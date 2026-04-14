@@ -1,0 +1,58 @@
+server.port: 8080
+
+jimuqu.claw:
+  workspace:
+    root: .
+  runtime:
+    defaultModel: default
+    maxSteps: 24
+    sessionWindowSize: 40
+    childTimeoutMs: 300000
+    delegateDepthLimit: 2
+    systemPromptResource: classpath:prompts/system-base.md
+  jobs:
+    pollIntervalMs: 1000
+  security:
+    auditEnabled: false
+    allowExplicitSendTargets: true
+    requireTerminalApproval: false
+  terminal:
+    defaultTimeoutMs: 120000
+    maxConcurrentProcesses: 4
+    allowedCommands: []
+  providers:
+    standard-openai:
+      dialect: openai
+      baseUrl: https://api.openai.com/v1/chat/completions
+      timeoutMs: 60000
+    standard-openai-responses:
+      dialect: openai-responses
+      baseUrl: https://api.openai.com/v1/responses
+      timeoutMs: 60000
+    standard-ollama:
+      dialect: ollama
+      baseUrl: http://127.0.0.1:11434/api/chat
+      timeoutMs: 60000
+    standard-gemini:
+      dialect: gemini
+      baseUrl: https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+      timeoutMs: 60000
+    standard-anthropic:
+      dialect: anthropic
+      baseUrl: https://api.anthropic.com/v1/messages
+      timeoutMs: 60000
+  models:
+    default:
+      providerProfile: standard-openai
+      model: gpt-4.1-mini
+      temperature: 0.2
+      maxTokens: 4096
+  channels:
+    weixin:
+      enabled: false
+    dingtalk:
+      enabled: false
+    feishu:
+      enabled: false
+    wecom:
+      enabled: false
