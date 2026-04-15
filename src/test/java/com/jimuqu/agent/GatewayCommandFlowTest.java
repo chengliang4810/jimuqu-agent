@@ -14,23 +14,28 @@ public class GatewayCommandFlowTest {
     void shouldHandleBasicCommandsAndConversationFlow() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
 
-        GatewayReply firstReply = env.gatewayService.handle(new GatewayMessage(PlatformType.MEMORY, "room-1", "user-1", "hello"));
+        GatewayReply claimPrompt = env.send("room-1", "user-1", "hello");
+        assertThat(claimPrompt.getContent()).contains("/pairing claim-admin");
+        GatewayReply claimReply = env.send("room-1", "user-1", "/pairing claim-admin");
+        assertThat(claimReply.getContent()).contains("唯一管理员");
+
+        GatewayReply firstReply = env.gatewayService.handle(env.message("room-1", "user-1", "hello"));
         assertThat(firstReply.getContent()).contains("echo:hello");
         String firstSessionId = firstReply.getSessionId();
 
-        GatewayReply statusReply = env.gatewayService.handle(new GatewayMessage(PlatformType.MEMORY, "room-1", "user-1", "/status"));
+        GatewayReply statusReply = env.gatewayService.handle(env.message("room-1", "user-1", "/status"));
         assertThat(statusReply.getContent()).contains(firstSessionId);
 
-        GatewayReply retryReply = env.gatewayService.handle(new GatewayMessage(PlatformType.MEMORY, "room-1", "user-1", "/retry"));
+        GatewayReply retryReply = env.gatewayService.handle(env.message("room-1", "user-1", "/retry"));
         assertThat(retryReply.getContent()).contains("echo:hello");
 
-        GatewayReply branchReply = env.gatewayService.handle(new GatewayMessage(PlatformType.MEMORY, "room-1", "user-1", "/branch review"));
+        GatewayReply branchReply = env.gatewayService.handle(env.message("room-1", "user-1", "/branch review"));
         assertThat(branchReply.getContent()).contains("review");
 
-        GatewayReply undoReply = env.gatewayService.handle(new GatewayMessage(PlatformType.MEMORY, "room-1", "user-1", "/undo"));
+        GatewayReply undoReply = env.gatewayService.handle(env.message("room-1", "user-1", "/undo"));
         assertThat(undoReply.getContent()).contains("Removed");
 
-        GatewayReply newReply = env.gatewayService.handle(new GatewayMessage(PlatformType.MEMORY, "room-1", "user-1", "/new"));
+        GatewayReply newReply = env.gatewayService.handle(env.message("room-1", "user-1", "/new"));
         assertThat(newReply.getSessionId()).isNotEqualTo(firstSessionId);
 
         SessionRecord rebound = env.sessionRepository.getBoundSession("MEMORY:room-1:user-1");

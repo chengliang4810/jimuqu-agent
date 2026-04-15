@@ -43,6 +43,11 @@
         </dependency>
         <dependency>
             <groupId>org.noear</groupId>
+            <artifactId>solon-ai-mcp</artifactId>
+            <version>${solon.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.noear</groupId>
             <artifactId>solon-serialization-snack4</artifactId>
             <version>${solon.version}</version>
         </dependency>
@@ -55,6 +60,16 @@
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
             <version>${hutool.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.17.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.vladsch.flexmark</groupId>
+            <artifactId>flexmark-html2md-converter</artifactId>
+            <version>0.50.50</version>
         </dependency>
         <dependency>
             <groupId>org.xerial</groupId>

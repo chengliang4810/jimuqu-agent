@@ -11,19 +11,32 @@ public class DefaultGatewayService {
     private final CommandService commandService;
     private final ConversationOrchestrator conversationOrchestrator;
     private final DeliveryService deliveryService;
+    private final GatewayAuthorizationService gatewayAuthorizationService;
 
     public DefaultGatewayService(CommandService commandService,
                                  ConversationOrchestrator conversationOrchestrator,
-                                 DeliveryService deliveryService) {
+                                 DeliveryService deliveryService,
+                                 GatewayAuthorizationService gatewayAuthorizationService) {
         this.commandService = commandService;
         this.conversationOrchestrator = conversationOrchestrator;
         this.deliveryService = deliveryService;
+        this.gatewayAuthorizationService = gatewayAuthorizationService;
     }
 
     public GatewayReply handle(GatewayMessage message) throws Exception {
+        GatewayReply preAuth = gatewayAuthorizationService.preAuthorize(message);
+        if (preAuth != null) {
+            if (preAuth.getContent() != null && preAuth.getContent().trim().length() > 0) {
+                deliveryService.deliver(new DeliveryRequest(message.getPlatform(), message.getChatId(), message.getUserId(), message.getThreadId(), preAuth.getContent()));
+            }
+            return preAuth;
+        }
+
         GatewayReply reply;
         String text = message.getText() == null ? "" : message.getText().trim();
-        if (text.startsWith("/")) {
+        if (!gatewayAuthorizationService.isAuthorized(message)) {
+            return null;
+        } else if (text.startsWith("/")) {
             reply = commandService.handle(message, text);
             reply.setCommandHandled(true);
         } else {

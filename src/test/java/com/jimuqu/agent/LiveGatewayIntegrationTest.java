@@ -24,13 +24,17 @@ public class LiveGatewayIntegrationTest {
         Assumptions.assumeTrue(System.getenv("JIMUQU_LIVE_AI_KEY") != null && System.getenv("JIMUQU_LIVE_AI_KEY").trim().length() > 0);
 
         TestEnvironment env = TestEnvironment.withLiveLlm();
-        GatewayMessage source = new GatewayMessage(PlatformType.MEMORY, "live-room", "tester", "请用一句话介绍你自己。");
+        GatewayReply claimPrompt = env.send("live-room", "tester", "hello");
+        assertThat(claimPrompt.getContent()).contains("/pairing claim-admin");
+        GatewayReply claimReply = env.send("live-room", "tester", "/pairing claim-admin");
+        assertThat(claimReply.getContent()).contains("唯一管理员");
+        GatewayMessage source = env.message("live-room", "tester", "请用一句话介绍你自己。");
 
         GatewayReply first = env.gatewayService.handle(source);
         assertThat(first.getContent()).isNotBlank();
         assertThat(env.memoryChannelAdapter.getLastRequest().getText()).isEqualTo(first.getContent());
 
-        GatewayReply branch = env.gatewayService.handle(new GatewayMessage(PlatformType.MEMORY, "live-room", "tester", "/branch live"));
+        GatewayReply branch = env.gatewayService.handle(env.message("live-room", "tester", "/branch live"));
         assertThat(branch.getBranchName()).isEqualTo("live");
 
         GatewayReply toolReply = env.gatewayService.handle(new GatewayMessage(

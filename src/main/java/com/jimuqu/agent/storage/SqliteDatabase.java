@@ -76,6 +76,45 @@ public class SqliteDatabase {
                     "status text not null," +
                     "summary text" +
                     ")");
+            statement.execute("create table if not exists home_channels (" +
+                    "platform text primary key," +
+                    "chat_id text not null," +
+                    "chat_name text," +
+                    "updated_at integer not null" +
+                    ")");
+            statement.execute("create table if not exists approved_users (" +
+                    "platform text not null," +
+                    "user_id text not null," +
+                    "user_name text," +
+                    "approved_at integer not null," +
+                    "approved_by text," +
+                    "primary key (platform, user_id)" +
+                    ")");
+            statement.execute("create table if not exists pairing_requests (" +
+                    "platform text not null," +
+                    "code text not null," +
+                    "user_id text not null," +
+                    "user_name text," +
+                    "chat_id text," +
+                    "created_at integer not null," +
+                    "expires_at integer not null," +
+                    "primary key (platform, code)" +
+                    ")");
+            statement.execute("create table if not exists pairing_rate_limits (" +
+                    "platform text not null," +
+                    "user_id text not null," +
+                    "requested_at integer not null," +
+                    "failed_attempts integer not null," +
+                    "lockout_until integer not null," +
+                    "primary key (platform, user_id)" +
+                    ")");
+            statement.execute("create table if not exists platform_admins (" +
+                    "platform text primary key," +
+                    "user_id text not null," +
+                    "user_name text," +
+                    "chat_id text," +
+                    "created_at integer not null" +
+                    ")");
             statement.close();
         } finally {
             connection.close();

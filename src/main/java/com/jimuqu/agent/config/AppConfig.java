@@ -4,12 +4,17 @@ import cn.hutool.core.util.StrUtil;
 import org.noear.solon.core.Props;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 public class AppConfig {
     private RuntimeConfig runtime = new RuntimeConfig();
     private LlmConfig llm = new LlmConfig();
     private SchedulerConfig scheduler = new SchedulerConfig();
     private ChannelsConfig channels = new ChannelsConfig();
+    private GatewayConfig gateway = new GatewayConfig();
 
     public static AppConfig load(Props props) {
         AppConfig config = new AppConfig();
@@ -36,6 +41,9 @@ public class AppConfig {
         config.getChannels().getFeishu().setAppId(resolveSecret("JIMUQU_FEISHU_APP_ID", props.get("jimuqu.channels.feishu.appId", "")));
         config.getChannels().getFeishu().setAppSecret(resolveSecret("JIMUQU_FEISHU_APP_SECRET", props.get("jimuqu.channels.feishu.appSecret", "")));
         config.getChannels().getFeishu().setWebsocketUrl(props.get("jimuqu.channels.feishu.websocketUrl", ""));
+        config.getChannels().getFeishu().setAllowedUsers(resolveList("JIMUQU_FEISHU_ALLOWED_USERS", props.get("jimuqu.channels.feishu.allowedUsers", "")));
+        config.getChannels().getFeishu().setAllowAllUsers(resolveBoolean("JIMUQU_FEISHU_ALLOW_ALL_USERS", props.getBool("jimuqu.channels.feishu.allowAllUsers", false)));
+        config.getChannels().getFeishu().setUnauthorizedDmBehavior(resolveBehavior("JIMUQU_FEISHU_UNAUTHORIZED_DM_BEHAVIOR", props.get("jimuqu.channels.feishu.unauthorizedDmBehavior", "pair")));
 
         config.getChannels().getDingtalk().setEnabled(resolveBoolean("JIMUQU_DINGTALK_ENABLED", props.getBool("jimuqu.channels.dingtalk.enabled", false)));
         config.getChannels().getDingtalk().setClientId(resolveSecret("JIMUQU_DINGTALK_CLIENT_ID", props.get("jimuqu.channels.dingtalk.clientId", "")));
@@ -43,15 +51,27 @@ public class AppConfig {
         config.getChannels().getDingtalk().setRobotCode(resolveSecret("JIMUQU_DINGTALK_ROBOT_CODE", props.get("jimuqu.channels.dingtalk.robotCode", "")));
         config.getChannels().getDingtalk().setCoolAppCode(props.get("jimuqu.channels.dingtalk.coolAppCode", ""));
         config.getChannels().getDingtalk().setStreamUrl(props.get("jimuqu.channels.dingtalk.streamUrl", ""));
+        config.getChannels().getDingtalk().setAllowedUsers(resolveList("JIMUQU_DINGTALK_ALLOWED_USERS", props.get("jimuqu.channels.dingtalk.allowedUsers", "")));
+        config.getChannels().getDingtalk().setAllowAllUsers(resolveBoolean("JIMUQU_DINGTALK_ALLOW_ALL_USERS", props.getBool("jimuqu.channels.dingtalk.allowAllUsers", false)));
+        config.getChannels().getDingtalk().setUnauthorizedDmBehavior(resolveBehavior("JIMUQU_DINGTALK_UNAUTHORIZED_DM_BEHAVIOR", props.get("jimuqu.channels.dingtalk.unauthorizedDmBehavior", "pair")));
 
         config.getChannels().getWecom().setEnabled(props.getBool("jimuqu.channels.wecom.enabled", false));
         config.getChannels().getWecom().setBotId(resolveSecret("JIMUQU_WECOM_BOT_ID", props.get("jimuqu.channels.wecom.botId", "")));
         config.getChannels().getWecom().setSecret(resolveSecret("JIMUQU_WECOM_SECRET", props.get("jimuqu.channels.wecom.secret", "")));
         config.getChannels().getWecom().setWebsocketUrl(props.get("jimuqu.channels.wecom.websocketUrl", ""));
+        config.getChannels().getWecom().setAllowedUsers(resolveList("JIMUQU_WECOM_ALLOWED_USERS", props.get("jimuqu.channels.wecom.allowedUsers", "")));
+        config.getChannels().getWecom().setAllowAllUsers(resolveBoolean("JIMUQU_WECOM_ALLOW_ALL_USERS", props.getBool("jimuqu.channels.wecom.allowAllUsers", false)));
+        config.getChannels().getWecom().setUnauthorizedDmBehavior(resolveBehavior("JIMUQU_WECOM_UNAUTHORIZED_DM_BEHAVIOR", props.get("jimuqu.channels.wecom.unauthorizedDmBehavior", "pair")));
 
         config.getChannels().getWeixin().setEnabled(props.getBool("jimuqu.channels.weixin.enabled", false));
         config.getChannels().getWeixin().setToken(resolveSecret("JIMUQU_WEIXIN_TOKEN", props.get("jimuqu.channels.weixin.token", "")));
         config.getChannels().getWeixin().setLongPollUrl(props.get("jimuqu.channels.weixin.longPollUrl", ""));
+        config.getChannels().getWeixin().setAllowedUsers(resolveList("JIMUQU_WEIXIN_ALLOWED_USERS", props.get("jimuqu.channels.weixin.allowedUsers", "")));
+        config.getChannels().getWeixin().setAllowAllUsers(resolveBoolean("JIMUQU_WEIXIN_ALLOW_ALL_USERS", props.getBool("jimuqu.channels.weixin.allowAllUsers", false)));
+        config.getChannels().getWeixin().setUnauthorizedDmBehavior(resolveBehavior("JIMUQU_WEIXIN_UNAUTHORIZED_DM_BEHAVIOR", props.get("jimuqu.channels.weixin.unauthorizedDmBehavior", "pair")));
+
+        config.getGateway().setAllowedUsers(resolveList("JIMUQU_GATEWAY_ALLOWED_USERS", props.get("jimuqu.gateway.allowedUsers", "")));
+        config.getGateway().setAllowAllUsers(resolveBoolean("JIMUQU_GATEWAY_ALLOW_ALL_USERS", props.getBool("jimuqu.gateway.allowAllUsers", false)));
 
         config.normalizePaths();
         return config;
@@ -75,6 +95,37 @@ public class AppConfig {
         return "true".equalsIgnoreCase(envValue.trim())
                 || "1".equals(envValue.trim())
                 || "yes".equalsIgnoreCase(envValue.trim());
+    }
+
+    private static List<String> resolveList(String envName, String fallback) {
+        String envValue = System.getenv(envName);
+        if (StrUtil.isNotBlank(envValue)) {
+            return splitList(envValue);
+        }
+        return splitList(fallback);
+    }
+
+    private static List<String> splitList(String raw) {
+        if (StrUtil.isBlank(raw)) {
+            return Collections.emptyList();
+        }
+        List<String> values = new ArrayList<String>();
+        for (String item : Arrays.asList(raw.split(","))) {
+            String trimmed = item == null ? "" : item.trim();
+            if (trimmed.length() > 0) {
+                values.add(trimmed);
+            }
+        }
+        return values;
+    }
+
+    private static String resolveBehavior(String envName, String fallback) {
+        String envValue = System.getenv(envName);
+        String value = StrUtil.isNotBlank(envValue) ? envValue.trim() : StrUtil.nullToDefault(fallback, "pair").trim();
+        if ("ignore".equalsIgnoreCase(value)) {
+            return "ignore";
+        }
+        return "pair";
     }
 
     public RuntimeConfig getRuntime() {
@@ -107,6 +158,14 @@ public class AppConfig {
 
     public void setChannels(ChannelsConfig channels) {
         this.channels = channels;
+    }
+
+    public GatewayConfig getGateway() {
+        return gateway;
+    }
+
+    public void setGateway(GatewayConfig gateway) {
+        this.gateway = gateway;
     }
 
     public void normalizePaths() {
@@ -322,6 +381,9 @@ public class AppConfig {
         private String websocketUrl;
         private String streamUrl;
         private String longPollUrl;
+        private List<String> allowedUsers = new ArrayList<String>();
+        private boolean allowAllUsers;
+        private String unauthorizedDmBehavior = "pair";
 
         public boolean isEnabled() {
             return enabled;
@@ -425,6 +487,51 @@ public class AppConfig {
 
         public void setLongPollUrl(String longPollUrl) {
             this.longPollUrl = longPollUrl;
+        }
+
+        public List<String> getAllowedUsers() {
+            return allowedUsers;
+        }
+
+        public void setAllowedUsers(List<String> allowedUsers) {
+            this.allowedUsers = allowedUsers;
+        }
+
+        public boolean isAllowAllUsers() {
+            return allowAllUsers;
+        }
+
+        public void setAllowAllUsers(boolean allowAllUsers) {
+            this.allowAllUsers = allowAllUsers;
+        }
+
+        public String getUnauthorizedDmBehavior() {
+            return unauthorizedDmBehavior;
+        }
+
+        public void setUnauthorizedDmBehavior(String unauthorizedDmBehavior) {
+            this.unauthorizedDmBehavior = unauthorizedDmBehavior;
+        }
+    }
+
+    public static class GatewayConfig {
+        private List<String> allowedUsers = new ArrayList<String>();
+        private boolean allowAllUsers;
+
+        public List<String> getAllowedUsers() {
+            return allowedUsers;
+        }
+
+        public void setAllowedUsers(List<String> allowedUsers) {
+            this.allowedUsers = allowedUsers;
+        }
+
+        public boolean isAllowAllUsers() {
+            return allowAllUsers;
+        }
+
+        public void setAllowAllUsers(boolean allowAllUsers) {
+            this.allowAllUsers = allowAllUsers;
         }
     }
 }

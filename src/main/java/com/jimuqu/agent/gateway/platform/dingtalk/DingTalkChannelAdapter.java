@@ -195,6 +195,9 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
                             message.getConversationType(),
                             text);
                     GatewayMessage gatewayMessage = new GatewayMessage(PlatformType.DINGTALK, conversationId, userId, text);
+                    gatewayMessage.setChatType("2".equals(String.valueOf(message.getConversationType())) ? "group" : "dm");
+                    gatewayMessage.setChatName(notBlank(message.getConversationTitle()) ? message.getConversationTitle() : conversationId);
+                    gatewayMessage.setUserName(notBlank(message.getSenderNick()) ? message.getSenderNick() : userId);
                     gatewayMessage.setThreadId(message.getMsgId());
                     inboundMessageHandler().handle(gatewayMessage);
                 } catch (Exception e) {

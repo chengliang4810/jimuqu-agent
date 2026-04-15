@@ -8,17 +8,22 @@ import com.jimuqu.agent.core.CommandService;
 import com.jimuqu.agent.core.ConversationOrchestrator;
 import com.jimuqu.agent.core.CronJobRepository;
 import com.jimuqu.agent.core.DeliveryService;
+import com.jimuqu.agent.core.GatewayMessage;
+import com.jimuqu.agent.core.GatewayReply;
+import com.jimuqu.agent.core.GatewayPolicyRepository;
 import com.jimuqu.agent.core.LlmGateway;
 import com.jimuqu.agent.core.PlatformType;
 import com.jimuqu.agent.core.SessionRepository;
 import com.jimuqu.agent.core.ToolRegistry;
 import com.jimuqu.agent.engine.DefaultConversationOrchestrator;
 import com.jimuqu.agent.gateway.AdapterBackedDeliveryService;
+import com.jimuqu.agent.gateway.GatewayAuthorizationService;
 import com.jimuqu.agent.gateway.DefaultCommandService;
 import com.jimuqu.agent.gateway.DefaultGatewayService;
 import com.jimuqu.agent.llm.SolonAiLlmGateway;
 import com.jimuqu.agent.storage.SqliteCronJobRepository;
 import com.jimuqu.agent.storage.SqliteDatabase;
+import com.jimuqu.agent.storage.SqliteGatewayPolicyRepository;
 import com.jimuqu.agent.storage.SqlitePreferenceStore;
 import com.jimuqu.agent.storage.SqliteSessionRepository;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
@@ -37,19 +42,31 @@ public class TestEnvironment {
     public final CronJobRepository cronJobRepository;
     public final LocalSkillService localSkillService;
     public final DefaultGatewayService gatewayService;
+    public final ToolRegistry toolRegistry;
+    public final GatewayPolicyRepository gatewayPolicyRepository;
+    public final GatewayAuthorizationService gatewayAuthorizationService;
+    public final DeliveryService deliveryService;
 
     private TestEnvironment(AppConfig appConfig,
                             MemoryChannelAdapter memoryChannelAdapter,
                             SessionRepository sessionRepository,
                             CronJobRepository cronJobRepository,
                             LocalSkillService localSkillService,
-                            DefaultGatewayService gatewayService) {
+                            DefaultGatewayService gatewayService,
+                            ToolRegistry toolRegistry,
+                            GatewayPolicyRepository gatewayPolicyRepository,
+                            GatewayAuthorizationService gatewayAuthorizationService,
+                            DeliveryService deliveryService) {
         this.appConfig = appConfig;
         this.memoryChannelAdapter = memoryChannelAdapter;
         this.sessionRepository = sessionRepository;
         this.cronJobRepository = cronJobRepository;
         this.localSkillService = localSkillService;
         this.gatewayService = gatewayService;
+        this.toolRegistry = toolRegistry;
+        this.gatewayPolicyRepository = gatewayPolicyRepository;
+        this.gatewayAuthorizationService = gatewayAuthorizationService;
+        this.deliveryService = deliveryService;
     }
 
     public static TestEnvironment withFakeLlm() throws Exception {
@@ -75,20 +92,38 @@ public class TestEnvironment {
         SqlitePreferenceStore preferenceStore = new SqlitePreferenceStore(database);
         SessionRepository sessionRepository = new SqliteSessionRepository(database);
         CronJobRepository cronJobRepository = new SqliteCronJobRepository(database);
+        GatewayPolicyRepository gatewayPolicyRepository = new SqliteGatewayPolicyRepository(database);
         LocalSkillService localSkillService = new LocalSkillService(config, preferenceStore);
         FileContextService contextService = new FileContextService(config, localSkillService, new File(System.getProperty("user.dir")));
         ConversationOrchestratorHolder holder = new ConversationOrchestratorHolder();
         MemoryChannelAdapter memoryAdapter = new MemoryChannelAdapter();
         Map<PlatformType, ChannelAdapter> adapters = new LinkedHashMap<PlatformType, ChannelAdapter>();
         adapters.put(PlatformType.MEMORY, memoryAdapter);
-        DeliveryService deliveryService = new AdapterBackedDeliveryService(adapters);
+        DeliveryService deliveryService = new AdapterBackedDeliveryService(adapters, gatewayPolicyRepository);
+        GatewayAuthorizationService gatewayAuthorizationService = new GatewayAuthorizationService(gatewayPolicyRepository, config);
         ProcessRegistry processRegistry = new ProcessRegistry();
         ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, holder, processRegistry);
         ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, llmGateway, toolRegistry);
         holder.set(orchestrator);
-        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, deliveryService);
-        DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService);
-        return new TestEnvironment(config, memoryAdapter, sessionRepository, cronJobRepository, localSkillService, gatewayService);
+        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, deliveryService, gatewayAuthorizationService);
+        DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService, gatewayAuthorizationService);
+        return new TestEnvironment(config, memoryAdapter, sessionRepository, cronJobRepository, localSkillService, gatewayService, toolRegistry, gatewayPolicyRepository, gatewayAuthorizationService, deliveryService);
+    }
+
+    public GatewayMessage message(String chatId, String userId, String text) {
+        return message(chatId, userId, "dm", chatId, userId, text);
+    }
+
+    public GatewayMessage message(String chatId, String userId, String chatType, String chatName, String userName, String text) {
+        GatewayMessage message = new GatewayMessage(PlatformType.MEMORY, chatId, userId, text);
+        message.setChatType(chatType);
+        message.setChatName(chatName);
+        message.setUserName(userName);
+        return message;
+    }
+
+    public GatewayReply send(String chatId, String userId, String text) throws Exception {
+        return gatewayService.handle(message(chatId, userId, text));
     }
 
     private static AppConfig newConfig() throws Exception {

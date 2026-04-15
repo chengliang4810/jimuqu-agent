@@ -21,6 +21,9 @@ jimuqu.scheduler.tickSeconds: 60
 
 # Channels
 jimuqu.channels.feishu.enabled: false
+jimuqu.channels.feishu.allowedUsers:
+jimuqu.channels.feishu.allowAllUsers: false
+jimuqu.channels.feishu.unauthorizedDmBehavior: pair
 
 # DingTalk stream-mode inbound + official robot outbound
 # Prefer environment variables for secrets:
@@ -29,8 +32,21 @@ jimuqu.channels.feishu.enabled: false
 # JIMUQU_DINGTALK_CLIENT_SECRET
 # JIMUQU_DINGTALK_ROBOT_CODE
 jimuqu.channels.dingtalk.enabled: false
+jimuqu.channels.dingtalk.allowedUsers:
+jimuqu.channels.dingtalk.allowAllUsers: false
+jimuqu.channels.dingtalk.unauthorizedDmBehavior: pair
 jimuqu.channels.dingtalk.robotCode:
 jimuqu.channels.dingtalk.coolAppCode:
 
 jimuqu.channels.wecom.enabled: false
+jimuqu.channels.wecom.allowedUsers:
+jimuqu.channels.wecom.allowAllUsers: false
+jimuqu.channels.wecom.unauthorizedDmBehavior: pair
 jimuqu.channels.weixin.enabled: false
+jimuqu.channels.weixin.allowedUsers:
+jimuqu.channels.weixin.allowAllUsers: false
+jimuqu.channels.weixin.unauthorizedDmBehavior: pair
+
+# Global gateway authorization fallback
+jimuqu.gateway.allowedUsers:
+jimuqu.gateway.allowAllUsers: false

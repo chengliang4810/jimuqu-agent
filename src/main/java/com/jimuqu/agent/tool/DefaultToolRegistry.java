@@ -8,6 +8,9 @@ import com.jimuqu.agent.core.SessionRepository;
 import com.jimuqu.agent.core.ToolRegistry;
 import com.jimuqu.agent.storage.SqlitePreferenceStore;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
+import com.jimuqu.agent.tool.builtin.CodeSearchTool;
+import com.jimuqu.agent.tool.builtin.WebfetchTool;
+import com.jimuqu.agent.tool.builtin.WebsearchTool;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -31,7 +34,10 @@ public class DefaultToolRegistry implements ToolRegistry {
             "session_search",
             "send_message",
             "cronjob",
-            "approval"
+            "approval",
+            "codesearch",
+            "websearch",
+            "webfetch"
     );
 
     private final AppConfig appConfig;
@@ -74,6 +80,9 @@ public class DefaultToolRegistry implements ToolRegistry {
         MessagingTools messagingTools = new MessagingTools(deliveryService, sourceKey);
         CronjobTools cronjobTools = new CronjobTools(cronJobRepository, sourceKey);
         DelegateTools delegateTools = new DelegateTools(conversationHolder.get(), sourceKey);
+        WebsearchTool websearchTool = WebsearchTool.getInstance();
+        WebfetchTool webfetchTool = WebfetchTool.getInstance();
+        CodeSearchTool codeSearchTool = CodeSearchTool.getInstance();
 
         for (String toolName : TOOL_NAMES) {
             if (isEnabled(sourceKey, toolName) == false) {
@@ -96,6 +105,12 @@ public class DefaultToolRegistry implements ToolRegistry {
                 unique.add(cronjobTools);
             } else if ("delegate_task".equals(toolName)) {
                 unique.add(delegateTools);
+            } else if ("websearch".equals(toolName)) {
+                unique.add(websearchTool);
+            } else if ("webfetch".equals(toolName)) {
+                unique.add(webfetchTool);
+            } else if ("codesearch".equals(toolName)) {
+                unique.add(codeSearchTool);
             }
         }
 

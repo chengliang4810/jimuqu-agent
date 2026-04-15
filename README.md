@@ -9,6 +9,37 @@
 - 钉钉群聊机器人回消息
 - 钉钉私聊机器人回消息
 
+当前统一消息渠道体验已补齐的能力：
+
+- 首个私聊用户认领平台唯一管理员
+- `/pairing claim-admin`
+- `/pairing pending`
+- `/pairing approve <platform> <code>`
+- `/pairing revoke <platform> <userId>`
+- `/pairing approved [platform]`
+- `/sethome`
+- `/platforms` 展示管理员、home channel、pairing 状态
+
+当前默认内置工具包含：
+
+- `terminal`
+- `process`
+- `read_file`
+- `write_file`
+- `patch`
+- `search_files`
+- `execute_code`
+- `delegate_task`
+- `todo`
+- `memory`
+- `session_search`
+- `send_message`
+- `cronjob`
+- `approval`
+- `codesearch`
+- `websearch`
+- `webfetch`
+
 ## 技术基线
 
 - JDK 8
@@ -101,6 +132,33 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 - 群聊发送走 `OrgGroupSend + sampleMarkdown`
 - 私聊发送走 `BatchSendOTO + sampleMarkdown`
 - 私聊发送目标必须使用钉钉 `senderStaffId`
+- 管理员由该平台首个私聊认领成功的用户自动固化，且只能有一个
+- 管理员一旦建立，不能通过对话命令修改
+
+## 统一消息渠道授权与 home channel
+
+当前所有消息渠道统一遵循以下规则：
+
+- 每个平台只能有一个管理员
+- 管理员由该平台首个私聊认领成功的用户自动成为
+- 没有管理员时：
+  - 群聊消息静默忽略
+  - 私聊消息返回管理员认领提示
+- 已有管理员后：
+  - 未授权私聊用户收到 pairing code
+  - 管理员在私聊中执行 `/pairing approve <platform> <code>`
+- `/sethome` 只能由平台管理员执行，且必须在目标聊天里执行
+- 当系统投递目标没有显式 `chatId` 时，会回退到该平台 home channel
+
+授权相关配置：
+
+- 平台级：
+  - `jimuqu.channels.<platform>.allowedUsers`
+  - `jimuqu.channels.<platform>.allowAllUsers`
+  - `jimuqu.channels.<platform>.unauthorizedDmBehavior`
+- 全局：
+  - `jimuqu.gateway.allowedUsers`
+  - `jimuqu.gateway.allowAllUsers`
 
 ## 已验证测试
 
@@ -108,6 +166,11 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 
 - [GatewayCommandFlowTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/GatewayCommandFlowTest.java)
 - [StorageRepositoryTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/StorageRepositoryTest.java)
+- [PlatformAdminBootstrapTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/PlatformAdminBootstrapTest.java)
+- [GatewayAuthorizationFlowTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/GatewayAuthorizationFlowTest.java)
+- [HomeChannelCommandTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/HomeChannelCommandTest.java)
+- [DeliveryHomeChannelFallbackTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/DeliveryHomeChannelFallbackTest.java)
+- [ToolRegistryExposureTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/ToolRegistryExposureTest.java)
 
 实时模型联调：
 
@@ -133,6 +196,7 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 - 本地 skills
 - cron 基础能力
 - 钉钉真实渠道打通
+- Solon 内置 `codesearch` / `websearch` / `webfetch` 工具接入
 
 未做或未完全做：
 

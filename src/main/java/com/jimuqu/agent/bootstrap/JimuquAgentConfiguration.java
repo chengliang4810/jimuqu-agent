@@ -8,12 +8,14 @@ import com.jimuqu.agent.core.CommandService;
 import com.jimuqu.agent.core.ConversationOrchestrator;
 import com.jimuqu.agent.core.CronJobRepository;
 import com.jimuqu.agent.core.DeliveryService;
+import com.jimuqu.agent.core.GatewayPolicyRepository;
 import com.jimuqu.agent.core.LlmGateway;
 import com.jimuqu.agent.core.PlatformType;
 import com.jimuqu.agent.core.SessionRepository;
 import com.jimuqu.agent.core.ToolRegistry;
 import com.jimuqu.agent.engine.DefaultConversationOrchestrator;
 import com.jimuqu.agent.gateway.AdapterBackedDeliveryService;
+import com.jimuqu.agent.gateway.GatewayAuthorizationService;
 import com.jimuqu.agent.gateway.DefaultCommandService;
 import com.jimuqu.agent.gateway.DefaultGatewayService;
 import com.jimuqu.agent.gateway.platform.dingtalk.DingTalkChannelAdapter;
@@ -24,6 +26,7 @@ import com.jimuqu.agent.llm.SolonAiLlmGateway;
 import com.jimuqu.agent.scheduler.DefaultCronScheduler;
 import com.jimuqu.agent.storage.SqliteCronJobRepository;
 import com.jimuqu.agent.storage.SqliteDatabase;
+import com.jimuqu.agent.storage.SqliteGatewayPolicyRepository;
 import com.jimuqu.agent.storage.SqlitePreferenceStore;
 import com.jimuqu.agent.storage.SqliteSessionRepository;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
@@ -104,8 +107,20 @@ public class JimuquAgentConfiguration {
     }
 
     @Bean
-    public DeliveryService deliveryService(Map<PlatformType, ChannelAdapter> channelAdapters) {
-        return new AdapterBackedDeliveryService(channelAdapters);
+    public GatewayPolicyRepository gatewayPolicyRepository(SqliteDatabase sqliteDatabase) {
+        return new SqliteGatewayPolicyRepository(sqliteDatabase);
+    }
+
+    @Bean
+    public DeliveryService deliveryService(Map<PlatformType, ChannelAdapter> channelAdapters,
+                                           GatewayPolicyRepository gatewayPolicyRepository) {
+        return new AdapterBackedDeliveryService(channelAdapters, gatewayPolicyRepository);
+    }
+
+    @Bean
+    public GatewayAuthorizationService gatewayAuthorizationService(GatewayPolicyRepository gatewayPolicyRepository,
+                                                                   AppConfig appConfig) {
+        return new GatewayAuthorizationService(gatewayPolicyRepository, appConfig);
     }
 
     @Bean
@@ -136,16 +151,18 @@ public class JimuquAgentConfiguration {
                                          LocalSkillService localSkillService,
                                          CronJobRepository cronJobRepository,
                                          ConversationOrchestrator conversationOrchestrator,
-                                         DeliveryService deliveryService) {
-        return new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, conversationOrchestrator, deliveryService);
+                                         DeliveryService deliveryService,
+                                         GatewayAuthorizationService gatewayAuthorizationService) {
+        return new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, conversationOrchestrator, deliveryService, gatewayAuthorizationService);
     }
 
     @Bean
     public DefaultGatewayService gatewayService(CommandService commandService,
                                                 ConversationOrchestrator conversationOrchestrator,
                                                 DeliveryService deliveryService,
+                                                GatewayAuthorizationService gatewayAuthorizationService,
                                                 Map<PlatformType, ChannelAdapter> channelAdapters) {
-        DefaultGatewayService service = new DefaultGatewayService(commandService, conversationOrchestrator, deliveryService);
+        DefaultGatewayService service = new DefaultGatewayService(commandService, conversationOrchestrator, deliveryService, gatewayAuthorizationService);
         for (ChannelAdapter adapter : channelAdapters.values()) {
             adapter.setInboundMessageHandler(new com.jimuqu.agent.core.InboundMessageHandler() {
                 public void handle(com.jimuqu.agent.core.GatewayMessage message) throws Exception {
