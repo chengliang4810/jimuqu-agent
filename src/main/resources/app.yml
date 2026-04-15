@@ -1,0 +1,36 @@
+server.port: 8080
+
+# Runtime directories
+jimuqu.runtime.home: runtime
+jimuqu.runtime.contextDir: runtime/context
+jimuqu.runtime.skillsDir: runtime/skills
+jimuqu.runtime.cacheDir: runtime/cache
+jimuqu.runtime.stateDb: runtime/state.db
+
+# Default live model
+jimuqu.llm.provider: openai-responses
+jimuqu.llm.apiUrl: https://subapi.jimuqu.com/v1/responses
+jimuqu.llm.model: gpt-5.4
+jimuqu.llm.stream: false
+jimuqu.llm.reasoningEffort: medium
+jimuqu.llm.temperature: 0.2
+jimuqu.llm.maxTokens: 4096
+
+jimuqu.scheduler.enabled: true
+jimuqu.scheduler.tickSeconds: 60
+
+# Channels
+jimuqu.channels.feishu.enabled: false
+
+# DingTalk stream-mode inbound + official robot outbound
+# Prefer environment variables for secrets:
+# JIMUQU_DINGTALK_ENABLED
+# JIMUQU_DINGTALK_CLIENT_ID
+# JIMUQU_DINGTALK_CLIENT_SECRET
+# JIMUQU_DINGTALK_ROBOT_CODE
+jimuqu.channels.dingtalk.enabled: false
+jimuqu.channels.dingtalk.robotCode:
+jimuqu.channels.dingtalk.coolAppCode:
+
+jimuqu.channels.wecom.enabled: false
+jimuqu.channels.weixin.enabled: false
