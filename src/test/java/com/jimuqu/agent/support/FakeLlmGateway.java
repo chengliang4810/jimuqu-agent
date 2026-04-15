@@ -1,8 +1,8 @@
 package com.jimuqu.agent.support;
 
-import com.jimuqu.agent.core.LlmGateway;
-import com.jimuqu.agent.core.LlmResult;
-import com.jimuqu.agent.core.SessionRecord;
+import com.jimuqu.agent.core.service.LlmGateway;
+import com.jimuqu.agent.core.model.LlmResult;
+import com.jimuqu.agent.core.model.SessionRecord;
 import org.noear.solon.ai.chat.message.ChatMessage;
 import org.noear.solon.ai.chat.session.InMemoryChatSession;
 
@@ -25,3 +25,4 @@ public class FakeLlmGateway implements LlmGateway {
         return result;
     }
 }
+

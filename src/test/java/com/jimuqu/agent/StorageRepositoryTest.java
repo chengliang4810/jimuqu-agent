@@ -1,6 +1,6 @@
 package com.jimuqu.agent;
 
-import com.jimuqu.agent.core.SessionRecord;
+import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.support.TestEnvironment;
 import org.junit.jupiter.api.Test;
 
@@ -22,3 +22,4 @@ public class StorageRepositoryTest {
         assertThat(env.sessionRepository.findBySourceAndBranch("MEMORY:room-a:user-a", "review")).isNotNull();
     }
 }
+

@@ -1,16 +1,19 @@
 package com.jimuqu.agent.engine;
 
-import com.jimuqu.agent.core.ContextService;
-import com.jimuqu.agent.core.ConversationOrchestrator;
-import com.jimuqu.agent.core.GatewayMessage;
-import com.jimuqu.agent.core.GatewayReply;
-import com.jimuqu.agent.core.LlmGateway;
-import com.jimuqu.agent.core.LlmResult;
-import com.jimuqu.agent.core.SessionRecord;
-import com.jimuqu.agent.core.SessionRepository;
-import com.jimuqu.agent.core.ToolRegistry;
+import com.jimuqu.agent.core.service.ContextService;
+import com.jimuqu.agent.core.service.ConversationOrchestrator;
+import com.jimuqu.agent.core.model.GatewayMessage;
+import com.jimuqu.agent.core.model.GatewayReply;
+import com.jimuqu.agent.core.service.LlmGateway;
+import com.jimuqu.agent.core.model.LlmResult;
+import com.jimuqu.agent.core.model.SessionRecord;
+import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.service.ToolRegistry;
 import org.noear.solon.ai.chat.message.AssistantMessage;
 
+/**
+ * DefaultConversationOrchestrator 实现。
+ */
 public class DefaultConversationOrchestrator implements ConversationOrchestrator {
     private final SessionRepository sessionRepository;
     private final ContextService contextService;

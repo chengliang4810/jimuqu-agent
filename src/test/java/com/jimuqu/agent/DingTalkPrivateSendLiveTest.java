@@ -1,8 +1,8 @@
 package com.jimuqu.agent;
 
 import com.jimuqu.agent.config.AppConfig;
-import com.jimuqu.agent.core.DeliveryRequest;
-import com.jimuqu.agent.core.PlatformType;
+import com.jimuqu.agent.core.model.DeliveryRequest;
+import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.gateway.platform.dingtalk.DingTalkChannelAdapter;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -48,3 +48,4 @@ public class DingTalkPrivateSendLiveTest {
         }
     }
 }
+

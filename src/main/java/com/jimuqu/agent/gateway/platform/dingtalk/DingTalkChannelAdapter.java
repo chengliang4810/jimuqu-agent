@@ -19,10 +19,10 @@ import com.dingtalk.open.app.api.models.bot.ChatbotMessage;
 import com.dingtalk.open.app.api.models.bot.MessageContent;
 import com.dingtalk.open.app.api.security.AuthClientCredential;
 import com.jimuqu.agent.config.AppConfig;
-import com.jimuqu.agent.core.DeliveryRequest;
-import com.jimuqu.agent.core.GatewayMessage;
-import com.jimuqu.agent.core.PlatformType;
-import com.jimuqu.agent.gateway.AbstractConfigurableChannelAdapter;
+import com.jimuqu.agent.core.model.DeliveryRequest;
+import com.jimuqu.agent.core.model.GatewayMessage;
+import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
 import org.noear.snack4.ONode;
 
 import java.util.HashMap;
@@ -30,6 +30,9 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * DingTalkChannelAdapter 实现。
+ */
 public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
     private final AppConfig.ChannelConfig config;
     private final Client oauthClient;

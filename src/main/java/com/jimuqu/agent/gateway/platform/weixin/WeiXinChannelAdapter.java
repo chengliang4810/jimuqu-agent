@@ -4,13 +4,16 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.ContentType;
 import cn.hutool.http.HttpRequest;
 import com.jimuqu.agent.config.AppConfig;
-import com.jimuqu.agent.core.DeliveryRequest;
-import com.jimuqu.agent.core.PlatformType;
-import com.jimuqu.agent.gateway.AbstractConfigurableChannelAdapter;
+import com.jimuqu.agent.core.model.DeliveryRequest;
+import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
 import org.noear.snack4.ONode;
 
 import java.util.UUID;
 
+/**
+ * WeiXinChannelAdapter 实现。
+ */
 public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     private static final String BASE_URL = "https://ilinkai.weixin.qq.com";
     private static final String SEND_ENDPOINT = BASE_URL + "/ilink/bot/sendmessage";

@@ -44,23 +44,58 @@
 
 - JDK 8
 - Maven 单模块工程
+- 启动类：`com.jimuqu.agent.JimuquAgentApp`
 - 包名：`com.jimuqu.agent`
 - JSON：`org.noear:snack4`
 - 模型协议：`openai`、`openai-responses`、`ollama`、`gemini`、`anthropic`
+- 数据对象与配置对象已引入 Lombok，优先使用 `@Getter`、`@Setter`、`@NoArgsConstructor`
 
-## 目录说明
+## 包结构
 
+- `src/main/java/com/jimuqu/agent`
+  启动入口
 - `src/main/java/com/jimuqu/agent/bootstrap`
+  Solon Bean 装配、健康检查、HTTP 网关入口
 - `src/main/java/com/jimuqu/agent/config`
-- `src/main/java/com/jimuqu/agent/core`
-- `src/main/java/com/jimuqu/agent/llm`
-- `src/main/java/com/jimuqu/agent/engine`
-- `src/main/java/com/jimuqu/agent/tool`
+  配置加载、环境变量覆盖、路径标准化
+- `src/main/java/com/jimuqu/agent/core/enums`
+  枚举定义
+- `src/main/java/com/jimuqu/agent/core/model`
+  领域模型与传输对象
+- `src/main/java/com/jimuqu/agent/core/repository`
+  仓储接口
+- `src/main/java/com/jimuqu/agent/core/service`
+  核心服务接口
 - `src/main/java/com/jimuqu/agent/context`
-- `src/main/java/com/jimuqu/agent/storage`
-- `src/main/java/com/jimuqu/agent/gateway`
+  `AGENTS.md`、`MEMORY.md`、`USER.md` 与本地 skills 处理
+- `src/main/java/com/jimuqu/agent/engine`
+  Agent 主循环
+- `src/main/java/com/jimuqu/agent/gateway/authorization`
+  管理员认领、pairing、授权判断
+- `src/main/java/com/jimuqu/agent/gateway/command`
+  slash 命令处理
+- `src/main/java/com/jimuqu/agent/gateway/delivery`
+  渠道投递与 home channel fallback
+- `src/main/java/com/jimuqu/agent/gateway/platform`
+  各渠道适配器实现
+- `src/main/java/com/jimuqu/agent/gateway/service`
+  网关主入口服务
+- `src/main/java/com/jimuqu/agent/llm`
+  Solon AI 模型网关
 - `src/main/java/com/jimuqu/agent/scheduler`
+  cron 调度执行
+- `src/main/java/com/jimuqu/agent/storage/repository`
+  SQLite 持久化实现
+- `src/main/java/com/jimuqu/agent/support`
+  通用辅助类
+- `src/main/java/com/jimuqu/agent/support/constants`
+  常量定义
+- `src/main/java/com/jimuqu/agent/tool/builtin`
+  内置搜索工具适配
+- `src/main/java/com/jimuqu/agent/tool/runtime`
+  工具注册与运行时工具实现
 - `codex-skills/`
+  项目专用 Codex skills
 
 运行时目录：
 
@@ -171,6 +206,7 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 - [HomeChannelCommandTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/HomeChannelCommandTest.java)
 - [DeliveryHomeChannelFallbackTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/DeliveryHomeChannelFallbackTest.java)
 - [ToolRegistryExposureTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/ToolRegistryExposureTest.java)
+- [AppConfigPathNormalizationTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/AppConfigPathNormalizationTest.java)
 
 实时模型联调：
 
@@ -203,7 +239,6 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 - 飞书真实端到端
 - 企微真实端到端
 - 微信真实端到端
-- Web 搜索/提取
 - 浏览器自动化
 - 多模态、图像、TTS/转写
 - 插件系统、Profiles、OpenAI 兼容 API Server

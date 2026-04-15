@@ -1,9 +1,9 @@
 package com.jimuqu.agent;
 
-import com.jimuqu.agent.core.GatewayMessage;
-import com.jimuqu.agent.core.GatewayReply;
-import com.jimuqu.agent.core.PlatformType;
-import com.jimuqu.agent.core.SessionRecord;
+import com.jimuqu.agent.core.model.GatewayMessage;
+import com.jimuqu.agent.core.model.GatewayReply;
+import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.TestEnvironment;
 import org.junit.jupiter.api.Assumptions;
@@ -65,9 +65,10 @@ public class LiveGatewayIntegrationTest {
         String jobId = matcher.group(1);
 
         GatewayReply cronRun = env.gatewayService.handle(new GatewayMessage(PlatformType.MEMORY, "live-room", "tester", "/cron run " + jobId));
-        assertThat(cronRun.getContent()).contains("Executed cron job");
+        assertThat(cronRun.getContent()).contains("已执行定时任务");
 
         GatewayReply retry = env.gatewayService.handle(new GatewayMessage(PlatformType.MEMORY, "live-room", "tester", "/retry"));
         assertThat(retry.getContent()).isNotBlank();
     }
 }
+

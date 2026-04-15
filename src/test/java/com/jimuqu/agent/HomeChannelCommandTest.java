@@ -1,8 +1,8 @@
 package com.jimuqu.agent;
 
-import com.jimuqu.agent.core.GatewayReply;
-import com.jimuqu.agent.core.HomeChannelRecord;
-import com.jimuqu.agent.core.PlatformType;
+import com.jimuqu.agent.core.model.GatewayReply;
+import com.jimuqu.agent.core.model.HomeChannelRecord;
+import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.support.TestEnvironment;
 import org.junit.jupiter.api.Test;
 
@@ -32,3 +32,4 @@ public class HomeChannelCommandTest {
         assertThat(platforms.getContent()).contains("admin=admin-user");
     }
 }
+

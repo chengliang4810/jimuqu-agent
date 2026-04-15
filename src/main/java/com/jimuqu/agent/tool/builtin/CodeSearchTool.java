@@ -1,5 +1,6 @@
 package com.jimuqu.agent.tool.builtin;
 
+import com.jimuqu.agent.support.constants.ToolNameConstants;
 import org.noear.solon.Utils;
 import org.noear.solon.ai.chat.tool.AbsTool;
 import org.noear.solon.ai.chat.tool.ToolResult;
@@ -9,31 +10,49 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 基于 Exa MCP 的代码搜索工具。
+ */
 public class CodeSearchTool extends AbsTool {
+    /**
+     * 默认返回 token 数。
+     */
     private static final int DEFAULT_TOKENS = 5000;
+
+    /**
+     * 单例实例。
+     */
     private static final CodeSearchTool INSTANCE = new CodeSearchTool();
 
+    /**
+     * Exa MCP 客户端。
+     */
+    private final McpClientProvider mcpClient;
+
+    /**
+     * 获取单例实例。
+     */
     public static CodeSearchTool getInstance() {
         return INSTANCE;
     }
 
-    private final McpClientProvider mcpClient;
-
+    /**
+     * 构造工具并注册参数定义。
+     */
     public CodeSearchTool() {
         this.mcpClient = ExaAiClient.getMcpClient();
-
         addParam("query", String.class, true, "搜索查询词");
-        addParam("tokensNum", Integer.class, false, "返回的 Token 数量", "5000");
+        addParam("tokensNum", Integer.class, false, "返回上下文的 Token 数量", String.valueOf(DEFAULT_TOKENS));
     }
 
     @Override
     public String name() {
-        return "codesearch";
+        return ToolNameConstants.CODESEARCH;
     }
 
     @Override
     public String description() {
-        return "使用 Exa Code API 搜索并获取编程任务相关上下文";
+        return "使用 Exa Code API 搜索并获取与编程任务相关的上下文。";
     }
 
     @Override
@@ -53,7 +72,7 @@ public class CodeSearchTool extends AbsTool {
         ToolResult result = mcpClient.callTool("get_code_context_exa", toolArgs);
         if (result.isError()) {
             String errorText = Utils.isNotEmpty(result.getContent()) ? result.getContent() : "Unknown error";
-            throw new RuntimeException("代码搜索出错: " + errorText);
+            throw new RuntimeException("代码搜索失败: " + errorText);
         }
 
         String title = "Code search: " + query;
@@ -63,7 +82,7 @@ public class CodeSearchTool extends AbsTool {
             response.put("title", title);
             response.put("metadata", new HashMap<String, Object>());
         } else {
-            response.put("output", "未找到相关的代码片段或文档。请尝试更换查询词。");
+            response.put("output", "未找到相关的代码片段或文档，请尝试调整查询词。");
             response.put("title", title);
             response.put("metadata", new HashMap<String, Object>());
         }

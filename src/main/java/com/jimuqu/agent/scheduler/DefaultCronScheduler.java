@@ -1,13 +1,13 @@
 package com.jimuqu.agent.scheduler;
 
 import com.jimuqu.agent.config.AppConfig;
-import com.jimuqu.agent.core.ConversationOrchestrator;
-import com.jimuqu.agent.core.CronJobRecord;
-import com.jimuqu.agent.core.CronJobRepository;
-import com.jimuqu.agent.core.DeliveryService;
-import com.jimuqu.agent.core.GatewayMessage;
-import com.jimuqu.agent.core.GatewayReply;
-import com.jimuqu.agent.core.PlatformType;
+import com.jimuqu.agent.core.service.ConversationOrchestrator;
+import com.jimuqu.agent.core.model.CronJobRecord;
+import com.jimuqu.agent.core.repository.CronJobRepository;
+import com.jimuqu.agent.core.service.DeliveryService;
+import com.jimuqu.agent.core.model.GatewayMessage;
+import com.jimuqu.agent.core.model.GatewayReply;
+import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.support.CronSupport;
 import com.jimuqu.agent.support.SourceKeySupport;
 import org.slf4j.Logger;
@@ -18,6 +18,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * DefaultCronScheduler 实现。
+ */
 public class DefaultCronScheduler {
     private static final Logger log = LoggerFactory.getLogger(DefaultCronScheduler.class);
 

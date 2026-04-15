@@ -23,3 +23,4 @@ public class ToolRegistryExposureTest {
         assertThat(joined).contains("WebfetchTool");
     }
 }
+

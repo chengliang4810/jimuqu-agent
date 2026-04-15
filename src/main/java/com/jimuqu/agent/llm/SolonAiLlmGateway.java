@@ -1,9 +1,9 @@
 package com.jimuqu.agent.llm;
 
 import com.jimuqu.agent.config.AppConfig;
-import com.jimuqu.agent.core.LlmGateway;
-import com.jimuqu.agent.core.LlmResult;
-import com.jimuqu.agent.core.SessionRecord;
+import com.jimuqu.agent.core.service.LlmGateway;
+import com.jimuqu.agent.core.model.LlmResult;
+import com.jimuqu.agent.core.model.SessionRecord;
 import org.noear.solon.ai.chat.ChatModel;
 import org.noear.solon.ai.chat.ChatResponse;
 import org.noear.solon.ai.chat.session.InMemoryChatSession;
@@ -15,6 +15,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * SolonAiLlmGateway 实现。
+ */
 public class SolonAiLlmGateway implements LlmGateway {
     private final AppConfig appConfig;
 

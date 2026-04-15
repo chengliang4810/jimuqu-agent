@@ -2,10 +2,20 @@ package com.jimuqu.agent.support;
 
 import java.util.Calendar;
 
+/**
+ * 轻量级 cron 计算辅助类，仅覆盖当前项目需要的 5 段 cron 语义。
+ */
 public final class CronSupport {
     private CronSupport() {
     }
 
+    /**
+     * 计算下一次执行时间。
+     *
+     * @param cronExpr       5 段 cron 表达式
+     * @param fromEpochMillis 起算时间
+     * @return 下一次执行时间戳
+     */
     public static long nextRunAt(String cronExpr, long fromEpochMillis) {
         if (cronExpr == null || cronExpr.trim().isEmpty()) {
             return fromEpochMillis + 60000L;
@@ -37,15 +47,20 @@ public final class CronSupport {
         return fromEpochMillis + 60000L;
     }
 
+    /**
+     * 将 Java 星期映射为 cron 星期值后做匹配。
+     */
     private static boolean matchesDayOfWeek(String expr, int dayOfWeek) {
         int normalized = dayOfWeek - 1;
         if (normalized < 0) {
             normalized = 0;
         }
-
         return matches(expr, normalized);
     }
 
+    /**
+     * 匹配单个 cron 字段。
+     */
     private static boolean matches(String expr, int value) {
         if ("*".equals(expr)) {
             return true;

@@ -2,9 +2,9 @@ package com.jimuqu.agent.gateway.platform.wecom;
 
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.config.AppConfig;
-import com.jimuqu.agent.core.DeliveryRequest;
-import com.jimuqu.agent.core.PlatformType;
-import com.jimuqu.agent.gateway.AbstractConfigurableChannelAdapter;
+import com.jimuqu.agent.core.model.DeliveryRequest;
+import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
 import okhttp3.*;
 import org.noear.snack4.ONode;
 
@@ -12,6 +12,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
 
+/**
+ * WeComChannelAdapter 实现。
+ */
 public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
     private static final String DEFAULT_WS_URL = "wss://openws.work.weixin.qq.com";
 

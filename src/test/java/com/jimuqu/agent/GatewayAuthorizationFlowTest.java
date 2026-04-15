@@ -1,6 +1,6 @@
 package com.jimuqu.agent;
 
-import com.jimuqu.agent.core.GatewayReply;
+import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.support.TestEnvironment;
 import org.junit.jupiter.api.Test;
 
@@ -31,3 +31,4 @@ public class GatewayAuthorizationFlowTest {
         assertThat(normalReply.getContent()).contains("echo:hello after pairing");
     }
 }
+

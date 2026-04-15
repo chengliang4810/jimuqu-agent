@@ -1,9 +1,9 @@
 package com.jimuqu.agent;
 
-import com.jimuqu.agent.core.GatewayMessage;
-import com.jimuqu.agent.core.GatewayReply;
-import com.jimuqu.agent.core.PlatformType;
-import com.jimuqu.agent.core.SessionRecord;
+import com.jimuqu.agent.core.model.GatewayMessage;
+import com.jimuqu.agent.core.model.GatewayReply;
+import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.support.TestEnvironment;
 import org.junit.jupiter.api.Test;
 
@@ -33,7 +33,7 @@ public class GatewayCommandFlowTest {
         assertThat(branchReply.getContent()).contains("review");
 
         GatewayReply undoReply = env.gatewayService.handle(env.message("room-1", "user-1", "/undo"));
-        assertThat(undoReply.getContent()).contains("Removed");
+        assertThat(undoReply.getContent()).contains("已从会话中移除上一轮对话");
 
         GatewayReply newReply = env.gatewayService.handle(env.message("room-1", "user-1", "/new"));
         assertThat(newReply.getSessionId()).isNotEqualTo(firstSessionId);
@@ -42,3 +42,4 @@ public class GatewayCommandFlowTest {
         assertThat(rebound.getSessionId()).isEqualTo(newReply.getSessionId());
     }
 }
+

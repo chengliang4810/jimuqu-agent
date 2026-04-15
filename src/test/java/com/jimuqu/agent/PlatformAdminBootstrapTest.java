@@ -1,8 +1,8 @@
 package com.jimuqu.agent;
 
-import com.jimuqu.agent.core.GatewayReply;
-import com.jimuqu.agent.core.PlatformAdminRecord;
-import com.jimuqu.agent.core.PlatformType;
+import com.jimuqu.agent.core.model.GatewayReply;
+import com.jimuqu.agent.core.model.PlatformAdminRecord;
+import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.support.TestEnvironment;
 import org.junit.jupiter.api.Test;
 
@@ -33,3 +33,4 @@ public class PlatformAdminBootstrapTest {
         assertThat(secondClaim.getContent()).contains("pairing code");
     }
 }
+

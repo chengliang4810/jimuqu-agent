@@ -1,0 +1,55 @@
+package com.jimuqu.agent.core.repository;
+
+import com.jimuqu.agent.core.model.SessionRecord;
+
+import java.util.List;
+
+/**
+ * 会话仓储接口。
+ */
+public interface SessionRepository {
+    /**
+     * 查询来源键当前绑定的会话。
+     */
+    SessionRecord getBoundSession(String sourceKey) throws Exception;
+
+    /**
+     * 为来源键创建并绑定新会话。
+     */
+    SessionRecord bindNewSession(String sourceKey) throws Exception;
+
+    /**
+     * 重新绑定来源键到指定会话。
+     */
+    void bindSource(String sourceKey, String sessionId) throws Exception;
+
+    /**
+     * 克隆会话并生成新分支。
+     */
+    SessionRecord cloneSession(String sourceKey, String sourceSessionId, String branchName) throws Exception;
+
+    /**
+     * 通过会话 ID 查询会话。
+     */
+    SessionRecord findById(String sessionId) throws Exception;
+
+    /**
+     * 通过来源键和分支名查询会话。
+     */
+    SessionRecord findBySourceAndBranch(String sourceKey, String branchName) throws Exception;
+
+    /**
+     * 保存会话。
+     */
+    void save(SessionRecord sessionRecord) throws Exception;
+
+    /**
+     * 全文检索会话。
+     */
+    List<SessionRecord> search(String keyword, int limit) throws Exception;
+
+    /**
+     * 更新会话模型覆盖配置。
+     */
+    void setModelOverride(String sessionId, String modelOverride) throws Exception;
+}

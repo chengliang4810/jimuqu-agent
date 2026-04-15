@@ -3,35 +3,37 @@ package com.jimuqu.agent.bootstrap;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.context.FileContextService;
 import com.jimuqu.agent.context.LocalSkillService;
-import com.jimuqu.agent.core.ChannelAdapter;
-import com.jimuqu.agent.core.CommandService;
-import com.jimuqu.agent.core.ConversationOrchestrator;
-import com.jimuqu.agent.core.CronJobRepository;
-import com.jimuqu.agent.core.DeliveryService;
-import com.jimuqu.agent.core.GatewayPolicyRepository;
-import com.jimuqu.agent.core.LlmGateway;
-import com.jimuqu.agent.core.PlatformType;
-import com.jimuqu.agent.core.SessionRepository;
-import com.jimuqu.agent.core.ToolRegistry;
+import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.core.model.GatewayMessage;
+import com.jimuqu.agent.core.repository.CronJobRepository;
+import com.jimuqu.agent.core.repository.GatewayPolicyRepository;
+import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.service.ChannelAdapter;
+import com.jimuqu.agent.core.service.CommandService;
+import com.jimuqu.agent.core.service.ConversationOrchestrator;
+import com.jimuqu.agent.core.service.DeliveryService;
+import com.jimuqu.agent.core.service.InboundMessageHandler;
+import com.jimuqu.agent.core.service.LlmGateway;
+import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.engine.DefaultConversationOrchestrator;
-import com.jimuqu.agent.gateway.AdapterBackedDeliveryService;
-import com.jimuqu.agent.gateway.GatewayAuthorizationService;
-import com.jimuqu.agent.gateway.DefaultCommandService;
-import com.jimuqu.agent.gateway.DefaultGatewayService;
+import com.jimuqu.agent.gateway.authorization.GatewayAuthorizationService;
+import com.jimuqu.agent.gateway.command.DefaultCommandService;
+import com.jimuqu.agent.gateway.delivery.AdapterBackedDeliveryService;
 import com.jimuqu.agent.gateway.platform.dingtalk.DingTalkChannelAdapter;
 import com.jimuqu.agent.gateway.platform.feishu.FeishuChannelAdapter;
 import com.jimuqu.agent.gateway.platform.wecom.WeComChannelAdapter;
 import com.jimuqu.agent.gateway.platform.weixin.WeiXinChannelAdapter;
+import com.jimuqu.agent.gateway.service.DefaultGatewayService;
 import com.jimuqu.agent.llm.SolonAiLlmGateway;
 import com.jimuqu.agent.scheduler.DefaultCronScheduler;
-import com.jimuqu.agent.storage.SqliteCronJobRepository;
-import com.jimuqu.agent.storage.SqliteDatabase;
-import com.jimuqu.agent.storage.SqliteGatewayPolicyRepository;
-import com.jimuqu.agent.storage.SqlitePreferenceStore;
-import com.jimuqu.agent.storage.SqliteSessionRepository;
+import com.jimuqu.agent.storage.repository.SqliteCronJobRepository;
+import com.jimuqu.agent.storage.repository.SqliteDatabase;
+import com.jimuqu.agent.storage.repository.SqliteGatewayPolicyRepository;
+import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
+import com.jimuqu.agent.storage.repository.SqliteSessionRepository;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
-import com.jimuqu.agent.tool.DefaultToolRegistry;
-import com.jimuqu.agent.tool.ProcessRegistry;
+import com.jimuqu.agent.tool.runtime.DefaultToolRegistry;
+import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import org.noear.solon.Solon;
 import org.noear.solon.annotation.Bean;
 import org.noear.solon.annotation.Configuration;
@@ -42,60 +44,99 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Solon Bean 装配配置类，集中定义应用主链所需的核心组件。
+ */
 @Configuration
 public class JimuquAgentConfiguration {
+    /**
+     * 启动期日志器。
+     */
     private static final Logger log = LoggerFactory.getLogger(JimuquAgentConfiguration.class);
 
+    /**
+     * 创建应用配置 Bean。
+     */
     @Bean
     public AppConfig appConfig() {
         return AppConfig.load(Solon.cfg());
     }
 
+    /**
+     * 创建 SQLite 数据库访问对象并初始化表结构。
+     */
     @Bean
     public SqliteDatabase sqliteDatabase(AppConfig appConfig) throws Exception {
         return new SqliteDatabase(appConfig);
     }
 
+    /**
+     * 创建偏好存储。
+     */
     @Bean
     public SqlitePreferenceStore sqlitePreferenceStore(SqliteDatabase sqliteDatabase) {
         return new SqlitePreferenceStore(sqliteDatabase);
     }
 
+    /**
+     * 创建会话仓储。
+     */
     @Bean
     public SessionRepository sessionRepository(SqliteDatabase sqliteDatabase) {
         return new SqliteSessionRepository(sqliteDatabase);
     }
 
+    /**
+     * 创建定时任务仓储。
+     */
     @Bean
     public CronJobRepository cronJobRepository(SqliteDatabase sqliteDatabase) {
         return new SqliteCronJobRepository(sqliteDatabase);
     }
 
+    /**
+     * 创建本地技能服务。
+     */
     @Bean
     public LocalSkillService localSkillService(AppConfig appConfig, SqlitePreferenceStore preferenceStore) {
         return new LocalSkillService(appConfig, preferenceStore);
     }
 
+    /**
+     * 创建文件上下文服务。
+     */
     @Bean
     public FileContextService fileContextService(AppConfig appConfig, LocalSkillService localSkillService) {
         return new FileContextService(appConfig, localSkillService, new File(System.getProperty("user.dir")));
     }
 
+    /**
+     * 创建大模型网关。
+     */
     @Bean
     public LlmGateway llmGateway(AppConfig appConfig) {
         return new SolonAiLlmGateway(appConfig);
     }
 
+    /**
+     * 创建进程注册表。
+     */
     @Bean
     public ProcessRegistry processRegistry() {
         return new ProcessRegistry();
     }
 
+    /**
+     * 创建编排器持有器。
+     */
     @Bean
     public ConversationOrchestratorHolder conversationOrchestratorHolder() {
         return new ConversationOrchestratorHolder();
     }
 
+    /**
+     * 创建渠道适配器映射。
+     */
     @Bean
     public Map<PlatformType, ChannelAdapter> channelAdapters(AppConfig appConfig) {
         Map<PlatformType, ChannelAdapter> adapters = new LinkedHashMap<PlatformType, ChannelAdapter>();
@@ -106,23 +147,35 @@ public class JimuquAgentConfiguration {
         return adapters;
     }
 
+    /**
+     * 创建网关授权策略仓储。
+     */
     @Bean
     public GatewayPolicyRepository gatewayPolicyRepository(SqliteDatabase sqliteDatabase) {
         return new SqliteGatewayPolicyRepository(sqliteDatabase);
     }
 
+    /**
+     * 创建统一投递服务。
+     */
     @Bean
     public DeliveryService deliveryService(Map<PlatformType, ChannelAdapter> channelAdapters,
                                            GatewayPolicyRepository gatewayPolicyRepository) {
         return new AdapterBackedDeliveryService(channelAdapters, gatewayPolicyRepository);
     }
 
+    /**
+     * 创建授权服务。
+     */
     @Bean
     public GatewayAuthorizationService gatewayAuthorizationService(GatewayPolicyRepository gatewayPolicyRepository,
                                                                    AppConfig appConfig) {
         return new GatewayAuthorizationService(gatewayPolicyRepository, appConfig);
     }
 
+    /**
+     * 创建工具注册表。
+     */
     @Bean
     public ToolRegistry toolRegistry(AppConfig appConfig,
                                      SqlitePreferenceStore preferenceStore,
@@ -131,9 +184,20 @@ public class JimuquAgentConfiguration {
                                      DeliveryService deliveryService,
                                      ConversationOrchestratorHolder conversationOrchestratorHolder,
                                      ProcessRegistry processRegistry) {
-        return new DefaultToolRegistry(appConfig, preferenceStore, sessionRepository, cronJobRepository, deliveryService, conversationOrchestratorHolder, processRegistry);
+        return new DefaultToolRegistry(
+                appConfig,
+                preferenceStore,
+                sessionRepository,
+                cronJobRepository,
+                deliveryService,
+                conversationOrchestratorHolder,
+                processRegistry
+        );
     }
 
+    /**
+     * 创建对话编排器并同步到持有器。
+     */
     @Bean
     public ConversationOrchestrator conversationOrchestrator(SessionRepository sessionRepository,
                                                              FileContextService contextService,
@@ -145,6 +209,9 @@ public class JimuquAgentConfiguration {
         return orchestrator;
     }
 
+    /**
+     * 创建命令服务。
+     */
     @Bean
     public CommandService commandService(SessionRepository sessionRepository,
                                          ToolRegistry toolRegistry,
@@ -153,32 +220,56 @@ public class JimuquAgentConfiguration {
                                          ConversationOrchestrator conversationOrchestrator,
                                          DeliveryService deliveryService,
                                          GatewayAuthorizationService gatewayAuthorizationService) {
-        return new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, conversationOrchestrator, deliveryService, gatewayAuthorizationService);
+        return new DefaultCommandService(
+                sessionRepository,
+                toolRegistry,
+                localSkillService,
+                cronJobRepository,
+                conversationOrchestrator,
+                deliveryService,
+                gatewayAuthorizationService
+        );
     }
 
+    /**
+     * 创建网关服务并为各渠道注入统一入站处理器。
+     */
     @Bean
     public DefaultGatewayService gatewayService(CommandService commandService,
                                                 ConversationOrchestrator conversationOrchestrator,
                                                 DeliveryService deliveryService,
                                                 GatewayAuthorizationService gatewayAuthorizationService,
                                                 Map<PlatformType, ChannelAdapter> channelAdapters) {
-        DefaultGatewayService service = new DefaultGatewayService(commandService, conversationOrchestrator, deliveryService, gatewayAuthorizationService);
+        final DefaultGatewayService service = new DefaultGatewayService(
+                commandService,
+                conversationOrchestrator,
+                deliveryService,
+                gatewayAuthorizationService
+        );
+
         for (ChannelAdapter adapter : channelAdapters.values()) {
-            adapter.setInboundMessageHandler(new com.jimuqu.agent.core.InboundMessageHandler() {
-                public void handle(com.jimuqu.agent.core.GatewayMessage message) throws Exception {
+            adapter.setInboundMessageHandler(new InboundMessageHandler() {
+                @Override
+                public void handle(GatewayMessage message) throws Exception {
                     service.handle(message);
                 }
             });
+
             boolean connected = adapter.connect();
-            log.info("[CHANNEL] platform={}, enabled={}, connected={}, detail={}",
+            log.info(
+                    "[CHANNEL] platform={}, enabled={}, connected={}, detail={}",
                     adapter.platform(),
                     adapter.isEnabled(),
                     connected,
-                    adapter.detail());
+                    adapter.detail()
+            );
         }
         return service;
     }
 
+    /**
+     * 创建并启动定时任务调度器。
+     */
     @Bean
     public DefaultCronScheduler defaultCronScheduler(AppConfig appConfig,
                                                      CronJobRepository cronJobRepository,

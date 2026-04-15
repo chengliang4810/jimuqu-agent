@@ -1,8 +1,8 @@
 package com.jimuqu.agent.support;
 
-import com.jimuqu.agent.core.ChannelAdapter;
-import com.jimuqu.agent.core.DeliveryRequest;
-import com.jimuqu.agent.core.PlatformType;
+import com.jimuqu.agent.core.service.ChannelAdapter;
+import com.jimuqu.agent.core.model.DeliveryRequest;
+import com.jimuqu.agent.core.enums.PlatformType;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -49,3 +49,4 @@ public class MemoryChannelAdapter implements ChannelAdapter {
         return requests.get(requests.size() - 1);
     }
 }
+

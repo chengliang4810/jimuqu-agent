@@ -1,5 +1,6 @@
 package com.jimuqu.agent.tool.builtin;
 
+import com.jimuqu.agent.support.constants.ToolNameConstants;
 import org.noear.solon.Utils;
 import org.noear.solon.ai.annotation.ToolMapping;
 import org.noear.solon.ai.chat.tool.ToolResult;
@@ -10,29 +11,62 @@ import org.noear.solon.annotation.Param;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 基于 Exa MCP 的网页搜索工具。
+ */
 public class WebsearchTool {
+    /**
+     * 默认搜索结果数。
+     */
     private static final int DEFAULT_NUM_RESULTS = 8;
+
+    /**
+     * 默认上下文字符数。
+     */
     private static final int DEFAULT_CONTEXT_CHARS = 10000;
+
+    /**
+     * 默认实时抓取策略。
+     */
     private static final String DEFAULT_LIVECRAWL = "fallback";
+
+    /**
+     * 默认搜索类型。
+     */
     private static final String DEFAULT_TYPE = "auto";
 
+    /**
+     * 单例实例。
+     */
     private static final WebsearchTool INSTANCE = new WebsearchTool();
 
+    /**
+     * Exa MCP 客户端。
+     */
+    private final McpClientProvider mcpClient;
+
+    /**
+     * 获取单例实例。
+     */
     public static WebsearchTool getInstance() {
         return INSTANCE;
     }
 
-    private final McpClientProvider mcpClient;
-
+    /**
+     * 构造搜索工具。
+     */
     public WebsearchTool() {
         this.mcpClient = ExaAiClient.getMcpClient();
     }
 
-    @ToolMapping(name = "websearch", description = "执行实时 web 搜索")
+    /**
+     * 执行网页搜索。
+     */
+    @ToolMapping(name = ToolNameConstants.WEBSEARCH, description = "执行实时网页搜索")
     public Document websearch(
-            @Param(name = "query", description = "查询关键字") String query,
+            @Param(name = "query", description = "搜索关键词") String query,
             @Param(name = "numResults", required = false, defaultValue = "8", description = "返回结果数量") Integer numResults,
-            @Param(name = "livecrawl", required = false, defaultValue = "fallback", description = "实时爬行模式") String livecrawl,
+            @Param(name = "livecrawl", required = false, defaultValue = "fallback", description = "实时抓取策略") String livecrawl,
             @Param(name = "type", required = false, defaultValue = "auto", description = "搜索类型") String type,
             @Param(name = "contextMaxCharacters", required = false, defaultValue = "10000", description = "最大上下文字符数") Integer contextMaxCharacters
     ) throws Exception {

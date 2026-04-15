@@ -1,7 +1,7 @@
 package com.jimuqu.agent;
 
-import com.jimuqu.agent.core.DeliveryRequest;
-import com.jimuqu.agent.core.PlatformType;
+import com.jimuqu.agent.core.model.DeliveryRequest;
+import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.support.TestEnvironment;
 import org.junit.jupiter.api.Test;
 
@@ -21,3 +21,4 @@ public class DeliveryHomeChannelFallbackTest {
         assertThat(env.memoryChannelAdapter.getLastRequest().getText()).isEqualTo("scheduled");
     }
 }
+

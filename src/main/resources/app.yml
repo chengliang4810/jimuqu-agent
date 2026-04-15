@@ -1,13 +1,13 @@
 server.port: 8080
 
-# Runtime directories
+# 运行时目录配置
 jimuqu.runtime.home: runtime
 jimuqu.runtime.contextDir: runtime/context
 jimuqu.runtime.skillsDir: runtime/skills
 jimuqu.runtime.cacheDir: runtime/cache
 jimuqu.runtime.stateDb: runtime/state.db
 
-# Default live model
+# 默认大模型配置
 jimuqu.llm.provider: openai-responses
 jimuqu.llm.apiUrl: https://subapi.jimuqu.com/v1/responses
 jimuqu.llm.model: gpt-5.4
@@ -16,17 +16,18 @@ jimuqu.llm.reasoningEffort: medium
 jimuqu.llm.temperature: 0.2
 jimuqu.llm.maxTokens: 4096
 
+# 定时任务调度
 jimuqu.scheduler.enabled: true
 jimuqu.scheduler.tickSeconds: 60
 
-# Channels
+# 飞书渠道
 jimuqu.channels.feishu.enabled: false
 jimuqu.channels.feishu.allowedUsers:
 jimuqu.channels.feishu.allowAllUsers: false
 jimuqu.channels.feishu.unauthorizedDmBehavior: pair
 
-# DingTalk stream-mode inbound + official robot outbound
-# Prefer environment variables for secrets:
+# 钉钉渠道，仅支持 stream mode 入站与官方机器人出站
+# 建议优先使用环境变量注入敏感配置：
 # JIMUQU_DINGTALK_ENABLED
 # JIMUQU_DINGTALK_CLIENT_ID
 # JIMUQU_DINGTALK_CLIENT_SECRET
@@ -38,15 +39,18 @@ jimuqu.channels.dingtalk.unauthorizedDmBehavior: pair
 jimuqu.channels.dingtalk.robotCode:
 jimuqu.channels.dingtalk.coolAppCode:
 
+# 企微渠道
 jimuqu.channels.wecom.enabled: false
 jimuqu.channels.wecom.allowedUsers:
 jimuqu.channels.wecom.allowAllUsers: false
 jimuqu.channels.wecom.unauthorizedDmBehavior: pair
+
+# 微信渠道
 jimuqu.channels.weixin.enabled: false
 jimuqu.channels.weixin.allowedUsers:
 jimuqu.channels.weixin.allowAllUsers: false
 jimuqu.channels.weixin.unauthorizedDmBehavior: pair
 
-# Global gateway authorization fallback
+# 全局网关授权兜底配置
 jimuqu.gateway.allowedUsers:
 jimuqu.gateway.allowAllUsers: false

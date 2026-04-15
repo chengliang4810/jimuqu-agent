@@ -23,6 +23,7 @@
         <sqlite.version>3.51.1.0</sqlite.version>
         <junit.version>5.10.2</junit.version>
         <slf4j.version>2.0.16</slf4j.version>
+        <lombok.version>1.18.36</lombok.version>
     </properties>
 
     <dependencies>
@@ -96,6 +97,12 @@
             <artifactId>slf4j-simple</artifactId>
             <version>${slf4j.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -128,6 +135,17 @@
                     <target>${maven.compiler.target}</target>
                     <encoding>${project.build.sourceEncoding}</encoding>
                     <parameters>true</parameters>
+                    <compilerArgs>
+                        <arg>-processor</arg>
+                        <arg>lombok.launch.AnnotationProcessorHider$AnnotationProcessor</arg>
+                    </compilerArgs>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
             <plugin>
@@ -163,7 +181,7 @@
                             </filters>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.jimuqu.agent.bootstrap.JimuquAgentApp</mainClass>
+                                    <mainClass>com.jimuqu.agent.JimuquAgentApp</mainClass>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
