@@ -4,6 +4,7 @@ import com.jimuqu.agent.core.model.CronJobRecord;
 import com.jimuqu.agent.core.repository.CronJobRepository;
 import com.jimuqu.agent.support.CronSupport;
 import com.jimuqu.agent.support.IdSupport;
+import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
 import java.util.List;
@@ -21,7 +22,10 @@ public class CronjobTools {
     }
 
     @ToolMapping(name = "cronjob", description = "Manage cron jobs. action can be create, list, pause, resume, or delete.")
-    public String cronjob(String action, String name, String cronExpr, String prompt) throws Exception {
+    public String cronjob(@Param(name = "action", description = "create、list、pause、resume、delete") String action,
+                          @Param(name = "name", description = "任务名或任务 ID", required = false) String name,
+                          @Param(name = "cronExpr", description = "cron 表达式", required = false) String cronExpr,
+                          @Param(name = "prompt", description = "任务提示词", required = false) String prompt) throws Exception {
         if ("list".equalsIgnoreCase(action)) {
             List<CronJobRecord> jobs = cronJobRepository.listBySource(sourceKey);
             StringBuilder buffer = new StringBuilder();

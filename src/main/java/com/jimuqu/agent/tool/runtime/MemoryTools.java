@@ -3,6 +3,7 @@ package com.jimuqu.agent.tool.runtime;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.core.service.MemoryService;
 import com.jimuqu.agent.support.constants.MemoryConstants;
+import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
 /**
@@ -25,7 +26,10 @@ public class MemoryTools {
      * 管理 MEMORY.md 与 USER.md。
      */
     @ToolMapping(name = "memory", description = "Manage persistent memory. action supports add, replace, remove, read. target supports memory or user.")
-    public String memory(String action, String target, String content, String oldText) throws Exception {
+    public String memory(@Param(name = "action", description = "操作类型：add、replace、remove、read") String action,
+                         @Param(name = "target", description = "目标存储：memory 或 user") String target,
+                         @Param(name = "content", description = "新增或替换的内容", required = false) String content,
+                         @Param(name = "oldText", description = "replace/remove 时用于匹配旧条目的文本", required = false) String oldText) throws Exception {
         String normalizedTarget = StrUtil.blankToDefault(target, MemoryConstants.TARGET_MEMORY);
         if (MemoryConstants.ACTION_READ.equalsIgnoreCase(action)) {
             return memoryService.read(normalizedTarget);

@@ -77,6 +77,7 @@ public class DefaultGatewayService {
                         message.getPlatform(),
                         message.getChatId(),
                         message.getUserId(),
+                        message.getChatType(),
                         message.getThreadId(),
                         preAuth.getContent()
                 ));
@@ -101,6 +102,7 @@ public class DefaultGatewayService {
                     message.getPlatform(),
                     message.getChatId(),
                     message.getUserId(),
+                    message.getChatType(),
                     message.getThreadId(),
                     reply.getContent()
             ));

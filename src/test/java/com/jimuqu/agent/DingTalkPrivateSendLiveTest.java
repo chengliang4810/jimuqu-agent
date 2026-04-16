@@ -41,7 +41,7 @@ public class DingTalkPrivateSendLiveTest {
             @SuppressWarnings("unchecked")
             Map<String, Boolean> flags = (Map<String, Boolean>) field.get(adapter);
             flags.put(openConversationId, Boolean.FALSE);
-            adapter.send(new DeliveryRequest(PlatformType.DINGTALK, openConversationId, userId, null, "私聊发送测试"));
+            adapter.send(new DeliveryRequest(PlatformType.DINGTALK, openConversationId, userId, "dm", null, "私聊发送测试"));
             assertThat(adapter.isConnected()).isTrue();
         } finally {
             adapter.disconnect();

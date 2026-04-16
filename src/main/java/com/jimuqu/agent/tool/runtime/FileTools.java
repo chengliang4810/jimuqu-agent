@@ -5,6 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
+import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
 import java.io.File;
@@ -40,12 +41,13 @@ public class FileTools {
     }
 
     @ToolMapping(name = "read_file", description = "Read a UTF-8 text file from disk by absolute or relative path.")
-    public String readFile(String path) {
+    public String readFile(@Param(name = "path", description = "文件绝对路径或相对路径") String path) {
         return FileUtil.readUtf8String(FileUtil.file(path));
     }
 
     @ToolMapping(name = "write_file", description = "Write UTF-8 text content to a file path, creating parent directories when needed.")
-    public String writeFile(String path, String content) throws Exception {
+    public String writeFile(@Param(name = "path", description = "目标文件路径") String path,
+                            @Param(name = "content", description = "写入的 UTF-8 文本内容") String content) throws Exception {
         File file = FileUtil.file(path);
         checkpoint(file);
         FileUtil.mkParentDirs(file);
@@ -54,7 +56,9 @@ public class FileTools {
     }
 
     @ToolMapping(name = "patch", description = "Replace one text snippet with another inside a UTF-8 text file.")
-    public String patch(String path, String findText, String replaceText) throws Exception {
+    public String patch(@Param(name = "path", description = "目标文件路径") String path,
+                        @Param(name = "findText", description = "要替换的原始文本") String findText,
+                        @Param(name = "replaceText", description = "替换后的文本") String replaceText) throws Exception {
         File file = FileUtil.file(path);
         String original = FileUtil.readUtf8String(file);
         if (StrUtil.isEmpty(findText) || !original.contains(findText)) {
@@ -66,7 +70,8 @@ public class FileTools {
     }
 
     @ToolMapping(name = "search_files", description = "Search for text inside files under a directory path.")
-    public String searchFiles(String rootPath, String pattern) {
+    public String searchFiles(@Param(name = "rootPath", description = "搜索根目录") String rootPath,
+                              @Param(name = "pattern", description = "要搜索的文本模式") String pattern) {
         List<File> files = FileUtil.loopFiles(FileUtil.file(rootPath));
         StringBuilder buffer = new StringBuilder();
         for (File file : files) {

@@ -15,7 +15,7 @@ public final class SourceKeySupport {
      */
     public static DeliveryRequest toDeliveryRequest(String sourceKey, String text) {
         String[] parts = split(sourceKey);
-        return new DeliveryRequest(PlatformType.fromName(parts[0]), parts[1], parts[2], null, text);
+        return new DeliveryRequest(PlatformType.fromName(parts[0]), parts[1], parts[2], null, null, text);
     }
 
     /**

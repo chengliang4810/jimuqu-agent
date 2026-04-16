@@ -47,20 +47,19 @@ public class AsyncSkillLearningService implements SkillLearningService {
             return;
         }
 
-        final int toolMessages = countToolMessages(session);
-        final boolean hasRecentCheckpoint = checkpointService.hasRecentCheckpoint(
-                message.sourceKey(),
-                Math.max(session.getLastLearningAt(), session.getUpdatedAt() - 60_000L)
-        );
-
-        if (toolMessages < appConfig.getLearning().getToolCallThreshold() && !hasRecentCheckpoint) {
-            return;
-        }
-
         executorService.submit(new Runnable() {
             @Override
             public void run() {
                 try {
+                    int toolMessages = countToolMessages(session);
+                    boolean hasRecentCheckpoint = checkpointService.hasRecentCheckpoint(
+                            message.sourceKey(),
+                            Math.max(session.getLastLearningAt(), session.getUpdatedAt() - 60_000L)
+                    );
+
+                    if (toolMessages < appConfig.getLearning().getToolCallThreshold() && !hasRecentCheckpoint) {
+                        return;
+                    }
                     runLearning(session, message, toolMessages, hasRecentCheckpoint);
                 } catch (Exception ignored) {
                     // 学习失败不影响主回复。

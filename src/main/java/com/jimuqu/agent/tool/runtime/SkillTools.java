@@ -1,7 +1,6 @@
 package com.jimuqu.agent.tool.runtime;
 
 import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.model.SkillDescriptor;
@@ -10,6 +9,7 @@ import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.support.constants.SkillConstants;
 import org.noear.snack4.ONode;
+import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
 import java.io.File;
@@ -55,7 +55,7 @@ public class SkillTools {
     }
 
     @ToolMapping(name = "skills_list", description = "List available skills. Optional category filter.")
-    public String skillsList(String category) throws Exception {
+    public String skillsList(@Param(name = "category", description = "可选分类名", required = false) String category) throws Exception {
         List<SkillDescriptor> skills = localSkillService.listSkills(category);
         List<SkillDescriptor> visible = new ArrayList<SkillDescriptor>();
         for (SkillDescriptor descriptor : skills) {
@@ -67,20 +67,21 @@ public class SkillTools {
     }
 
     @ToolMapping(name = "skill_view", description = "Load full SKILL.md or a supporting file from a skill directory.")
-    public String skillView(String name, String filePath) throws Exception {
+    public String skillView(@Param(name = "name", description = "技能名或 category/name") String name,
+                            @Param(name = "filePath", description = "可选支持文件相对路径", required = false) String filePath) throws Exception {
         SkillView view = localSkillService.viewSkill(name, filePath);
         return ONode.serialize(view);
     }
 
     @ToolMapping(name = "skill_manage", description = "Create, patch, edit, delete or manage supporting files for a local skill.")
-    public String skillManage(String action,
-                              String name,
-                              String category,
-                              String content,
-                              String oldText,
-                              String newText,
-                              String filePath,
-                              String fileContent) throws Exception {
+    public String skillManage(@Param(name = "action", description = "create、edit、patch、delete、write_file、remove_file") String action,
+                              @Param(name = "name", description = "技能名或 category/name") String name,
+                              @Param(name = "category", description = "create 时可选分类", required = false) String category,
+                              @Param(name = "content", description = "create/edit 时的主文件内容", required = false) String content,
+                              @Param(name = "oldText", description = "patch 时要匹配的旧文本", required = false) String oldText,
+                              @Param(name = "newText", description = "patch 时替换后的新文本", required = false) String newText,
+                              @Param(name = "filePath", description = "支持文件相对路径", required = false) String filePath,
+                              @Param(name = "fileContent", description = "write_file 时写入的内容", required = false) String fileContent) throws Exception {
         if (SkillConstants.ACTION_CREATE.equalsIgnoreCase(action)) {
             checkpoint(Collections.singletonList(localSkillService.resolveSkillMainFile(name, category)));
             return ONode.serialize(localSkillService.createSkill(name, category, content));

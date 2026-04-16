@@ -22,11 +22,13 @@ public class DelegationServiceTest {
         assertThat(result.getContent()).contains("echo:");
         assertThat(result.getSessionId()).isNotBlank();
         assertThat(env.sessionRepository.getBoundSession("MEMORY:room-a:user-a").getSessionId()).isEqualTo(parent.getSessionId());
+        assertThat(env.sessionRepository.findById(result.getSessionId()).getParentSessionId()).isEqualTo(parent.getSessionId());
     }
 
     @Test
     void shouldSupportBatchDelegation() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
+        SessionRecord parent = env.sessionRepository.bindNewSession("MEMORY:room-a:user-a");
         DelegationTask first = new DelegationTask();
         first.setName("one");
         first.setPrompt("task one");
@@ -38,5 +40,7 @@ public class DelegationServiceTest {
         assertThat(results).hasSize(2);
         assertThat(results.get(0).getContent()).contains("echo:");
         assertThat(results.get(1).getContent()).contains("echo:");
+        assertThat(env.sessionRepository.findById(results.get(0).getSessionId()).getParentSessionId()).isEqualTo(parent.getSessionId());
+        assertThat(env.sessionRepository.findById(results.get(1).getSessionId()).getParentSessionId()).isEqualTo(parent.getSessionId());
     }
 }

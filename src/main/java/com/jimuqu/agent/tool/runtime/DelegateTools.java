@@ -5,6 +5,7 @@ import com.jimuqu.agent.core.model.DelegationResult;
 import com.jimuqu.agent.core.model.DelegationTask;
 import com.jimuqu.agent.core.service.DelegationService;
 import org.noear.snack4.ONode;
+import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
 import java.util.ArrayList;
@@ -36,7 +37,10 @@ public class DelegateTools {
      * 支持单任务与批量委托。
      */
     @ToolMapping(name = "delegate_task", description = "Delegate a subtask. mode supports single or batch. batch mode accepts tasks as JSON array.")
-    public String delegateTask(String mode, String prompt, String tasks, String context) throws Exception {
+    public String delegateTask(@Param(name = "mode", description = "委托模式：single 或 batch", required = false) String mode,
+                               @Param(name = "prompt", description = "单任务模式下的委托目标", required = false) String prompt,
+                               @Param(name = "tasks", description = "批量模式下的任务 JSON 数组", required = false) String tasks,
+                               @Param(name = "context", description = "委托补充上下文", required = false) String context) throws Exception {
         if (delegationService == null) {
             return "Delegate tool is not ready";
         }

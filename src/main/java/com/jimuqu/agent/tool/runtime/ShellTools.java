@@ -3,6 +3,7 @@ package com.jimuqu.agent.tool.runtime;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.util.StrUtil;
+import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
 import java.io.File;
@@ -25,7 +26,8 @@ public class ShellTools {
     }
 
     @ToolMapping(name = "terminal", description = "Execute a shell command in a working directory. Dangerous commands require approval.")
-    public String terminal(String command, String workingDir) throws Exception {
+    public String terminal(@Param(name = "command", description = "要执行的 shell 命令") String command,
+                           @Param(name = "workingDir", description = "可选工作目录", required = false) String workingDir) throws Exception {
         if (isDangerous(command) && approvals.contains(command) == false) {
             return "Command blocked by approval policy. Use approval tool first: " + command;
         }
@@ -46,7 +48,8 @@ public class ShellTools {
     }
 
     @ToolMapping(name = "process", description = "Manage background processes. action can be list, start, or stop.")
-    public String process(String action, String value) throws Exception {
+    public String process(@Param(name = "action", description = "list、start、stop") String action,
+                          @Param(name = "value", description = "动作附带值，例如命令或进程 ID", required = false) String value) throws Exception {
         if ("list".equalsIgnoreCase(action)) {
             StringBuilder buffer = new StringBuilder();
             for (Map.Entry<String, Process> entry : processRegistry.snapshot().entrySet()) {
@@ -68,7 +71,9 @@ public class ShellTools {
     }
 
     @ToolMapping(name = "execute_code", description = "Execute temporary code in powershell or python. language can be powershell or python.")
-    public String executeCode(String language, String code, String workingDir) throws Exception {
+    public String executeCode(@Param(name = "language", description = "powershell 或 python") String language,
+                              @Param(name = "code", description = "要执行的代码文本") String code,
+                              @Param(name = "workingDir", description = "可选工作目录", required = false) String workingDir) throws Exception {
         String suffix = "python".equalsIgnoreCase(language) ? ".py" : ".ps1";
         File tempFile = FileUtil.createTempFile("jimuqu-code-", suffix, true);
         FileUtil.writeUtf8String(code, tempFile);
@@ -82,7 +87,8 @@ public class ShellTools {
     }
 
     @ToolMapping(name = "approval", description = "Approve a previously blocked command string for the current process.")
-    public String approval(String action, String target) {
+    public String approval(@Param(name = "action", description = "approve 或 revoke") String action,
+                           @Param(name = "target", description = "目标命令文本") String target) {
         if ("approve".equalsIgnoreCase(action)) {
             approvals.add(target);
             return "Approved command: " + target;

@@ -4,6 +4,7 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.HashUtil;
 import com.jimuqu.agent.config.AppConfig;
 import org.noear.snack4.ONode;
+import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
 import java.io.File;
@@ -21,7 +22,8 @@ public class TodoTools {
     }
 
     @ToolMapping(name = "todo", description = "Manage a lightweight todo list. action can be add, list, clear, or done.")
-    public String todo(String action, String value) {
+    public String todo(@Param(name = "action", description = "add、list、clear、done") String action,
+                       @Param(name = "value", description = "add/done 时的条目内容", required = false) String value) {
         File file = todoFile();
         ONode node = file.exists() ? ONode.ofJson(FileUtil.readUtf8String(file)) : new ONode().asArray();
         if ("add".equalsIgnoreCase(action)) {

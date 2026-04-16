@@ -30,6 +30,11 @@ public class DeliveryRequest {
     private String userId;
 
     /**
+     * 会话类型。
+     */
+    private String chatType;
+
+    /**
      * 线程或话题 ID。
      */
     private String threadId;

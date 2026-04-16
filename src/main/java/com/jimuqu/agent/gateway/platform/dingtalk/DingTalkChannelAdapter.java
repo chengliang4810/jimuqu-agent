@@ -127,7 +127,7 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
         }
         refreshAccessTokenIfNecessary();
 
-        boolean isGroup = isGroupConversation(request.getChatId());
+        boolean isGroup = isGroupConversation(request);
         if (isGroup) {
             try {
                 OrgGroupSendHeaders headers = new OrgGroupSendHeaders();
@@ -240,8 +240,14 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
                 .toJson();
     }
 
-    private boolean isGroupConversation(String openConversationId) {
-        Boolean value = conversationGroupFlags.get(openConversationId);
+    private boolean isGroupConversation(DeliveryRequest request) {
+        if ("group".equalsIgnoreCase(request.getChatType())) {
+            return true;
+        }
+        if ("dm".equalsIgnoreCase(request.getChatType())) {
+            return false;
+        }
+        Boolean value = conversationGroupFlags.get(request.getChatId());
         return value == null || value.booleanValue();
     }
 

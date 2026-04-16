@@ -6,6 +6,7 @@ import com.jimuqu.agent.core.model.DelegationResult;
 import com.jimuqu.agent.core.model.DelegationTask;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
+import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.DelegationService;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
@@ -43,6 +44,32 @@ public class DefaultDelegationService implements DelegationService {
     );
 
     /**
+     * 当前系统已知工具清单。
+     */
+    private static final List<String> ALL_TOOLS = Arrays.asList(
+            ToolNameConstants.TERMINAL,
+            ToolNameConstants.PROCESS,
+            ToolNameConstants.READ_FILE,
+            ToolNameConstants.WRITE_FILE,
+            ToolNameConstants.PATCH,
+            ToolNameConstants.SEARCH_FILES,
+            ToolNameConstants.EXECUTE_CODE,
+            ToolNameConstants.DELEGATE_TASK,
+            ToolNameConstants.TODO,
+            ToolNameConstants.MEMORY,
+            ToolNameConstants.SESSION_SEARCH,
+            ToolNameConstants.SKILLS_LIST,
+            ToolNameConstants.SKILL_VIEW,
+            ToolNameConstants.SKILL_MANAGE,
+            ToolNameConstants.SEND_MESSAGE,
+            ToolNameConstants.CRONJOB,
+            ToolNameConstants.APPROVAL,
+            ToolNameConstants.CODESEARCH,
+            ToolNameConstants.WEBSEARCH,
+            ToolNameConstants.WEBFETCH
+    );
+
+    /**
      * 对话编排器。
      */
     private final ConversationOrchestratorHolder conversationHolder;
@@ -70,10 +97,11 @@ public class DefaultDelegationService implements DelegationService {
 
     @Override
     public DelegationResult delegateSingle(String sourceKey, String prompt, String context) throws Exception {
+        SessionRecord parentSession = sessionRepository.getBoundSession(sourceKey);
         String childSourceKey = sourceKey + ":delegate:" + IdSupport.newId();
-        for (String blockedTool : BLOCKED_TOOLS) {
-            preferenceStore.setToolEnabled(childSourceKey, blockedTool, false);
-        }
+        cloneToolVisibility(sourceKey, childSourceKey);
+        applyBlockedTools(childSourceKey);
+        prepareChildSession(childSourceKey, parentSession);
 
         if (conversationHolder.get() == null) {
             throw new IllegalStateException("Conversation orchestrator is not ready");
@@ -118,6 +146,41 @@ public class DefaultDelegationService implements DelegationService {
         } finally {
             executorService.shutdownNow();
         }
+    }
+
+    /**
+     * 复制父来源键的工具可见性。
+     */
+    private void cloneToolVisibility(String parentSourceKey, String childSourceKey) throws Exception {
+        for (String toolName : ALL_TOOLS) {
+            boolean enabled = preferenceStore.isToolEnabled(parentSourceKey, toolName);
+            preferenceStore.setToolEnabled(childSourceKey, toolName, enabled);
+        }
+    }
+
+    /**
+     * 对子会话应用固定黑名单。
+     */
+    private void applyBlockedTools(String childSourceKey) throws Exception {
+        for (String blockedTool : BLOCKED_TOOLS) {
+            preferenceStore.setToolEnabled(childSourceKey, blockedTool, false);
+        }
+    }
+
+    /**
+     * 预先创建子会话并写入父会话关系。
+     */
+    private void prepareChildSession(String childSourceKey, SessionRecord parentSession) throws Exception {
+        SessionRecord existing = sessionRepository.getBoundSession(childSourceKey);
+        if (existing != null) {
+            return;
+        }
+
+        SessionRecord childSession = sessionRepository.bindNewSession(childSourceKey);
+        if (parentSession != null) {
+            childSession.setParentSessionId(parentSession.getSessionId());
+        }
+        sessionRepository.save(childSession);
     }
 
     /**
