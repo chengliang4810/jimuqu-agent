@@ -14,6 +14,7 @@ public interface RuntimePathConstants {
     String DEFAULT_LLM_API_URL = "https://subapi.jimuqu.com/v1/responses";
     String DEFAULT_LLM_MODEL = "gpt-5.4";
     String DEFAULT_REASONING_EFFORT = "medium";
+    int DEFAULT_CONTEXT_WINDOW_TOKENS = 128000;
 
     int DEFAULT_SCHEDULER_TICK_SECONDS = 60;
     int DEFAULT_MAX_TOKENS = 4096;

@@ -1,6 +1,8 @@
 package com.jimuqu.agent.config;
 
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.support.constants.CheckpointConstants;
+import com.jimuqu.agent.support.constants.CompressionConstants;
 import com.jimuqu.agent.support.constants.GatewayBehaviorConstants;
 import com.jimuqu.agent.support.constants.RuntimePathConstants;
 import lombok.Getter;
@@ -37,6 +39,21 @@ public class AppConfig {
     private SchedulerConfig scheduler = new SchedulerConfig();
 
     /**
+     * 上下文压缩配置。
+     */
+    private CompressionConfig compression = new CompressionConfig();
+
+    /**
+     * 任务后自动学习配置。
+     */
+    private LearningConfig learning = new LearningConfig();
+
+    /**
+     * 文件快照与回滚配置。
+     */
+    private RollbackConfig rollback = new RollbackConfig();
+
+    /**
      * 各渠道接入配置。
      */
     private ChannelsConfig channels = new ChannelsConfig();
@@ -69,9 +86,22 @@ public class AppConfig {
         config.getLlm().setReasoningEffort(props.get("jimuqu.llm.reasoningEffort", RuntimePathConstants.DEFAULT_REASONING_EFFORT));
         config.getLlm().setTemperature(props.getDouble("jimuqu.llm.temperature", RuntimePathConstants.DEFAULT_TEMPERATURE));
         config.getLlm().setMaxTokens(props.getInt("jimuqu.llm.maxTokens", RuntimePathConstants.DEFAULT_MAX_TOKENS));
+        config.getLlm().setContextWindowTokens(props.getInt("jimuqu.llm.contextWindowTokens", RuntimePathConstants.DEFAULT_CONTEXT_WINDOW_TOKENS));
 
         config.getScheduler().setEnabled(props.getBool("jimuqu.scheduler.enabled", true));
         config.getScheduler().setTickSeconds(props.getInt("jimuqu.scheduler.tickSeconds", RuntimePathConstants.DEFAULT_SCHEDULER_TICK_SECONDS));
+
+        config.getCompression().setEnabled(props.getBool("jimuqu.compression.enabled", true));
+        config.getCompression().setThresholdPercent(props.getDouble("jimuqu.compression.thresholdPercent", CompressionConstants.DEFAULT_THRESHOLD_PERCENT));
+        config.getCompression().setSummaryModel(props.get("jimuqu.compression.summaryModel", ""));
+        config.getCompression().setProtectHeadMessages(props.getInt("jimuqu.compression.protectHeadMessages", CompressionConstants.DEFAULT_PROTECT_HEAD_MESSAGES));
+        config.getCompression().setTailRatio(props.getDouble("jimuqu.compression.tailRatio", CompressionConstants.DEFAULT_TAIL_RATIO));
+
+        config.getLearning().setEnabled(props.getBool("jimuqu.learning.enabled", true));
+        config.getLearning().setToolCallThreshold(props.getInt("jimuqu.learning.toolCallThreshold", 5));
+
+        config.getRollback().setEnabled(props.getBool("jimuqu.rollback.enabled", true));
+        config.getRollback().setMaxCheckpointsPerSource(props.getInt("jimuqu.rollback.maxCheckpointsPerSource", CheckpointConstants.DEFAULT_MAX_CHECKPOINTS_PER_SOURCE));
 
         applyChannelConfig(
                 config.getChannels().getFeishu(),
@@ -328,6 +358,11 @@ public class AppConfig {
          * 最大输出 token。
          */
         private int maxTokens;
+
+        /**
+         * 模型上下文窗口大小，用于自动压缩阈值计算。
+         */
+        private int contextWindowTokens;
     }
 
     /**
@@ -346,6 +381,75 @@ public class AppConfig {
          * 调度轮询周期，单位秒。
          */
         private int tickSeconds;
+    }
+
+    /**
+     * 上下文压缩配置。
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class CompressionConfig {
+        /**
+         * 是否启用自动压缩。
+         */
+        private boolean enabled = true;
+
+        /**
+         * 触发压缩的上下文阈值百分比。
+         */
+        private double thresholdPercent = CompressionConstants.DEFAULT_THRESHOLD_PERCENT;
+
+        /**
+         * 可选的压缩摘要模型。
+         */
+        private String summaryModel;
+
+        /**
+         * 头部消息保护数量。
+         */
+        private int protectHeadMessages = CompressionConstants.DEFAULT_PROTECT_HEAD_MESSAGES;
+
+        /**
+         * 尾部消息保护比例。
+         */
+        private double tailRatio = CompressionConstants.DEFAULT_TAIL_RATIO;
+    }
+
+    /**
+     * 任务后学习闭环配置。
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class LearningConfig {
+        /**
+         * 是否启用自动学习。
+         */
+        private boolean enabled = true;
+
+        /**
+         * 触发自动学习的最少工具调用数。
+         */
+        private int toolCallThreshold = 5;
+    }
+
+    /**
+     * 文件快照与回滚配置。
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class RollbackConfig {
+        /**
+         * 是否启用文件快照与回滚。
+         */
+        private boolean enabled = true;
+
+        /**
+         * 单来源键保留的最大 checkpoint 数。
+         */
+        private int maxCheckpointsPerSource = CheckpointConstants.DEFAULT_MAX_CHECKPOINTS_PER_SOURCE;
     }
 
     /**

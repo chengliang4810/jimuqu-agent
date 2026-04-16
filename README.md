@@ -20,6 +20,16 @@
 - `/sethome`
 - `/platforms` 展示管理员、home channel、pairing 状态
 
+当前已补齐的 Hermes 核心 Agent 能力：
+
+- 自动上下文压缩与 `/compress`
+- 结构化文件快照与 `/rollback`
+- `MEMORY.md` / `USER.md` 双存储长期记忆
+- Hermes 风格技能目录与渐进披露技能索引
+- `skills_list` / `skill_view` / `skill_manage`
+- 隔离子会话委托与批量委托
+- 主回复后的异步技能/记忆学习闭环
+
 当前默认内置工具包含：
 
 - `terminal`
@@ -33,6 +43,9 @@
 - `todo`
 - `memory`
 - `session_search`
+- `skills_list`
+- `skill_view`
+- `skill_manage`
 - `send_message`
 - `cronjob`
 - `approval`
@@ -144,6 +157,17 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 - `jimuqu.llm.apiUrl=https://subapi.jimuqu.com/v1/responses`
 - `jimuqu.llm.model=gpt-5.4`
 
+新增的核心 Agent 配置：
+
+- `jimuqu.llm.contextWindowTokens`
+- `jimuqu.compression.enabled`
+- `jimuqu.compression.thresholdPercent`
+- `jimuqu.compression.summaryModel`
+- `jimuqu.learning.enabled`
+- `jimuqu.learning.toolCallThreshold`
+- `jimuqu.rollback.enabled`
+- `jimuqu.rollback.maxCheckpointsPerSource`
+
 ## 钉钉配置
 
 钉钉当前只保留：
@@ -228,8 +252,13 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 
 - slash 命令语义
 - 会话、分支、重试、撤销
+- 自动上下文压缩
+- `/rollback` 文件回滚
 - SQLite 持久化
 - 本地 skills
+- Hermes 风格 skills 渐进披露
+- `MEMORY.md` / `USER.md` 长期记忆
+- 子会话委托
 - cron 基础能力
 - 钉钉真实渠道打通
 - Solon 内置 `codesearch` / `websearch` / `webfetch` 工具接入

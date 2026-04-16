@@ -1,6 +1,8 @@
 package com.jimuqu.agent.bootstrap;
 
 import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.context.AsyncSkillLearningService;
+import com.jimuqu.agent.context.FileMemoryService;
 import com.jimuqu.agent.context.FileContextService;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.core.enums.PlatformType;
@@ -8,13 +10,20 @@ import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.repository.CronJobRepository;
 import com.jimuqu.agent.core.repository.GatewayPolicyRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.ChannelAdapter;
 import com.jimuqu.agent.core.service.CommandService;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
+import com.jimuqu.agent.core.service.ContextCompressionService;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.service.InboundMessageHandler;
 import com.jimuqu.agent.core.service.LlmGateway;
+import com.jimuqu.agent.core.service.MemoryService;
+import com.jimuqu.agent.core.service.DelegationService;
+import com.jimuqu.agent.core.service.SkillLearningService;
 import com.jimuqu.agent.core.service.ToolRegistry;
+import com.jimuqu.agent.engine.DefaultContextCompressionService;
+import com.jimuqu.agent.engine.DefaultDelegationService;
 import com.jimuqu.agent.engine.DefaultConversationOrchestrator;
 import com.jimuqu.agent.gateway.authorization.GatewayAuthorizationService;
 import com.jimuqu.agent.gateway.command.DefaultCommandService;
@@ -32,6 +41,7 @@ import com.jimuqu.agent.storage.repository.SqliteGatewayPolicyRepository;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.storage.repository.SqliteSessionRepository;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
+import com.jimuqu.agent.support.DefaultCheckpointService;
 import com.jimuqu.agent.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import org.noear.solon.Solon;
@@ -106,8 +116,26 @@ public class JimuquAgentConfiguration {
      * 创建文件上下文服务。
      */
     @Bean
-    public FileContextService fileContextService(AppConfig appConfig, LocalSkillService localSkillService) {
-        return new FileContextService(appConfig, localSkillService, new File(System.getProperty("user.dir")));
+    public FileContextService fileContextService(AppConfig appConfig,
+                                                 LocalSkillService localSkillService,
+                                                 MemoryService memoryService) {
+        return new FileContextService(appConfig, localSkillService, memoryService, new File(System.getProperty("user.dir")));
+    }
+
+    /**
+     * 创建长期记忆服务。
+     */
+    @Bean
+    public MemoryService memoryService(AppConfig appConfig) {
+        return new FileMemoryService(appConfig);
+    }
+
+    /**
+     * 创建上下文压缩服务。
+     */
+    @Bean
+    public ContextCompressionService contextCompressionService(AppConfig appConfig) {
+        return new DefaultContextCompressionService(appConfig);
     }
 
     /**
@@ -156,6 +184,14 @@ public class JimuquAgentConfiguration {
     }
 
     /**
+     * 创建 checkpoint 服务。
+     */
+    @Bean
+    public CheckpointService checkpointService(AppConfig appConfig, SqliteDatabase sqliteDatabase) {
+        return new DefaultCheckpointService(appConfig, sqliteDatabase);
+    }
+
+    /**
      * 创建统一投递服务。
      */
     @Bean
@@ -182,16 +218,22 @@ public class JimuquAgentConfiguration {
                                      SessionRepository sessionRepository,
                                      CronJobRepository cronJobRepository,
                                      DeliveryService deliveryService,
-                                     ConversationOrchestratorHolder conversationOrchestratorHolder,
-                                     ProcessRegistry processRegistry) {
+                                     ProcessRegistry processRegistry,
+                                     MemoryService memoryService,
+                                     LocalSkillService localSkillService,
+                                     CheckpointService checkpointService,
+                                     DelegationService delegationService) {
         return new DefaultToolRegistry(
                 appConfig,
                 preferenceStore,
                 sessionRepository,
                 cronJobRepository,
                 deliveryService,
-                conversationOrchestratorHolder,
-                processRegistry
+                processRegistry,
+                memoryService,
+                localSkillService,
+                checkpointService,
+                delegationService
         );
     }
 
@@ -201,12 +243,35 @@ public class JimuquAgentConfiguration {
     @Bean
     public ConversationOrchestrator conversationOrchestrator(SessionRepository sessionRepository,
                                                              FileContextService contextService,
+                                                             ContextCompressionService contextCompressionService,
                                                              LlmGateway llmGateway,
                                                              ToolRegistry toolRegistry,
                                                              ConversationOrchestratorHolder holder) {
-        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, llmGateway, toolRegistry);
+        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry);
         holder.set(orchestrator);
         return orchestrator;
+    }
+
+    /**
+     * 创建委托服务。
+     */
+    @Bean
+    public DelegationService delegationService(ConversationOrchestratorHolder holder,
+                                               SqlitePreferenceStore preferenceStore,
+                                               SessionRepository sessionRepository) {
+        return new DefaultDelegationService(holder, preferenceStore, sessionRepository);
+    }
+
+    /**
+     * 创建任务后学习闭环服务。
+     */
+    @Bean
+    public SkillLearningService skillLearningService(AppConfig appConfig,
+                                                     SessionRepository sessionRepository,
+                                                     MemoryService memoryService,
+                                                     LocalSkillService localSkillService,
+                                                     CheckpointService checkpointService) {
+        return new AsyncSkillLearningService(appConfig, sessionRepository, memoryService, localSkillService, checkpointService);
     }
 
     /**
@@ -218,16 +283,22 @@ public class JimuquAgentConfiguration {
                                          LocalSkillService localSkillService,
                                          CronJobRepository cronJobRepository,
                                          ConversationOrchestrator conversationOrchestrator,
+                                         FileContextService contextService,
+                                         ContextCompressionService contextCompressionService,
                                          DeliveryService deliveryService,
-                                         GatewayAuthorizationService gatewayAuthorizationService) {
+                                         GatewayAuthorizationService gatewayAuthorizationService,
+                                         CheckpointService checkpointService) {
         return new DefaultCommandService(
                 sessionRepository,
                 toolRegistry,
                 localSkillService,
                 cronJobRepository,
                 conversationOrchestrator,
+                contextService,
+                contextCompressionService,
                 deliveryService,
-                gatewayAuthorizationService
+                gatewayAuthorizationService,
+                checkpointService
         );
     }
 
@@ -238,13 +309,17 @@ public class JimuquAgentConfiguration {
     public DefaultGatewayService gatewayService(CommandService commandService,
                                                 ConversationOrchestrator conversationOrchestrator,
                                                 DeliveryService deliveryService,
+                                                SessionRepository sessionRepository,
                                                 GatewayAuthorizationService gatewayAuthorizationService,
+                                                SkillLearningService skillLearningService,
                                                 Map<PlatformType, ChannelAdapter> channelAdapters) {
         final DefaultGatewayService service = new DefaultGatewayService(
                 commandService,
                 conversationOrchestrator,
                 deliveryService,
-                gatewayAuthorizationService
+                sessionRepository,
+                gatewayAuthorizationService,
+                skillLearningService
         );
 
         for (ChannelAdapter adapter : channelAdapters.values()) {

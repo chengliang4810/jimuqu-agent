@@ -42,6 +42,26 @@ public class SessionRecord {
     private String ndjson;
 
     /**
+     * 会话标题。
+     */
+    private String title;
+
+    /**
+     * 最近一次压缩生成的结构化摘要。
+     */
+    private String compressedSummary;
+
+    /**
+     * 会话冻结后的系统提示词快照。
+     */
+    private String systemPromptSnapshot;
+
+    /**
+     * 最近一次学习闭环执行时间。
+     */
+    private long lastLearningAt;
+
+    /**
      * 创建时间。
      */
     private long createdAt;

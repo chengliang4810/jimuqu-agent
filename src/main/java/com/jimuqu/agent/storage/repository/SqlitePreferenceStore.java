@@ -24,7 +24,7 @@ public class SqlitePreferenceStore {
     }
 
     public boolean isSkillEnabled(String sourceKey, String skillName) throws SQLException {
-        return readBoolean("skill_states", "skill_name", sourceKey, skillName, false);
+        return readBoolean("skill_states", "skill_name", sourceKey, skillName, true);
     }
 
     public void setSkillEnabled(String sourceKey, String skillName, boolean enabled) throws SQLException {

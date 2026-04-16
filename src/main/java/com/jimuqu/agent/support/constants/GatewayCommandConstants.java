@@ -44,6 +44,8 @@ public interface GatewayCommandConstants {
     String COMMAND_PLATFORMS = "platforms";
     String COMMAND_SETHOME = "sethome";
     String COMMAND_PAIRING = "pairing";
+    String COMMAND_COMPRESS = "compress";
+    String COMMAND_ROLLBACK = "rollback";
     String COMMAND_HELP = "help";
 
     /**
@@ -62,5 +64,7 @@ public interface GatewayCommandConstants {
     String SLASH_PLATFORMS = COMMAND_PREFIX + COMMAND_PLATFORMS;
     String SLASH_SETHOME = COMMAND_PREFIX + COMMAND_SETHOME;
     String SLASH_PAIRING = COMMAND_PREFIX + COMMAND_PAIRING;
+    String SLASH_COMPRESS = COMMAND_PREFIX + COMMAND_COMPRESS;
+    String SLASH_ROLLBACK = COMMAND_PREFIX + COMMAND_ROLLBACK;
     String SLASH_HELP = COMMAND_PREFIX + COMMAND_HELP;
 }

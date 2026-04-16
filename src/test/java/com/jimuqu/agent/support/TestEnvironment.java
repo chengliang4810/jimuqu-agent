@@ -1,20 +1,29 @@
 package com.jimuqu.agent.support;
 
 import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.context.AsyncSkillLearningService;
+import com.jimuqu.agent.context.FileMemoryService;
 import com.jimuqu.agent.context.FileContextService;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.core.service.ChannelAdapter;
+import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.CommandService;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
+import com.jimuqu.agent.core.service.ContextCompressionService;
 import com.jimuqu.agent.core.repository.CronJobRepository;
+import com.jimuqu.agent.core.service.DelegationService;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.core.repository.GatewayPolicyRepository;
 import com.jimuqu.agent.core.service.LlmGateway;
+import com.jimuqu.agent.core.service.MemoryService;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.service.SkillLearningService;
 import com.jimuqu.agent.core.service.ToolRegistry;
+import com.jimuqu.agent.engine.DefaultContextCompressionService;
+import com.jimuqu.agent.engine.DefaultDelegationService;
 import com.jimuqu.agent.engine.DefaultConversationOrchestrator;
 import com.jimuqu.agent.gateway.delivery.AdapterBackedDeliveryService;
 import com.jimuqu.agent.gateway.authorization.GatewayAuthorizationService;
@@ -27,6 +36,7 @@ import com.jimuqu.agent.storage.repository.SqliteGatewayPolicyRepository;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.storage.repository.SqliteSessionRepository;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
+import com.jimuqu.agent.support.DefaultCheckpointService;
 import com.jimuqu.agent.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 
@@ -46,6 +56,11 @@ public class TestEnvironment {
     public final GatewayPolicyRepository gatewayPolicyRepository;
     public final GatewayAuthorizationService gatewayAuthorizationService;
     public final DeliveryService deliveryService;
+    public final LlmGateway llmGateway;
+    public final MemoryService memoryService;
+    public final CheckpointService checkpointService;
+    public final DelegationService delegationService;
+    public final ContextCompressionService contextCompressionService;
 
     private TestEnvironment(AppConfig appConfig,
                             MemoryChannelAdapter memoryChannelAdapter,
@@ -56,7 +71,12 @@ public class TestEnvironment {
                             ToolRegistry toolRegistry,
                             GatewayPolicyRepository gatewayPolicyRepository,
                             GatewayAuthorizationService gatewayAuthorizationService,
-                            DeliveryService deliveryService) {
+                            DeliveryService deliveryService,
+                            LlmGateway llmGateway,
+                            MemoryService memoryService,
+                            CheckpointService checkpointService,
+                            DelegationService delegationService,
+                            ContextCompressionService contextCompressionService) {
         this.appConfig = appConfig;
         this.memoryChannelAdapter = memoryChannelAdapter;
         this.sessionRepository = sessionRepository;
@@ -67,6 +87,11 @@ public class TestEnvironment {
         this.gatewayPolicyRepository = gatewayPolicyRepository;
         this.gatewayAuthorizationService = gatewayAuthorizationService;
         this.deliveryService = deliveryService;
+        this.llmGateway = llmGateway;
+        this.memoryService = memoryService;
+        this.checkpointService = checkpointService;
+        this.delegationService = delegationService;
+        this.contextCompressionService = contextCompressionService;
     }
 
     public static TestEnvironment withFakeLlm() throws Exception {
@@ -94,20 +119,41 @@ public class TestEnvironment {
         CronJobRepository cronJobRepository = new SqliteCronJobRepository(database);
         GatewayPolicyRepository gatewayPolicyRepository = new SqliteGatewayPolicyRepository(database);
         LocalSkillService localSkillService = new LocalSkillService(config, preferenceStore);
-        FileContextService contextService = new FileContextService(config, localSkillService, new File(System.getProperty("user.dir")));
+        MemoryService memoryService = new FileMemoryService(config);
+        FileContextService contextService = new FileContextService(config, localSkillService, memoryService, new File(System.getProperty("user.dir")));
+        ContextCompressionService contextCompressionService = new DefaultContextCompressionService(config);
         ConversationOrchestratorHolder holder = new ConversationOrchestratorHolder();
         MemoryChannelAdapter memoryAdapter = new MemoryChannelAdapter();
         Map<PlatformType, ChannelAdapter> adapters = new LinkedHashMap<PlatformType, ChannelAdapter>();
         adapters.put(PlatformType.MEMORY, memoryAdapter);
         DeliveryService deliveryService = new AdapterBackedDeliveryService(adapters, gatewayPolicyRepository);
         GatewayAuthorizationService gatewayAuthorizationService = new GatewayAuthorizationService(gatewayPolicyRepository, config);
+        CheckpointService checkpointService = new DefaultCheckpointService(config, database);
         ProcessRegistry processRegistry = new ProcessRegistry();
-        ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, holder, processRegistry);
-        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, llmGateway, toolRegistry);
+        DelegationService delegationService = new DefaultDelegationService(holder, preferenceStore, sessionRepository);
+        ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, processRegistry, memoryService, localSkillService, checkpointService, delegationService);
+        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry);
         holder.set(orchestrator);
-        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, deliveryService, gatewayAuthorizationService);
-        DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService, gatewayAuthorizationService);
-        return new TestEnvironment(config, memoryAdapter, sessionRepository, cronJobRepository, localSkillService, gatewayService, toolRegistry, gatewayPolicyRepository, gatewayAuthorizationService, deliveryService);
+        SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService);
+        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService);
+        DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService, sessionRepository, gatewayAuthorizationService, skillLearningService);
+        return new TestEnvironment(
+                config,
+                memoryAdapter,
+                sessionRepository,
+                cronJobRepository,
+                localSkillService,
+                gatewayService,
+                toolRegistry,
+                gatewayPolicyRepository,
+                gatewayAuthorizationService,
+                deliveryService,
+                llmGateway,
+                memoryService,
+                checkpointService,
+                delegationService,
+                contextCompressionService
+        );
     }
 
     public GatewayMessage message(String chatId, String userId, String text) {

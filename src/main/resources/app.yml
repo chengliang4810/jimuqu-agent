@@ -15,10 +15,26 @@ jimuqu.llm.stream: false
 jimuqu.llm.reasoningEffort: medium
 jimuqu.llm.temperature: 0.2
 jimuqu.llm.maxTokens: 4096
+jimuqu.llm.contextWindowTokens: 128000
 
 # 定时任务调度
 jimuqu.scheduler.enabled: true
 jimuqu.scheduler.tickSeconds: 60
+
+# 上下文压缩
+jimuqu.compression.enabled: true
+jimuqu.compression.thresholdPercent: 0.5
+jimuqu.compression.summaryModel:
+jimuqu.compression.protectHeadMessages: 3
+jimuqu.compression.tailRatio: 0.2
+
+# 主回复后的自动学习
+jimuqu.learning.enabled: true
+jimuqu.learning.toolCallThreshold: 5
+
+# 文件快照与回滚
+jimuqu.rollback.enabled: true
+jimuqu.rollback.maxCheckpointsPerSource: 20
 
 # 飞书渠道
 jimuqu.channels.feishu.enabled: false

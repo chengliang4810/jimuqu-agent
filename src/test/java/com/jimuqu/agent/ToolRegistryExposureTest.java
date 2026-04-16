@@ -14,13 +14,14 @@ public class ToolRegistryExposureTest {
         List<String> names = env.gatewayService == null ? java.util.Collections.<String>emptyList() : null;
         names = env.toolRegistry.listToolNames();
 
-        assertThat(names).contains("codesearch", "websearch", "webfetch");
+        assertThat(names).contains("codesearch", "websearch", "webfetch", "skills_list", "skill_view", "skill_manage");
 
         List<Object> tools = env.toolRegistry.resolveEnabledTools("MEMORY:room-1:user-1");
         String joined = tools.toString();
         assertThat(joined).contains("CodeSearchTool");
         assertThat(joined).contains("WebsearchTool");
         assertThat(joined).contains("WebfetchTool");
+        assertThat(joined).contains("SkillTools");
     }
 }
 

@@ -11,15 +11,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * SqliteSessionRepository 实现。
+ * SQLite 会话仓储实现。
  */
 public class SqliteSessionRepository implements SessionRepository {
+    /**
+     * 数据库访问对象。
+     */
     private final SqliteDatabase database;
 
+    /**
+     * 构造仓储。
+     */
     public SqliteSessionRepository(SqliteDatabase database) {
         this.database = database;
     }
 
+    @Override
     public SessionRecord getBoundSession(String sourceKey) throws Exception {
         Connection connection = database.openConnection();
         try {
@@ -37,10 +44,10 @@ public class SqliteSessionRepository implements SessionRepository {
         } finally {
             connection.close();
         }
-
         return null;
     }
 
+    @Override
     public SessionRecord bindNewSession(String sourceKey) throws Exception {
         long now = System.currentTimeMillis();
         SessionRecord record = new SessionRecord();
@@ -55,6 +62,7 @@ public class SqliteSessionRepository implements SessionRepository {
         return record;
     }
 
+    @Override
     public void bindSource(String sourceKey, String sessionId) throws Exception {
         Connection connection = database.openConnection();
         try {
@@ -68,6 +76,7 @@ public class SqliteSessionRepository implements SessionRepository {
         }
     }
 
+    @Override
     public SessionRecord cloneSession(String sourceKey, String sourceSessionId, String branchName) throws Exception {
         SessionRecord source = findById(sourceSessionId);
         if (source == null) {
@@ -82,6 +91,9 @@ public class SqliteSessionRepository implements SessionRepository {
         clone.setBranchName(branchName);
         clone.setModelOverride(source.getModelOverride());
         clone.setNdjson(source.getNdjson());
+        clone.setTitle(source.getTitle());
+        clone.setCompressedSummary(source.getCompressedSummary());
+        clone.setSystemPromptSnapshot(source.getSystemPromptSnapshot());
         clone.setCreatedAt(now);
         clone.setUpdatedAt(now);
         save(clone);
@@ -89,10 +101,13 @@ public class SqliteSessionRepository implements SessionRepository {
         return clone;
     }
 
+    @Override
     public SessionRecord findById(String sessionId) throws Exception {
         Connection connection = database.openConnection();
         try {
-            PreparedStatement statement = connection.prepareStatement("select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, created_at, updated_at from sessions where session_id = ?");
+            PreparedStatement statement = connection.prepareStatement(
+                    "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, created_at, updated_at from sessions where session_id = ?"
+            );
             statement.setString(1, sessionId);
             ResultSet resultSet = statement.executeQuery();
             try {
@@ -106,14 +121,16 @@ public class SqliteSessionRepository implements SessionRepository {
         } finally {
             connection.close();
         }
-
         return null;
     }
 
+    @Override
     public SessionRecord findBySourceAndBranch(String sourceKey, String branchName) throws Exception {
         Connection connection = database.openConnection();
         try {
-            PreparedStatement statement = connection.prepareStatement("select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, created_at, updated_at from sessions where source_key = ? and branch_name = ? order by updated_at desc limit 1");
+            PreparedStatement statement = connection.prepareStatement(
+                    "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, created_at, updated_at from sessions where source_key = ? and branch_name = ? order by updated_at desc limit 1"
+            );
             statement.setString(1, sourceKey);
             statement.setString(2, branchName);
             ResultSet resultSet = statement.executeQuery();
@@ -128,27 +145,35 @@ public class SqliteSessionRepository implements SessionRepository {
         } finally {
             connection.close();
         }
-
         return null;
     }
 
+    @Override
     public void save(SessionRecord sessionRecord) throws Exception {
         long updatedAt = sessionRecord.getUpdatedAt() > 0 ? sessionRecord.getUpdatedAt() : System.currentTimeMillis();
         long createdAt = sessionRecord.getCreatedAt() > 0 ? sessionRecord.getCreatedAt() : updatedAt;
 
         Connection connection = database.openConnection();
         try {
-            PreparedStatement statement = connection.prepareStatement("insert or replace into sessions (session_id, source_key, branch_name, parent_session_id, model_override, ndjson, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?)");
+            PreparedStatement statement = connection.prepareStatement(
+                    "insert or replace into sessions (session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            );
             statement.setString(1, sessionRecord.getSessionId());
             statement.setString(2, sessionRecord.getSourceKey());
             statement.setString(3, sessionRecord.getBranchName());
             statement.setString(4, sessionRecord.getParentSessionId());
             statement.setString(5, sessionRecord.getModelOverride());
             statement.setString(6, sessionRecord.getNdjson());
-            statement.setLong(7, createdAt);
-            statement.setLong(8, updatedAt);
+            statement.setString(7, sessionRecord.getTitle());
+            statement.setString(8, sessionRecord.getCompressedSummary());
+            statement.setString(9, sessionRecord.getSystemPromptSnapshot());
+            statement.setLong(10, sessionRecord.getLastLearningAt());
+            statement.setLong(11, createdAt);
+            statement.setLong(12, updatedAt);
             statement.executeUpdate();
             statement.close();
+
+            upsertSearchIndex(connection, sessionRecord);
             sessionRecord.setCreatedAt(createdAt);
             sessionRecord.setUpdatedAt(updatedAt);
         } finally {
@@ -156,29 +181,55 @@ public class SqliteSessionRepository implements SessionRepository {
         }
     }
 
+    @Override
     public List<SessionRecord> search(String keyword, int limit) throws Exception {
         List<SessionRecord> results = new ArrayList<SessionRecord>();
         Connection connection = database.openConnection();
         try {
-            PreparedStatement statement = connection.prepareStatement("select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, created_at, updated_at from sessions where ndjson like ? order by updated_at desc limit ?");
-            statement.setString(1, "%" + keyword + "%");
-            statement.setInt(2, limit);
-            ResultSet resultSet = statement.executeQuery();
             try {
-                while (resultSet.next()) {
-                    results.add(map(resultSet));
+                PreparedStatement statement = connection.prepareStatement(
+                        "select s.session_id, s.source_key, s.branch_name, s.parent_session_id, s.model_override, s.ndjson, s.title, s.compressed_summary, s.system_prompt_snapshot, s.last_learning_at, s.created_at, s.updated_at " +
+                                "from sessions_fts f join sessions s on s.session_id = f.session_id " +
+                                "where sessions_fts match ? order by bm25(sessions_fts), s.updated_at desc limit ?"
+                );
+                statement.setString(1, keyword);
+                statement.setInt(2, limit);
+                ResultSet resultSet = statement.executeQuery();
+                try {
+                    while (resultSet.next()) {
+                        results.add(map(resultSet));
+                    }
+                } finally {
+                    resultSet.close();
+                    statement.close();
                 }
-            } finally {
-                resultSet.close();
-                statement.close();
+            } catch (Exception e) {
+                PreparedStatement fallback = connection.prepareStatement(
+                        "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, created_at, updated_at " +
+                                "from sessions where ndjson like ? or compressed_summary like ? or title like ? order by updated_at desc limit ?"
+                );
+                String like = "%" + keyword + "%";
+                fallback.setString(1, like);
+                fallback.setString(2, like);
+                fallback.setString(3, like);
+                fallback.setInt(4, limit);
+                ResultSet resultSet = fallback.executeQuery();
+                try {
+                    while (resultSet.next()) {
+                        results.add(map(resultSet));
+                    }
+                } finally {
+                    resultSet.close();
+                    fallback.close();
+                }
             }
         } finally {
             connection.close();
         }
-
         return results;
     }
 
+    @Override
     public void setModelOverride(String sessionId, String modelOverride) throws Exception {
         Connection connection = database.openConnection();
         try {
@@ -193,6 +244,29 @@ public class SqliteSessionRepository implements SessionRepository {
         }
     }
 
+    /**
+     * 将会话同步到 FTS5 索引。
+     */
+    private void upsertSearchIndex(Connection connection, SessionRecord sessionRecord) throws Exception {
+        PreparedStatement delete = connection.prepareStatement("delete from sessions_fts where session_id = ?");
+        delete.setString(1, sessionRecord.getSessionId());
+        delete.executeUpdate();
+        delete.close();
+
+        PreparedStatement insert = connection.prepareStatement(
+                "insert into sessions_fts (session_id, title, compressed_summary, ndjson) values (?, ?, ?, ?)"
+        );
+        insert.setString(1, sessionRecord.getSessionId());
+        insert.setString(2, sessionRecord.getTitle());
+        insert.setString(3, sessionRecord.getCompressedSummary());
+        insert.setString(4, sessionRecord.getNdjson());
+        insert.executeUpdate();
+        insert.close();
+    }
+
+    /**
+     * 结果集映射。
+     */
     private SessionRecord map(ResultSet resultSet) throws Exception {
         SessionRecord record = new SessionRecord();
         record.setSessionId(resultSet.getString("session_id"));
@@ -201,6 +275,10 @@ public class SqliteSessionRepository implements SessionRepository {
         record.setParentSessionId(resultSet.getString("parent_session_id"));
         record.setModelOverride(resultSet.getString("model_override"));
         record.setNdjson(resultSet.getString("ndjson"));
+        record.setTitle(resultSet.getString("title"));
+        record.setCompressedSummary(resultSet.getString("compressed_summary"));
+        record.setSystemPromptSnapshot(resultSet.getString("system_prompt_snapshot"));
+        record.setLastLearningAt(resultSet.getLong("last_learning_at"));
         record.setCreatedAt(resultSet.getLong("created_at"));
         record.setUpdatedAt(resultSet.getLong("updated_at"));
         return record;

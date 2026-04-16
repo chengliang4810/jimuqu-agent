@@ -3,9 +3,12 @@ package com.jimuqu.agent.gateway.service;
 import com.jimuqu.agent.core.model.DeliveryRequest;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
+import com.jimuqu.agent.core.model.SessionRecord;
+import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CommandService;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.core.service.DeliveryService;
+import com.jimuqu.agent.core.service.SkillLearningService;
 import com.jimuqu.agent.gateway.authorization.GatewayAuthorizationService;
 import com.jimuqu.agent.support.constants.GatewayCommandConstants;
 
@@ -29,9 +32,19 @@ public class DefaultGatewayService {
     private final DeliveryService deliveryService;
 
     /**
+     * 会话仓储。
+     */
+    private final SessionRepository sessionRepository;
+
+    /**
      * 授权服务。
      */
     private final GatewayAuthorizationService gatewayAuthorizationService;
+
+    /**
+     * 任务后自动学习服务。
+     */
+    private final SkillLearningService skillLearningService;
 
     /**
      * 构造网关服务。
@@ -39,11 +52,15 @@ public class DefaultGatewayService {
     public DefaultGatewayService(CommandService commandService,
                                  ConversationOrchestrator conversationOrchestrator,
                                  DeliveryService deliveryService,
-                                 GatewayAuthorizationService gatewayAuthorizationService) {
+                                 SessionRepository sessionRepository,
+                                 GatewayAuthorizationService gatewayAuthorizationService,
+                                 SkillLearningService skillLearningService) {
         this.commandService = commandService;
         this.conversationOrchestrator = conversationOrchestrator;
         this.deliveryService = deliveryService;
+        this.sessionRepository = sessionRepository;
         this.gatewayAuthorizationService = gatewayAuthorizationService;
+        this.skillLearningService = skillLearningService;
     }
 
     /**
@@ -87,6 +104,13 @@ public class DefaultGatewayService {
                     message.getThreadId(),
                     reply.getContent()
             ));
+        }
+
+        if (reply != null && !reply.isCommandHandled() && !reply.isError() && reply.getSessionId() != null) {
+            SessionRecord session = sessionRepository.findById(reply.getSessionId());
+            if (session != null) {
+                skillLearningService.schedulePostReplyLearning(session, message, reply);
+            }
         }
 
         return reply;

@@ -35,10 +35,15 @@ public class SqliteDatabase {
                     "parent_session_id text," +
                     "model_override text," +
                     "ndjson text," +
+                    "title text," +
+                    "compressed_summary text," +
+                    "system_prompt_snapshot text," +
+                    "last_learning_at integer not null default 0," +
                     "created_at integer not null," +
                     "updated_at integer not null" +
                     ")");
             statement.execute("create index if not exists idx_sessions_source on sessions(source_key)");
+            statement.execute("create virtual table if not exists sessions_fts using fts5(session_id, title, compressed_summary, ndjson)");
             statement.execute("create table if not exists bindings (" +
                     "source_key text primary key," +
                     "session_id text not null" +
@@ -118,6 +123,16 @@ public class SqliteDatabase {
                     "chat_id text," +
                     "created_at integer not null" +
                     ")");
+            statement.execute("create table if not exists checkpoints (" +
+                    "checkpoint_id text primary key," +
+                    "source_key text not null," +
+                    "session_id text," +
+                    "checkpoint_dir text not null," +
+                    "manifest_path text not null," +
+                    "created_at integer not null," +
+                    "restored_at integer not null default 0" +
+                    ")");
+            statement.execute("create index if not exists idx_checkpoints_source_created on checkpoints(source_key, created_at desc)");
             statement.close();
         } finally {
             connection.close();

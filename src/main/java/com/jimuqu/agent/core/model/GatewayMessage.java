@@ -54,6 +54,11 @@ public class GatewayMessage {
     private String threadId;
 
     /**
+     * 来源键覆盖值，供逻辑子会话等场景复用同一消息模型。
+     */
+    private String sourceKeyOverride;
+
+    /**
      * 入站时间戳。
      */
     private long timestamp;
@@ -78,6 +83,9 @@ public class GatewayMessage {
      * @return 平台:会话:用户 组成的来源键
      */
     public String sourceKey() {
+        if (sourceKeyOverride != null && sourceKeyOverride.trim().length() > 0) {
+            return sourceKeyOverride;
+        }
         return String.valueOf(platform) + ":" + nullToEmpty(chatId) + ":" + nullToEmpty(userId);
     }
 

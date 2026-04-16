@@ -1,35 +1,44 @@
 package com.jimuqu.agent.tool.runtime;
 
-import cn.hutool.core.io.FileUtil;
-import com.jimuqu.agent.config.AppConfig;
+import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.core.service.MemoryService;
+import com.jimuqu.agent.support.constants.MemoryConstants;
 import org.noear.solon.ai.annotation.ToolMapping;
 
-import java.io.File;
-
 /**
- * MemoryTools 实现。
+ * 长期记忆工具。
  */
 public class MemoryTools {
-    private final AppConfig appConfig;
+    /**
+     * 长期记忆服务。
+     */
+    private final MemoryService memoryService;
 
-    public MemoryTools(AppConfig appConfig) {
-        this.appConfig = appConfig;
+    /**
+     * 构造记忆工具。
+     */
+    public MemoryTools(MemoryService memoryService) {
+        this.memoryService = memoryService;
     }
 
-    @ToolMapping(name = "memory", description = "Manage long-term memory text. action can be read, append, or clear.")
-    public String memory(String action, String value) {
-        File file = FileUtil.file(appConfig.getRuntime().getContextDir(), "MEMORY.md");
-        if ("append".equalsIgnoreCase(action)) {
-            FileUtil.appendUtf8String("- " + value + System.lineSeparator(), file);
-            return "Memory appended";
+    /**
+     * 管理 MEMORY.md 与 USER.md。
+     */
+    @ToolMapping(name = "memory", description = "Manage persistent memory. action supports add, replace, remove, read. target supports memory or user.")
+    public String memory(String action, String target, String content, String oldText) throws Exception {
+        String normalizedTarget = StrUtil.blankToDefault(target, MemoryConstants.TARGET_MEMORY);
+        if (MemoryConstants.ACTION_READ.equalsIgnoreCase(action)) {
+            return memoryService.read(normalizedTarget);
         }
-        if ("clear".equalsIgnoreCase(action)) {
-            FileUtil.writeUtf8String("", file);
-            return "Memory cleared";
+        if (MemoryConstants.ACTION_ADD.equalsIgnoreCase(action)) {
+            return memoryService.add(normalizedTarget, content);
         }
-        if (file.exists() == false) {
-            return "";
+        if (MemoryConstants.ACTION_REPLACE.equalsIgnoreCase(action)) {
+            return memoryService.replace(normalizedTarget, oldText, content);
         }
-        return FileUtil.readUtf8String(file);
+        if (MemoryConstants.ACTION_REMOVE.equalsIgnoreCase(action)) {
+            return memoryService.remove(normalizedTarget, StrUtil.blankToDefault(oldText, content));
+        }
+        return "Unsupported memory action";
     }
 }

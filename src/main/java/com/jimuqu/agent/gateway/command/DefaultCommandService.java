@@ -9,8 +9,11 @@ import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.CronJobRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.CommandService;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
+import com.jimuqu.agent.core.service.ContextCompressionService;
+import com.jimuqu.agent.core.service.ContextService;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.gateway.authorization.GatewayAuthorizationService;
@@ -54,6 +57,16 @@ public class DefaultCommandService implements CommandService {
     private final ConversationOrchestrator conversationOrchestrator;
 
     /**
+     * 上下文服务。
+     */
+    private final ContextService contextService;
+
+    /**
+     * 上下文压缩服务。
+     */
+    private final ContextCompressionService contextCompressionService;
+
+    /**
      * 渠道投递服务。
      */
     private final DeliveryService deliveryService;
@@ -64,6 +77,11 @@ public class DefaultCommandService implements CommandService {
     private final GatewayAuthorizationService gatewayAuthorizationService;
 
     /**
+     * checkpoint 服务。
+     */
+    private final CheckpointService checkpointService;
+
+    /**
      * 构造默认命令服务。
      */
     public DefaultCommandService(SessionRepository sessionRepository,
@@ -71,15 +89,21 @@ public class DefaultCommandService implements CommandService {
                                  LocalSkillService localSkillService,
                                  CronJobRepository cronJobRepository,
                                  ConversationOrchestrator conversationOrchestrator,
+                                 ContextService contextService,
+                                 ContextCompressionService contextCompressionService,
                                  DeliveryService deliveryService,
-                                 GatewayAuthorizationService gatewayAuthorizationService) {
+                                 GatewayAuthorizationService gatewayAuthorizationService,
+                                 CheckpointService checkpointService) {
         this.sessionRepository = sessionRepository;
         this.toolRegistry = toolRegistry;
         this.localSkillService = localSkillService;
         this.cronJobRepository = cronJobRepository;
         this.conversationOrchestrator = conversationOrchestrator;
+        this.contextService = contextService;
+        this.contextCompressionService = contextCompressionService;
         this.deliveryService = deliveryService;
         this.gatewayAuthorizationService = gatewayAuthorizationService;
+        this.checkpointService = checkpointService;
     }
 
     /**
@@ -99,6 +123,8 @@ public class DefaultCommandService implements CommandService {
                 GatewayCommandConstants.COMMAND_SKILLS,
                 GatewayCommandConstants.COMMAND_CRON,
                 GatewayCommandConstants.COMMAND_PLATFORMS,
+                GatewayCommandConstants.COMMAND_COMPRESS,
+                GatewayCommandConstants.COMMAND_ROLLBACK,
                 GatewayCommandConstants.COMMAND_SETHOME,
                 GatewayCommandConstants.COMMAND_PAIRING,
                 GatewayCommandConstants.COMMAND_HELP
@@ -221,6 +247,25 @@ public class DefaultCommandService implements CommandService {
 
         if (GatewayCommandConstants.COMMAND_CRON.equals(command)) {
             return handleCron(message, args);
+        }
+
+        if (GatewayCommandConstants.COMMAND_COMPRESS.equals(command)) {
+            SessionRecord session = requireSession(message.sourceKey());
+            String systemPrompt = StrUtil.blankToDefault(session.getSystemPromptSnapshot(), contextService.buildSystemPrompt(message.sourceKey()));
+            session.setSystemPromptSnapshot(systemPrompt);
+            session = contextCompressionService.compressNow(session, systemPrompt);
+            sessionRepository.save(session);
+            GatewayReply reply = GatewayReply.ok("已完成当前会话的上下文压缩。");
+            reply.setSessionId(session.getSessionId());
+            reply.setBranchName(session.getBranchName());
+            return reply;
+        }
+
+        if (GatewayCommandConstants.COMMAND_ROLLBACK.equals(command)) {
+            if (StrUtil.isBlank(args) || "latest".equalsIgnoreCase(args)) {
+                return GatewayReply.ok("已回滚到最近一次 checkpoint：" + checkpointService.rollbackLatest(message.sourceKey()).getCheckpointId());
+            }
+            return GatewayReply.ok("已回滚到指定 checkpoint：" + checkpointService.rollback(args).getCheckpointId());
         }
 
         if (GatewayCommandConstants.COMMAND_PLATFORMS.equals(command)) {
@@ -431,6 +476,8 @@ public class DefaultCommandService implements CommandService {
                 + GatewayCommandConstants.SLASH_TOOLS + " [list|enable|disable] [name...]\n"
                 + GatewayCommandConstants.SLASH_SKILLS + " [list|enable|disable|inspect|reload]\n"
                 + GatewayCommandConstants.SLASH_CRON + " [list|create|pause|resume|delete|run]\n"
+                + GatewayCommandConstants.SLASH_COMPRESS + "\n"
+                + GatewayCommandConstants.SLASH_ROLLBACK + " [latest|checkpoint-id]\n"
                 + GatewayCommandConstants.SLASH_SETHOME + "\n"
                 + GatewayCommandConstants.SLASH_PAIRING + " [claim-admin|pending|approve|revoke|approved]\n"
                 + GatewayCommandConstants.SLASH_PLATFORMS + "\n"

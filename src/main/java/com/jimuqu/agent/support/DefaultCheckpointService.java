@@ -1,0 +1,296 @@
+package com.jimuqu.agent.support;
+
+import cn.hutool.core.io.FileUtil;
+import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.core.model.CheckpointRecord;
+import com.jimuqu.agent.core.service.CheckpointService;
+import com.jimuqu.agent.storage.repository.SqliteDatabase;
+import com.jimuqu.agent.support.constants.CheckpointConstants;
+import org.noear.snack4.ONode;
+
+import java.io.File;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * 默认文件快照服务。
+ */
+public class DefaultCheckpointService implements CheckpointService {
+    /**
+     * 应用配置。
+     */
+    private final AppConfig appConfig;
+
+    /**
+     * 数据库访问对象。
+     */
+    private final SqliteDatabase database;
+
+    /**
+     * 构造 checkpoint 服务。
+     */
+    public DefaultCheckpointService(AppConfig appConfig, SqliteDatabase database) {
+        this.appConfig = appConfig;
+        this.database = database;
+    }
+
+    @Override
+    public CheckpointRecord createCheckpoint(String sourceKey, String sessionId, List<File> files) throws Exception {
+        if (!appConfig.getRollback().isEnabled()) {
+            return null;
+        }
+
+        String checkpointId = IdSupport.newId();
+        File rootDir = FileUtil.file(appConfig.getRuntime().getCacheDir(), CheckpointConstants.CHECKPOINT_DIR_NAME, checkpointId);
+        FileUtil.mkdir(rootDir);
+
+        ONode manifest = new ONode().asObject();
+        manifest.set("checkpointId", checkpointId);
+        manifest.set("sourceKey", sourceKey);
+        manifest.set("sessionId", sessionId);
+        manifest.getOrNew("files").asArray();
+
+        int index = 0;
+        for (File file : files) {
+            if (file == null) {
+                continue;
+            }
+            ONode item = new ONode().asObject();
+            item.set("path", file.getAbsolutePath());
+            item.set("exists", file.exists());
+            if (file.exists()) {
+                File snapshotFile = FileUtil.file(rootDir, "file-" + index + ".bak");
+                FileUtil.copy(file, snapshotFile, true);
+                item.set("snapshot", snapshotFile.getAbsolutePath());
+            }
+            manifest.get("files").add(item);
+            index++;
+        }
+
+        File manifestFile = FileUtil.file(rootDir, CheckpointConstants.MANIFEST_FILE_NAME);
+        FileUtil.writeUtf8String(manifest.toJson(), manifestFile);
+
+        CheckpointRecord record = new CheckpointRecord();
+        record.setCheckpointId(checkpointId);
+        record.setSourceKey(sourceKey);
+        record.setSessionId(sessionId);
+        record.setCheckpointDir(rootDir.getAbsolutePath());
+        record.setManifestPath(manifestFile.getAbsolutePath());
+        record.setCreatedAt(System.currentTimeMillis());
+        saveRecord(record);
+        pruneOldRecords(sourceKey);
+        return record;
+    }
+
+    @Override
+    public CheckpointRecord rollbackLatest(String sourceKey) throws Exception {
+        CheckpointRecord latest = findLatest(sourceKey);
+        if (latest == null) {
+            throw new IllegalStateException("当前来源键没有可回滚的 checkpoint。");
+        }
+        return rollback(latest.getCheckpointId());
+    }
+
+    @Override
+    public CheckpointRecord rollback(String checkpointId) throws Exception {
+        CheckpointRecord record = findById(checkpointId);
+        if (record == null) {
+            throw new IllegalStateException("未找到 checkpoint：" + checkpointId);
+        }
+
+        ONode manifest = ONode.ofJson(FileUtil.readUtf8String(FileUtil.file(record.getManifestPath())));
+        ONode filesNode = manifest.get("files");
+        for (int i = 0; i < filesNode.size(); i++) {
+            ONode item = filesNode.get(i);
+            File target = FileUtil.file(item.get("path").getString());
+            boolean existed = item.get("exists").getBoolean();
+            if (!existed) {
+                if (target.exists()) {
+                    FileUtil.del(target);
+                }
+                continue;
+            }
+
+            File snapshot = FileUtil.file(item.get("snapshot").getString());
+            FileUtil.mkParentDirs(target);
+            FileUtil.copy(snapshot, target, true);
+        }
+
+        record.setRestoredAt(System.currentTimeMillis());
+        updateRestoredAt(record);
+        return record;
+    }
+
+    @Override
+    public boolean hasRecentCheckpoint(String sourceKey, long sinceEpochMillis) throws Exception {
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement(
+                    "select count(*) from checkpoints where source_key = ? and created_at >= ?"
+            );
+            statement.setString(1, sourceKey);
+            statement.setLong(2, sinceEpochMillis);
+            ResultSet resultSet = statement.executeQuery();
+            try {
+                return resultSet.next() && resultSet.getInt(1) > 0;
+            } finally {
+                resultSet.close();
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
+    }
+
+    /**
+     * 保存 checkpoint 记录。
+     */
+    private void saveRecord(CheckpointRecord record) throws Exception {
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement(
+                    "insert into checkpoints (checkpoint_id, source_key, session_id, checkpoint_dir, manifest_path, created_at, restored_at) values (?, ?, ?, ?, ?, ?, ?)"
+            );
+            statement.setString(1, record.getCheckpointId());
+            statement.setString(2, record.getSourceKey());
+            statement.setString(3, record.getSessionId());
+            statement.setString(4, record.getCheckpointDir());
+            statement.setString(5, record.getManifestPath());
+            statement.setLong(6, record.getCreatedAt());
+            statement.setLong(7, record.getRestoredAt());
+            statement.executeUpdate();
+            statement.close();
+        } finally {
+            connection.close();
+        }
+    }
+
+    /**
+     * 更新恢复时间。
+     */
+    private void updateRestoredAt(CheckpointRecord record) throws Exception {
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement(
+                    "update checkpoints set restored_at = ? where checkpoint_id = ?"
+            );
+            statement.setLong(1, record.getRestoredAt());
+            statement.setString(2, record.getCheckpointId());
+            statement.executeUpdate();
+            statement.close();
+        } finally {
+            connection.close();
+        }
+    }
+
+    /**
+     * 查询最新 checkpoint。
+     */
+    private CheckpointRecord findLatest(String sourceKey) throws Exception {
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement(
+                    "select checkpoint_id, source_key, session_id, checkpoint_dir, manifest_path, created_at, restored_at from checkpoints where source_key = ? order by created_at desc limit 1"
+            );
+            statement.setString(1, sourceKey);
+            ResultSet resultSet = statement.executeQuery();
+            try {
+                return resultSet.next() ? map(resultSet) : null;
+            } finally {
+                resultSet.close();
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
+    }
+
+    /**
+     * 通过 id 查询 checkpoint。
+     */
+    private CheckpointRecord findById(String checkpointId) throws Exception {
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement(
+                    "select checkpoint_id, source_key, session_id, checkpoint_dir, manifest_path, created_at, restored_at from checkpoints where checkpoint_id = ?"
+            );
+            statement.setString(1, checkpointId);
+            ResultSet resultSet = statement.executeQuery();
+            try {
+                return resultSet.next() ? map(resultSet) : null;
+            } finally {
+                resultSet.close();
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
+    }
+
+    /**
+     * 清理超额 checkpoint。
+     */
+    private void pruneOldRecords(String sourceKey) throws Exception {
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement(
+                    "select checkpoint_id, checkpoint_dir from checkpoints where source_key = ? order by created_at desc"
+            );
+            statement.setString(1, sourceKey);
+            ResultSet resultSet = statement.executeQuery();
+            try {
+                List<String> ids = new ArrayList<String>();
+                List<String> dirs = new ArrayList<String>();
+                while (resultSet.next()) {
+                    ids.add(resultSet.getString("checkpoint_id"));
+                    dirs.add(resultSet.getString("checkpoint_dir"));
+                }
+
+                for (int i = appConfig.getRollback().getMaxCheckpointsPerSource(); i < ids.size(); i++) {
+                    deleteRecord(ids.get(i));
+                    FileUtil.del(dirs.get(i));
+                }
+            } finally {
+                resultSet.close();
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
+    }
+
+    /**
+     * 删除 checkpoint 记录。
+     */
+    private void deleteRecord(String checkpointId) throws Exception {
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement(
+                    "delete from checkpoints where checkpoint_id = ?"
+            );
+            statement.setString(1, checkpointId);
+            statement.executeUpdate();
+            statement.close();
+        } finally {
+            connection.close();
+        }
+    }
+
+    /**
+     * 结果集映射。
+     */
+    private CheckpointRecord map(ResultSet resultSet) throws Exception {
+        CheckpointRecord record = new CheckpointRecord();
+        record.setCheckpointId(resultSet.getString("checkpoint_id"));
+        record.setSourceKey(resultSet.getString("source_key"));
+        record.setSessionId(resultSet.getString("session_id"));
+        record.setCheckpointDir(resultSet.getString("checkpoint_dir"));
+        record.setManifestPath(resultSet.getString("manifest_path"));
+        record.setCreatedAt(resultSet.getLong("created_at"));
+        record.setRestoredAt(resultSet.getLong("restored_at"));
+        return record;
+    }
+}

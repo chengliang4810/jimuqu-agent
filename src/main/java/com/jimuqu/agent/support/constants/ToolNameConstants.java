@@ -15,6 +15,9 @@ public interface ToolNameConstants {
     String TODO = "todo";
     String MEMORY = "memory";
     String SESSION_SEARCH = "session_search";
+    String SKILLS_LIST = "skills_list";
+    String SKILL_VIEW = "skill_view";
+    String SKILL_MANAGE = "skill_manage";
     String SEND_MESSAGE = "send_message";
     String CRONJOB = "cronjob";
     String APPROVAL = "approval";

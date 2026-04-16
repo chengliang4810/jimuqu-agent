@@ -12,10 +12,14 @@ public class StorageRepositoryTest {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         SessionRecord session = env.sessionRepository.bindNewSession("MEMORY:room-a:user-a");
         session.setNdjson("hello world");
+        session.setTitle("alpha session");
+        session.setCompressedSummary("beta summary");
         env.sessionRepository.save(session);
 
         assertThat(env.sessionRepository.findById(session.getSessionId())).isNotNull();
         assertThat(env.sessionRepository.search("hello", 10)).hasSize(1);
+        assertThat(env.sessionRepository.search("alpha", 10)).hasSize(1);
+        assertThat(env.sessionRepository.search("beta", 10)).hasSize(1);
 
         SessionRecord clone = env.sessionRepository.cloneSession("MEMORY:room-a:user-a", session.getSessionId(), "review");
         assertThat(clone.getParentSessionId()).isEqualTo(session.getSessionId());
