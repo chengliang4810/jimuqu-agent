@@ -27,6 +27,7 @@ import org.noear.snack4.ONode;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -41,7 +42,7 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
     private volatile long accessTokenExpireAt;
     private volatile OpenDingTalkClient streamClient;
     private ExecutorService callbackExecutor;
-    private final Map<String, Boolean> conversationGroupFlags = new HashMap<String, Boolean>();
+    private final Map<String, Boolean> conversationGroupFlags = new ConcurrentHashMap<String, Boolean>();
 
     public DingTalkChannelAdapter(AppConfig.ChannelConfig config) {
         super(PlatformType.DINGTALK, config);

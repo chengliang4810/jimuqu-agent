@@ -34,9 +34,12 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
     @Override
     public boolean connect() {
         if (!isEnabled()) {
+            setDetail("disabled");
             return false;
         }
         if (StrUtil.isBlank(config.getBotId()) || StrUtil.isBlank(config.getSecret())) {
+            setConnected(false);
+            setDetail("missing botId/secret");
             log.warn("[WECOM] Missing botId/secret");
             return false;
         }
@@ -57,11 +60,15 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
             if (ret != 0) {
                 throw new IllegalStateException("WeCom subscribe failed: " + auth.toJson());
             }
+            setConnected(true);
+            setDetail("websocket subscribed");
             return true;
         } catch (Exception e) {
             if (webSocket != null) {
                 webSocket.cancel();
             }
+            setConnected(false);
+            setDetail("connect failed: " + e.getMessage());
             throw new IllegalStateException("WeCom connect failed", e);
         }
     }
@@ -72,6 +79,8 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
             webSocket.close(1000, "normal");
             webSocket = null;
         }
+        setConnected(false);
+        setDetail("disconnected");
     }
 
     @Override

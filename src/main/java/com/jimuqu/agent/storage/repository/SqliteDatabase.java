@@ -39,9 +39,29 @@ public class SqliteDatabase {
                     "compressed_summary text," +
                     "system_prompt_snapshot text," +
                     "last_learning_at integer not null default 0," +
+                    "last_compression_at integer not null default 0," +
+                    "last_compression_input_tokens integer not null default 0," +
+                    "compression_failure_count integer not null default 0," +
+                    "last_compression_failed_at integer not null default 0," +
                     "created_at integer not null," +
                     "updated_at integer not null" +
                     ")");
+            try {
+                statement.execute("alter table sessions add column last_compression_at integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column last_compression_input_tokens integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column compression_failure_count integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column last_compression_failed_at integer not null default 0");
+            } catch (Exception ignored) {
+            }
             statement.execute("create index if not exists idx_sessions_source on sessions(source_key)");
             statement.execute("create virtual table if not exists sessions_fts using fts5(session_id, title, compressed_summary, ndjson)");
             statement.execute("create table if not exists bindings (" +

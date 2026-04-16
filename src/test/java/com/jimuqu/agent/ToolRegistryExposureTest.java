@@ -21,7 +21,19 @@ public class ToolRegistryExposureTest {
         assertThat(joined).contains("CodeSearchTool");
         assertThat(joined).contains("WebsearchTool");
         assertThat(joined).contains("WebfetchTool");
-        assertThat(joined).contains("SkillTools");
+        assertThat(joined).contains("SkillsListTool");
+    }
+
+    @Test
+    void shouldRespectSingleToolDisableWithinGroupedRuntimeServices() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.toolRegistry.disableTools("MEMORY:room-1:user-1", java.util.Collections.singletonList("write_file"));
+
+        String joined = env.toolRegistry.resolveEnabledTools("MEMORY:room-1:user-1").toString();
+
+        assertThat(joined).contains("ReadFileTool");
+        assertThat(joined).contains("PatchTool");
+        assertThat(joined).doesNotContain("WriteFileTool");
     }
 }
 

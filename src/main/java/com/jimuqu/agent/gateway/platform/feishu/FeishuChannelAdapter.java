@@ -28,16 +28,23 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
     @Override
     public boolean connect() {
         if (!isEnabled()) {
+            setDetail("disabled");
             return false;
         }
         if (StrUtil.isBlank(config.getAppId()) || StrUtil.isBlank(config.getAppSecret())) {
+            setConnected(false);
+            setDetail("missing appId/appSecret");
             log.warn("[FEISHU] Missing appId/appSecret");
             return false;
         }
         try {
             refreshTenantTokenIfNecessary();
+            setConnected(true);
+            setDetail("tenant token ready");
             return true;
         } catch (Exception e) {
+            setConnected(false);
+            setDetail("connect failed: " + e.getMessage());
             log.warn("[FEISHU] connect failed: {}", e.getMessage());
             return false;
         }

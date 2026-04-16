@@ -72,14 +72,10 @@ public class AsyncSkillLearningService implements SkillLearningService {
                              GatewayMessage message,
                              int toolMessages,
                              boolean hasRecentCheckpoint) throws Exception {
-        if (hasRecentCheckpoint && StrUtil.isNotBlank(session.getTitle())) {
-            memoryService.add("memory", "本会话完成了结构化文件修改：" + session.getTitle());
-        }
-
         if (toolMessages >= appConfig.getLearning().getToolCallThreshold()) {
             String skillName = inferSkillName(session);
             if (!skillExists(skillName)) {
-                localSkillService.createSkill(skillName, null, buildSkillContent(session, message));
+                localSkillService.createSkill(skillName, null, buildSkillContent(session, message, hasRecentCheckpoint));
             }
         }
 
@@ -89,10 +85,14 @@ public class AsyncSkillLearningService implements SkillLearningService {
 
     private int countToolMessages(SessionRecord session) throws Exception {
         int count = 0;
-        for (org.noear.solon.ai.chat.message.ChatMessage chatMessage : MessageSupport.loadMessages(session.getNdjson())) {
-            if (chatMessage.getRole() == org.noear.solon.ai.chat.ChatRole.TOOL) {
-                count++;
+        try {
+            for (org.noear.solon.ai.chat.message.ChatMessage chatMessage : MessageSupport.loadMessages(session.getNdjson())) {
+                if (chatMessage.getRole() == org.noear.solon.ai.chat.ChatRole.TOOL) {
+                    count++;
+                }
             }
+        } catch (Exception ignored) {
+            return 0;
         }
         return count;
     }
@@ -114,7 +114,7 @@ public class AsyncSkillLearningService implements SkillLearningService {
         return StrUtil.blankToDefault(base, "learned-workflow");
     }
 
-    private String buildSkillContent(SessionRecord session, GatewayMessage message) {
+    private String buildSkillContent(SessionRecord session, GatewayMessage message, boolean hasRecentCheckpoint) {
         String name = inferSkillName(session);
         String description = StrUtil.blankToDefault(session.getTitle(), "从复杂任务中沉淀出的可复用流程。");
         String progress = StrUtil.blankToDefault(session.getCompressedSummary(), replySafeExcerpt(session.getNdjson()));
@@ -137,7 +137,17 @@ public class AsyncSkillLearningService implements SkillLearningService {
         buffer.append("- 如上下文差异较大，先重新检查输入条件再复用。\n\n");
         buffer.append("# Verification\n");
         buffer.append("- 核对输出是否满足当前用户要求：").append(nextStep).append("\n");
+        if (hasSessionHints(session, hasRecentCheckpoint)) {
+            buffer.append("- 当前流程涉及结构化文件修改，执行前先确认 checkpoint 策略。\n");
+        }
         return buffer.toString();
+    }
+
+    /**
+     * 判断是否需要额外补充会话提示。
+     */
+    private boolean hasSessionHints(SessionRecord session, boolean hasRecentCheckpoint) {
+        return hasRecentCheckpoint && session != null && StrUtil.isNotBlank(session.getTitle());
     }
 
     private String replySafeExcerpt(String ndjson) {

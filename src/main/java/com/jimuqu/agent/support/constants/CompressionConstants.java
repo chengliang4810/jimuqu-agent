@@ -38,4 +38,19 @@ public interface CompressionConstants {
      * 会话标题最大长度。
      */
     int MAX_TITLE_LENGTH = 80;
+
+    /**
+     * 压缩失败后的冷却时间，单位毫秒。
+     */
+    long FAILURE_COOLDOWN_MILLIS = 10L * 60L * 1000L;
+
+    /**
+     * 成功压缩后的最短重压缩间隔，单位毫秒。
+     */
+    long RECOMPRESS_COOLDOWN_MILLIS = 60L * 1000L;
+
+    /**
+     * 再次压缩前至少新增的估算 token。
+     */
+    int MIN_RECOMPRESS_DELTA_TOKENS = 512;
 }

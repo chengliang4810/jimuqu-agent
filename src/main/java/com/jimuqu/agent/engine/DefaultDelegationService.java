@@ -13,6 +13,8 @@ import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.IdSupport;
 import com.jimuqu.agent.support.constants.ToolNameConstants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -26,6 +28,11 @@ import java.util.concurrent.Future;
  * 默认子代理委托服务。
  */
 public class DefaultDelegationService implements DelegationService {
+    /**
+     * 委托日志器。
+     */
+    private static final Logger log = LoggerFactory.getLogger(DefaultDelegationService.class);
+
     /**
      * 默认最大并行数。
      */
@@ -97,25 +104,34 @@ public class DefaultDelegationService implements DelegationService {
 
     @Override
     public DelegationResult delegateSingle(String sourceKey, String prompt, String context) throws Exception {
-        SessionRecord parentSession = sessionRepository.getBoundSession(sourceKey);
-        String childSourceKey = sourceKey + ":delegate:" + IdSupport.newId();
-        cloneToolVisibility(sourceKey, childSourceKey);
-        applyBlockedTools(childSourceKey);
-        prepareChildSession(childSourceKey, parentSession);
-
-        if (conversationHolder.get() == null) {
-            throw new IllegalStateException("Conversation orchestrator is not ready");
+        if (StrUtil.isBlank(prompt)) {
+            return failureResult("delegate", "委托任务不能为空。");
         }
-        GatewayMessage message = new GatewayMessage(PlatformType.MEMORY, "", "", decoratePrompt(prompt, context));
-        message.setSourceKeyOverride(childSourceKey);
-        GatewayReply reply = conversationHolder.get().handleIncoming(message);
 
-        DelegationResult result = new DelegationResult();
-        result.setName("delegate");
-        result.setSessionId(reply.getSessionId());
-        result.setContent(reply.getContent());
-        result.setError(reply.isError());
-        return result;
+        try {
+            SessionRecord parentSession = sessionRepository.getBoundSession(sourceKey);
+            String childSourceKey = sourceKey + ":delegate:" + IdSupport.newId();
+            cloneToolVisibility(sourceKey, childSourceKey);
+            applyBlockedTools(childSourceKey);
+            prepareChildSession(childSourceKey, parentSession);
+
+            if (conversationHolder.get() == null) {
+                return failureResult("delegate", "Conversation orchestrator is not ready");
+            }
+            GatewayMessage message = new GatewayMessage(PlatformType.MEMORY, "", "", decoratePrompt(prompt, context));
+            message.setSourceKeyOverride(childSourceKey);
+            GatewayReply reply = conversationHolder.get().handleIncoming(message);
+
+            DelegationResult result = new DelegationResult();
+            result.setName("delegate");
+            result.setSessionId(reply == null ? null : reply.getSessionId());
+            result.setContent(reply == null ? "" : reply.getContent());
+            result.setError(reply != null && reply.isError());
+            return result;
+        } catch (Exception e) {
+            log.warn("delegateSingle failed: sourceKey={}, prompt={}", sourceKey, prompt, e);
+            return failureResult("delegate", e.getMessage());
+        }
     }
 
     @Override
@@ -140,7 +156,12 @@ public class DefaultDelegationService implements DelegationService {
             }
 
             for (Future<DelegationResult> future : futures) {
-                results.add(future.get());
+                try {
+                    results.add(future.get());
+                } catch (Exception e) {
+                    log.warn("delegateBatch child failed: sourceKey={}", sourceKey, e);
+                    results.add(failureResult("delegate", e.getMessage()));
+                }
             }
             return results;
         } finally {
@@ -191,5 +212,16 @@ public class DefaultDelegationService implements DelegationService {
             return prompt;
         }
         return "任务目标:\n" + prompt + "\n\n补充上下文:\n" + context;
+    }
+
+    /**
+     * 构造失败结果，避免单个子任务异常打断整个批次。
+     */
+    private DelegationResult failureResult(String name, String message) {
+        DelegationResult result = new DelegationResult();
+        result.setName(StrUtil.blankToDefault(name, "delegate"));
+        result.setError(true);
+        result.setContent(StrUtil.blankToDefault(message, "delegation failed"));
+        return result;
     }
 }

@@ -94,6 +94,10 @@ public class SqliteSessionRepository implements SessionRepository {
         clone.setTitle(source.getTitle());
         clone.setCompressedSummary(source.getCompressedSummary());
         clone.setSystemPromptSnapshot(source.getSystemPromptSnapshot());
+        clone.setLastCompressionAt(source.getLastCompressionAt());
+        clone.setLastCompressionInputTokens(source.getLastCompressionInputTokens());
+        clone.setCompressionFailureCount(source.getCompressionFailureCount());
+        clone.setLastCompressionFailedAt(source.getLastCompressionFailedAt());
         clone.setCreatedAt(now);
         clone.setUpdatedAt(now);
         save(clone);
@@ -106,7 +110,7 @@ public class SqliteSessionRepository implements SessionRepository {
         Connection connection = database.openConnection();
         try {
             PreparedStatement statement = connection.prepareStatement(
-                    "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, created_at, updated_at from sessions where session_id = ?"
+                    "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, created_at, updated_at from sessions where session_id = ?"
             );
             statement.setString(1, sessionId);
             ResultSet resultSet = statement.executeQuery();
@@ -129,7 +133,7 @@ public class SqliteSessionRepository implements SessionRepository {
         Connection connection = database.openConnection();
         try {
             PreparedStatement statement = connection.prepareStatement(
-                    "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, created_at, updated_at from sessions where source_key = ? and branch_name = ? order by updated_at desc limit 1"
+                    "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, created_at, updated_at from sessions where source_key = ? and branch_name = ? order by updated_at desc limit 1"
             );
             statement.setString(1, sourceKey);
             statement.setString(2, branchName);
@@ -156,7 +160,7 @@ public class SqliteSessionRepository implements SessionRepository {
         Connection connection = database.openConnection();
         try {
             PreparedStatement statement = connection.prepareStatement(
-                    "insert or replace into sessions (session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    "insert or replace into sessions (session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             statement.setString(1, sessionRecord.getSessionId());
             statement.setString(2, sessionRecord.getSourceKey());
@@ -168,8 +172,12 @@ public class SqliteSessionRepository implements SessionRepository {
             statement.setString(8, sessionRecord.getCompressedSummary());
             statement.setString(9, sessionRecord.getSystemPromptSnapshot());
             statement.setLong(10, sessionRecord.getLastLearningAt());
-            statement.setLong(11, createdAt);
-            statement.setLong(12, updatedAt);
+            statement.setLong(11, sessionRecord.getLastCompressionAt());
+            statement.setInt(12, sessionRecord.getLastCompressionInputTokens());
+            statement.setInt(13, sessionRecord.getCompressionFailureCount());
+            statement.setLong(14, sessionRecord.getLastCompressionFailedAt());
+            statement.setLong(15, createdAt);
+            statement.setLong(16, updatedAt);
             statement.executeUpdate();
             statement.close();
 
@@ -188,7 +196,7 @@ public class SqliteSessionRepository implements SessionRepository {
         try {
             try {
                 PreparedStatement statement = connection.prepareStatement(
-                        "select s.session_id, s.source_key, s.branch_name, s.parent_session_id, s.model_override, s.ndjson, s.title, s.compressed_summary, s.system_prompt_snapshot, s.last_learning_at, s.created_at, s.updated_at " +
+                        "select s.session_id, s.source_key, s.branch_name, s.parent_session_id, s.model_override, s.ndjson, s.title, s.compressed_summary, s.system_prompt_snapshot, s.last_learning_at, s.last_compression_at, s.last_compression_input_tokens, s.compression_failure_count, s.last_compression_failed_at, s.created_at, s.updated_at " +
                                 "from sessions_fts f join sessions s on s.session_id = f.session_id " +
                                 "where sessions_fts match ? order by bm25(sessions_fts), s.updated_at desc limit ?"
                 );
@@ -205,7 +213,7 @@ public class SqliteSessionRepository implements SessionRepository {
                 }
             } catch (Exception e) {
                 PreparedStatement fallback = connection.prepareStatement(
-                        "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, created_at, updated_at " +
+                        "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, created_at, updated_at " +
                                 "from sessions where ndjson like ? or compressed_summary like ? or title like ? order by updated_at desc limit ?"
                 );
                 String like = "%" + keyword + "%";
@@ -279,6 +287,10 @@ public class SqliteSessionRepository implements SessionRepository {
         record.setCompressedSummary(resultSet.getString("compressed_summary"));
         record.setSystemPromptSnapshot(resultSet.getString("system_prompt_snapshot"));
         record.setLastLearningAt(resultSet.getLong("last_learning_at"));
+        record.setLastCompressionAt(resultSet.getLong("last_compression_at"));
+        record.setLastCompressionInputTokens(resultSet.getInt("last_compression_input_tokens"));
+        record.setCompressionFailureCount(resultSet.getInt("compression_failure_count"));
+        record.setLastCompressionFailedAt(resultSet.getLong("last_compression_failed_at"));
         record.setCreatedAt(resultSet.getLong("created_at"));
         record.setUpdatedAt(resultSet.getLong("updated_at"));
         return record;

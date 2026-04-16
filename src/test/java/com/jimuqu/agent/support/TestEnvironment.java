@@ -98,6 +98,10 @@ public class TestEnvironment {
         return create(new FakeLlmGateway());
     }
 
+    public static TestEnvironment withLlm(LlmGateway llmGateway) throws Exception {
+        return create(llmGateway);
+    }
+
     public static TestEnvironment withLiveLlm() throws Exception {
         AppConfig config = newConfig();
         config.getLlm().setProvider("openai-responses");

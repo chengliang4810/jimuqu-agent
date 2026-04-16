@@ -37,66 +37,83 @@ public class DefaultContextCompressionService implements ContextCompressionServi
         int contextWindow = Math.max(1024, appConfig.getLlm().getContextWindowTokens());
         int threshold = (int) (contextWindow * appConfig.getCompression().getThresholdPercent());
         int estimatedTokens = estimateTokens(systemPrompt) + estimateTokens(userMessage) + estimateTokens(session.getNdjson());
+        if (shouldSkipForFailureCooldown(session)) {
+            return session;
+        }
         if (estimatedTokens < threshold) {
             return session;
         }
+        if (shouldSkipForThrashing(session, estimatedTokens)) {
+            return session;
+        }
 
+        session.setLastCompressionInputTokens(estimatedTokens);
         return compressNow(session, systemPrompt);
     }
 
     @Override
     public SessionRecord compressNow(SessionRecord session, String systemPrompt) throws Exception {
-        List<ChatMessage> history = MessageSupport.loadMessages(session.getNdjson());
-        if (history.size() <= appConfig.getCompression().getProtectHeadMessages() + 1) {
-            return session;
-        }
-
-        List<ChatMessage> normalized = new ArrayList<ChatMessage>();
-        for (ChatMessage message : history) {
-            if (message.getRole() == ChatRole.ASSISTANT
-                    && StrUtil.startWithIgnoreCase(message.getContent(), CompressionConstants.SUMMARY_PREFIX)) {
-                if (StrUtil.isBlank(session.getCompressedSummary())) {
-                    session.setCompressedSummary(message.getContent());
-                }
-                continue;
-            }
-            normalized.add(message);
-        }
-
-        if (normalized.size() <= appConfig.getCompression().getProtectHeadMessages() + 1) {
-            return session;
-        }
-
-        List<ChatMessage> pruned = pruneOldToolResults(normalized);
-        int protectHead = Math.min(appConfig.getCompression().getProtectHeadMessages(), pruned.size());
-        int protectTailStart = findTailStart(pruned);
-        if (protectTailStart <= protectHead) {
-            protectTailStart = Math.max(protectHead + 1, pruned.size() - 1);
-            if (protectTailStart <= protectHead) {
+        try {
+            List<ChatMessage> history = MessageSupport.loadMessages(session.getNdjson());
+            if (history.size() <= appConfig.getCompression().getProtectHeadMessages() + 1) {
                 return session;
             }
-        }
 
-        List<ChatMessage> head = new ArrayList<ChatMessage>(pruned.subList(0, protectHead));
-        List<ChatMessage> middle = new ArrayList<ChatMessage>(pruned.subList(protectHead, protectTailStart));
-        List<ChatMessage> tail = new ArrayList<ChatMessage>(pruned.subList(protectTailStart, pruned.size()));
+            List<ChatMessage> normalized = new ArrayList<ChatMessage>();
+            String previousSummary = StrUtil.nullToEmpty(session.getCompressedSummary()).trim();
+            for (ChatMessage message : history) {
+                if (message.getRole() == ChatRole.ASSISTANT
+                        && StrUtil.startWithIgnoreCase(message.getContent(), CompressionConstants.SUMMARY_PREFIX)) {
+                    if (StrUtil.isBlank(previousSummary)) {
+                        previousSummary = message.getContent().trim();
+                    }
+                    continue;
+                }
+                normalized.add(message);
+            }
 
-        if (middle.isEmpty()) {
+            if (normalized.size() <= appConfig.getCompression().getProtectHeadMessages() + 1) {
+                return session;
+            }
+
+            List<ChatMessage> pruned = pruneOldToolResults(normalized);
+            int protectHead = Math.min(appConfig.getCompression().getProtectHeadMessages(), pruned.size());
+            int protectTailStart = findTailStart(pruned);
+            if (protectTailStart <= protectHead) {
+                protectTailStart = Math.max(protectHead + 1, pruned.size() - 1);
+                if (protectTailStart <= protectHead) {
+                    return session;
+                }
+            }
+
+            List<ChatMessage> head = new ArrayList<ChatMessage>(pruned.subList(0, protectHead));
+            List<ChatMessage> middle = new ArrayList<ChatMessage>(pruned.subList(protectHead, protectTailStart));
+            List<ChatMessage> tail = new ArrayList<ChatMessage>(pruned.subList(protectTailStart, pruned.size()));
+
+            if (middle.isEmpty() || shouldSkipMiddleCompression(middle)) {
+                return session;
+            }
+
+            String summaryBody = buildStructuredSummary(session, systemPrompt, middle, tail, previousSummary);
+            String summaryText = CompressionConstants.SUMMARY_PREFIX + "\n" + summaryBody;
+
+            List<ChatMessage> compacted = new ArrayList<ChatMessage>();
+            compacted.addAll(head);
+            compacted.add(ChatMessage.ofAssistant(summaryText));
+            compacted.addAll(tail);
+
+            session.setCompressedSummary(summaryText);
+            session.setNdjson(MessageSupport.toNdjson(compacted));
+            session.setLastCompressionAt(System.currentTimeMillis());
+            session.setCompressionFailureCount(0);
+            session.setLastCompressionFailedAt(0L);
+            session.setUpdatedAt(System.currentTimeMillis());
+            return session;
+        } catch (Exception e) {
+            session.setCompressionFailureCount(session.getCompressionFailureCount() + 1);
+            session.setLastCompressionFailedAt(System.currentTimeMillis());
             return session;
         }
-
-        String summaryBody = buildStructuredSummary(session, systemPrompt, middle, tail);
-        String summaryText = CompressionConstants.SUMMARY_PREFIX + "\n" + summaryBody;
-
-        List<ChatMessage> compacted = new ArrayList<ChatMessage>();
-        compacted.addAll(head);
-        compacted.add(ChatMessage.ofAssistant(summaryText));
-        compacted.addAll(tail);
-
-        session.setCompressedSummary(summaryText);
-        session.setNdjson(MessageSupport.toNdjson(compacted));
-        session.setUpdatedAt(System.currentTimeMillis());
-        return session;
     }
 
     /**
@@ -148,7 +165,8 @@ public class DefaultContextCompressionService implements ContextCompressionServi
     private String buildStructuredSummary(SessionRecord session,
                                           String systemPrompt,
                                           List<ChatMessage> middle,
-                                          List<ChatMessage> tail) {
+                                          List<ChatMessage> tail,
+                                          String previousSummary) {
         String goal = extractFirstUserMessage(middle, tail);
         String progress = collectByRole(middle, ChatRole.ASSISTANT, 3);
         String decisions = collectKeywords(middle, new String[]{"决定", "改为", "使用", "切换", "采用"});
@@ -156,6 +174,11 @@ public class DefaultContextCompressionService implements ContextCompressionServi
         String nextSteps = collectByRole(tail, ChatRole.USER, 1);
 
         StringBuilder buffer = new StringBuilder();
+        if (StrUtil.isNotBlank(previousSummary)) {
+            buffer.append("Previous Summary\n")
+                    .append(trimContent(previousSummary.replace(CompressionConstants.SUMMARY_PREFIX, "").trim(), 600))
+                    .append("\n\n");
+        }
         buffer.append("Goal\n").append(StrUtil.blankToDefault(goal, inferGoalFromPrompt(systemPrompt))).append("\n\n");
         buffer.append("Progress\n").append(StrUtil.blankToDefault(progress, "已对较早轮次进行压缩，后续请基于当前文件状态继续。")).append("\n\n");
         buffer.append("Decisions\n").append(StrUtil.blankToDefault(decisions, "未提取到明确决策，请结合当前工程状态判断。")).append("\n\n");
@@ -251,6 +274,48 @@ public class DefaultContextCompressionService implements ContextCompressionServi
             return "继续当前任务。";
         }
         return trimContent(systemPrompt, 160);
+    }
+
+    /**
+     * 压缩失败冷却期内直接跳过。
+     */
+    private boolean shouldSkipForFailureCooldown(SessionRecord session) {
+        return session.getLastCompressionFailedAt() > 0
+                && System.currentTimeMillis() - session.getLastCompressionFailedAt() < CompressionConstants.FAILURE_COOLDOWN_MILLIS;
+    }
+
+    /**
+     * 压缩后短时间内若上下文增长不明显，则跳过重压缩。
+     */
+    private boolean shouldSkipForThrashing(SessionRecord session, int estimatedTokens) {
+        if (session.getLastCompressionAt() <= 0) {
+            return false;
+        }
+        long elapsed = System.currentTimeMillis() - session.getLastCompressionAt();
+        if (elapsed >= CompressionConstants.RECOMPRESS_COOLDOWN_MILLIS) {
+            return false;
+        }
+        return estimatedTokens <= session.getLastCompressionInputTokens() + CompressionConstants.MIN_RECOMPRESS_DELTA_TOKENS;
+    }
+
+    /**
+     * 如果中间区间已经只剩占位内容，则无需继续压缩。
+     */
+    private boolean shouldSkipMiddleCompression(List<ChatMessage> middle) {
+        for (ChatMessage message : middle) {
+            String content = StrUtil.nullToEmpty(message.getContent()).trim();
+            if (content.length() == 0) {
+                continue;
+            }
+            if (CompressionConstants.PRUNED_TOOL_PLACEHOLDER.equals(content)) {
+                continue;
+            }
+            if (StrUtil.startWithIgnoreCase(content, CompressionConstants.SUMMARY_PREFIX)) {
+                continue;
+            }
+            return false;
+        }
+        return true;
     }
 
     /**

@@ -62,6 +62,26 @@ public class SessionRecord {
     private long lastLearningAt;
 
     /**
+     * 最近一次压缩时间。
+     */
+    private long lastCompressionAt;
+
+    /**
+     * 最近一次压缩前估算的输入 token 数。
+     */
+    private int lastCompressionInputTokens;
+
+    /**
+     * 压缩连续失败次数。
+     */
+    private int compressionFailureCount;
+
+    /**
+     * 最近一次压缩失败时间。
+     */
+    private long lastCompressionFailedAt;
+
+    /**
      * 创建时间。
      */
     private long createdAt;

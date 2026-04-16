@@ -1,6 +1,7 @@
 package com.jimuqu.agent.tool.runtime;
 
 import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.model.SkillDescriptor;
@@ -56,21 +57,29 @@ public class SkillTools {
 
     @ToolMapping(name = "skills_list", description = "List available skills. Optional category filter.")
     public String skillsList(@Param(name = "category", description = "可选分类名", required = false) String category) throws Exception {
-        List<SkillDescriptor> skills = localSkillService.listSkills(category);
-        List<SkillDescriptor> visible = new ArrayList<SkillDescriptor>();
-        for (SkillDescriptor descriptor : skills) {
-            if (localSkillService.isVisible(sourceKey, descriptor.canonicalName())) {
-                visible.add(descriptor);
+        try {
+            List<SkillDescriptor> skills = localSkillService.listSkills(category);
+            List<SkillDescriptor> visible = new ArrayList<SkillDescriptor>();
+            for (SkillDescriptor descriptor : skills) {
+                if (localSkillService.isVisible(sourceKey, descriptor.canonicalName())) {
+                    visible.add(descriptor);
+                }
             }
+            return ONode.serialize(visible);
+        } catch (Exception e) {
+            return toolError(e.getMessage());
         }
-        return ONode.serialize(visible);
     }
 
     @ToolMapping(name = "skill_view", description = "Load full SKILL.md or a supporting file from a skill directory.")
     public String skillView(@Param(name = "name", description = "技能名或 category/name") String name,
                             @Param(name = "filePath", description = "可选支持文件相对路径", required = false) String filePath) throws Exception {
-        SkillView view = localSkillService.viewSkill(name, filePath);
-        return ONode.serialize(view);
+        try {
+            SkillView view = localSkillService.viewSkill(name, filePath);
+            return ONode.serialize(view);
+        } catch (Exception e) {
+            return toolError(e.getMessage());
+        }
     }
 
     @ToolMapping(name = "skill_manage", description = "Create, patch, edit, delete or manage supporting files for a local skill.")
@@ -82,31 +91,35 @@ public class SkillTools {
                               @Param(name = "newText", description = "patch 时替换后的新文本", required = false) String newText,
                               @Param(name = "filePath", description = "支持文件相对路径", required = false) String filePath,
                               @Param(name = "fileContent", description = "write_file 时写入的内容", required = false) String fileContent) throws Exception {
-        if (SkillConstants.ACTION_CREATE.equalsIgnoreCase(action)) {
-            checkpoint(Collections.singletonList(localSkillService.resolveSkillMainFile(name, category)));
-            return ONode.serialize(localSkillService.createSkill(name, category, content));
+        try {
+            if (SkillConstants.ACTION_CREATE.equalsIgnoreCase(action)) {
+                checkpoint(Collections.singletonList(localSkillService.resolveSkillMainFile(name, category)));
+                return ONode.serialize(localSkillService.createSkill(name, category, content));
+            }
+            if (SkillConstants.ACTION_EDIT.equalsIgnoreCase(action)) {
+                checkpoint(skillFiles(name));
+                return ONode.serialize(localSkillService.editSkill(name, content));
+            }
+            if (SkillConstants.ACTION_PATCH.equalsIgnoreCase(action)) {
+                checkpoint(skillFiles(name));
+                return localSkillService.patchSkill(name, oldText, newText, filePath);
+            }
+            if (SkillConstants.ACTION_DELETE.equalsIgnoreCase(action)) {
+                checkpoint(skillFiles(name));
+                return localSkillService.deleteSkill(name);
+            }
+            if (SkillConstants.ACTION_WRITE_FILE.equalsIgnoreCase(action)) {
+                checkpoint(skillFiles(name));
+                return localSkillService.writeSkillFile(name, filePath, fileContent);
+            }
+            if (SkillConstants.ACTION_REMOVE_FILE.equalsIgnoreCase(action)) {
+                checkpoint(skillFiles(name));
+                return localSkillService.removeSkillFile(name, filePath);
+            }
+            return toolError("Unsupported skill_manage action");
+        } catch (Exception e) {
+            return toolError(e.getMessage());
         }
-        if (SkillConstants.ACTION_EDIT.equalsIgnoreCase(action)) {
-            checkpoint(skillFiles(name));
-            return ONode.serialize(localSkillService.editSkill(name, content));
-        }
-        if (SkillConstants.ACTION_PATCH.equalsIgnoreCase(action)) {
-            checkpoint(skillFiles(name));
-            return localSkillService.patchSkill(name, oldText, newText, filePath);
-        }
-        if (SkillConstants.ACTION_DELETE.equalsIgnoreCase(action)) {
-            checkpoint(skillFiles(name));
-            return localSkillService.deleteSkill(name);
-        }
-        if (SkillConstants.ACTION_WRITE_FILE.equalsIgnoreCase(action)) {
-            checkpoint(skillFiles(name));
-            return localSkillService.writeSkillFile(name, filePath, fileContent);
-        }
-        if (SkillConstants.ACTION_REMOVE_FILE.equalsIgnoreCase(action)) {
-            checkpoint(skillFiles(name));
-            return localSkillService.removeSkillFile(name, filePath);
-        }
-        return "Unsupported skill_manage action";
     }
 
     /**
@@ -131,5 +144,71 @@ public class SkillTools {
         }
         SessionRecord session = sessionRepository == null ? null : sessionRepository.getBoundSession(sourceKey);
         checkpointService.createCheckpoint(sourceKey, session == null ? null : session.getSessionId(), files);
+    }
+
+    /**
+     * 统一工具错误返回。
+     */
+    private String toolError(String message) {
+        return new ONode()
+                .set("success", false)
+                .set("error", StrUtil.nullToDefault(message, "unknown error"))
+                .toJson();
+    }
+
+    /**
+     * `skills_list` 单工具暴露对象。
+     */
+    public static class SkillsListTool {
+        private final SkillTools delegate;
+
+        public SkillsListTool(SkillTools delegate) {
+            this.delegate = delegate;
+        }
+
+        @ToolMapping(name = "skills_list", description = "List available skills. Optional category filter.")
+        public String skillsList(@Param(name = "category", description = "可选分类名", required = false) String category) throws Exception {
+            return delegate.skillsList(category);
+        }
+    }
+
+    /**
+     * `skill_view` 单工具暴露对象。
+     */
+    public static class SkillViewTool {
+        private final SkillTools delegate;
+
+        public SkillViewTool(SkillTools delegate) {
+            this.delegate = delegate;
+        }
+
+        @ToolMapping(name = "skill_view", description = "Load full SKILL.md or a supporting file from a skill directory.")
+        public String skillView(@Param(name = "name", description = "技能名或 category/name") String name,
+                                @Param(name = "filePath", description = "可选支持文件相对路径", required = false) String filePath) throws Exception {
+            return delegate.skillView(name, filePath);
+        }
+    }
+
+    /**
+     * `skill_manage` 单工具暴露对象。
+     */
+    public static class SkillManageTool {
+        private final SkillTools delegate;
+
+        public SkillManageTool(SkillTools delegate) {
+            this.delegate = delegate;
+        }
+
+        @ToolMapping(name = "skill_manage", description = "Create, patch, edit, delete or manage supporting files for a local skill.")
+        public String skillManage(@Param(name = "action", description = "create、edit、patch、delete、write_file、remove_file") String action,
+                                  @Param(name = "name", description = "技能名或 category/name") String name,
+                                  @Param(name = "category", description = "create 时可选分类", required = false) String category,
+                                  @Param(name = "content", description = "create/edit 时的主文件内容", required = false) String content,
+                                  @Param(name = "oldText", description = "patch 时要匹配的旧文本", required = false) String oldText,
+                                  @Param(name = "newText", description = "patch 时替换后的新文本", required = false) String newText,
+                                  @Param(name = "filePath", description = "支持文件相对路径", required = false) String filePath,
+                                  @Param(name = "fileContent", description = "write_file 时写入的内容", required = false) String fileContent) throws Exception {
+            return delegate.skillManage(action, name, category, content, oldText, newText, filePath, fileContent);
+        }
     }
 }

@@ -10,6 +10,8 @@ import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.support.constants.SkillConstants;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -21,6 +23,11 @@ import java.util.Map;
  * 本地技能目录服务，支持 Hermes 风格分类目录与渐进披露读取。
  */
 public class LocalSkillService implements SkillCatalogService {
+    /**
+     * 技能名允许字符。
+     */
+    private static final String VALID_NAME_PATTERN = "^[a-z0-9][a-z0-9._-]*$";
+
     /**
      * 应用配置。
      */
@@ -131,10 +138,7 @@ public class LocalSkillService implements SkillCatalogService {
             throw new IllegalStateException("Skill not found: " + nameOrPath);
         }
 
-        File skillDir = FileUtil.file(descriptor.getSkillDir());
-        File target = StrUtil.isBlank(filePath)
-                ? FileUtil.file(skillDir, SkillConstants.SKILL_FILE_NAME)
-                : FileUtil.file(skillDir, filePath);
+        File target = resolveSkillFile(descriptor, filePath);
         if (!target.exists()) {
             throw new IllegalStateException("Skill file not found: " + target.getAbsolutePath());
         }
@@ -200,6 +204,9 @@ public class LocalSkillService implements SkillCatalogService {
      * 创建新技能。
      */
     public SkillDescriptor createSkill(String name, String category, String content) {
+        validateSkillName(name);
+        validateCategory(category);
+        validateSkillContent(content);
         File skillDir = resolveSkillDir(name, category);
         if (skillDir.exists()) {
             throw new IllegalStateException("Skill already exists: " + canonicalName(category, name));
@@ -212,6 +219,7 @@ public class LocalSkillService implements SkillCatalogService {
      * 全量改写技能主文件。
      */
     public SkillDescriptor editSkill(String nameOrPath, String content) throws Exception {
+        validateSkillContent(content);
         SkillDescriptor descriptor = findDescriptor(nameOrPath);
         if (descriptor == null) {
             throw new IllegalStateException("Skill not found: " + nameOrPath);
@@ -229,7 +237,7 @@ public class LocalSkillService implements SkillCatalogService {
             throw new IllegalStateException("Patch target not found.");
         }
         File target = resolveSkillFile(view.getDescriptor(), filePath);
-        FileUtil.writeUtf8String(view.getContent().replace(oldText, StrUtil.nullToEmpty(newText)), target);
+        writeTextAtomically(target, view.getContent().replace(oldText, StrUtil.nullToEmpty(newText)));
         return "Patched skill file: " + target.getAbsolutePath();
     }
 
@@ -253,9 +261,9 @@ public class LocalSkillService implements SkillCatalogService {
         if (descriptor == null) {
             throw new IllegalStateException("Skill not found: " + nameOrPath);
         }
+        validateSupportFilePath(filePath);
         File target = resolveSkillFile(descriptor, filePath);
-        FileUtil.mkParentDirs(target);
-        FileUtil.writeUtf8String(StrUtil.nullToEmpty(fileContent), target);
+        writeTextAtomically(target, StrUtil.nullToEmpty(fileContent));
         return "Wrote skill file: " + target.getAbsolutePath();
     }
 
@@ -267,6 +275,7 @@ public class LocalSkillService implements SkillCatalogService {
         if (descriptor == null) {
             throw new IllegalStateException("Skill not found: " + nameOrPath);
         }
+        validateSupportFilePath(filePath);
         File target = resolveSkillFile(descriptor, filePath);
         if (!target.exists()) {
             throw new IllegalStateException("Skill file not found: " + target.getAbsolutePath());
@@ -279,6 +288,8 @@ public class LocalSkillService implements SkillCatalogService {
      * 预测新技能主文件路径。
      */
     public File resolveSkillMainFile(String name, String category) {
+        validateSkillName(name);
+        validateCategory(category);
         return FileUtil.file(resolveSkillDir(name, category), SkillConstants.SKILL_FILE_NAME);
     }
 
@@ -437,17 +448,28 @@ public class LocalSkillService implements SkillCatalogService {
         FileUtil.mkdir(FileUtil.file(skillDir, SkillConstants.TEMPLATES_DIR));
         FileUtil.mkdir(FileUtil.file(skillDir, SkillConstants.SCRIPTS_DIR));
         FileUtil.mkdir(FileUtil.file(skillDir, SkillConstants.ASSETS_DIR));
-        FileUtil.writeUtf8String(StrUtil.nullToEmpty(content), FileUtil.file(skillDir, SkillConstants.SKILL_FILE_NAME));
+        writeTextAtomically(FileUtil.file(skillDir, SkillConstants.SKILL_FILE_NAME), StrUtil.nullToEmpty(content));
     }
 
     /**
      * 解析技能支持文件路径。
      */
-    private File resolveSkillFile(SkillDescriptor descriptor, String filePath) {
-        if (StrUtil.isBlank(filePath)) {
-            return FileUtil.file(descriptor.getSkillDir(), SkillConstants.SKILL_FILE_NAME);
+    private File resolveSkillFile(SkillDescriptor descriptor, String filePath) throws Exception {
+        if (StrUtil.isNotBlank(filePath)) {
+            validateSupportFilePath(filePath);
         }
-        return FileUtil.file(descriptor.getSkillDir(), filePath);
+
+        File skillDir = FileUtil.file(descriptor.getSkillDir()).getCanonicalFile();
+        File candidate = StrUtil.isBlank(filePath)
+                ? FileUtil.file(skillDir, SkillConstants.SKILL_FILE_NAME)
+                : FileUtil.file(skillDir, filePath);
+        File target = candidate.getCanonicalFile();
+        String skillRoot = skillDir.getAbsolutePath() + File.separator;
+        if (!target.getAbsolutePath().equals(skillDir.getAbsolutePath())
+                && !target.getAbsolutePath().startsWith(skillRoot)) {
+            throw new IllegalStateException("Skill file path is outside skill directory: " + filePath);
+        }
+        return target;
     }
 
     /**
@@ -455,5 +477,72 @@ public class LocalSkillService implements SkillCatalogService {
      */
     private String canonicalName(String category, String name) {
         return StrUtil.isBlank(category) ? name : category + "/" + name;
+    }
+
+    /**
+     * 校验技能名。
+     */
+    private void validateSkillName(String name) {
+        if (StrUtil.isBlank(name) || !name.matches(VALID_NAME_PATTERN)) {
+            throw new IllegalStateException("Invalid skill name: " + name);
+        }
+    }
+
+    /**
+     * 校验分类名。
+     */
+    private void validateCategory(String category) {
+        if (StrUtil.isBlank(category)) {
+            return;
+        }
+        if (category.contains("/") || category.contains("\\")) {
+            throw new IllegalStateException("Category must be a single directory name.");
+        }
+        if (!category.matches(VALID_NAME_PATTERN)) {
+            throw new IllegalStateException("Invalid category: " + category);
+        }
+    }
+
+    /**
+     * 校验技能主文件内容。
+     */
+    private void validateSkillContent(String content) {
+        if (StrUtil.isBlank(content)) {
+            throw new IllegalStateException("Skill content cannot be empty.");
+        }
+        if (!content.startsWith("---")) {
+            throw new IllegalStateException("Skill content must start with YAML frontmatter.");
+        }
+    }
+
+    /**
+     * 校验支持文件相对路径。
+     */
+    private void validateSupportFilePath(String filePath) {
+        if (StrUtil.isBlank(filePath) || filePath.contains("..")) {
+            throw new IllegalStateException("Invalid skill file path: " + filePath);
+        }
+    }
+
+    /**
+     * 以原子替换方式写文本，降低并发写和中断写导致的半成品风险。
+     */
+    private void writeTextAtomically(File target, String content) {
+        try {
+            FileUtil.mkParentDirs(target);
+            File tempFile = FileUtil.file(target.getParentFile(), target.getName() + ".tmp-" + System.nanoTime());
+            FileUtil.writeUtf8String(StrUtil.nullToEmpty(content), tempFile);
+            try {
+                Files.move(tempFile.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (Exception ignored) {
+                Files.move(tempFile.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            } finally {
+                if (tempFile.exists()) {
+                    FileUtil.del(tempFile);
+                }
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to write skill file: " + target.getAbsolutePath(), e);
+        }
     }
 }

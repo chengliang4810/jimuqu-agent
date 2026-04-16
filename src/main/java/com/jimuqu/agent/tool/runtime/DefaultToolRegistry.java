@@ -18,9 +18,7 @@ import com.jimuqu.agent.tool.builtin.WebsearchTool;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * 默认工具注册表。
@@ -129,13 +127,12 @@ public class DefaultToolRegistry implements ToolRegistry {
 
     @Override
     public List<String> listToolNames() {
-        return TOOL_NAMES;
+        return new ArrayList<String>(TOOL_NAMES);
     }
 
     @Override
     public List<Object> resolveEnabledTools(String sourceKey) {
         List<Object> tools = new ArrayList<Object>();
-        Set<Object> unique = new LinkedHashSet<Object>();
 
         FileTools fileTools = new FileTools(checkpointService, sessionRepository, sourceKey);
         ShellTools shellTools = new ShellTools(processRegistry);
@@ -155,42 +152,48 @@ public class DefaultToolRegistry implements ToolRegistry {
                 continue;
             }
 
-            if (ToolNameConstants.READ_FILE.equals(toolName)
-                    || ToolNameConstants.WRITE_FILE.equals(toolName)
-                    || ToolNameConstants.PATCH.equals(toolName)
-                    || ToolNameConstants.SEARCH_FILES.equals(toolName)) {
-                unique.add(fileTools);
-            } else if (ToolNameConstants.TERMINAL.equals(toolName)
-                    || ToolNameConstants.PROCESS.equals(toolName)
-                    || ToolNameConstants.EXECUTE_CODE.equals(toolName)
-                    || ToolNameConstants.APPROVAL.equals(toolName)) {
-                unique.add(shellTools);
+            if (ToolNameConstants.READ_FILE.equals(toolName)) {
+                tools.add(new FileTools.ReadFileTool(fileTools));
+            } else if (ToolNameConstants.WRITE_FILE.equals(toolName)) {
+                tools.add(new FileTools.WriteFileTool(fileTools));
+            } else if (ToolNameConstants.PATCH.equals(toolName)) {
+                tools.add(new FileTools.PatchTool(fileTools));
+            } else if (ToolNameConstants.SEARCH_FILES.equals(toolName)) {
+                tools.add(new FileTools.SearchFilesTool(fileTools));
+            } else if (ToolNameConstants.TERMINAL.equals(toolName)) {
+                tools.add(new ShellTools.TerminalTool(shellTools));
+            } else if (ToolNameConstants.PROCESS.equals(toolName)) {
+                tools.add(new ShellTools.ProcessTool(shellTools));
+            } else if (ToolNameConstants.EXECUTE_CODE.equals(toolName)) {
+                tools.add(new ShellTools.ExecuteCodeTool(shellTools));
+            } else if (ToolNameConstants.APPROVAL.equals(toolName)) {
+                tools.add(new ShellTools.ApprovalTool(shellTools));
             } else if (ToolNameConstants.TODO.equals(toolName)) {
-                unique.add(todoTools);
+                tools.add(todoTools);
             } else if (ToolNameConstants.MEMORY.equals(toolName)) {
-                unique.add(memoryTools);
+                tools.add(memoryTools);
             } else if (ToolNameConstants.SESSION_SEARCH.equals(toolName)) {
-                unique.add(sessionSearchTools);
-            } else if (ToolNameConstants.SKILLS_LIST.equals(toolName)
-                    || ToolNameConstants.SKILL_VIEW.equals(toolName)
-                    || ToolNameConstants.SKILL_MANAGE.equals(toolName)) {
-                unique.add(skillTools);
+                tools.add(sessionSearchTools);
+            } else if (ToolNameConstants.SKILLS_LIST.equals(toolName)) {
+                tools.add(new SkillTools.SkillsListTool(skillTools));
+            } else if (ToolNameConstants.SKILL_VIEW.equals(toolName)) {
+                tools.add(new SkillTools.SkillViewTool(skillTools));
+            } else if (ToolNameConstants.SKILL_MANAGE.equals(toolName)) {
+                tools.add(new SkillTools.SkillManageTool(skillTools));
             } else if (ToolNameConstants.SEND_MESSAGE.equals(toolName)) {
-                unique.add(messagingTools);
+                tools.add(messagingTools);
             } else if (ToolNameConstants.CRONJOB.equals(toolName)) {
-                unique.add(cronjobTools);
+                tools.add(cronjobTools);
             } else if (ToolNameConstants.DELEGATE_TASK.equals(toolName)) {
-                unique.add(delegateTools);
+                tools.add(delegateTools);
             } else if (ToolNameConstants.WEBSEARCH.equals(toolName)) {
-                unique.add(websearchTool);
+                tools.add(websearchTool);
             } else if (ToolNameConstants.WEBFETCH.equals(toolName)) {
-                unique.add(webfetchTool);
+                tools.add(webfetchTool);
             } else if (ToolNameConstants.CODESEARCH.equals(toolName)) {
-                unique.add(codeSearchTool);
+                tools.add(codeSearchTool);
             }
         }
-
-        tools.addAll(unique);
         return tools;
     }
 

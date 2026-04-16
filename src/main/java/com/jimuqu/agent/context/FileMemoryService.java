@@ -16,6 +16,13 @@ import java.util.List;
  */
 public class FileMemoryService implements MemoryService {
     /**
+     * 明显属于短期任务状态的关键词。
+     */
+    private static final String[] TRANSIENT_PATTERNS = new String[]{
+            "本会话", "临时", "TODO", "todo", "rollback", "checkpoint", "sessionId", "session_id"
+    };
+
+    /**
      * 应用配置。
      */
     private final AppConfig appConfig;
@@ -51,9 +58,13 @@ public class FileMemoryService implements MemoryService {
             return "记忆内容不能为空。";
         }
 
+        String normalized = normalizeEntry(content);
+        if (shouldReject(normalized)) {
+            return "该内容更像临时任务状态，不会写入长期记忆。";
+        }
+
         List<String> entries = readEntries(target);
-        String normalized = content.trim();
-        if (!entries.contains(normalized)) {
+        if (!containsEntry(entries, normalized)) {
             entries.add(normalized);
             writeEntries(target, entries);
         }
@@ -66,11 +77,16 @@ public class FileMemoryService implements MemoryService {
             return "replace 需要 oldText 和 newContent。";
         }
 
+        String normalizedNew = normalizeEntry(newContent);
+        if (shouldReject(normalizedNew)) {
+            return "该内容更像临时任务状态，不会写入长期记忆。";
+        }
+
         List<String> entries = readEntries(target);
         boolean replaced = false;
         for (int i = 0; i < entries.size(); i++) {
             if (entries.get(i).contains(oldText.trim())) {
-                entries.set(i, newContent.trim());
+                entries.set(i, normalizedNew);
                 replaced = true;
                 break;
             }
@@ -126,7 +142,7 @@ public class FileMemoryService implements MemoryService {
                 trimmed = trimmed.substring(2).trim();
             }
             if (trimmed.length() > 0) {
-                entries.add(trimmed);
+                entries.add(normalizeEntry(trimmed));
             }
         }
         return entries;
@@ -163,5 +179,46 @@ public class FileMemoryService implements MemoryService {
         return MemoryConstants.TARGET_USER.equalsIgnoreCase(target)
                 ? MemoryConstants.TARGET_USER
                 : MemoryConstants.TARGET_MEMORY;
+    }
+
+    /**
+     * 统一归一化记忆条目。
+     */
+    private String normalizeEntry(String content) {
+        return StrUtil.nullToEmpty(content)
+                .replace('\r', ' ')
+                .replace('\n', ' ')
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    /**
+     * 判断内容是否像短期状态。
+     */
+    private boolean shouldReject(String content) {
+        if (StrUtil.isBlank(content)) {
+            return true;
+        }
+        if (content.length() > 300) {
+            return true;
+        }
+        for (String pattern : TRANSIENT_PATTERNS) {
+            if (StrUtil.containsIgnoreCase(content, pattern)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 判断是否已有相同或更泛化的条目。
+     */
+    private boolean containsEntry(List<String> entries, String candidate) {
+        for (String entry : entries) {
+            if (entry.equals(candidate) || entry.contains(candidate) || candidate.contains(entry)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

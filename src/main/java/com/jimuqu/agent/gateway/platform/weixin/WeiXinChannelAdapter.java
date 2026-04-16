@@ -28,12 +28,17 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     @Override
     public boolean connect() {
         if (!isEnabled()) {
+            setDetail("disabled");
             return false;
         }
         if (StrUtil.isBlank(config.getToken())) {
+            setConnected(false);
+            setDetail("missing token");
             log.warn("[WEIXIN] Missing token");
             return false;
         }
+        setConnected(true);
+        setDetail("token configured");
         return true;
     }
 

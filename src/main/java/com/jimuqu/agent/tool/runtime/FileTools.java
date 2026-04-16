@@ -105,4 +105,72 @@ public class FileTools {
                 Collections.singletonList(file)
         );
     }
+
+    /**
+     * `read_file` 单工具暴露对象。
+     */
+    public static class ReadFileTool {
+        private final FileTools delegate;
+
+        public ReadFileTool(FileTools delegate) {
+            this.delegate = delegate;
+        }
+
+        @ToolMapping(name = "read_file", description = "Read a UTF-8 text file from disk by absolute or relative path.")
+        public String readFile(@Param(name = "path", description = "文件绝对路径或相对路径") String path) {
+            return delegate.readFile(path);
+        }
+    }
+
+    /**
+     * `write_file` 单工具暴露对象。
+     */
+    public static class WriteFileTool {
+        private final FileTools delegate;
+
+        public WriteFileTool(FileTools delegate) {
+            this.delegate = delegate;
+        }
+
+        @ToolMapping(name = "write_file", description = "Write UTF-8 text content to a file path, creating parent directories when needed.")
+        public String writeFile(@Param(name = "path", description = "目标文件路径") String path,
+                                @Param(name = "content", description = "写入的 UTF-8 文本内容") String content) throws Exception {
+            return delegate.writeFile(path, content);
+        }
+    }
+
+    /**
+     * `patch` 单工具暴露对象。
+     */
+    public static class PatchTool {
+        private final FileTools delegate;
+
+        public PatchTool(FileTools delegate) {
+            this.delegate = delegate;
+        }
+
+        @ToolMapping(name = "patch", description = "Replace one text snippet with another inside a UTF-8 text file.")
+        public String patch(@Param(name = "path", description = "目标文件路径") String path,
+                            @Param(name = "findText", description = "要替换的原始文本") String findText,
+                            @Param(name = "replaceText", description = "替换后的文本") String replaceText) throws Exception {
+            return delegate.patch(path, findText, replaceText);
+        }
+    }
+
+    /**
+     * `search_files` 单工具暴露对象。
+     */
+    public static class SearchFilesTool {
+        private final FileTools delegate;
+
+        public SearchFilesTool(FileTools delegate) {
+            this.delegate = delegate;
+        }
+
+        @ToolMapping(name = "search_files", description = "Search for text inside files under a directory path.")
+        public String searchFiles(@Param(name = "rootPath", description = "搜索根目录") String rootPath,
+                                  @Param(name = "pattern", description = "要搜索的文本模式") String pattern) {
+            return delegate.searchFiles(rootPath, pattern);
+        }
+    }
 }

@@ -115,4 +115,73 @@ public class ShellTools {
     private String read(InputStream inputStream) throws Exception {
         return IoUtil.readUtf8(inputStream);
     }
+
+    /**
+     * `terminal` 单工具暴露对象。
+     */
+    public static class TerminalTool {
+        private final ShellTools delegate;
+
+        public TerminalTool(ShellTools delegate) {
+            this.delegate = delegate;
+        }
+
+        @ToolMapping(name = "terminal", description = "Execute a shell command in a working directory. Dangerous commands require approval.")
+        public String terminal(@Param(name = "command", description = "要执行的 shell 命令") String command,
+                               @Param(name = "workingDir", description = "可选工作目录", required = false) String workingDir) throws Exception {
+            return delegate.terminal(command, workingDir);
+        }
+    }
+
+    /**
+     * `process` 单工具暴露对象。
+     */
+    public static class ProcessTool {
+        private final ShellTools delegate;
+
+        public ProcessTool(ShellTools delegate) {
+            this.delegate = delegate;
+        }
+
+        @ToolMapping(name = "process", description = "Manage background processes. action can be list, start, or stop.")
+        public String process(@Param(name = "action", description = "list、start、stop") String action,
+                              @Param(name = "value", description = "动作附带值，例如命令或进程 ID", required = false) String value) throws Exception {
+            return delegate.process(action, value);
+        }
+    }
+
+    /**
+     * `execute_code` 单工具暴露对象。
+     */
+    public static class ExecuteCodeTool {
+        private final ShellTools delegate;
+
+        public ExecuteCodeTool(ShellTools delegate) {
+            this.delegate = delegate;
+        }
+
+        @ToolMapping(name = "execute_code", description = "Execute temporary code in powershell or python. language can be powershell or python.")
+        public String executeCode(@Param(name = "language", description = "powershell 或 python") String language,
+                                  @Param(name = "code", description = "要执行的代码文本") String code,
+                                  @Param(name = "workingDir", description = "可选工作目录", required = false) String workingDir) throws Exception {
+            return delegate.executeCode(language, code, workingDir);
+        }
+    }
+
+    /**
+     * `approval` 单工具暴露对象。
+     */
+    public static class ApprovalTool {
+        private final ShellTools delegate;
+
+        public ApprovalTool(ShellTools delegate) {
+            this.delegate = delegate;
+        }
+
+        @ToolMapping(name = "approval", description = "Approve a previously blocked command string for the current process.")
+        public String approval(@Param(name = "action", description = "approve 或 revoke") String action,
+                               @Param(name = "target", description = "目标命令文本") String target) {
+            return delegate.approval(action, target);
+        }
+    }
 }
