@@ -6,6 +6,7 @@ import com.jimuqu.agent.core.model.LlmResult;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.support.constants.LlmConstants;
+import lombok.RequiredArgsConstructor;
 import org.noear.solon.ai.chat.ChatModel;
 import org.noear.solon.ai.chat.ChatResponse;
 import org.noear.solon.ai.chat.message.AssistantMessage;
@@ -22,6 +23,7 @@ import java.util.Map;
 /**
  * SolonAiLlmGateway 实现。
  */
+@RequiredArgsConstructor
 public class SolonAiLlmGateway implements LlmGateway {
     /**
      * LLM 网关日志器。
@@ -29,10 +31,6 @@ public class SolonAiLlmGateway implements LlmGateway {
     private static final Logger log = LoggerFactory.getLogger(SolonAiLlmGateway.class);
 
     private final AppConfig appConfig;
-
-    public SolonAiLlmGateway(AppConfig appConfig) {
-        this.appConfig = appConfig;
-    }
 
     public LlmResult chat(SessionRecord session, String systemPrompt, String userMessage, List<Object> toolObjects) throws Exception {
         AppConfig.LlmConfig resolved = resolve(session);

@@ -3,6 +3,7 @@ package com.jimuqu.agent.tool.runtime;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.HashUtil;
 import com.jimuqu.agent.config.AppConfig;
+import lombok.RequiredArgsConstructor;
 import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
@@ -12,14 +13,10 @@ import java.io.File;
 /**
  * TodoTools 实现。
  */
+@RequiredArgsConstructor
 public class TodoTools {
     private final AppConfig appConfig;
     private final String sourceKey;
-
-    public TodoTools(AppConfig appConfig, String sourceKey) {
-        this.appConfig = appConfig;
-        this.sourceKey = sourceKey;
-    }
 
     @ToolMapping(name = "todo", description = "Manage a lightweight todo list. action can be add, list, clear, or done.")
     public String todo(@Param(name = "action", description = "add、list、clear、done") String action,

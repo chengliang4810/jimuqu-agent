@@ -13,6 +13,7 @@ import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.IdSupport;
 import com.jimuqu.agent.support.constants.ToolNameConstants;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,6 +28,7 @@ import java.util.concurrent.Future;
 /**
  * 默认子代理委托服务。
  */
+@RequiredArgsConstructor
 public class DefaultDelegationService implements DelegationService {
     /**
      * 委托日志器。
@@ -90,17 +92,6 @@ public class DefaultDelegationService implements DelegationService {
      * 会话仓储。
      */
     private final SessionRepository sessionRepository;
-
-    /**
-     * 构造委托服务。
-     */
-    public DefaultDelegationService(ConversationOrchestratorHolder conversationHolder,
-                                    SqlitePreferenceStore preferenceStore,
-                                    SessionRepository sessionRepository) {
-        this.conversationHolder = conversationHolder;
-        this.preferenceStore = preferenceStore;
-        this.sessionRepository = sessionRepository;
-    }
 
     @Override
     public DelegationResult delegateSingle(String sourceKey, String prompt, String context) throws Exception {

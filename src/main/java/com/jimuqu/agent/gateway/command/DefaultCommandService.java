@@ -22,6 +22,7 @@ import com.jimuqu.agent.support.IdSupport;
 import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.SourceKeySupport;
 import com.jimuqu.agent.support.constants.GatewayCommandConstants;
+import lombok.RequiredArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,6 +31,7 @@ import java.util.List;
 /**
  * 默认 slash 命令实现，统一承接 Hermes 风格的会话控制命令。
  */
+@RequiredArgsConstructor
 public class DefaultCommandService implements CommandService {
     /**
      * 会话仓储。
@@ -80,31 +82,6 @@ public class DefaultCommandService implements CommandService {
      * checkpoint 服务。
      */
     private final CheckpointService checkpointService;
-
-    /**
-     * 构造默认命令服务。
-     */
-    public DefaultCommandService(SessionRepository sessionRepository,
-                                 ToolRegistry toolRegistry,
-                                 LocalSkillService localSkillService,
-                                 CronJobRepository cronJobRepository,
-                                 ConversationOrchestrator conversationOrchestrator,
-                                 ContextService contextService,
-                                 ContextCompressionService contextCompressionService,
-                                 DeliveryService deliveryService,
-                                 GatewayAuthorizationService gatewayAuthorizationService,
-                                 CheckpointService checkpointService) {
-        this.sessionRepository = sessionRepository;
-        this.toolRegistry = toolRegistry;
-        this.localSkillService = localSkillService;
-        this.cronJobRepository = cronJobRepository;
-        this.conversationOrchestrator = conversationOrchestrator;
-        this.contextService = contextService;
-        this.contextCompressionService = contextCompressionService;
-        this.deliveryService = deliveryService;
-        this.gatewayAuthorizationService = gatewayAuthorizationService;
-        this.checkpointService = checkpointService;
-    }
 
     /**
      * 判断当前命令是否由默认命令服务承接。

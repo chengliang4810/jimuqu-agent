@@ -14,6 +14,7 @@ import com.jimuqu.agent.support.constants.ToolNameConstants;
 import com.jimuqu.agent.tool.builtin.CodeSearchTool;
 import com.jimuqu.agent.tool.builtin.WebfetchTool;
 import com.jimuqu.agent.tool.builtin.WebsearchTool;
+import lombok.RequiredArgsConstructor;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ import java.util.List;
 /**
  * 默认工具注册表。
  */
+@RequiredArgsConstructor
 public class DefaultToolRegistry implements ToolRegistry {
     /**
      * 默认内置工具清单。
@@ -99,31 +101,6 @@ public class DefaultToolRegistry implements ToolRegistry {
      * 委托服务。
      */
     private final DelegationService delegationService;
-
-    /**
-     * 构造工具注册表。
-     */
-    public DefaultToolRegistry(AppConfig appConfig,
-                               SqlitePreferenceStore preferenceStore,
-                               SessionRepository sessionRepository,
-                               CronJobRepository cronJobRepository,
-                               DeliveryService deliveryService,
-                               ProcessRegistry processRegistry,
-                               MemoryService memoryService,
-                               LocalSkillService localSkillService,
-                               CheckpointService checkpointService,
-                               DelegationService delegationService) {
-        this.appConfig = appConfig;
-        this.preferenceStore = preferenceStore;
-        this.sessionRepository = sessionRepository;
-        this.cronJobRepository = cronJobRepository;
-        this.deliveryService = deliveryService;
-        this.processRegistry = processRegistry;
-        this.memoryService = memoryService;
-        this.localSkillService = localSkillService;
-        this.checkpointService = checkpointService;
-        this.delegationService = delegationService;
-    }
 
     @Override
     public List<String> listToolNames() {

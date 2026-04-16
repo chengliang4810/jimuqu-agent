@@ -4,6 +4,7 @@ import com.jimuqu.agent.core.model.CronJobRecord;
 import com.jimuqu.agent.core.repository.CronJobRepository;
 import com.jimuqu.agent.support.CronSupport;
 import com.jimuqu.agent.support.IdSupport;
+import lombok.RequiredArgsConstructor;
 import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
@@ -12,14 +13,10 @@ import java.util.List;
 /**
  * CronjobTools 实现。
  */
+@RequiredArgsConstructor
 public class CronjobTools {
     private final CronJobRepository cronJobRepository;
     private final String sourceKey;
-
-    public CronjobTools(CronJobRepository cronJobRepository, String sourceKey) {
-        this.cronJobRepository = cronJobRepository;
-        this.sourceKey = sourceKey;
-    }
 
     @ToolMapping(name = "cronjob", description = "Manage cron jobs. action can be create, list, pause, resume, or delete.")
     public String cronjob(@Param(name = "action", description = "create、list、pause、resume、delete") String action,

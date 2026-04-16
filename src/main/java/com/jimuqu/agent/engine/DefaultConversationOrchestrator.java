@@ -13,6 +13,7 @@ import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.constants.CompressionConstants;
+import lombok.RequiredArgsConstructor;
 import org.noear.solon.ai.chat.ChatRole;
 import org.noear.solon.ai.chat.message.AssistantMessage;
 import org.noear.solon.ai.chat.message.ChatMessage;
@@ -23,6 +24,7 @@ import java.util.List;
 /**
  * DefaultConversationOrchestrator 实现。
  */
+@RequiredArgsConstructor
 public class DefaultConversationOrchestrator implements ConversationOrchestrator {
     /**
      * 当模型只完成工具调用却未生成最终文字答复时，补发的恢复提示。
@@ -39,18 +41,6 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     private final ContextCompressionService contextCompressionService;
     private final LlmGateway llmGateway;
     private final ToolRegistry toolRegistry;
-
-    public DefaultConversationOrchestrator(SessionRepository sessionRepository,
-                                           ContextService contextService,
-                                           ContextCompressionService contextCompressionService,
-                                           LlmGateway llmGateway,
-                                           ToolRegistry toolRegistry) {
-        this.sessionRepository = sessionRepository;
-        this.contextService = contextService;
-        this.contextCompressionService = contextCompressionService;
-        this.llmGateway = llmGateway;
-        this.toolRegistry = toolRegistry;
-    }
 
     public GatewayReply handleIncoming(GatewayMessage message) throws Exception {
         SessionRecord session = sessionRepository.getBoundSession(message.sourceKey());

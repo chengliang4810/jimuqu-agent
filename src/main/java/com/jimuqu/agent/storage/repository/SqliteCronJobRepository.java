@@ -2,6 +2,7 @@ package com.jimuqu.agent.storage.repository;
 
 import com.jimuqu.agent.core.model.CronJobRecord;
 import com.jimuqu.agent.core.repository.CronJobRepository;
+import lombok.RequiredArgsConstructor;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -12,12 +13,9 @@ import java.util.List;
 /**
  * SqliteCronJobRepository 实现。
  */
+@RequiredArgsConstructor
 public class SqliteCronJobRepository implements CronJobRepository {
     private final SqliteDatabase database;
-
-    public SqliteCronJobRepository(SqliteDatabase database) {
-        this.database = database;
-    }
 
     public CronJobRecord save(CronJobRecord job) throws Exception {
         Connection connection = database.openConnection();

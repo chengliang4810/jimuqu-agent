@@ -10,6 +10,7 @@ import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.support.CronSupport;
 import com.jimuqu.agent.support.SourceKeySupport;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * DefaultCronScheduler 实现。
  */
+@RequiredArgsConstructor
 public class DefaultCronScheduler {
     private static final Logger log = LoggerFactory.getLogger(DefaultCronScheduler.class);
 
@@ -29,16 +31,6 @@ public class DefaultCronScheduler {
     private final ConversationOrchestrator conversationOrchestrator;
     private final DeliveryService deliveryService;
     private ScheduledExecutorService executorService;
-
-    public DefaultCronScheduler(AppConfig appConfig,
-                                CronJobRepository cronJobRepository,
-                                ConversationOrchestrator conversationOrchestrator,
-                                DeliveryService deliveryService) {
-        this.appConfig = appConfig;
-        this.cronJobRepository = cronJobRepository;
-        this.conversationOrchestrator = conversationOrchestrator;
-        this.deliveryService = deliveryService;
-    }
 
     public void start() {
         if (!appConfig.getScheduler().isEnabled()) {

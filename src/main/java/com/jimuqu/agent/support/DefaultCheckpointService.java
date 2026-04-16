@@ -6,6 +6,7 @@ import com.jimuqu.agent.core.model.CheckpointRecord;
 import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.storage.repository.SqliteDatabase;
 import com.jimuqu.agent.support.constants.CheckpointConstants;
+import lombok.RequiredArgsConstructor;
 import org.noear.snack4.ONode;
 
 import java.io.File;
@@ -18,6 +19,7 @@ import java.util.List;
 /**
  * 默认文件快照服务。
  */
+@RequiredArgsConstructor
 public class DefaultCheckpointService implements CheckpointService {
     /**
      * 应用配置。
@@ -28,14 +30,6 @@ public class DefaultCheckpointService implements CheckpointService {
      * 数据库访问对象。
      */
     private final SqliteDatabase database;
-
-    /**
-     * 构造 checkpoint 服务。
-     */
-    public DefaultCheckpointService(AppConfig appConfig, SqliteDatabase database) {
-        this.appConfig = appConfig;
-        this.database = database;
-    }
 
     @Override
     public CheckpointRecord createCheckpoint(String sourceKey, String sessionId, List<File> files) throws Exception {

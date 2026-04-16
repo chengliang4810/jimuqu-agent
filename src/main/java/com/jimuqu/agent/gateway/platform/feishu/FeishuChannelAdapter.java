@@ -7,6 +7,7 @@ import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.DeliveryRequest;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
+import lombok.RequiredArgsConstructor;
 import org.noear.snack4.ONode;
 
 /**
@@ -108,12 +109,9 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
         tokenExpireAt = now + Math.max(60000L, (expire - 60L) * 1000L);
     }
 
+    @RequiredArgsConstructor
     public static class FeishuTextMessage {
-        private String text;
-
-        public FeishuTextMessage(String text) {
-            this.text = text;
-        }
+        private final String text;
 
         public String getText() {
             return text;

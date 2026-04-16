@@ -39,12 +39,15 @@ import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.DefaultCheckpointService;
 import com.jimuqu.agent.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
 
 import java.io.File;
 import java.nio.file.Files;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public class TestEnvironment {
     public final AppConfig appConfig;
     public final MemoryChannelAdapter memoryChannelAdapter;
@@ -61,38 +64,6 @@ public class TestEnvironment {
     public final CheckpointService checkpointService;
     public final DelegationService delegationService;
     public final ContextCompressionService contextCompressionService;
-
-    private TestEnvironment(AppConfig appConfig,
-                            MemoryChannelAdapter memoryChannelAdapter,
-                            SessionRepository sessionRepository,
-                            CronJobRepository cronJobRepository,
-                            LocalSkillService localSkillService,
-                            DefaultGatewayService gatewayService,
-                            ToolRegistry toolRegistry,
-                            GatewayPolicyRepository gatewayPolicyRepository,
-                            GatewayAuthorizationService gatewayAuthorizationService,
-                            DeliveryService deliveryService,
-                            LlmGateway llmGateway,
-                            MemoryService memoryService,
-                            CheckpointService checkpointService,
-                            DelegationService delegationService,
-                            ContextCompressionService contextCompressionService) {
-        this.appConfig = appConfig;
-        this.memoryChannelAdapter = memoryChannelAdapter;
-        this.sessionRepository = sessionRepository;
-        this.cronJobRepository = cronJobRepository;
-        this.localSkillService = localSkillService;
-        this.gatewayService = gatewayService;
-        this.toolRegistry = toolRegistry;
-        this.gatewayPolicyRepository = gatewayPolicyRepository;
-        this.gatewayAuthorizationService = gatewayAuthorizationService;
-        this.deliveryService = deliveryService;
-        this.llmGateway = llmGateway;
-        this.memoryService = memoryService;
-        this.checkpointService = checkpointService;
-        this.delegationService = delegationService;
-        this.contextCompressionService = contextCompressionService;
-    }
 
     public static TestEnvironment withFakeLlm() throws Exception {
         return create(new FakeLlmGateway());

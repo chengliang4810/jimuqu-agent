@@ -3,24 +3,19 @@ package com.jimuqu.agent.tool.runtime;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.core.service.MemoryService;
 import com.jimuqu.agent.support.constants.MemoryConstants;
+import lombok.RequiredArgsConstructor;
 import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
 /**
  * 长期记忆工具。
  */
+@RequiredArgsConstructor
 public class MemoryTools {
     /**
      * 长期记忆服务。
      */
     private final MemoryService memoryService;
-
-    /**
-     * 构造记忆工具。
-     */
-    public MemoryTools(MemoryService memoryService) {
-        this.memoryService = memoryService;
-    }
 
     /**
      * 管理 MEMORY.md 与 USER.md。

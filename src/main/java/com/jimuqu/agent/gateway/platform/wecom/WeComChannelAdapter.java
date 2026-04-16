@@ -5,6 +5,7 @@ import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.DeliveryRequest;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
+import lombok.RequiredArgsConstructor;
 import okhttp3.*;
 import org.noear.snack4.ONode;
 
@@ -130,12 +131,9 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
         }
     }
 
+    @RequiredArgsConstructor
     private class Listener extends WebSocketListener {
         private final CountDownLatch openLatch;
-
-        private Listener(CountDownLatch openLatch) {
-            this.openLatch = openLatch;
-        }
 
         @Override
         public void onOpen(WebSocket webSocket, Response response) {

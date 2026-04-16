@@ -5,6 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
+import lombok.RequiredArgsConstructor;
 import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
@@ -15,6 +16,7 @@ import java.util.List;
 /**
  * 文件工具。
  */
+@RequiredArgsConstructor
 public class FileTools {
     /**
      * checkpoint 服务。
@@ -30,15 +32,6 @@ public class FileTools {
      * 当前来源键。
      */
     private final String sourceKey;
-
-    /**
-     * 构造文件工具。
-     */
-    public FileTools(CheckpointService checkpointService, SessionRepository sessionRepository, String sourceKey) {
-        this.checkpointService = checkpointService;
-        this.sessionRepository = sessionRepository;
-        this.sourceKey = sourceKey;
-    }
 
     @ToolMapping(name = "read_file", description = "Read a UTF-8 text file from disk by absolute or relative path.")
     public String readFile(@Param(name = "path", description = "文件绝对路径或相对路径") String path) {
@@ -109,12 +102,9 @@ public class FileTools {
     /**
      * `read_file` 单工具暴露对象。
      */
+    @RequiredArgsConstructor
     public static class ReadFileTool {
         private final FileTools delegate;
-
-        public ReadFileTool(FileTools delegate) {
-            this.delegate = delegate;
-        }
 
         @ToolMapping(name = "read_file", description = "Read a UTF-8 text file from disk by absolute or relative path.")
         public String readFile(@Param(name = "path", description = "文件绝对路径或相对路径") String path) {
@@ -125,12 +115,9 @@ public class FileTools {
     /**
      * `write_file` 单工具暴露对象。
      */
+    @RequiredArgsConstructor
     public static class WriteFileTool {
         private final FileTools delegate;
-
-        public WriteFileTool(FileTools delegate) {
-            this.delegate = delegate;
-        }
 
         @ToolMapping(name = "write_file", description = "Write UTF-8 text content to a file path, creating parent directories when needed.")
         public String writeFile(@Param(name = "path", description = "目标文件路径") String path,
@@ -142,12 +129,9 @@ public class FileTools {
     /**
      * `patch` 单工具暴露对象。
      */
+    @RequiredArgsConstructor
     public static class PatchTool {
         private final FileTools delegate;
-
-        public PatchTool(FileTools delegate) {
-            this.delegate = delegate;
-        }
 
         @ToolMapping(name = "patch", description = "Replace one text snippet with another inside a UTF-8 text file.")
         public String patch(@Param(name = "path", description = "目标文件路径") String path,
@@ -160,12 +144,9 @@ public class FileTools {
     /**
      * `search_files` 单工具暴露对象。
      */
+    @RequiredArgsConstructor
     public static class SearchFilesTool {
         private final FileTools delegate;
-
-        public SearchFilesTool(FileTools delegate) {
-            this.delegate = delegate;
-        }
 
         @ToolMapping(name = "search_files", description = "Search for text inside files under a directory path.")
         public String searchFiles(@Param(name = "rootPath", description = "搜索根目录") String rootPath,

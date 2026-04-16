@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.core.model.DelegationResult;
 import com.jimuqu.agent.core.model.DelegationTask;
 import com.jimuqu.agent.core.service.DelegationService;
+import lombok.RequiredArgsConstructor;
 import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
@@ -14,6 +15,7 @@ import java.util.List;
 /**
  * 子代理委托工具。
  */
+@RequiredArgsConstructor
 public class DelegateTools {
     /**
      * 委托服务。
@@ -24,14 +26,6 @@ public class DelegateTools {
      * 当前来源键。
      */
     private final String sourceKey;
-
-    /**
-     * 构造委托工具。
-     */
-    public DelegateTools(DelegationService delegationService, String sourceKey) {
-        this.delegationService = delegationService;
-        this.sourceKey = sourceKey;
-    }
 
     /**
      * 支持单任务与批量委托。

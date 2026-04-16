@@ -11,6 +11,7 @@ import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.service.SkillLearningService;
 import com.jimuqu.agent.gateway.authorization.GatewayAuthorizationService;
 import com.jimuqu.agent.support.constants.GatewayCommandConstants;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,6 +21,7 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * 网关主入口服务，负责把消息分流到授权、命令和对话主链。
  */
+@RequiredArgsConstructor
 public class DefaultGatewayService {
     /**
      * 网关日志器。
@@ -65,23 +67,6 @@ public class DefaultGatewayService {
      * 进程内最近已处理的消息键，用于抑制渠道重复投递。
      */
     private final ConcurrentMap<String, Long> recentMessageKeys = new ConcurrentHashMap<String, Long>();
-
-    /**
-     * 构造网关服务。
-     */
-    public DefaultGatewayService(CommandService commandService,
-                                 ConversationOrchestrator conversationOrchestrator,
-                                 DeliveryService deliveryService,
-                                 SessionRepository sessionRepository,
-                                 GatewayAuthorizationService gatewayAuthorizationService,
-                                 SkillLearningService skillLearningService) {
-        this.commandService = commandService;
-        this.conversationOrchestrator = conversationOrchestrator;
-        this.deliveryService = deliveryService;
-        this.sessionRepository = sessionRepository;
-        this.gatewayAuthorizationService = gatewayAuthorizationService;
-        this.skillLearningService = skillLearningService;
-    }
 
     /**
      * 处理单条统一网关消息。

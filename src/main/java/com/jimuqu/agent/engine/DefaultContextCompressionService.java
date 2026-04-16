@@ -6,6 +6,7 @@ import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.service.ContextCompressionService;
 import com.jimuqu.agent.support.constants.CompressionConstants;
 import com.jimuqu.agent.support.MessageSupport;
+import lombok.RequiredArgsConstructor;
 import org.noear.solon.ai.chat.ChatRole;
 import org.noear.solon.ai.chat.message.ChatMessage;
 
@@ -15,18 +16,12 @@ import java.util.List;
 /**
  * 默认上下文压缩服务。
  */
+@RequiredArgsConstructor
 public class DefaultContextCompressionService implements ContextCompressionService {
     /**
      * 应用配置。
      */
     private final AppConfig appConfig;
-
-    /**
-     * 构造上下文压缩服务。
-     */
-    public DefaultContextCompressionService(AppConfig appConfig) {
-        this.appConfig = appConfig;
-    }
 
     @Override
     public SessionRecord compressIfNeeded(SessionRecord session, String systemPrompt, String userMessage) throws Exception {

@@ -3,6 +3,7 @@ package com.jimuqu.agent.tool.runtime;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.util.StrUtil;
+import lombok.RequiredArgsConstructor;
 import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
@@ -17,13 +18,10 @@ import java.util.concurrent.TimeUnit;
 /**
  * ShellTools 实现。
  */
+@RequiredArgsConstructor
 public class ShellTools {
     private final ProcessRegistry processRegistry;
     private final Set<String> approvals = Collections.synchronizedSet(new LinkedHashSet<String>());
-
-    public ShellTools(ProcessRegistry processRegistry) {
-        this.processRegistry = processRegistry;
-    }
 
     @ToolMapping(name = "terminal", description = "Execute a shell command in a working directory. Dangerous commands require approval.")
     public String terminal(@Param(name = "command", description = "要执行的 shell 命令") String command,
@@ -119,12 +117,9 @@ public class ShellTools {
     /**
      * `terminal` 单工具暴露对象。
      */
+    @RequiredArgsConstructor
     public static class TerminalTool {
         private final ShellTools delegate;
-
-        public TerminalTool(ShellTools delegate) {
-            this.delegate = delegate;
-        }
 
         @ToolMapping(name = "terminal", description = "Execute a shell command in a working directory. Dangerous commands require approval.")
         public String terminal(@Param(name = "command", description = "要执行的 shell 命令") String command,
@@ -136,12 +131,9 @@ public class ShellTools {
     /**
      * `process` 单工具暴露对象。
      */
+    @RequiredArgsConstructor
     public static class ProcessTool {
         private final ShellTools delegate;
-
-        public ProcessTool(ShellTools delegate) {
-            this.delegate = delegate;
-        }
 
         @ToolMapping(name = "process", description = "Manage background processes. action can be list, start, or stop.")
         public String process(@Param(name = "action", description = "list、start、stop") String action,
@@ -153,12 +145,9 @@ public class ShellTools {
     /**
      * `execute_code` 单工具暴露对象。
      */
+    @RequiredArgsConstructor
     public static class ExecuteCodeTool {
         private final ShellTools delegate;
-
-        public ExecuteCodeTool(ShellTools delegate) {
-            this.delegate = delegate;
-        }
 
         @ToolMapping(name = "execute_code", description = "Execute temporary code in powershell or python. language can be powershell or python.")
         public String executeCode(@Param(name = "language", description = "powershell 或 python") String language,
@@ -171,12 +160,9 @@ public class ShellTools {
     /**
      * `approval` 单工具暴露对象。
      */
+    @RequiredArgsConstructor
     public static class ApprovalTool {
         private final ShellTools delegate;
-
-        public ApprovalTool(ShellTools delegate) {
-            this.delegate = delegate;
-        }
 
         @ToolMapping(name = "approval", description = "Approve a previously blocked command string for the current process.")
         public String approval(@Param(name = "action", description = "approve 或 revoke") String action,

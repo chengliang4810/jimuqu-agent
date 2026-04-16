@@ -9,6 +9,7 @@ import com.jimuqu.agent.core.model.SkillView;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.support.constants.SkillConstants;
+import lombok.RequiredArgsConstructor;
 import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
@@ -21,6 +22,7 @@ import java.util.List;
 /**
  * Hermes 风格 skills 工具集合。
  */
+@RequiredArgsConstructor
 public class SkillTools {
     /**
      * 本地技能目录服务。
@@ -41,19 +43,6 @@ public class SkillTools {
      * 当前来源键。
      */
     private final String sourceKey;
-
-    /**
-     * 构造技能工具。
-     */
-    public SkillTools(LocalSkillService localSkillService,
-                      CheckpointService checkpointService,
-                      SessionRepository sessionRepository,
-                      String sourceKey) {
-        this.localSkillService = localSkillService;
-        this.checkpointService = checkpointService;
-        this.sessionRepository = sessionRepository;
-        this.sourceKey = sourceKey;
-    }
 
     @ToolMapping(name = "skills_list", description = "List available skills. Optional category filter.")
     public String skillsList(@Param(name = "category", description = "可选分类名", required = false) String category) throws Exception {
@@ -159,12 +148,9 @@ public class SkillTools {
     /**
      * `skills_list` 单工具暴露对象。
      */
+    @RequiredArgsConstructor
     public static class SkillsListTool {
         private final SkillTools delegate;
-
-        public SkillsListTool(SkillTools delegate) {
-            this.delegate = delegate;
-        }
 
         @ToolMapping(name = "skills_list", description = "List available skills. Optional category filter.")
         public String skillsList(@Param(name = "category", description = "可选分类名", required = false) String category) throws Exception {
@@ -175,12 +161,9 @@ public class SkillTools {
     /**
      * `skill_view` 单工具暴露对象。
      */
+    @RequiredArgsConstructor
     public static class SkillViewTool {
         private final SkillTools delegate;
-
-        public SkillViewTool(SkillTools delegate) {
-            this.delegate = delegate;
-        }
 
         @ToolMapping(name = "skill_view", description = "Load full SKILL.md or a supporting file from a skill directory.")
         public String skillView(@Param(name = "name", description = "技能名或 category/name") String name,
@@ -192,12 +175,9 @@ public class SkillTools {
     /**
      * `skill_manage` 单工具暴露对象。
      */
+    @RequiredArgsConstructor
     public static class SkillManageTool {
         private final SkillTools delegate;
-
-        public SkillManageTool(SkillTools delegate) {
-            this.delegate = delegate;
-        }
 
         @ToolMapping(name = "skill_manage", description = "Create, patch, edit, delete or manage supporting files for a local skill.")
         public String skillManage(@Param(name = "action", description = "create、edit、patch、delete、write_file、remove_file") String action,

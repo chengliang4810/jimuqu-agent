@@ -7,6 +7,7 @@ import com.jimuqu.agent.core.model.PairingRateLimitRecord;
 import com.jimuqu.agent.core.model.PairingRequestRecord;
 import com.jimuqu.agent.core.model.PlatformAdminRecord;
 import com.jimuqu.agent.core.enums.PlatformType;
+import lombok.RequiredArgsConstructor;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -17,14 +18,11 @@ import java.util.List;
 /**
  * SqliteGatewayPolicyRepository 实现。
  */
+@RequiredArgsConstructor
 public class SqliteGatewayPolicyRepository implements GatewayPolicyRepository {
     public static final String ADMIN_CLAIM_CODE = "__ADMIN_CLAIM__";
 
     private final SqliteDatabase database;
-
-    public SqliteGatewayPolicyRepository(SqliteDatabase database) {
-        this.database = database;
-    }
 
     public HomeChannelRecord getHomeChannel(PlatformType platform) throws Exception {
         Connection connection = database.openConnection();

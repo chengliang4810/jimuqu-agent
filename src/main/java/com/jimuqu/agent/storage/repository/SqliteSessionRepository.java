@@ -3,6 +3,7 @@ package com.jimuqu.agent.storage.repository;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.support.IdSupport;
+import lombok.RequiredArgsConstructor;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -13,18 +14,12 @@ import java.util.List;
 /**
  * SQLite 会话仓储实现。
  */
+@RequiredArgsConstructor
 public class SqliteSessionRepository implements SessionRepository {
     /**
      * 数据库访问对象。
      */
     private final SqliteDatabase database;
-
-    /**
-     * 构造仓储。
-     */
-    public SqliteSessionRepository(SqliteDatabase database) {
-        this.database = database;
-    }
 
     @Override
     public SessionRecord getBoundSession(String sourceKey) throws Exception {

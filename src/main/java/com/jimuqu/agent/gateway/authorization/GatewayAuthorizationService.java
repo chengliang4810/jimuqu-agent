@@ -14,6 +14,7 @@ import com.jimuqu.agent.core.repository.GatewayPolicyRepository;
 import com.jimuqu.agent.support.constants.GatewayBehaviorConstants;
 import com.jimuqu.agent.support.constants.GatewayCommandConstants;
 import com.jimuqu.agent.support.constants.PairingConstants;
+import lombok.RequiredArgsConstructor;
 
 import java.security.SecureRandom;
 import java.util.List;
@@ -21,6 +22,7 @@ import java.util.List;
 /**
  * 统一处理管理员认领、pairing 与 home channel 授权逻辑。
  */
+@RequiredArgsConstructor
 public class GatewayAuthorizationService {
     /**
      * 授权状态仓储。
@@ -36,14 +38,6 @@ public class GatewayAuthorizationService {
      * pairing code 生成器。
      */
     private final SecureRandom secureRandom = new SecureRandom();
-
-    /**
-     * 构造授权服务。
-     */
-    public GatewayAuthorizationService(GatewayPolicyRepository repository, AppConfig appConfig) {
-        this.repository = repository;
-        this.appConfig = appConfig;
-    }
 
     /**
      * 在进入主处理链前执行预授权检查。

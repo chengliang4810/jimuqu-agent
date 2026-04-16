@@ -1,5 +1,7 @@
 package com.jimuqu.agent.storage.repository;
 
+import lombok.RequiredArgsConstructor;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -8,12 +10,9 @@ import java.sql.SQLException;
 /**
  * SqlitePreferenceStore 实现。
  */
+@RequiredArgsConstructor
 public class SqlitePreferenceStore {
     private final SqliteDatabase database;
-
-    public SqlitePreferenceStore(SqliteDatabase database) {
-        this.database = database;
-    }
 
     public boolean isToolEnabled(String sourceKey, String toolName) throws SQLException {
         return readBoolean("tool_toggles", "tool_name", sourceKey, toolName, true);
