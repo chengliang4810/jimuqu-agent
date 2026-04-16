@@ -28,4 +28,9 @@ public interface CheckpointService {
      * 判断来源键最近是否发生过结构化文件修改。
      */
     boolean hasRecentCheckpoint(String sourceKey, long sinceEpochMillis) throws Exception;
+
+    /**
+     * 列出来源键最近的 checkpoints。
+     */
+    List<CheckpointRecord> listRecent(String sourceKey, int limit) throws Exception;
 }

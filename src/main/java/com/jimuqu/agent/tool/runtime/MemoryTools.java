@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.core.service.MemoryService;
 import com.jimuqu.agent.support.constants.MemoryConstants;
 import lombok.RequiredArgsConstructor;
+import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
@@ -27,17 +28,40 @@ public class MemoryTools {
                          @Param(name = "oldText", description = "replace/remove 时用于匹配旧条目的文本", required = false) String oldText) throws Exception {
         String normalizedTarget = StrUtil.blankToDefault(target, MemoryConstants.TARGET_MEMORY);
         if (MemoryConstants.ACTION_READ.equalsIgnoreCase(action)) {
-            return memoryService.read(normalizedTarget);
+            return new ONode()
+                    .set("success", true)
+                    .set("action", MemoryConstants.ACTION_READ)
+                    .set("target", normalizedTarget)
+                    .set("content", memoryService.read(normalizedTarget))
+                    .set("message", "ok")
+                    .toJson();
         }
+        String result;
         if (MemoryConstants.ACTION_ADD.equalsIgnoreCase(action)) {
-            return memoryService.add(normalizedTarget, content);
+            result = memoryService.add(normalizedTarget, content);
+        } else if (MemoryConstants.ACTION_REPLACE.equalsIgnoreCase(action)) {
+            result = memoryService.replace(normalizedTarget, oldText, content);
+        } else if (MemoryConstants.ACTION_REMOVE.equalsIgnoreCase(action)) {
+            result = memoryService.remove(normalizedTarget, StrUtil.blankToDefault(oldText, content));
+        } else {
+            result = "Unsupported memory action";
         }
-        if (MemoryConstants.ACTION_REPLACE.equalsIgnoreCase(action)) {
-            return memoryService.replace(normalizedTarget, oldText, content);
+        return new ONode()
+                .set("success", isSuccess(result))
+                .set("action", StrUtil.nullToEmpty(action))
+                .set("target", normalizedTarget)
+                .set("message", result)
+                .toJson();
+    }
+
+    private boolean isSuccess(String message) {
+        String normalized = StrUtil.nullToEmpty(message).trim();
+        if (normalized.length() == 0) {
+            return false;
         }
-        if (MemoryConstants.ACTION_REMOVE.equalsIgnoreCase(action)) {
-            return memoryService.remove(normalizedTarget, StrUtil.blankToDefault(oldText, content));
-        }
-        return "Unsupported memory action";
+        return !normalized.startsWith("Unsupported")
+                && !normalized.contains("不能为空")
+                && !normalized.contains("不会写入")
+                && !normalized.startsWith("未");
     }
 }

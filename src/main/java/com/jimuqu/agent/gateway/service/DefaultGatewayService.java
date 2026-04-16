@@ -8,6 +8,7 @@ import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CommandService;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.core.service.DeliveryService;
+import com.jimuqu.agent.core.service.MemoryManager;
 import com.jimuqu.agent.core.service.SkillLearningService;
 import com.jimuqu.agent.gateway.authorization.GatewayAuthorizationService;
 import com.jimuqu.agent.support.constants.GatewayCommandConstants;
@@ -62,6 +63,11 @@ public class DefaultGatewayService {
      * 任务后自动学习服务。
      */
     private final SkillLearningService skillLearningService;
+
+    /**
+     * 记忆管理器。
+     */
+    private final MemoryManager memoryManager;
 
     /**
      * 进程内最近已处理的消息键，用于抑制渠道重复投递。
@@ -166,6 +172,9 @@ public class DefaultGatewayService {
             return;
         }
         try {
+            if (memoryManager != null) {
+                memoryManager.syncTurn(message.sourceKey(), message.getText(), reply.getContent());
+            }
             SessionRecord session = sessionRepository.findById(reply.getSessionId());
             if (session != null) {
                 skillLearningService.schedulePostReplyLearning(session, message, reply);

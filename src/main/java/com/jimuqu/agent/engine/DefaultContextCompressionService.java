@@ -43,11 +43,16 @@ public class DefaultContextCompressionService implements ContextCompressionServi
         }
 
         session.setLastCompressionInputTokens(estimatedTokens);
-        return compressNow(session, systemPrompt);
+        return compressNow(session, systemPrompt, null);
     }
 
     @Override
     public SessionRecord compressNow(SessionRecord session, String systemPrompt) throws Exception {
+        return compressNow(session, systemPrompt, null);
+    }
+
+    @Override
+    public SessionRecord compressNow(SessionRecord session, String systemPrompt, String focus) throws Exception {
         try {
             List<ChatMessage> history = MessageSupport.loadMessages(session.getNdjson());
             if (history.size() <= appConfig.getCompression().getProtectHeadMessages() + 1) {
@@ -89,7 +94,7 @@ public class DefaultContextCompressionService implements ContextCompressionServi
                 return session;
             }
 
-            String summaryBody = buildStructuredSummary(session, systemPrompt, middle, tail, previousSummary);
+            String summaryBody = buildStructuredSummary(session, systemPrompt, middle, tail, previousSummary, focus);
             String summaryText = CompressionConstants.SUMMARY_PREFIX + "\n" + summaryBody;
 
             List<ChatMessage> compacted = new ArrayList<ChatMessage>();
@@ -161,7 +166,8 @@ public class DefaultContextCompressionService implements ContextCompressionServi
                                           String systemPrompt,
                                           List<ChatMessage> middle,
                                           List<ChatMessage> tail,
-                                          String previousSummary) {
+                                          String previousSummary,
+                                          String focus) {
         String goal = extractFirstUserMessage(middle, tail);
         String progress = collectByRole(middle, ChatRole.ASSISTANT, 3);
         String decisions = collectKeywords(middle, new String[]{"决定", "改为", "使用", "切换", "采用"});
@@ -173,6 +179,9 @@ public class DefaultContextCompressionService implements ContextCompressionServi
             buffer.append("Previous Summary\n")
                     .append(trimContent(previousSummary.replace(CompressionConstants.SUMMARY_PREFIX, "").trim(), 600))
                     .append("\n\n");
+        }
+        if (StrUtil.isNotBlank(focus)) {
+            buffer.append("Focus\n").append(trimContent(focus, 200)).append("\n\n");
         }
         buffer.append("Goal\n").append(StrUtil.blankToDefault(goal, inferGoalFromPrompt(systemPrompt))).append("\n\n");
         buffer.append("Progress\n").append(StrUtil.blankToDefault(progress, "已对较早轮次进行压缩，后续请基于当前文件状态继续。")).append("\n\n");

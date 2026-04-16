@@ -233,6 +233,31 @@ public class SqliteSessionRepository implements SessionRepository {
     }
 
     @Override
+    public List<SessionRecord> listRecent(int limit) throws Exception {
+        List<SessionRecord> results = new ArrayList<SessionRecord>();
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement(
+                    "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, created_at, updated_at " +
+                            "from sessions order by updated_at desc limit ?"
+            );
+            statement.setInt(1, limit);
+            ResultSet resultSet = statement.executeQuery();
+            try {
+                while (resultSet.next()) {
+                    results.add(map(resultSet));
+                }
+            } finally {
+                resultSet.close();
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
+        return results;
+    }
+
+    @Override
     public void setModelOverride(String sessionId, String modelOverride) throws Exception {
         Connection connection = database.openConnection();
         try {

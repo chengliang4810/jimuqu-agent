@@ -14,7 +14,9 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 应用级配置对象，负责承接 Solon 配置并做环境变量覆盖与路径标准化。
@@ -62,6 +64,11 @@ public class AppConfig {
      * 网关通用授权配置。
      */
     private GatewayConfig gateway = new GatewayConfig();
+
+    /**
+     * Agent 运行配置。
+     */
+    private AgentConfig agent = new AgentConfig();
 
     /**
      * 从 Solon Props 构建应用配置。
@@ -158,6 +165,7 @@ public class AppConfig {
 
         config.getGateway().setAllowedUsers(resolveList("JIMUQU_GATEWAY_ALLOWED_USERS", props.get("jimuqu.gateway.allowedUsers", "")));
         config.getGateway().setAllowAllUsers(resolveBoolean("JIMUQU_GATEWAY_ALLOW_ALL_USERS", props.getBool("jimuqu.gateway.allowAllUsers", false)));
+        config.getAgent().setPersonalities(loadPersonalities(props));
 
         config.normalizePaths();
         return config;
@@ -267,6 +275,54 @@ public class AppConfig {
             }
         }
         return values;
+    }
+
+    /**
+     * 解析 personalities 配置映射。
+     */
+    private static Map<String, PersonalityConfig> loadPersonalities(Props props) {
+        Map<String, PersonalityConfig> result = new LinkedHashMap<String, PersonalityConfig>();
+        if (props == null) {
+            return result;
+        }
+
+        String prefix = "jimuqu.agent.personalities.";
+        for (Map.Entry<Object, Object> entry : props.entrySet()) {
+            String rawKey = String.valueOf(entry.getKey());
+            if (!rawKey.startsWith(prefix)) {
+                continue;
+            }
+
+            String suffix = rawKey.substring(prefix.length());
+            int index = suffix.indexOf('.');
+            if (index <= 0 || index >= suffix.length() - 1) {
+                continue;
+            }
+
+            String name = suffix.substring(0, index).trim();
+            String field = suffix.substring(index + 1).trim();
+            if (StrUtil.isBlank(name) || StrUtil.isBlank(field)) {
+                continue;
+            }
+
+            PersonalityConfig personality = result.get(name);
+            if (personality == null) {
+                personality = new PersonalityConfig();
+                result.put(name, personality);
+            }
+
+            String value = props.get(rawKey, "");
+            if ("description".equals(field)) {
+                personality.setDescription(value);
+            } else if ("systemPrompt".equals(field)) {
+                personality.setSystemPrompt(value);
+            } else if ("tone".equals(field)) {
+                personality.setTone(value);
+            } else if ("style".equals(field)) {
+                personality.setStyle(value);
+            }
+        }
+        return result;
     }
 
     /**
@@ -450,6 +506,70 @@ public class AppConfig {
          * 单来源键保留的最大 checkpoint 数。
          */
         private int maxCheckpointsPerSource = CheckpointConstants.DEFAULT_MAX_CHECKPOINTS_PER_SOURCE;
+    }
+
+    /**
+     * Agent 行为配置。
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class AgentConfig {
+        /**
+         * 预定义人格列表。
+         */
+        private Map<String, PersonalityConfig> personalities = new LinkedHashMap<String, PersonalityConfig>();
+    }
+
+    /**
+     * 单个人格定义。
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class PersonalityConfig {
+        /**
+         * 描述文案。
+         */
+        private String description;
+
+        /**
+         * 系统提示词主体。
+         */
+        private String systemPrompt;
+
+        /**
+         * 额外语气提示。
+         */
+        private String tone;
+
+        /**
+         * 额外风格提示。
+         */
+        private String style;
+
+        /**
+         * 合并为最终注入文本。
+         */
+        public String toPrompt() {
+            StringBuilder buffer = new StringBuilder();
+            if (StrUtil.isNotBlank(systemPrompt)) {
+                buffer.append(systemPrompt.trim());
+            }
+            if (StrUtil.isNotBlank(tone)) {
+                if (buffer.length() > 0) {
+                    buffer.append('\n');
+                }
+                buffer.append("Tone: ").append(tone.trim());
+            }
+            if (StrUtil.isNotBlank(style)) {
+                if (buffer.length() > 0) {
+                    buffer.append('\n');
+                }
+                buffer.append("Style: ").append(style.trim());
+            }
+            return buffer.toString();
+        }
     }
 
     /**

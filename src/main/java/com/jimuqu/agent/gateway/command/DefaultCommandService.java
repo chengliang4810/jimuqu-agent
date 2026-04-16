@@ -1,13 +1,17 @@
 package com.jimuqu.agent.gateway.command;
 
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.core.model.CheckpointRecord;
 import com.jimuqu.agent.core.model.CronJobRecord;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.CronJobRepository;
+import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.CommandService;
@@ -21,12 +25,15 @@ import com.jimuqu.agent.support.CronSupport;
 import com.jimuqu.agent.support.IdSupport;
 import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.SourceKeySupport;
+import com.jimuqu.agent.support.constants.AgentSettingConstants;
 import com.jimuqu.agent.support.constants.GatewayCommandConstants;
+import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import lombok.RequiredArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 默认 slash 命令实现，统一承接 Hermes 风格的会话控制命令。
@@ -84,17 +91,35 @@ public class DefaultCommandService implements CommandService {
     private final CheckpointService checkpointService;
 
     /**
+     * 应用配置。
+     */
+    private final AppConfig appConfig;
+
+    /**
+     * 全局设置仓储。
+     */
+    private final GlobalSettingRepository globalSettingRepository;
+
+    /**
+     * 进程注册表。
+     */
+    private final ProcessRegistry processRegistry;
+
+    /**
      * 判断当前命令是否由默认命令服务承接。
      */
     @Override
     public boolean supports(String commandName) {
         return Arrays.asList(
                 GatewayCommandConstants.COMMAND_NEW,
+                GatewayCommandConstants.COMMAND_RESET,
                 GatewayCommandConstants.COMMAND_RETRY,
                 GatewayCommandConstants.COMMAND_UNDO,
                 GatewayCommandConstants.COMMAND_BRANCH,
                 GatewayCommandConstants.COMMAND_RESUME,
                 GatewayCommandConstants.COMMAND_STATUS,
+                GatewayCommandConstants.COMMAND_STOP,
+                GatewayCommandConstants.COMMAND_PERSONALITY,
                 GatewayCommandConstants.COMMAND_MODEL,
                 GatewayCommandConstants.COMMAND_TOOLS,
                 GatewayCommandConstants.COMMAND_SKILLS,
@@ -118,7 +143,8 @@ public class DefaultCommandService implements CommandService {
         String command = parts[0].toLowerCase();
         String args = parts.length > 1 ? parts[1].trim() : "";
 
-        if (GatewayCommandConstants.COMMAND_NEW.equals(command)) {
+        if (GatewayCommandConstants.COMMAND_NEW.equals(command)
+                || GatewayCommandConstants.COMMAND_RESET.equals(command)) {
             SessionRecord created = sessionRepository.bindNewSession(message.sourceKey());
             GatewayReply reply = GatewayReply.ok("已创建新会话：" + created.getSessionId());
             reply.setSessionId(created.getSessionId());
@@ -191,10 +217,19 @@ public class DefaultCommandService implements CommandService {
                             + ", branch=" + session.getBranchName()
                             + ", messages=" + count
                             + ", model=" + StrUtil.nullToDefault(session.getModelOverride(), "default")
+                            + ", personality=" + currentPersonalityName()
             );
             reply.setSessionId(session.getSessionId());
             reply.setBranchName(session.getBranchName());
             return reply;
+        }
+
+        if (GatewayCommandConstants.COMMAND_STOP.equals(command)) {
+            return GatewayReply.ok("已停止后台进程：" + processRegistry.stopAll() + " 个。");
+        }
+
+        if (GatewayCommandConstants.COMMAND_PERSONALITY.equals(command)) {
+            return handlePersonality(args);
         }
 
         if (GatewayCommandConstants.COMMAND_MODEL.equals(command)) {
@@ -228,19 +263,33 @@ public class DefaultCommandService implements CommandService {
 
         if (GatewayCommandConstants.COMMAND_COMPRESS.equals(command)) {
             SessionRecord session = requireSession(message.sourceKey());
-            String systemPrompt = StrUtil.blankToDefault(session.getSystemPromptSnapshot(), contextService.buildSystemPrompt(message.sourceKey()));
+            String systemPrompt = contextService.buildSystemPrompt(message.sourceKey());
             session.setSystemPromptSnapshot(systemPrompt);
-            session = contextCompressionService.compressNow(session, systemPrompt);
+            session = contextCompressionService.compressNow(session, systemPrompt, args);
             sessionRepository.save(session);
-            GatewayReply reply = GatewayReply.ok("已完成当前会话的上下文压缩。");
+            GatewayReply reply = GatewayReply.ok(StrUtil.isBlank(args) ? "已完成当前会话的上下文压缩。" : "已按关注主题完成当前会话的上下文压缩。");
             reply.setSessionId(session.getSessionId());
             reply.setBranchName(session.getBranchName());
             return reply;
         }
 
         if (GatewayCommandConstants.COMMAND_ROLLBACK.equals(command)) {
-            if (StrUtil.isBlank(args) || "latest".equalsIgnoreCase(args)) {
+            if (StrUtil.isBlank(args)) {
+                return GatewayReply.ok(formatCheckpointList(message.sourceKey()));
+            }
+            if ("latest".equalsIgnoreCase(args)) {
                 return GatewayReply.ok("已回滚到最近一次 checkpoint：" + checkpointService.rollbackLatest(message.sourceKey()).getCheckpointId());
+            }
+            try {
+                int index = Integer.parseInt(args);
+                List<CheckpointRecord> recent = checkpointService.listRecent(message.sourceKey(), 10);
+                if (index < 1 || index > recent.size()) {
+                    return GatewayReply.error("checkpoint 序号无效，应在 1-" + recent.size() + " 之间。");
+                }
+                CheckpointRecord restored = checkpointService.rollback(recent.get(index - 1).getCheckpointId());
+                return GatewayReply.ok("已按列表序号回滚到 checkpoint：" + restored.getCheckpointId());
+            } catch (NumberFormatException ignored) {
+                // fall through
             }
             return GatewayReply.ok("已回滚到指定 checkpoint：" + checkpointService.rollback(args).getCheckpointId());
         }
@@ -308,6 +357,45 @@ public class DefaultCommandService implements CommandService {
         }
 
         return GatewayReply.error("用法：" + GatewayCommandConstants.SLASH_SKILLS + " [list|enable|disable|inspect|reload] [name]");
+    }
+
+    /**
+     * 处理人格命令。
+     */
+    private GatewayReply handlePersonality(String args) throws Exception {
+        Map<String, AppConfig.PersonalityConfig> personalities = appConfig.getAgent().getPersonalities();
+        if (personalities == null || personalities.isEmpty()) {
+            return GatewayReply.error("当前没有可用的人格配置。");
+        }
+        if (StrUtil.isBlank(args)) {
+            StringBuilder buffer = new StringBuilder();
+            buffer.append("可用人格：\n");
+            buffer.append("- none: 清除人格覆盖\n");
+            for (Map.Entry<String, AppConfig.PersonalityConfig> entry : personalities.entrySet()) {
+                String description = entry.getValue() == null ? "" : StrUtil.blankToDefault(entry.getValue().getDescription(), "无描述");
+                buffer.append("- ").append(entry.getKey()).append(": ").append(description).append('\n');
+            }
+            buffer.append("当前激活：").append(currentPersonalityName());
+            return GatewayReply.ok(buffer.toString().trim());
+        }
+
+        if ("none".equalsIgnoreCase(args) || "default".equalsIgnoreCase(args) || "neutral".equalsIgnoreCase(args)) {
+            globalSettingRepository.remove(AgentSettingConstants.ACTIVE_PERSONALITY);
+            return GatewayReply.ok("已清除人格覆盖，下一条消息恢复默认行为。");
+        }
+
+        String matchedName = null;
+        for (String name : personalities.keySet()) {
+            if (name.equalsIgnoreCase(args)) {
+                matchedName = name;
+                break;
+            }
+        }
+        if (matchedName == null) {
+            return GatewayReply.error("未知人格：" + args);
+        }
+        globalSettingRepository.set(AgentSettingConstants.ACTIVE_PERSONALITY, matchedName);
+        return GatewayReply.ok("已切换人格为：" + matchedName + "，将从下一条消息开始生效。");
     }
 
     /**
@@ -439,22 +527,59 @@ public class DefaultCommandService implements CommandService {
         return session;
     }
 
+    private String formatCheckpointList(String sourceKey) throws Exception {
+        List<CheckpointRecord> checkpoints = checkpointService.listRecent(sourceKey, 10);
+        if (checkpoints.isEmpty()) {
+            return "当前来源键没有可回滚的 checkpoint。";
+        }
+        StringBuilder buffer = new StringBuilder();
+        for (int i = 0; i < checkpoints.size(); i++) {
+            CheckpointRecord record = checkpoints.get(i);
+            if (buffer.length() > 0) {
+                buffer.append('\n');
+            }
+            buffer.append(i + 1)
+                    .append(". ")
+                    .append(record.getCheckpointId())
+                    .append(" created=")
+                    .append(DateUtil.formatDateTime(new java.util.Date(record.getCreatedAt())))
+                    .append(", restored=")
+                    .append(record.getRestoredAt() > 0 ? DateUtil.formatDateTime(new java.util.Date(record.getRestoredAt())) : "never");
+            if (StrUtil.isNotBlank(record.getSessionId())) {
+                buffer.append(", session=").append(record.getSessionId());
+            }
+        }
+        return buffer.toString();
+    }
+
+    private String currentPersonalityName() {
+        try {
+            String value = globalSettingRepository.get(AgentSettingConstants.ACTIVE_PERSONALITY);
+            return StrUtil.blankToDefault(value, "default");
+        } catch (Exception e) {
+            return "default";
+        }
+    }
+
     /**
      * 生成帮助文本。
      */
     private String helpText() {
         return GatewayCommandConstants.SLASH_NEW + "\n"
+                + GatewayCommandConstants.SLASH_RESET + "\n"
                 + GatewayCommandConstants.SLASH_RETRY + "\n"
                 + GatewayCommandConstants.SLASH_UNDO + "\n"
                 + GatewayCommandConstants.SLASH_BRANCH + " [name]\n"
                 + GatewayCommandConstants.SLASH_RESUME + " <session-or-branch>\n"
                 + GatewayCommandConstants.SLASH_STATUS + "\n"
+                + GatewayCommandConstants.SLASH_STOP + "\n"
+                + GatewayCommandConstants.SLASH_PERSONALITY + " [name]\n"
                 + GatewayCommandConstants.SLASH_MODEL + " <provider:model>\n"
                 + GatewayCommandConstants.SLASH_TOOLS + " [list|enable|disable] [name...]\n"
                 + GatewayCommandConstants.SLASH_SKILLS + " [list|enable|disable|inspect|reload]\n"
                 + GatewayCommandConstants.SLASH_CRON + " [list|create|pause|resume|delete|run]\n"
-                + GatewayCommandConstants.SLASH_COMPRESS + "\n"
-                + GatewayCommandConstants.SLASH_ROLLBACK + " [latest|checkpoint-id]\n"
+                + GatewayCommandConstants.SLASH_COMPRESS + " [focus]\n"
+                + GatewayCommandConstants.SLASH_ROLLBACK + " [latest|checkpoint-id|number]\n"
                 + GatewayCommandConstants.SLASH_SETHOME + "\n"
                 + GatewayCommandConstants.SLASH_PAIRING + " [claim-admin|pending|approve|revoke|approved]\n"
                 + GatewayCommandConstants.SLASH_PLATFORMS + "\n"

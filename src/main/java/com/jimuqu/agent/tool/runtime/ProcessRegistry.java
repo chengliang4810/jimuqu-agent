@@ -31,4 +31,19 @@ public class ProcessRegistry {
         process.destroy();
         return true;
     }
+
+    public int stopAll() {
+        Map<String, Process> snapshot = snapshot();
+        int stopped = 0;
+        for (String id : snapshot.keySet()) {
+            if (stop(id)) {
+                stopped++;
+            }
+        }
+        return stopped;
+    }
+
+    public int runningCount() {
+        return processes.size();
+    }
 }

@@ -2,12 +2,15 @@ package com.jimuqu.agent.bootstrap;
 
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.context.AsyncSkillLearningService;
+import com.jimuqu.agent.context.BuiltinMemoryProvider;
+import com.jimuqu.agent.context.DefaultMemoryManager;
 import com.jimuqu.agent.context.FileMemoryService;
 import com.jimuqu.agent.context.FileContextService;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.repository.CronJobRepository;
+import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.repository.GatewayPolicyRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
@@ -18,13 +21,17 @@ import com.jimuqu.agent.core.service.ContextCompressionService;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.service.InboundMessageHandler;
 import com.jimuqu.agent.core.service.LlmGateway;
+import com.jimuqu.agent.core.service.MemoryManager;
+import com.jimuqu.agent.core.service.MemoryProvider;
 import com.jimuqu.agent.core.service.MemoryService;
 import com.jimuqu.agent.core.service.DelegationService;
+import com.jimuqu.agent.core.service.SessionSearchService;
 import com.jimuqu.agent.core.service.SkillLearningService;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.engine.DefaultContextCompressionService;
 import com.jimuqu.agent.engine.DefaultDelegationService;
 import com.jimuqu.agent.engine.DefaultConversationOrchestrator;
+import com.jimuqu.agent.engine.DefaultSessionSearchService;
 import com.jimuqu.agent.gateway.authorization.GatewayAuthorizationService;
 import com.jimuqu.agent.gateway.command.DefaultCommandService;
 import com.jimuqu.agent.gateway.delivery.AdapterBackedDeliveryService;
@@ -37,6 +44,7 @@ import com.jimuqu.agent.llm.SolonAiLlmGateway;
 import com.jimuqu.agent.scheduler.DefaultCronScheduler;
 import com.jimuqu.agent.storage.repository.SqliteCronJobRepository;
 import com.jimuqu.agent.storage.repository.SqliteDatabase;
+import com.jimuqu.agent.storage.repository.SqliteGlobalSettingRepository;
 import com.jimuqu.agent.storage.repository.SqliteGatewayPolicyRepository;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.storage.repository.SqliteSessionRepository;
@@ -113,13 +121,22 @@ public class JimuquAgentConfiguration {
     }
 
     /**
+     * 创建全局设置仓储。
+     */
+    @Bean
+    public GlobalSettingRepository globalSettingRepository(SqliteDatabase sqliteDatabase) {
+        return new SqliteGlobalSettingRepository(sqliteDatabase);
+    }
+
+    /**
      * 创建文件上下文服务。
      */
     @Bean
     public FileContextService fileContextService(AppConfig appConfig,
                                                  LocalSkillService localSkillService,
-                                                 MemoryService memoryService) {
-        return new FileContextService(appConfig, localSkillService, memoryService, new File(System.getProperty("user.dir")));
+                                                 MemoryManager memoryManager,
+                                                 GlobalSettingRepository globalSettingRepository) {
+        return new FileContextService(appConfig, localSkillService, memoryManager, globalSettingRepository, new File(System.getProperty("user.dir")));
     }
 
     /**
@@ -128,6 +145,24 @@ public class JimuquAgentConfiguration {
     @Bean
     public MemoryService memoryService(AppConfig appConfig) {
         return new FileMemoryService(appConfig);
+    }
+
+    /**
+     * 创建内建记忆提供方。
+     */
+    @Bean
+    public MemoryProvider builtinMemoryProvider(MemoryService memoryService) {
+        return new BuiltinMemoryProvider(memoryService);
+    }
+
+    /**
+     * 创建记忆管理器。
+     */
+    @Bean
+    public MemoryManager memoryManager(MemoryProvider builtinMemoryProvider) {
+        java.util.List<MemoryProvider> providers = new java.util.ArrayList<MemoryProvider>();
+        providers.add(builtinMemoryProvider);
+        return new DefaultMemoryManager(providers);
     }
 
     /**
@@ -144,6 +179,15 @@ public class JimuquAgentConfiguration {
     @Bean
     public LlmGateway llmGateway(AppConfig appConfig) {
         return new SolonAiLlmGateway(appConfig);
+    }
+
+    /**
+     * 创建会话搜索服务。
+     */
+    @Bean
+    public SessionSearchService sessionSearchService(SessionRepository sessionRepository,
+                                                     LlmGateway llmGateway) {
+        return new DefaultSessionSearchService(sessionRepository, llmGateway);
     }
 
     /**
@@ -220,6 +264,7 @@ public class JimuquAgentConfiguration {
                                      DeliveryService deliveryService,
                                      ProcessRegistry processRegistry,
                                      MemoryService memoryService,
+                                     SessionSearchService sessionSearchService,
                                      LocalSkillService localSkillService,
                                      CheckpointService checkpointService,
                                      DelegationService delegationService) {
@@ -231,6 +276,7 @@ public class JimuquAgentConfiguration {
                 deliveryService,
                 processRegistry,
                 memoryService,
+                sessionSearchService,
                 localSkillService,
                 checkpointService,
                 delegationService
@@ -287,7 +333,10 @@ public class JimuquAgentConfiguration {
                                          ContextCompressionService contextCompressionService,
                                          DeliveryService deliveryService,
                                          GatewayAuthorizationService gatewayAuthorizationService,
-                                         CheckpointService checkpointService) {
+                                         CheckpointService checkpointService,
+                                         AppConfig appConfig,
+                                         GlobalSettingRepository globalSettingRepository,
+                                         ProcessRegistry processRegistry) {
         return new DefaultCommandService(
                 sessionRepository,
                 toolRegistry,
@@ -298,7 +347,10 @@ public class JimuquAgentConfiguration {
                 contextCompressionService,
                 deliveryService,
                 gatewayAuthorizationService,
-                checkpointService
+                checkpointService,
+                appConfig,
+                globalSettingRepository,
+                processRegistry
         );
     }
 
@@ -312,6 +364,7 @@ public class JimuquAgentConfiguration {
                                                 SessionRepository sessionRepository,
                                                 GatewayAuthorizationService gatewayAuthorizationService,
                                                 SkillLearningService skillLearningService,
+                                                MemoryManager memoryManager,
                                                 Map<PlatformType, ChannelAdapter> channelAdapters) {
         final DefaultGatewayService service = new DefaultGatewayService(
                 commandService,
@@ -319,7 +372,8 @@ public class JimuquAgentConfiguration {
                 deliveryService,
                 sessionRepository,
                 gatewayAuthorizationService,
-                skillLearningService
+                skillLearningService,
+                memoryManager
         );
 
         for (ChannelAdapter adapter : channelAdapters.values()) {

@@ -2,6 +2,8 @@ package com.jimuqu.agent.support;
 
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.context.AsyncSkillLearningService;
+import com.jimuqu.agent.context.BuiltinMemoryProvider;
+import com.jimuqu.agent.context.DefaultMemoryManager;
 import com.jimuqu.agent.context.FileMemoryService;
 import com.jimuqu.agent.context.FileContextService;
 import com.jimuqu.agent.context.LocalSkillService;
@@ -15,16 +17,21 @@ import com.jimuqu.agent.core.service.DelegationService;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
+import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.repository.GatewayPolicyRepository;
 import com.jimuqu.agent.core.service.LlmGateway;
+import com.jimuqu.agent.core.service.MemoryManager;
+import com.jimuqu.agent.core.service.MemoryProvider;
 import com.jimuqu.agent.core.service.MemoryService;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.service.SessionSearchService;
 import com.jimuqu.agent.core.service.SkillLearningService;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.engine.DefaultContextCompressionService;
 import com.jimuqu.agent.engine.DefaultDelegationService;
 import com.jimuqu.agent.engine.DefaultConversationOrchestrator;
+import com.jimuqu.agent.engine.DefaultSessionSearchService;
 import com.jimuqu.agent.gateway.delivery.AdapterBackedDeliveryService;
 import com.jimuqu.agent.gateway.authorization.GatewayAuthorizationService;
 import com.jimuqu.agent.gateway.command.DefaultCommandService;
@@ -32,6 +39,7 @@ import com.jimuqu.agent.gateway.service.DefaultGatewayService;
 import com.jimuqu.agent.llm.SolonAiLlmGateway;
 import com.jimuqu.agent.storage.repository.SqliteCronJobRepository;
 import com.jimuqu.agent.storage.repository.SqliteDatabase;
+import com.jimuqu.agent.storage.repository.SqliteGlobalSettingRepository;
 import com.jimuqu.agent.storage.repository.SqliteGatewayPolicyRepository;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.storage.repository.SqliteSessionRepository;
@@ -61,9 +69,13 @@ public class TestEnvironment {
     public final DeliveryService deliveryService;
     public final LlmGateway llmGateway;
     public final MemoryService memoryService;
+    public final MemoryManager memoryManager;
     public final CheckpointService checkpointService;
     public final DelegationService delegationService;
     public final ContextCompressionService contextCompressionService;
+    public final GlobalSettingRepository globalSettingRepository;
+    public final SessionSearchService sessionSearchService;
+    public final ProcessRegistry processRegistry;
 
     public static TestEnvironment withFakeLlm() throws Exception {
         return create(new FakeLlmGateway());
@@ -90,12 +102,15 @@ public class TestEnvironment {
     private static TestEnvironment create(AppConfig config, LlmGateway llmGateway) throws Exception {
         SqliteDatabase database = new SqliteDatabase(config);
         SqlitePreferenceStore preferenceStore = new SqlitePreferenceStore(database);
+        GlobalSettingRepository globalSettingRepository = new SqliteGlobalSettingRepository(database);
         SessionRepository sessionRepository = new SqliteSessionRepository(database);
         CronJobRepository cronJobRepository = new SqliteCronJobRepository(database);
         GatewayPolicyRepository gatewayPolicyRepository = new SqliteGatewayPolicyRepository(database);
         LocalSkillService localSkillService = new LocalSkillService(config, preferenceStore);
         MemoryService memoryService = new FileMemoryService(config);
-        FileContextService contextService = new FileContextService(config, localSkillService, memoryService, new File(System.getProperty("user.dir")));
+        MemoryProvider builtinMemoryProvider = new BuiltinMemoryProvider(memoryService);
+        MemoryManager memoryManager = new DefaultMemoryManager(java.util.Collections.singletonList(builtinMemoryProvider));
+        FileContextService contextService = new FileContextService(config, localSkillService, memoryManager, globalSettingRepository, new File(System.getProperty("user.dir")));
         ContextCompressionService contextCompressionService = new DefaultContextCompressionService(config);
         ConversationOrchestratorHolder holder = new ConversationOrchestratorHolder();
         MemoryChannelAdapter memoryAdapter = new MemoryChannelAdapter();
@@ -106,12 +121,13 @@ public class TestEnvironment {
         CheckpointService checkpointService = new DefaultCheckpointService(config, database);
         ProcessRegistry processRegistry = new ProcessRegistry();
         DelegationService delegationService = new DefaultDelegationService(holder, preferenceStore, sessionRepository);
-        ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, processRegistry, memoryService, localSkillService, checkpointService, delegationService);
+        SessionSearchService sessionSearchService = new DefaultSessionSearchService(sessionRepository, llmGateway);
+        ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, processRegistry, memoryService, sessionSearchService, localSkillService, checkpointService, delegationService);
         ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry);
         holder.set(orchestrator);
         SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService);
-        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService);
-        DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService, sessionRepository, gatewayAuthorizationService, skillLearningService);
+        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, config, globalSettingRepository, processRegistry);
+        DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService, sessionRepository, gatewayAuthorizationService, skillLearningService, memoryManager);
         return new TestEnvironment(
                 config,
                 memoryAdapter,
@@ -125,9 +141,13 @@ public class TestEnvironment {
                 deliveryService,
                 llmGateway,
                 memoryService,
+                memoryManager,
                 checkpointService,
                 delegationService,
-                contextCompressionService
+                contextCompressionService,
+                globalSettingRepository,
+                sessionSearchService,
+                processRegistry
         );
     }
 
@@ -162,6 +182,14 @@ public class TestEnvironment {
         config.getLlm().setTemperature(0.2D);
         config.getLlm().setMaxTokens(4096);
         config.getScheduler().setEnabled(false);
+        AppConfig.PersonalityConfig helpful = new AppConfig.PersonalityConfig();
+        helpful.setDescription("friendly default");
+        helpful.setSystemPrompt("You are a helpful assistant.");
+        config.getAgent().getPersonalities().put("helpful", helpful);
+        AppConfig.PersonalityConfig concise = new AppConfig.PersonalityConfig();
+        concise.setDescription("brief answers");
+        concise.setSystemPrompt("Be concise.");
+        config.getAgent().getPersonalities().put("concise", concise);
         return config;
     }
 

@@ -34,7 +34,8 @@ public class GatewayResilienceTest {
                     public void schedulePostReplyLearning(SessionRecord session, GatewayMessage message, GatewayReply reply) {
                         throw new IllegalStateException("learning scheduler boom");
                     }
-                }
+                },
+                env.memoryManager
         );
 
         GatewayReply reply = service.handle(env.message("room", "user", "hello"));
@@ -72,7 +73,8 @@ public class GatewayResilienceTest {
                     @Override
                     public void schedulePostReplyLearning(SessionRecord session, GatewayMessage message, GatewayReply reply) {
                     }
-                }
+                },
+                env.memoryManager
         );
 
         GatewayMessage firstMessage = env.message("room", "user", "hello");

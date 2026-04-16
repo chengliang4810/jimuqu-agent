@@ -139,6 +139,31 @@ public class DefaultCheckpointService implements CheckpointService {
         }
     }
 
+    @Override
+    public List<CheckpointRecord> listRecent(String sourceKey, int limit) throws Exception {
+        List<CheckpointRecord> results = new ArrayList<CheckpointRecord>();
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement(
+                    "select checkpoint_id, source_key, session_id, checkpoint_dir, manifest_path, created_at, restored_at from checkpoints where source_key = ? order by created_at desc limit ?"
+            );
+            statement.setString(1, sourceKey);
+            statement.setInt(2, Math.max(1, limit));
+            ResultSet resultSet = statement.executeQuery();
+            try {
+                while (resultSet.next()) {
+                    results.add(map(resultSet));
+                }
+            } finally {
+                resultSet.close();
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
+        return results;
+    }
+
     /**
      * 保存 checkpoint 记录。
      */

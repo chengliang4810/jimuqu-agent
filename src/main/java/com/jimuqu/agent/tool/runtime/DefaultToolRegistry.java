@@ -8,6 +8,7 @@ import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.DelegationService;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.service.MemoryService;
+import com.jimuqu.agent.core.service.SessionSearchService;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.support.constants.ToolNameConstants;
@@ -88,6 +89,11 @@ public class DefaultToolRegistry implements ToolRegistry {
     private final MemoryService memoryService;
 
     /**
+     * 会话搜索服务。
+     */
+    private final SessionSearchService sessionSearchService;
+
+    /**
      * 本地技能目录服务。
      */
     private final LocalSkillService localSkillService;
@@ -115,7 +121,7 @@ public class DefaultToolRegistry implements ToolRegistry {
         ShellTools shellTools = new ShellTools(processRegistry);
         TodoTools todoTools = new TodoTools(appConfig, sourceKey);
         MemoryTools memoryTools = new MemoryTools(memoryService);
-        SessionSearchTools sessionSearchTools = new SessionSearchTools(sessionRepository);
+        SessionSearchTools sessionSearchTools = new SessionSearchTools(sessionSearchService, sourceKey);
         SkillTools skillTools = new SkillTools(localSkillService, checkpointService, sessionRepository, sourceKey);
         MessagingTools messagingTools = new MessagingTools(deliveryService, sourceKey);
         CronjobTools cronjobTools = new CronjobTools(cronJobRepository, sourceKey);

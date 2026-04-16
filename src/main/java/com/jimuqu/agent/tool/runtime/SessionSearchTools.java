@@ -1,8 +1,9 @@
 package com.jimuqu.agent.tool.runtime;
 
-import com.jimuqu.agent.core.model.SessionRecord;
-import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.model.SessionSearchEntry;
+import com.jimuqu.agent.core.service.SessionSearchService;
 import lombok.RequiredArgsConstructor;
+import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
@@ -13,18 +14,13 @@ import java.util.List;
  */
 @RequiredArgsConstructor
 public class SessionSearchTools {
-    private final SessionRepository sessionRepository;
+    private final SessionSearchService sessionSearchService;
+    private final String sourceKey;
 
-    @ToolMapping(name = "session_search", description = "Search historical sessions by keyword and return matching session ids and branch names.")
-    public String sessionSearch(@Param(name = "keyword", description = "检索关键词") String keyword) throws Exception {
-        List<SessionRecord> sessions = sessionRepository.search(keyword, 10);
-        StringBuilder buffer = new StringBuilder();
-        for (SessionRecord session : sessions) {
-            if (buffer.length() > 0) {
-                buffer.append('\n');
-            }
-            buffer.append(session.getSessionId()).append(" [").append(session.getBranchName()).append(']');
-        }
-        return buffer.length() == 0 ? "No matching sessions" : buffer.toString();
+    @ToolMapping(name = "session_search", description = "Search historical sessions or list recent sessions. Returns metadata, preview and focused summary.")
+    public String sessionSearch(@Param(name = "query", description = "检索主题；为空时列出最近会话", required = false) String query,
+                                @Param(name = "limit", description = "结果条数，默认 3，最大 5", required = false) Integer limit) throws Exception {
+        List<SessionSearchEntry> sessions = sessionSearchService.search(sourceKey, query, limit == null ? 3 : limit.intValue());
+        return ONode.serialize(sessions);
     }
 }

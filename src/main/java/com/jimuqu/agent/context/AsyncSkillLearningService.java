@@ -6,6 +6,7 @@ import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.model.SkillDescriptor;
+import com.jimuqu.agent.core.model.SkillView;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.MemoryService;
@@ -64,8 +65,11 @@ public class AsyncSkillLearningService implements SkillLearningService {
                              boolean hasRecentCheckpoint) throws Exception {
         if (toolMessages >= appConfig.getLearning().getToolCallThreshold()) {
             String skillName = inferSkillName(session);
-            if (!skillExists(skillName)) {
+            SkillDescriptor descriptor = findSkill(skillName);
+            if (descriptor == null) {
                 localSkillService.createSkill(skillName, null, buildSkillContent(session, message, hasRecentCheckpoint));
+            } else {
+                patchExistingSkill(skillName, session, message, hasRecentCheckpoint);
             }
         }
 
@@ -87,14 +91,14 @@ public class AsyncSkillLearningService implements SkillLearningService {
         return count;
     }
 
-    private boolean skillExists(String skillName) throws Exception {
+    private SkillDescriptor findSkill(String skillName) throws Exception {
         List<SkillDescriptor> skills = localSkillService.listSkills(null);
         for (SkillDescriptor descriptor : skills) {
             if (descriptor.getName().equals(skillName)) {
-                return true;
+                return descriptor;
             }
         }
-        return false;
+        return null;
     }
 
     private String inferSkillName(SessionRecord session) {
@@ -131,6 +135,69 @@ public class AsyncSkillLearningService implements SkillLearningService {
             buffer.append("- 当前流程涉及结构化文件修改，执行前先确认 checkpoint 策略。\n");
         }
         return buffer.toString();
+    }
+
+    private void patchExistingSkill(String skillName,
+                                    SessionRecord session,
+                                    GatewayMessage message,
+                                    boolean hasRecentCheckpoint) throws Exception {
+        SkillView view = localSkillService.viewSkill(skillName, null);
+        String content = view.getContent();
+        String progressBullet = "- " + StrUtil.blankToDefault(session.getCompressedSummary(), replySafeExcerpt(session.getNdjson()));
+        String pitfallBullet = "- 当上下文与历史流程不完全一致时，先重新核对输入条件与依赖。";
+        String verificationBullet = "- 当前任务验证点：" + StrUtil.blankToDefault(message.getText(), "继续核对结果是否满足用户要求。");
+        if (hasRecentCheckpoint) {
+            verificationBullet = verificationBullet + " 执行前确认 checkpoint 策略。";
+        }
+
+        boolean updated = false;
+        if (!content.contains(progressBullet)) {
+            updated |= patchOrAppend(skillName, "# 已验证流程\n", "# 已验证流程\n" + progressBullet + "\n");
+        }
+        if (!content.contains(pitfallBullet)) {
+            updated |= patchOrAppend(skillName, "# Pitfalls\n", "# Pitfalls\n" + pitfallBullet + "\n");
+        }
+        if (!content.contains(verificationBullet)) {
+            updated |= patchOrAppend(skillName, "# Verification\n", "# Verification\n" + verificationBullet + "\n");
+        }
+
+        SkillView refreshed = localSkillService.viewSkill(skillName, null);
+        if (!updated
+                || !refreshed.getContent().contains(progressBullet)
+                || !refreshed.getContent().contains(pitfallBullet)
+                || !refreshed.getContent().contains(verificationBullet)) {
+            localSkillService.editSkill(skillName, appendMissingSections(refreshed.getContent(), progressBullet, pitfallBullet, verificationBullet));
+        }
+    }
+
+    private boolean patchOrAppend(String skillName, String header, String replacement) {
+        try {
+            localSkillService.patchSkill(skillName, header, replacement, null);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private String appendMissingSections(String content, String progressBullet, String pitfallBullet, String verificationBullet) {
+        String updated = content;
+        if (!updated.contains(progressBullet)) {
+            updated = appendSection(updated, "# 已验证流程", progressBullet);
+        }
+        if (!updated.contains(pitfallBullet)) {
+            updated = appendSection(updated, "# Pitfalls", pitfallBullet);
+        }
+        if (!updated.contains(verificationBullet)) {
+            updated = appendSection(updated, "# Verification", verificationBullet);
+        }
+        return updated;
+    }
+
+    private String appendSection(String content, String header, String bullet) {
+        if (content.contains(header)) {
+            return content.replace(header, header + "\n" + bullet);
+        }
+        return content + "\n\n" + header + "\n" + bullet + "\n";
     }
 
     /**

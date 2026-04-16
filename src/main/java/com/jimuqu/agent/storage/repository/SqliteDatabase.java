@@ -80,6 +80,11 @@ public class SqliteDatabase {
                     "enabled integer not null," +
                     "primary key (source_key, skill_name)" +
                     ")");
+            statement.execute("create table if not exists global_settings (" +
+                    "setting_key text primary key," +
+                    "setting_value text not null," +
+                    "updated_at integer not null" +
+                    ")");
             statement.execute("create table if not exists cron_jobs (" +
                     "job_id text primary key," +
                     "name text not null," +

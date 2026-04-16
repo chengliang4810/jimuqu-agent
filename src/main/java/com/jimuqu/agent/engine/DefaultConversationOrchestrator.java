@@ -62,11 +62,8 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         if (StrUtil.isBlank(session.getTitle()) && StrUtil.isNotBlank(message.getText())) {
             session.setTitle(extractTitle(message.getText()));
         }
-        String systemPrompt = session.getSystemPromptSnapshot();
-        if (StrUtil.isBlank(systemPrompt)) {
-            systemPrompt = contextService.buildSystemPrompt(message.sourceKey());
-            session.setSystemPromptSnapshot(systemPrompt);
-        }
+        String systemPrompt = contextService.buildSystemPrompt(message.sourceKey());
+        session.setSystemPromptSnapshot(systemPrompt);
 
         session = contextCompressionService.compressIfNeeded(session, systemPrompt, message.getText());
         String previousNdjson = session.getNdjson();

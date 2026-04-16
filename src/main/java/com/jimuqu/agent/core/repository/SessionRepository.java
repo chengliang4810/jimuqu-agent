@@ -49,6 +49,11 @@ public interface SessionRepository {
     List<SessionRecord> search(String keyword, int limit) throws Exception;
 
     /**
+     * 按更新时间列出最近会话。
+     */
+    List<SessionRecord> listRecent(int limit) throws Exception;
+
+    /**
      * 更新会话模型覆盖配置。
      */
     void setModelOverride(String sessionId, String modelOverride) throws Exception;

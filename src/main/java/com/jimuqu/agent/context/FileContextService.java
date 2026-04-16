@@ -3,9 +3,10 @@ package com.jimuqu.agent.context;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.config.AppConfig;
-import com.jimuqu.agent.core.model.MemorySnapshot;
+import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.service.ContextService;
-import com.jimuqu.agent.core.service.MemoryService;
+import com.jimuqu.agent.core.service.MemoryManager;
+import com.jimuqu.agent.support.constants.AgentSettingConstants;
 
 import java.io.File;
 
@@ -26,7 +27,12 @@ public class FileContextService implements ContextService {
     /**
      * 长期记忆服务。
      */
-    private final MemoryService memoryService;
+    private final MemoryManager memoryManager;
+
+    /**
+     * 全局设置仓储。
+     */
+    private final GlobalSettingRepository globalSettingRepository;
 
     /**
      * 仓库根目录，用于读取项目根 AGENTS.md。
@@ -36,10 +42,15 @@ public class FileContextService implements ContextService {
     /**
      * 构造文件上下文服务。
      */
-    public FileContextService(AppConfig appConfig, LocalSkillService localSkillService, MemoryService memoryService, File repoRoot) {
+    public FileContextService(AppConfig appConfig,
+                              LocalSkillService localSkillService,
+                              MemoryManager memoryManager,
+                              GlobalSettingRepository globalSettingRepository,
+                              File repoRoot) {
         this.appConfig = appConfig;
         this.localSkillService = localSkillService;
-        this.memoryService = memoryService;
+        this.memoryManager = memoryManager;
+        this.globalSettingRepository = globalSettingRepository;
         this.repoRoot = repoRoot;
         FileUtil.mkdir(appConfig.getRuntime().getContextDir());
     }
@@ -54,7 +65,8 @@ public class FileContextService implements ContextService {
     public String buildSystemPrompt(String sourceKey) {
         StringBuilder buffer = new StringBuilder();
         appendFile(buffer, contextFile("AGENTS.md"), new File(repoRoot, "AGENTS.md"), "Project Rules");
-        appendMemorySnapshot(buffer);
+        appendPersonality(buffer);
+        appendMemoryBlock(buffer, sourceKey);
 
         try {
             String skillPrompt = localSkillService.renderSkillIndexPrompt(sourceKey);
@@ -75,16 +87,34 @@ public class FileContextService implements ContextService {
         return new File(appConfig.getRuntime().getContextDir(), fileName);
     }
 
-    /**
-     * 追加 MEMORY/USER 快照。
-     */
-    private void appendMemorySnapshot(StringBuilder buffer) {
+    private void appendPersonality(StringBuilder buffer) {
         try {
-            MemorySnapshot snapshot = memoryService.loadSnapshot();
-            appendBlock(buffer, "Memory", snapshot.getMemoryText());
-            appendBlock(buffer, "User", snapshot.getUserText());
+            String active = globalSettingRepository == null ? null : globalSettingRepository.get(AgentSettingConstants.ACTIVE_PERSONALITY);
+            if (StrUtil.isBlank(active)) {
+                return;
+            }
+            AppConfig.PersonalityConfig personality = appConfig.getAgent().getPersonalities().get(active);
+            if (personality == null) {
+                return;
+            }
+            String prompt = personality.toPrompt();
+            if (StrUtil.isBlank(prompt)) {
+                return;
+            }
+            appendBlock(buffer, "Personality: " + active, prompt);
         } catch (Exception e) {
-            appendBlock(buffer, "Memory", "Failed to load memory snapshot: " + e.getMessage());
+            appendBlock(buffer, "Personality", "Failed to load active personality: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 追加记忆管理器提供的系统提示块。
+     */
+    private void appendMemoryBlock(StringBuilder buffer, String sourceKey) {
+        try {
+            appendBlock(buffer, "Memory Manager", memoryManager == null ? "" : memoryManager.buildSystemPrompt(sourceKey));
+        } catch (Exception e) {
+            appendBlock(buffer, "Memory Manager", "Failed to load memory context: " + e.getMessage());
         }
     }
 

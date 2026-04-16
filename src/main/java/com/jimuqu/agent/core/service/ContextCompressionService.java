@@ -15,4 +15,9 @@ public interface ContextCompressionService {
      * 强制压缩当前会话。
      */
     SessionRecord compressNow(SessionRecord session, String systemPrompt) throws Exception;
+
+    /**
+     * 强制压缩当前会话，并允许指定关注主题。
+     */
+    SessionRecord compressNow(SessionRecord session, String systemPrompt, String focus) throws Exception;
 }
