@@ -19,8 +19,14 @@ import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.core.service.ContextCompressionService;
 import com.jimuqu.agent.core.service.ContextService;
 import com.jimuqu.agent.core.service.DeliveryService;
+import com.jimuqu.agent.core.service.SkillHubService;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.gateway.authorization.GatewayAuthorizationService;
+import com.jimuqu.agent.skillhub.model.HubInstallRecord;
+import com.jimuqu.agent.skillhub.model.ScanResult;
+import com.jimuqu.agent.skillhub.model.SkillBrowseResult;
+import com.jimuqu.agent.skillhub.model.SkillMeta;
+import com.jimuqu.agent.skillhub.model.TapRecord;
 import com.jimuqu.agent.support.CronSupport;
 import com.jimuqu.agent.support.IdSupport;
 import com.jimuqu.agent.support.MessageSupport;
@@ -89,6 +95,7 @@ public class DefaultCommandService implements CommandService {
      * checkpoint 服务。
      */
     private final CheckpointService checkpointService;
+    private final SkillHubService skillHubService;
 
     /**
      * 应用配置。
@@ -341,6 +348,41 @@ public class DefaultCommandService implements CommandService {
         if (GatewayCommandConstants.ACTION_LIST.equalsIgnoreCase(action)) {
             return GatewayReply.ok("技能列表：" + localSkillService.listSkillNames());
         }
+        if (GatewayCommandConstants.ACTION_BROWSE.equalsIgnoreCase(action)) {
+            return GatewayReply.ok(formatBrowse(skillHubService.browse(parseOption(target, "--source", "all"), parseIntOption(target, "--page", 1), parseIntOption(target, "--size", 20))));
+        }
+        if (GatewayCommandConstants.ACTION_SEARCH.equalsIgnoreCase(action)) {
+            String query = stripOptions(target, "--source", "--limit");
+            return GatewayReply.ok(formatSearch(skillHubService.search(query, parseOption(target, "--source", "all"), parseIntOption(target, "--limit", 10))));
+        }
+        if (GatewayCommandConstants.ACTION_INSTALL.equalsIgnoreCase(action)) {
+            if (StrUtil.isBlank(target)) {
+                return GatewayReply.error("用法：" + GatewayCommandConstants.SLASH_SKILLS + " install <identifier> [--category <name>] [--force]");
+            }
+            String identifier = firstToken(target);
+            String category = parseOption(target, "--category", null);
+            boolean force = hasFlag(target, "--force");
+            HubInstallRecord record = skillHubService.install(identifier, category, force);
+            return GatewayReply.ok("已安装技能：" + record.getInstallPath() + " (" + record.getSource() + ")");
+        }
+        if (GatewayCommandConstants.ACTION_CHECK.equalsIgnoreCase(action)) {
+            return GatewayReply.ok(formatHubInstallRecords(skillHubService.check(StrUtil.blankToDefault(target, null))));
+        }
+        if (GatewayCommandConstants.ACTION_UPDATE.equalsIgnoreCase(action)) {
+            return GatewayReply.ok(formatHubInstallRecords(skillHubService.update(stripOptions(target, "--force"), hasFlag(target, "--force"))));
+        }
+        if (GatewayCommandConstants.ACTION_AUDIT.equalsIgnoreCase(action)) {
+            return GatewayReply.ok(formatAudit(skillHubService.audit(StrUtil.blankToDefault(target, null))));
+        }
+        if (GatewayCommandConstants.ACTION_UNINSTALL.equalsIgnoreCase(action)) {
+            if (StrUtil.isBlank(target)) {
+                return GatewayReply.error("用法：" + GatewayCommandConstants.SLASH_SKILLS + " uninstall <name>");
+            }
+            return GatewayReply.ok(skillHubService.uninstall(firstToken(target)));
+        }
+        if (GatewayCommandConstants.ACTION_TAP.equalsIgnoreCase(action)) {
+            return GatewayReply.ok(handleTap(target));
+        }
         if (GatewayCommandConstants.ACTION_ENABLE.equalsIgnoreCase(action)) {
             localSkillService.enable(message.sourceKey(), target);
             return GatewayReply.ok("已启用技能：" + target);
@@ -356,7 +398,7 @@ public class DefaultCommandService implements CommandService {
             return GatewayReply.ok("已从 runtime 目录重新加载本地技能。");
         }
 
-        return GatewayReply.error("用法：" + GatewayCommandConstants.SLASH_SKILLS + " [list|enable|disable|inspect|reload] [name]");
+        return GatewayReply.error("用法：" + GatewayCommandConstants.SLASH_SKILLS + " [list|browse|search|install|inspect|check|update|audit|uninstall|tap|enable|disable|reload] ...");
     }
 
     /**
@@ -561,6 +603,144 @@ public class DefaultCommandService implements CommandService {
         }
     }
 
+    private String handleTap(String target) throws Exception {
+        String action = firstToken(target);
+        if (StrUtil.isBlank(action) || GatewayCommandConstants.ACTION_LIST.equalsIgnoreCase(action)) {
+            List<TapRecord> taps = skillHubService.listTaps();
+            if (taps.isEmpty()) {
+                return "当前没有自定义 taps。";
+            }
+            StringBuilder buffer = new StringBuilder();
+            for (TapRecord tap : taps) {
+                if (buffer.length() > 0) {
+                    buffer.append('\n');
+                }
+                buffer.append(tap.getRepo()).append(" path=").append(StrUtil.blankToDefault(tap.getPath(), ""));
+            }
+            return buffer.toString();
+        }
+        if (GatewayCommandConstants.ACTION_ADD.equalsIgnoreCase(action)) {
+            String[] parts = target.split("\\s+");
+            if (parts.length < 2) {
+                throw new IllegalStateException("用法：/skills tap add <owner/repo> [path]");
+            }
+            return skillHubService.addTap(parts[1], parts.length > 2 ? parts[2] : null);
+        }
+        if (GatewayCommandConstants.ACTION_REMOVE.equalsIgnoreCase(action) || GatewayCommandConstants.ACTION_DELETE.equalsIgnoreCase(action)) {
+            String[] parts = target.split("\\s+");
+            if (parts.length < 2) {
+                throw new IllegalStateException("用法：/skills tap remove <owner/repo>");
+            }
+            return skillHubService.removeTap(parts[1]);
+        }
+        throw new IllegalStateException("Unsupported tap action: " + action);
+    }
+
+    private String formatBrowse(SkillBrowseResult result) {
+        StringBuilder buffer = new StringBuilder();
+        buffer.append("skills hub browse page ").append(result.getPage()).append("/").append(Math.max(1, (result.getTotal() + result.getPageSize() - 1) / result.getPageSize())).append('\n');
+        for (SkillMeta item : result.getItems()) {
+            buffer.append("- ").append(item.getName()).append(" [").append(item.getSource()).append("/").append(item.getTrustLevel()).append("]: ").append(item.getDescription()).append('\n');
+        }
+        return buffer.toString().trim();
+    }
+
+    private String formatSearch(SkillBrowseResult result) {
+        StringBuilder buffer = new StringBuilder();
+        for (SkillMeta item : result.getItems()) {
+            if (buffer.length() > 0) {
+                buffer.append('\n');
+            }
+            buffer.append("- ").append(item.getName())
+                    .append(" [").append(item.getSource()).append("/").append(item.getTrustLevel()).append("]")
+                    .append(" -> ").append(item.getIdentifier());
+        }
+        return buffer.length() == 0 ? "未找到匹配技能。" : buffer.toString();
+    }
+
+    private String formatHubInstallRecords(List<HubInstallRecord> records) {
+        if (records == null || records.isEmpty()) {
+            return "没有技能变更。";
+        }
+        StringBuilder buffer = new StringBuilder();
+        for (HubInstallRecord record : records) {
+            if (buffer.length() > 0) {
+                buffer.append('\n');
+            }
+            buffer.append("- ").append(record.getName())
+                    .append(" [").append(record.getSource()).append("/").append(record.getTrustLevel()).append("]")
+                    .append(" path=").append(record.getInstallPath());
+            Object status = record.getMetadata().get("status");
+            if (status != null) {
+                buffer.append(" status=").append(status);
+            }
+        }
+        return buffer.toString();
+    }
+
+    private String formatAudit(List<ScanResult> results) {
+        if (results == null || results.isEmpty()) {
+            return "没有可审计的 hub 技能。";
+        }
+        StringBuilder buffer = new StringBuilder();
+        for (ScanResult result : results) {
+            if (buffer.length() > 0) {
+                buffer.append("\n\n");
+            }
+            buffer.append(result.getSkillName()).append(" -> ").append(result.getVerdict()).append('\n');
+            buffer.append(result.getSummary());
+        }
+        return buffer.toString();
+    }
+
+    private boolean hasFlag(String raw, String flag) {
+        return (" " + StrUtil.nullToEmpty(raw) + " ").contains(" " + flag + " ");
+    }
+
+    private String parseOption(String raw, String option, String defaultValue) {
+        String[] parts = StrUtil.nullToEmpty(raw).split("\\s+");
+        for (int i = 0; i < parts.length - 1; i++) {
+            if (option.equals(parts[i])) {
+                return parts[i + 1];
+            }
+        }
+        return defaultValue;
+    }
+
+    private int parseIntOption(String raw, String option, int defaultValue) {
+        try {
+            return Integer.parseInt(parseOption(raw, option, String.valueOf(defaultValue)));
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    private String stripOptions(String raw, String... optionNames) {
+        String[] parts = StrUtil.nullToEmpty(raw).split("\\s+");
+        List<String> kept = new ArrayList<String>();
+        for (int i = 0; i < parts.length; i++) {
+            boolean skip = false;
+            for (String optionName : optionNames) {
+                if (optionName.equals(parts[i])) {
+                    skip = true;
+                    if (i + 1 < parts.length) {
+                        i++;
+                    }
+                    break;
+                }
+            }
+            if (!skip && i < parts.length && StrUtil.isNotBlank(parts[i])) {
+                kept.add(parts[i]);
+            }
+        }
+        return String.join(" ", kept).trim();
+    }
+
+    private String firstToken(String raw) {
+        String[] parts = StrUtil.nullToEmpty(raw).trim().split("\\s+", 2);
+        return parts.length == 0 ? "" : parts[0];
+    }
+
     /**
      * 生成帮助文本。
      */
@@ -576,7 +756,7 @@ public class DefaultCommandService implements CommandService {
                 + GatewayCommandConstants.SLASH_PERSONALITY + " [name]\n"
                 + GatewayCommandConstants.SLASH_MODEL + " <provider:model>\n"
                 + GatewayCommandConstants.SLASH_TOOLS + " [list|enable|disable] [name...]\n"
-                + GatewayCommandConstants.SLASH_SKILLS + " [list|enable|disable|inspect|reload]\n"
+                + GatewayCommandConstants.SLASH_SKILLS + " [list|browse|search|install|inspect|check|update|audit|uninstall|tap|enable|disable|reload]\n"
                 + GatewayCommandConstants.SLASH_CRON + " [list|create|pause|resume|delete|run]\n"
                 + GatewayCommandConstants.SLASH_COMPRESS + " [focus]\n"
                 + GatewayCommandConstants.SLASH_ROLLBACK + " [latest|checkpoint-id|number]\n"

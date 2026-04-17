@@ -166,7 +166,7 @@ git -C D:\projects\hermes-agent status --short --branch
 ### F. 技能、记忆、上下文
 
 - Skills 本地管理
-- 第一版不做 Skills Hub / 安装 / 同步
+- Skills Hub / 手动导入兼容 / 在线 source 搜索安装
 - 任务后沉淀技能或改进技能
 - MEMORY / USER / AGENTS 等上下文文件协同
 - 跨会话检索与总结
@@ -224,7 +224,6 @@ git -C D:\projects\hermes-agent status --short --branch
 - 研究与实验能力
 - Docker 之外的执行后端
 - worktree
-- Skills Hub / 安装 / 同步
 - 插件系统
 - ACP / 编辑器集成
 - OpenAI 兼容 API Server
@@ -238,6 +237,7 @@ git -C D:\projects\hermes-agent status --short --branch
 - `java -jar` 部署
 - Docker 部署
 - 单实例架构
+- Skills Hub / 手动导入兼容 / 在线 source 搜索安装
 
 ## 后续任务执行要求
 

@@ -1,5 +1,6 @@
 package com.jimuqu.agent.bootstrap;
 
+import cn.hutool.core.io.FileUtil;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.context.AsyncSkillLearningService;
 import com.jimuqu.agent.context.BuiltinMemoryProvider;
@@ -26,6 +27,9 @@ import com.jimuqu.agent.core.service.MemoryProvider;
 import com.jimuqu.agent.core.service.MemoryService;
 import com.jimuqu.agent.core.service.DelegationService;
 import com.jimuqu.agent.core.service.SessionSearchService;
+import com.jimuqu.agent.core.service.SkillGuardService;
+import com.jimuqu.agent.core.service.SkillHubService;
+import com.jimuqu.agent.core.service.SkillImportService;
 import com.jimuqu.agent.core.service.SkillLearningService;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.engine.DefaultContextCompressionService;
@@ -42,6 +46,14 @@ import com.jimuqu.agent.gateway.platform.weixin.WeiXinChannelAdapter;
 import com.jimuqu.agent.gateway.service.DefaultGatewayService;
 import com.jimuqu.agent.llm.SolonAiLlmGateway;
 import com.jimuqu.agent.scheduler.DefaultCronScheduler;
+import com.jimuqu.agent.skillhub.service.DefaultSkillGuardService;
+import com.jimuqu.agent.skillhub.service.DefaultSkillHubService;
+import com.jimuqu.agent.skillhub.service.DefaultSkillImportService;
+import com.jimuqu.agent.skillhub.source.GitHubSkillSource;
+import com.jimuqu.agent.skillhub.support.DefaultSkillHubHttpClient;
+import com.jimuqu.agent.skillhub.support.GitHubAuth;
+import com.jimuqu.agent.skillhub.support.SkillHubHttpClient;
+import com.jimuqu.agent.skillhub.support.SkillHubStateStore;
 import com.jimuqu.agent.storage.repository.SqliteCronJobRepository;
 import com.jimuqu.agent.storage.repository.SqliteDatabase;
 import com.jimuqu.agent.storage.repository.SqliteGlobalSettingRepository;
@@ -116,8 +128,11 @@ public class JimuquAgentConfiguration {
      * 创建本地技能服务。
      */
     @Bean
-    public LocalSkillService localSkillService(AppConfig appConfig, SqlitePreferenceStore preferenceStore) {
-        return new LocalSkillService(appConfig, preferenceStore);
+    public LocalSkillService localSkillService(AppConfig appConfig,
+                                               SqlitePreferenceStore preferenceStore,
+                                               SkillImportService skillImportService,
+                                               SkillHubStateStore skillHubStateStore) {
+        return new LocalSkillService(appConfig, preferenceStore, skillImportService, skillHubStateStore);
     }
 
     /**
@@ -145,6 +160,64 @@ public class JimuquAgentConfiguration {
     @Bean
     public MemoryService memoryService(AppConfig appConfig) {
         return new FileMemoryService(appConfig);
+    }
+
+    @Bean
+    public SkillHubStateStore skillHubStateStore(AppConfig appConfig) {
+        return new SkillHubStateStore(FileUtil.file(appConfig.getRuntime().getSkillsDir()));
+    }
+
+    @Bean
+    public SkillHubHttpClient skillHubHttpClient() {
+        return new DefaultSkillHubHttpClient();
+    }
+
+    @Bean
+    public GitHubAuth gitHubAuth(SkillHubHttpClient skillHubHttpClient) {
+        return new GitHubAuth(skillHubHttpClient);
+    }
+
+    @Bean
+    public SkillGuardService skillGuardService() {
+        return new DefaultSkillGuardService();
+    }
+
+    @Bean
+    public SkillImportService skillImportService(AppConfig appConfig,
+                                                 SkillGuardService skillGuardService,
+                                                 SkillHubStateStore skillHubStateStore) {
+        return new DefaultSkillImportService(
+                FileUtil.file(appConfig.getRuntime().getSkillsDir()),
+                skillGuardService,
+                skillHubStateStore
+        );
+    }
+
+    @Bean
+    public GitHubSkillSource gitHubSkillSource(GitHubAuth gitHubAuth,
+                                               SkillHubHttpClient skillHubHttpClient,
+                                               SkillHubStateStore skillHubStateStore) {
+        return new GitHubSkillSource(gitHubAuth, skillHubHttpClient, skillHubStateStore);
+    }
+
+    @Bean
+    public SkillHubService skillHubService(AppConfig appConfig,
+                                           SkillImportService skillImportService,
+                                           SkillGuardService skillGuardService,
+                                           SkillHubStateStore skillHubStateStore,
+                                           SkillHubHttpClient skillHubHttpClient,
+                                           GitHubAuth gitHubAuth,
+                                           GitHubSkillSource gitHubSkillSource) {
+        return new DefaultSkillHubService(
+                new File(System.getProperty("user.dir")),
+                FileUtil.file(appConfig.getRuntime().getSkillsDir()),
+                skillImportService,
+                skillGuardService,
+                skillHubStateStore,
+                skillHubHttpClient,
+                gitHubAuth,
+                gitHubSkillSource
+        );
     }
 
     /**
@@ -266,6 +339,7 @@ public class JimuquAgentConfiguration {
                                      MemoryService memoryService,
                                      SessionSearchService sessionSearchService,
                                      LocalSkillService localSkillService,
+                                     SkillHubService skillHubService,
                                      CheckpointService checkpointService,
                                      DelegationService delegationService) {
         return new DefaultToolRegistry(
@@ -278,6 +352,7 @@ public class JimuquAgentConfiguration {
                 memoryService,
                 sessionSearchService,
                 localSkillService,
+                skillHubService,
                 checkpointService,
                 delegationService
         );
@@ -334,6 +409,7 @@ public class JimuquAgentConfiguration {
                                          DeliveryService deliveryService,
                                          GatewayAuthorizationService gatewayAuthorizationService,
                                          CheckpointService checkpointService,
+                                         SkillHubService skillHubService,
                                          AppConfig appConfig,
                                          GlobalSettingRepository globalSettingRepository,
                                          ProcessRegistry processRegistry) {
@@ -348,6 +424,7 @@ public class JimuquAgentConfiguration {
                 deliveryService,
                 gatewayAuthorizationService,
                 checkpointService,
+                skillHubService,
                 appConfig,
                 globalSettingRepository,
                 processRegistry

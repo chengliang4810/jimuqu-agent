@@ -14,7 +14,11 @@ public class ToolRegistryExposureTest {
         List<String> names = env.gatewayService == null ? java.util.Collections.<String>emptyList() : null;
         names = env.toolRegistry.listToolNames();
 
-        assertThat(names).contains("codesearch", "websearch", "webfetch", "skills_list", "skill_view", "skill_manage");
+        assertThat(names).contains(
+                "codesearch", "websearch", "webfetch",
+                "skills_list", "skill_view", "skill_manage",
+                "skills_hub_search", "skills_hub_install", "skills_hub_tap"
+        );
 
         List<Object> tools = env.toolRegistry.resolveEnabledTools("MEMORY:room-1:user-1");
         String joined = tools.toString();

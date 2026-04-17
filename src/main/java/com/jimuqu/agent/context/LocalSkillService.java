@@ -5,9 +5,15 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.SkillDescriptor;
 import com.jimuqu.agent.core.model.SkillView;
+import com.jimuqu.agent.core.service.SkillImportService;
 import com.jimuqu.agent.core.service.SkillCatalogService;
+import com.jimuqu.agent.skillhub.model.HubInstallRecord;
+import com.jimuqu.agent.skillhub.model.SkillSetupState;
+import com.jimuqu.agent.skillhub.support.SkillFrontmatterSupport;
+import com.jimuqu.agent.skillhub.support.SkillHubStateStore;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.support.constants.SkillConstants;
+import com.jimuqu.agent.support.constants.ToolNameConstants;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -39,11 +45,30 @@ public class LocalSkillService implements SkillCatalogService {
     private final SqlitePreferenceStore preferenceStore;
 
     /**
+     * 自动导入服务。
+     */
+    private final SkillImportService skillImportService;
+
+    /**
+     * Hub 状态存储。
+     */
+    private final SkillHubStateStore hubStateStore;
+
+    /**
      * 构造本地技能服务。
      */
     public LocalSkillService(AppConfig appConfig, SqlitePreferenceStore preferenceStore) {
+        this(appConfig, preferenceStore, null, null);
+    }
+
+    public LocalSkillService(AppConfig appConfig,
+                             SqlitePreferenceStore preferenceStore,
+                             SkillImportService skillImportService,
+                             SkillHubStateStore hubStateStore) {
         this.appConfig = appConfig;
         this.preferenceStore = preferenceStore;
+        this.skillImportService = skillImportService;
+        this.hubStateStore = hubStateStore == null ? new SkillHubStateStore(FileUtil.file(appConfig.getRuntime().getSkillsDir())) : hubStateStore;
         FileUtil.mkdir(appConfig.getRuntime().getSkillsDir());
     }
 
@@ -52,6 +77,7 @@ public class LocalSkillService implements SkillCatalogService {
      */
     public List<String> listSkillNames() {
         try {
+            processPendingImportsQuietly();
             List<SkillDescriptor> skills = listSkills(null);
             List<String> names = new ArrayList<String>();
             for (SkillDescriptor descriptor : skills) {
@@ -68,6 +94,7 @@ public class LocalSkillService implements SkillCatalogService {
      */
     public String inspect(String skillName) {
         try {
+            processPendingImportsQuietly();
             SkillView skillView = viewSkill(skillName, null);
             return skillView.getContent();
         } catch (Exception e) {
@@ -98,6 +125,7 @@ public class LocalSkillService implements SkillCatalogService {
 
     @Override
     public List<SkillDescriptor> listSkills(String category) throws Exception {
+        processPendingImportsQuietly();
         File root = FileUtil.file(appConfig.getRuntime().getSkillsDir());
         if (!root.exists()) {
             return Collections.emptyList();
@@ -133,6 +161,7 @@ public class LocalSkillService implements SkillCatalogService {
 
     @Override
     public SkillView viewSkill(String nameOrPath, String filePath) throws Exception {
+        processPendingImportsQuietly();
         SkillDescriptor descriptor = findDescriptor(nameOrPath);
         if (descriptor == null) {
             throw new IllegalStateException("Skill not found: " + nameOrPath);
@@ -153,10 +182,14 @@ public class LocalSkillService implements SkillCatalogService {
 
     @Override
     public String renderSkillIndexPrompt(String sourceKey) throws Exception {
+        processPendingImportsQuietly();
         List<SkillDescriptor> skills = listSkills(null);
         Map<String, List<SkillDescriptor>> grouped = new LinkedHashMap<String, List<SkillDescriptor>>();
         for (SkillDescriptor descriptor : skills) {
             if (!isVisible(sourceKey, descriptor.canonicalName())) {
+                continue;
+            }
+            if (!isRuntimeVisible(sourceKey, descriptor)) {
                 continue;
             }
             String category = StrUtil.blankToDefault(descriptor.getCategory(), SkillConstants.DEFAULT_CATEGORY);
@@ -182,7 +215,7 @@ public class LocalSkillService implements SkillCatalogService {
                 buffer.append("    - ")
                         .append(descriptor.canonicalName())
                         .append(": ")
-                        .append(StrUtil.nullToDefault(descriptor.getDescription(), ""))
+                        .append(descriptorLine(descriptor))
                         .append('\n');
             }
         }
@@ -331,12 +364,29 @@ public class LocalSkillService implements SkillCatalogService {
     private SkillDescriptor buildDescriptor(File skillDir, String category) {
         File skillFile = FileUtil.file(skillDir, SkillConstants.SKILL_FILE_NAME);
         String content = FileUtil.readUtf8String(skillFile);
+        Map<String, Object> frontmatter = SkillFrontmatterSupport.parseFrontmatter(content);
         SkillDescriptor descriptor = new SkillDescriptor();
-        descriptor.setName(skillDir.getName());
+        descriptor.setName(SkillFrontmatterSupport.resolveName(frontmatter, skillDir.getName()));
         descriptor.setCategory(category);
         descriptor.setSkillDir(skillDir.getAbsolutePath());
-        descriptor.setDescription(extractDescription(skillDir.getName(), content));
+        descriptor.setDescription(SkillFrontmatterSupport.resolveDescription(frontmatter, extractDescription(skillDir.getName(), content)));
         descriptor.setLinkedFiles(scanLinkedFiles(skillDir));
+        descriptor.setTags(new ArrayList<String>(SkillFrontmatterSupport.resolveTags(frontmatter)));
+        descriptor.setPlatforms(new ArrayList<String>(SkillFrontmatterSupport.parseStringList(frontmatter.get("platforms"))));
+        descriptor.setMetadata(new LinkedHashMap<String, Object>(frontmatter));
+        descriptor.setSetupState(SkillFrontmatterSupport.resolveSetupState(frontmatter).name());
+
+        HubInstallRecord hubRecord = findHubRecord(category, skillDir.getName());
+        if (hubRecord != null) {
+            descriptor.setSource(hubRecord.getSource());
+            descriptor.setIdentifier(hubRecord.getIdentifier());
+            descriptor.setTrustLevel(hubRecord.getTrustLevel());
+            descriptor.getMetadata().put("hub", hubRecord.getMetadata());
+        } else {
+            descriptor.setSource("local");
+            descriptor.setIdentifier(descriptor.canonicalName());
+            descriptor.setTrustLevel("agent-created");
+        }
         return descriptor;
     }
 
@@ -413,7 +463,10 @@ public class LocalSkillService implements SkillCatalogService {
             String absolute = file.getAbsolutePath();
             String root = skillDir.getAbsolutePath() + File.separator;
             if (absolute.startsWith(root)) {
-                output.add(absolute.substring(root.length()).replace(File.separatorChar, '/'));
+                String relative = absolute.substring(root.length()).replace(File.separatorChar, '/');
+                if (!relative.startsWith(".hub")) {
+                    output.add(relative);
+                }
             }
         }
     }
@@ -522,6 +575,154 @@ public class LocalSkillService implements SkillCatalogService {
         if (StrUtil.isBlank(filePath) || filePath.contains("..")) {
             throw new IllegalStateException("Invalid skill file path: " + filePath);
         }
+    }
+
+    private HubInstallRecord findHubRecord(String category, String name) {
+        String installPath = StrUtil.isBlank(category) ? name : category + "/" + name;
+        for (HubInstallRecord record : hubStateStore.listInstalled()) {
+            if (installPath.equals(record.getInstallPath())) {
+                return record;
+            }
+        }
+        return null;
+    }
+
+    private void processPendingImportsQuietly() {
+        if (skillImportService == null) {
+            return;
+        }
+        try {
+            skillImportService.processPendingImports(false);
+        } catch (Exception ignored) {
+            // auto import failure should not break normal skills usage
+        }
+    }
+
+    private boolean isRuntimeVisible(String sourceKey, SkillDescriptor descriptor) {
+        if (SkillSetupState.UNSUPPORTED.name().equals(descriptor.getSetupState())) {
+            return false;
+        }
+        Map<String, Object> hermes = SkillFrontmatterSupport.getHermesMetadata(descriptor.getMetadata());
+        if (!checkRequiresTools(sourceKey, SkillFrontmatterSupport.parseStringList(hermes.get("requires_tools")))) {
+            return false;
+        }
+        if (!checkRequiresToolsets(sourceKey, SkillFrontmatterSupport.parseStringList(hermes.get("requires_toolsets")))) {
+            return false;
+        }
+        if (!checkFallbackTools(sourceKey, SkillFrontmatterSupport.parseStringList(hermes.get("fallback_for_tools")))) {
+            return false;
+        }
+        return checkFallbackToolsets(sourceKey, SkillFrontmatterSupport.parseStringList(hermes.get("fallback_for_toolsets")));
+    }
+
+    private boolean checkRequiresTools(String sourceKey, List<String> tools) {
+        if (tools.isEmpty()) {
+            return true;
+        }
+        for (String tool : tools) {
+            if (!isToolEnabled(sourceKey, tool)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean checkRequiresToolsets(String sourceKey, List<String> toolsets) {
+        if (toolsets.isEmpty()) {
+            return true;
+        }
+        for (String toolset : toolsets) {
+            if (!isAnyToolEnabled(sourceKey, toolNamesForToolset(toolset))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean checkFallbackTools(String sourceKey, List<String> tools) {
+        if (tools.isEmpty()) {
+            return true;
+        }
+        for (String tool : tools) {
+            if (isToolEnabled(sourceKey, tool)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean checkFallbackToolsets(String sourceKey, List<String> toolsets) {
+        if (toolsets.isEmpty()) {
+            return true;
+        }
+        for (String toolset : toolsets) {
+            if (isAnyToolEnabled(sourceKey, toolNamesForToolset(toolset))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isAnyToolEnabled(String sourceKey, List<String> tools) {
+        if (tools.isEmpty()) {
+            return false;
+        }
+        for (String tool : tools) {
+            if (isToolEnabled(sourceKey, tool)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isToolEnabled(String sourceKey, String toolName) {
+        try {
+            return preferenceStore.isToolEnabled(sourceKey, toolName);
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    private List<String> toolNamesForToolset(String toolset) {
+        if ("web".equalsIgnoreCase(toolset)) {
+            return java.util.Arrays.asList(ToolNameConstants.WEBSEARCH, ToolNameConstants.WEBFETCH, ToolNameConstants.CODESEARCH);
+        }
+        if ("terminal".equalsIgnoreCase(toolset)) {
+            return java.util.Arrays.asList(ToolNameConstants.TERMINAL, ToolNameConstants.PROCESS, ToolNameConstants.EXECUTE_CODE);
+        }
+        if ("skills".equalsIgnoreCase(toolset)) {
+            return java.util.Arrays.asList(ToolNameConstants.SKILLS_LIST, ToolNameConstants.SKILL_VIEW, ToolNameConstants.SKILL_MANAGE);
+        }
+        if ("memory".equalsIgnoreCase(toolset)) {
+            return java.util.Arrays.asList(ToolNameConstants.MEMORY, ToolNameConstants.SESSION_SEARCH);
+        }
+        if ("cron".equalsIgnoreCase(toolset)) {
+            return java.util.Collections.singletonList(ToolNameConstants.CRONJOB);
+        }
+        if ("messaging".equalsIgnoreCase(toolset)) {
+            return java.util.Collections.singletonList(ToolNameConstants.SEND_MESSAGE);
+        }
+        if ("delegate".equalsIgnoreCase(toolset)) {
+            return java.util.Collections.singletonList(ToolNameConstants.DELEGATE_TASK);
+        }
+        if ("todo".equalsIgnoreCase(toolset)) {
+            return java.util.Collections.singletonList(ToolNameConstants.TODO);
+        }
+        if ("approval".equalsIgnoreCase(toolset)) {
+            return java.util.Collections.singletonList(ToolNameConstants.APPROVAL);
+        }
+        return java.util.Collections.emptyList();
+    }
+
+    private String descriptorLine(SkillDescriptor descriptor) {
+        StringBuilder buffer = new StringBuilder(StrUtil.nullToDefault(descriptor.getDescription(), ""));
+        if (SkillSetupState.SETUP_NEEDED.name().equals(descriptor.getSetupState())) {
+            buffer.append(" [setup_needed]");
+        }
+        if (StrUtil.isNotBlank(descriptor.getSource()) && !"local".equals(descriptor.getSource())) {
+            buffer.append(" [").append(descriptor.getSource()).append("]");
+        }
+        return buffer.toString().trim();
     }
 
     /**

@@ -9,6 +9,7 @@ import com.jimuqu.agent.core.service.DelegationService;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.service.MemoryService;
 import com.jimuqu.agent.core.service.SessionSearchService;
+import com.jimuqu.agent.core.service.SkillHubService;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.support.constants.ToolNameConstants;
@@ -45,6 +46,15 @@ public class DefaultToolRegistry implements ToolRegistry {
             ToolNameConstants.SKILLS_LIST,
             ToolNameConstants.SKILL_VIEW,
             ToolNameConstants.SKILL_MANAGE,
+            ToolNameConstants.SKILLS_HUB_SEARCH,
+            ToolNameConstants.SKILLS_HUB_INSPECT,
+            ToolNameConstants.SKILLS_HUB_INSTALL,
+            ToolNameConstants.SKILLS_HUB_LIST,
+            ToolNameConstants.SKILLS_HUB_CHECK,
+            ToolNameConstants.SKILLS_HUB_UPDATE,
+            ToolNameConstants.SKILLS_HUB_AUDIT,
+            ToolNameConstants.SKILLS_HUB_UNINSTALL,
+            ToolNameConstants.SKILLS_HUB_TAP,
             ToolNameConstants.SEND_MESSAGE,
             ToolNameConstants.CRONJOB,
             ToolNameConstants.APPROVAL,
@@ -99,6 +109,11 @@ public class DefaultToolRegistry implements ToolRegistry {
     private final LocalSkillService localSkillService;
 
     /**
+     * Skills Hub 服务。
+     */
+    private final SkillHubService skillHubService;
+
+    /**
      * checkpoint 服务。
      */
     private final CheckpointService checkpointService;
@@ -123,6 +138,7 @@ public class DefaultToolRegistry implements ToolRegistry {
         MemoryTools memoryTools = new MemoryTools(memoryService);
         SessionSearchTools sessionSearchTools = new SessionSearchTools(sessionSearchService, sourceKey);
         SkillTools skillTools = new SkillTools(localSkillService, checkpointService, sessionRepository, sourceKey);
+        SkillHubTools skillHubTools = new SkillHubTools(skillHubService);
         MessagingTools messagingTools = new MessagingTools(deliveryService, sourceKey);
         CronjobTools cronjobTools = new CronjobTools(cronJobRepository, sourceKey);
         DelegateTools delegateTools = new DelegateTools(delegationService, sourceKey);
@@ -163,6 +179,24 @@ public class DefaultToolRegistry implements ToolRegistry {
                 tools.add(new SkillTools.SkillViewTool(skillTools));
             } else if (ToolNameConstants.SKILL_MANAGE.equals(toolName)) {
                 tools.add(new SkillTools.SkillManageTool(skillTools));
+            } else if (ToolNameConstants.SKILLS_HUB_SEARCH.equals(toolName)) {
+                tools.add(new SkillHubTools.SearchTool(skillHubTools));
+            } else if (ToolNameConstants.SKILLS_HUB_INSPECT.equals(toolName)) {
+                tools.add(new SkillHubTools.InspectTool(skillHubTools));
+            } else if (ToolNameConstants.SKILLS_HUB_INSTALL.equals(toolName)) {
+                tools.add(new SkillHubTools.InstallTool(skillHubTools));
+            } else if (ToolNameConstants.SKILLS_HUB_LIST.equals(toolName)) {
+                tools.add(new SkillHubTools.ListTool(skillHubTools));
+            } else if (ToolNameConstants.SKILLS_HUB_CHECK.equals(toolName)) {
+                tools.add(new SkillHubTools.CheckTool(skillHubTools));
+            } else if (ToolNameConstants.SKILLS_HUB_UPDATE.equals(toolName)) {
+                tools.add(new SkillHubTools.UpdateTool(skillHubTools));
+            } else if (ToolNameConstants.SKILLS_HUB_AUDIT.equals(toolName)) {
+                tools.add(new SkillHubTools.AuditTool(skillHubTools));
+            } else if (ToolNameConstants.SKILLS_HUB_UNINSTALL.equals(toolName)) {
+                tools.add(new SkillHubTools.UninstallTool(skillHubTools));
+            } else if (ToolNameConstants.SKILLS_HUB_TAP.equals(toolName)) {
+                tools.add(new SkillHubTools.TapTool(skillHubTools));
             } else if (ToolNameConstants.SEND_MESSAGE.equals(toolName)) {
                 tools.add(messagingTools);
             } else if (ToolNameConstants.CRONJOB.equals(toolName)) {

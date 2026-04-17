@@ -26,6 +26,9 @@ import com.jimuqu.agent.core.service.MemoryService;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.SessionSearchService;
+import com.jimuqu.agent.core.service.SkillGuardService;
+import com.jimuqu.agent.core.service.SkillHubService;
+import com.jimuqu.agent.core.service.SkillImportService;
 import com.jimuqu.agent.core.service.SkillLearningService;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.engine.DefaultContextCompressionService;
@@ -37,6 +40,14 @@ import com.jimuqu.agent.gateway.authorization.GatewayAuthorizationService;
 import com.jimuqu.agent.gateway.command.DefaultCommandService;
 import com.jimuqu.agent.gateway.service.DefaultGatewayService;
 import com.jimuqu.agent.llm.SolonAiLlmGateway;
+import com.jimuqu.agent.skillhub.service.DefaultSkillGuardService;
+import com.jimuqu.agent.skillhub.service.DefaultSkillHubService;
+import com.jimuqu.agent.skillhub.service.DefaultSkillImportService;
+import com.jimuqu.agent.skillhub.source.GitHubSkillSource;
+import com.jimuqu.agent.skillhub.support.DefaultSkillHubHttpClient;
+import com.jimuqu.agent.skillhub.support.GitHubAuth;
+import com.jimuqu.agent.skillhub.support.SkillHubHttpClient;
+import com.jimuqu.agent.skillhub.support.SkillHubStateStore;
 import com.jimuqu.agent.storage.repository.SqliteCronJobRepository;
 import com.jimuqu.agent.storage.repository.SqliteDatabase;
 import com.jimuqu.agent.storage.repository.SqliteGlobalSettingRepository;
@@ -76,6 +87,7 @@ public class TestEnvironment {
     public final GlobalSettingRepository globalSettingRepository;
     public final SessionSearchService sessionSearchService;
     public final ProcessRegistry processRegistry;
+    public final SkillHubService skillHubService;
 
     public static TestEnvironment withFakeLlm() throws Exception {
         return create(new FakeLlmGateway());
@@ -106,7 +118,12 @@ public class TestEnvironment {
         SessionRepository sessionRepository = new SqliteSessionRepository(database);
         CronJobRepository cronJobRepository = new SqliteCronJobRepository(database);
         GatewayPolicyRepository gatewayPolicyRepository = new SqliteGatewayPolicyRepository(database);
-        LocalSkillService localSkillService = new LocalSkillService(config, preferenceStore);
+        SkillHubStateStore skillHubStateStore = new SkillHubStateStore(new File(config.getRuntime().getSkillsDir()));
+        SkillGuardService skillGuardService = new DefaultSkillGuardService();
+        SkillHubHttpClient skillHubHttpClient = new DefaultSkillHubHttpClient();
+        GitHubAuth gitHubAuth = new GitHubAuth(skillHubHttpClient);
+        SkillImportService skillImportService = new DefaultSkillImportService(new File(config.getRuntime().getSkillsDir()), skillGuardService, skillHubStateStore);
+        LocalSkillService localSkillService = new LocalSkillService(config, preferenceStore, skillImportService, skillHubStateStore);
         MemoryService memoryService = new FileMemoryService(config);
         MemoryProvider builtinMemoryProvider = new BuiltinMemoryProvider(memoryService);
         MemoryManager memoryManager = new DefaultMemoryManager(java.util.Collections.singletonList(builtinMemoryProvider));
@@ -122,11 +139,13 @@ public class TestEnvironment {
         ProcessRegistry processRegistry = new ProcessRegistry();
         DelegationService delegationService = new DefaultDelegationService(holder, preferenceStore, sessionRepository);
         SessionSearchService sessionSearchService = new DefaultSessionSearchService(sessionRepository, llmGateway);
-        ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, processRegistry, memoryService, sessionSearchService, localSkillService, checkpointService, delegationService);
+        GitHubSkillSource gitHubSkillSource = new GitHubSkillSource(gitHubAuth, skillHubHttpClient, skillHubStateStore);
+        SkillHubService skillHubService = new DefaultSkillHubService(new File(System.getProperty("user.dir")), new File(config.getRuntime().getSkillsDir()), skillImportService, skillGuardService, skillHubStateStore, skillHubHttpClient, gitHubAuth, gitHubSkillSource);
+        ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, processRegistry, memoryService, sessionSearchService, localSkillService, skillHubService, checkpointService, delegationService);
         ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry);
         holder.set(orchestrator);
         SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService);
-        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, config, globalSettingRepository, processRegistry);
+        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry);
         DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService, sessionRepository, gatewayAuthorizationService, skillLearningService, memoryManager);
         return new TestEnvironment(
                 config,
@@ -147,7 +166,8 @@ public class TestEnvironment {
                 contextCompressionService,
                 globalSettingRepository,
                 sessionSearchService,
-                processRegistry
+                processRegistry,
+                skillHubService
         );
     }
 

@@ -28,6 +28,16 @@ public interface GatewayCommandConstants {
     String ACTION_APPROVED = "approved";
     String ACTION_CLAIM_ADMIN = "claim-admin";
     String ACTION_CLEAR = "clear";
+    String ACTION_SEARCH = "search";
+    String ACTION_BROWSE = "browse";
+    String ACTION_INSTALL = "install";
+    String ACTION_CHECK = "check";
+    String ACTION_UPDATE = "update";
+    String ACTION_AUDIT = "audit";
+    String ACTION_UNINSTALL = "uninstall";
+    String ACTION_TAP = "tap";
+    String ACTION_ADD = "add";
+    String ACTION_REMOVE = "remove";
 
     /**
      * 一级命令。
