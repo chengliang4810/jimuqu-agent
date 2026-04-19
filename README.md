@@ -134,7 +134,7 @@ mvn clean package
 启动：
 
 ```powershell
-java -jar target/jimuqu-agent-0.1.0-SNAPSHOT.jar --server.port=8080
+java -jar target/jimuqu-agent-0.0.1.jar --server.port=8080
 ```
 
 健康检查：

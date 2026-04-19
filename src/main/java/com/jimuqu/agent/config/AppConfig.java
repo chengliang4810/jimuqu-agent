@@ -1,6 +1,7 @@
 package com.jimuqu.agent.config;
 
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.core.io.FileUtil;
 import com.jimuqu.agent.support.constants.CheckpointConstants;
 import com.jimuqu.agent.support.constants.CompressionConstants;
 import com.jimuqu.agent.support.constants.GatewayBehaviorConstants;
@@ -9,6 +10,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.noear.solon.core.Props;
+import org.yaml.snakeyaml.Yaml;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -78,94 +80,128 @@ public class AppConfig {
      */
     public static AppConfig load(Props props) {
         AppConfig config = new AppConfig();
+        File userDir = new File(System.getProperty("user.dir"));
+        File runtimeHome = asAbsoluteStatic(
+                new File(props.get("jimuqu.runtime.home", RuntimePathConstants.RUNTIME_HOME)),
+                userDir
+        );
+        Map<String, Object> overrides = loadFlatOverrides(runtimeHome);
+        RuntimeEnvResolver envResolver = RuntimeEnvResolver.initialize(runtimeHome.getAbsolutePath());
 
-        config.getRuntime().setHome(props.get("jimuqu.runtime.home", RuntimePathConstants.RUNTIME_HOME));
-        config.getRuntime().setContextDir(props.get("jimuqu.runtime.contextDir", RuntimePathConstants.CONTEXT_DIR));
-        config.getRuntime().setSkillsDir(props.get("jimuqu.runtime.skillsDir", RuntimePathConstants.SKILLS_DIR));
-        config.getRuntime().setCacheDir(props.get("jimuqu.runtime.cacheDir", RuntimePathConstants.CACHE_DIR));
-        config.getRuntime().setStateDb(props.get("jimuqu.runtime.stateDb", RuntimePathConstants.STATE_DB));
+        config.getRuntime().setHome(readString(props, overrides, "jimuqu.runtime.home", RuntimePathConstants.RUNTIME_HOME));
+        config.getRuntime().setContextDir(resolveRuntimePath(
+                readString(props, overrides, "jimuqu.runtime.contextDir", RuntimePathConstants.CONTEXT_DIR),
+                config.getRuntime().getHome(),
+                RuntimePathConstants.CONTEXT_DIR,
+                "context"
+        ));
+        config.getRuntime().setSkillsDir(resolveRuntimePath(
+                readString(props, overrides, "jimuqu.runtime.skillsDir", RuntimePathConstants.SKILLS_DIR),
+                config.getRuntime().getHome(),
+                RuntimePathConstants.SKILLS_DIR,
+                "skills"
+        ));
+        config.getRuntime().setCacheDir(resolveRuntimePath(
+                readString(props, overrides, "jimuqu.runtime.cacheDir", RuntimePathConstants.CACHE_DIR),
+                config.getRuntime().getHome(),
+                RuntimePathConstants.CACHE_DIR,
+                "cache"
+        ));
+        config.getRuntime().setStateDb(resolveRuntimePath(
+                readString(props, overrides, "jimuqu.runtime.stateDb", RuntimePathConstants.STATE_DB),
+                config.getRuntime().getHome(),
+                RuntimePathConstants.STATE_DB,
+                "state.db"
+        ));
+        config.getRuntime().setConfigOverrideFile(new File(runtimeHome, "config.override.yml").getPath());
+        config.getRuntime().setEnvFile(envResolver.envFile().getPath());
+        config.getRuntime().setLogsDir(new File(runtimeHome, "logs").getPath());
 
-        config.getLlm().setProvider(props.get("jimuqu.llm.provider", RuntimePathConstants.DEFAULT_LLM_PROVIDER));
-        config.getLlm().setApiUrl(props.get("jimuqu.llm.apiUrl", RuntimePathConstants.DEFAULT_LLM_API_URL));
+        config.getLlm().setProvider(readString(props, overrides, "jimuqu.llm.provider", RuntimePathConstants.DEFAULT_LLM_PROVIDER));
+        config.getLlm().setApiUrl(readString(props, overrides, "jimuqu.llm.apiUrl", RuntimePathConstants.DEFAULT_LLM_API_URL));
         config.getLlm().setApiKey(resolveSecret("JIMUQU_LLM_API_KEY", props.get("jimuqu.llm.apiKey", "")));
-        config.getLlm().setModel(props.get("jimuqu.llm.model", RuntimePathConstants.DEFAULT_LLM_MODEL));
-        config.getLlm().setStream(props.getBool("jimuqu.llm.stream", false));
-        config.getLlm().setReasoningEffort(props.get("jimuqu.llm.reasoningEffort", RuntimePathConstants.DEFAULT_REASONING_EFFORT));
-        config.getLlm().setTemperature(props.getDouble("jimuqu.llm.temperature", RuntimePathConstants.DEFAULT_TEMPERATURE));
-        config.getLlm().setMaxTokens(props.getInt("jimuqu.llm.maxTokens", RuntimePathConstants.DEFAULT_MAX_TOKENS));
-        config.getLlm().setContextWindowTokens(props.getInt("jimuqu.llm.contextWindowTokens", RuntimePathConstants.DEFAULT_CONTEXT_WINDOW_TOKENS));
+        config.getLlm().setModel(readString(props, overrides, "jimuqu.llm.model", RuntimePathConstants.DEFAULT_LLM_MODEL));
+        config.getLlm().setStream(readBoolean(props, overrides, "jimuqu.llm.stream", false));
+        config.getLlm().setReasoningEffort(readString(props, overrides, "jimuqu.llm.reasoningEffort", RuntimePathConstants.DEFAULT_REASONING_EFFORT));
+        config.getLlm().setTemperature(readDouble(props, overrides, "jimuqu.llm.temperature", RuntimePathConstants.DEFAULT_TEMPERATURE));
+        config.getLlm().setMaxTokens(readInt(props, overrides, "jimuqu.llm.maxTokens", RuntimePathConstants.DEFAULT_MAX_TOKENS));
+        config.getLlm().setContextWindowTokens(readInt(props, overrides, "jimuqu.llm.contextWindowTokens", RuntimePathConstants.DEFAULT_CONTEXT_WINDOW_TOKENS));
 
-        config.getScheduler().setEnabled(props.getBool("jimuqu.scheduler.enabled", true));
-        config.getScheduler().setTickSeconds(props.getInt("jimuqu.scheduler.tickSeconds", RuntimePathConstants.DEFAULT_SCHEDULER_TICK_SECONDS));
+        config.getScheduler().setEnabled(readBoolean(props, overrides, "jimuqu.scheduler.enabled", true));
+        config.getScheduler().setTickSeconds(readInt(props, overrides, "jimuqu.scheduler.tickSeconds", RuntimePathConstants.DEFAULT_SCHEDULER_TICK_SECONDS));
 
-        config.getCompression().setEnabled(props.getBool("jimuqu.compression.enabled", true));
-        config.getCompression().setThresholdPercent(props.getDouble("jimuqu.compression.thresholdPercent", CompressionConstants.DEFAULT_THRESHOLD_PERCENT));
-        config.getCompression().setSummaryModel(props.get("jimuqu.compression.summaryModel", ""));
-        config.getCompression().setProtectHeadMessages(props.getInt("jimuqu.compression.protectHeadMessages", CompressionConstants.DEFAULT_PROTECT_HEAD_MESSAGES));
-        config.getCompression().setTailRatio(props.getDouble("jimuqu.compression.tailRatio", CompressionConstants.DEFAULT_TAIL_RATIO));
+        config.getCompression().setEnabled(readBoolean(props, overrides, "jimuqu.compression.enabled", true));
+        config.getCompression().setThresholdPercent(readDouble(props, overrides, "jimuqu.compression.thresholdPercent", CompressionConstants.DEFAULT_THRESHOLD_PERCENT));
+        config.getCompression().setSummaryModel(readString(props, overrides, "jimuqu.compression.summaryModel", ""));
+        config.getCompression().setProtectHeadMessages(readInt(props, overrides, "jimuqu.compression.protectHeadMessages", CompressionConstants.DEFAULT_PROTECT_HEAD_MESSAGES));
+        config.getCompression().setTailRatio(readDouble(props, overrides, "jimuqu.compression.tailRatio", CompressionConstants.DEFAULT_TAIL_RATIO));
 
-        config.getLearning().setEnabled(props.getBool("jimuqu.learning.enabled", true));
-        config.getLearning().setToolCallThreshold(props.getInt("jimuqu.learning.toolCallThreshold", 5));
+        config.getLearning().setEnabled(readBoolean(props, overrides, "jimuqu.learning.enabled", true));
+        config.getLearning().setToolCallThreshold(readInt(props, overrides, "jimuqu.learning.toolCallThreshold", 5));
 
-        config.getRollback().setEnabled(props.getBool("jimuqu.rollback.enabled", true));
-        config.getRollback().setMaxCheckpointsPerSource(props.getInt("jimuqu.rollback.maxCheckpointsPerSource", CheckpointConstants.DEFAULT_MAX_CHECKPOINTS_PER_SOURCE));
+        config.getRollback().setEnabled(readBoolean(props, overrides, "jimuqu.rollback.enabled", true));
+        config.getRollback().setMaxCheckpointsPerSource(readInt(props, overrides, "jimuqu.rollback.maxCheckpointsPerSource", CheckpointConstants.DEFAULT_MAX_CHECKPOINTS_PER_SOURCE));
 
         applyChannelConfig(
                 config.getChannels().getFeishu(),
                 props,
+                overrides,
                 "feishu",
                 "JIMUQU_FEISHU_ALLOWED_USERS",
                 "JIMUQU_FEISHU_ALLOW_ALL_USERS",
                 "JIMUQU_FEISHU_UNAUTHORIZED_DM_BEHAVIOR"
         );
-        config.getChannels().getFeishu().setEnabled(props.getBool("jimuqu.channels.feishu.enabled", false));
+        config.getChannels().getFeishu().setEnabled(readBoolean(props, overrides, "jimuqu.channels.feishu.enabled", false));
         config.getChannels().getFeishu().setAppId(resolveSecret("JIMUQU_FEISHU_APP_ID", props.get("jimuqu.channels.feishu.appId", "")));
         config.getChannels().getFeishu().setAppSecret(resolveSecret("JIMUQU_FEISHU_APP_SECRET", props.get("jimuqu.channels.feishu.appSecret", "")));
-        config.getChannels().getFeishu().setWebsocketUrl(props.get("jimuqu.channels.feishu.websocketUrl", ""));
+        config.getChannels().getFeishu().setWebsocketUrl(readString(props, overrides, "jimuqu.channels.feishu.websocketUrl", ""));
 
         applyChannelConfig(
                 config.getChannels().getDingtalk(),
                 props,
+                overrides,
                 "dingtalk",
                 "JIMUQU_DINGTALK_ALLOWED_USERS",
                 "JIMUQU_DINGTALK_ALLOW_ALL_USERS",
                 "JIMUQU_DINGTALK_UNAUTHORIZED_DM_BEHAVIOR"
         );
-        config.getChannels().getDingtalk().setEnabled(resolveBoolean("JIMUQU_DINGTALK_ENABLED", props.getBool("jimuqu.channels.dingtalk.enabled", false)));
+        config.getChannels().getDingtalk().setEnabled(resolveBoolean("JIMUQU_DINGTALK_ENABLED", readBoolean(props, overrides, "jimuqu.channels.dingtalk.enabled", false)));
         config.getChannels().getDingtalk().setClientId(resolveSecret("JIMUQU_DINGTALK_CLIENT_ID", props.get("jimuqu.channels.dingtalk.clientId", "")));
         config.getChannels().getDingtalk().setClientSecret(resolveSecret("JIMUQU_DINGTALK_CLIENT_SECRET", props.get("jimuqu.channels.dingtalk.clientSecret", "")));
         config.getChannels().getDingtalk().setRobotCode(resolveSecret("JIMUQU_DINGTALK_ROBOT_CODE", props.get("jimuqu.channels.dingtalk.robotCode", "")));
-        config.getChannels().getDingtalk().setCoolAppCode(props.get("jimuqu.channels.dingtalk.coolAppCode", ""));
-        config.getChannels().getDingtalk().setStreamUrl(props.get("jimuqu.channels.dingtalk.streamUrl", ""));
+        config.getChannels().getDingtalk().setCoolAppCode(readString(props, overrides, "jimuqu.channels.dingtalk.coolAppCode", ""));
+        config.getChannels().getDingtalk().setStreamUrl(readString(props, overrides, "jimuqu.channels.dingtalk.streamUrl", ""));
 
         applyChannelConfig(
                 config.getChannels().getWecom(),
                 props,
+                overrides,
                 "wecom",
                 "JIMUQU_WECOM_ALLOWED_USERS",
                 "JIMUQU_WECOM_ALLOW_ALL_USERS",
                 "JIMUQU_WECOM_UNAUTHORIZED_DM_BEHAVIOR"
         );
-        config.getChannels().getWecom().setEnabled(props.getBool("jimuqu.channels.wecom.enabled", false));
+        config.getChannels().getWecom().setEnabled(readBoolean(props, overrides, "jimuqu.channels.wecom.enabled", false));
         config.getChannels().getWecom().setBotId(resolveSecret("JIMUQU_WECOM_BOT_ID", props.get("jimuqu.channels.wecom.botId", "")));
         config.getChannels().getWecom().setSecret(resolveSecret("JIMUQU_WECOM_SECRET", props.get("jimuqu.channels.wecom.secret", "")));
-        config.getChannels().getWecom().setWebsocketUrl(props.get("jimuqu.channels.wecom.websocketUrl", ""));
+        config.getChannels().getWecom().setWebsocketUrl(readString(props, overrides, "jimuqu.channels.wecom.websocketUrl", ""));
 
         applyChannelConfig(
                 config.getChannels().getWeixin(),
                 props,
+                overrides,
                 "weixin",
                 "JIMUQU_WEIXIN_ALLOWED_USERS",
                 "JIMUQU_WEIXIN_ALLOW_ALL_USERS",
                 "JIMUQU_WEIXIN_UNAUTHORIZED_DM_BEHAVIOR"
         );
-        config.getChannels().getWeixin().setEnabled(props.getBool("jimuqu.channels.weixin.enabled", false));
+        config.getChannels().getWeixin().setEnabled(readBoolean(props, overrides, "jimuqu.channels.weixin.enabled", false));
         config.getChannels().getWeixin().setToken(resolveSecret("JIMUQU_WEIXIN_TOKEN", props.get("jimuqu.channels.weixin.token", "")));
-        config.getChannels().getWeixin().setLongPollUrl(props.get("jimuqu.channels.weixin.longPollUrl", ""));
+        config.getChannels().getWeixin().setLongPollUrl(readString(props, overrides, "jimuqu.channels.weixin.longPollUrl", ""));
 
-        config.getGateway().setAllowedUsers(resolveList("JIMUQU_GATEWAY_ALLOWED_USERS", props.get("jimuqu.gateway.allowedUsers", "")));
-        config.getGateway().setAllowAllUsers(resolveBoolean("JIMUQU_GATEWAY_ALLOW_ALL_USERS", props.getBool("jimuqu.gateway.allowAllUsers", false)));
-        config.getAgent().setPersonalities(loadPersonalities(props));
+        config.getGateway().setAllowedUsers(resolveList("JIMUQU_GATEWAY_ALLOWED_USERS", readString(props, overrides, "jimuqu.gateway.allowedUsers", "")));
+        config.getGateway().setAllowAllUsers(resolveBoolean("JIMUQU_GATEWAY_ALLOW_ALL_USERS", readBoolean(props, overrides, "jimuqu.gateway.allowAllUsers", false)));
+        config.getAgent().setPersonalities(loadPersonalities(props, overrides));
 
         config.normalizePaths();
         return config;
@@ -181,6 +217,18 @@ public class AppConfig {
         runtime.setSkillsDir(asAbsolute(new File(runtime.getSkillsDir()), userDir).getAbsolutePath());
         runtime.setCacheDir(asAbsolute(new File(runtime.getCacheDir()), userDir).getAbsolutePath());
         runtime.setStateDb(asAbsolute(new File(runtime.getStateDb()), userDir).getAbsolutePath());
+        if (StrUtil.isBlank(runtime.getConfigOverrideFile())) {
+            runtime.setConfigOverrideFile(new File(runtime.getHome(), "config.override.yml").getPath());
+        }
+        if (StrUtil.isBlank(runtime.getEnvFile())) {
+            runtime.setEnvFile(new File(runtime.getHome(), ".env").getPath());
+        }
+        if (StrUtil.isBlank(runtime.getLogsDir())) {
+            runtime.setLogsDir(new File(runtime.getHome(), "logs").getPath());
+        }
+        runtime.setConfigOverrideFile(asAbsolute(new File(runtime.getConfigOverrideFile()), userDir).getAbsolutePath());
+        runtime.setEnvFile(asAbsolute(new File(runtime.getEnvFile()), userDir).getAbsolutePath());
+        runtime.setLogsDir(asAbsolute(new File(runtime.getLogsDir()), userDir).getAbsolutePath());
     }
 
     /**
@@ -195,18 +243,16 @@ public class AppConfig {
      */
     private static void applyChannelConfig(ChannelConfig channelConfig,
                                            Props props,
+                                           Map<String, Object> overrides,
                                            String channelName,
                                            String allowedUsersEnvName,
                                            String allowAllUsersEnvName,
                                            String unauthorizedBehaviorEnvName) {
-        channelConfig.setAllowedUsers(resolveList(allowedUsersEnvName, props.get("jimuqu.channels." + channelName + ".allowedUsers", "")));
-        channelConfig.setAllowAllUsers(resolveBoolean(allowAllUsersEnvName, props.getBool("jimuqu.channels." + channelName + ".allowAllUsers", false)));
+        channelConfig.setAllowedUsers(resolveList(allowedUsersEnvName, readString(props, overrides, "jimuqu.channels." + channelName + ".allowedUsers", "")));
+        channelConfig.setAllowAllUsers(resolveBoolean(allowAllUsersEnvName, readBoolean(props, overrides, "jimuqu.channels." + channelName + ".allowAllUsers", false)));
         channelConfig.setUnauthorizedDmBehavior(resolveBehavior(
                 unauthorizedBehaviorEnvName,
-                props.get(
-                        "jimuqu.channels." + channelName + ".unauthorizedDmBehavior",
-                        GatewayBehaviorConstants.UNAUTHORIZED_DM_BEHAVIOR_PAIR
-                )
+                readString(props, overrides, "jimuqu.channels." + channelName + ".unauthorizedDmBehavior", GatewayBehaviorConstants.UNAUTHORIZED_DM_BEHAVIOR_PAIR)
         ));
     }
 
@@ -214,7 +260,7 @@ public class AppConfig {
      * 优先从环境变量解析密钥。
      */
     private static String resolveSecret(String envName, String fallback) {
-        String envValue = System.getenv(envName);
+        String envValue = RuntimeEnvResolver.getenv(envName);
         if (StrUtil.isNotBlank(envValue)) {
             return envValue.trim();
         }
@@ -225,7 +271,7 @@ public class AppConfig {
      * 支持通过环境变量覆盖布尔配置。
      */
     private static boolean resolveBoolean(String envName, boolean fallback) {
-        String envValue = System.getenv(envName);
+        String envValue = RuntimeEnvResolver.getenv(envName);
         if (StrUtil.isBlank(envValue)) {
             return fallback;
         }
@@ -239,7 +285,7 @@ public class AppConfig {
      * 支持逗号分隔的用户列表解析。
      */
     private static List<String> resolveList(String envName, String fallback) {
-        String envValue = System.getenv(envName);
+        String envValue = RuntimeEnvResolver.getenv(envName);
         if (StrUtil.isNotBlank(envValue)) {
             return splitList(envValue);
         }
@@ -250,7 +296,7 @@ public class AppConfig {
      * 统一收敛未授权私聊用户的处理行为。
      */
     private static String resolveBehavior(String envName, String fallback) {
-        String envValue = System.getenv(envName);
+        String envValue = RuntimeEnvResolver.getenv(envName);
         String value = StrUtil.isNotBlank(envValue)
                 ? envValue.trim()
                 : StrUtil.nullToDefault(fallback, GatewayBehaviorConstants.UNAUTHORIZED_DM_BEHAVIOR_PAIR).trim();
@@ -280,18 +326,29 @@ public class AppConfig {
     /**
      * 解析 personalities 配置映射。
      */
-    private static Map<String, PersonalityConfig> loadPersonalities(Props props) {
+    private static Map<String, PersonalityConfig> loadPersonalities(Props props, Map<String, Object> overrides) {
         Map<String, PersonalityConfig> result = new LinkedHashMap<String, PersonalityConfig>();
         if (props == null) {
             return result;
         }
 
         String prefix = "jimuqu.agent.personalities.";
+        Map<String, String> rawEntries = new LinkedHashMap<String, String>();
         for (Map.Entry<Object, Object> entry : props.entrySet()) {
             String rawKey = String.valueOf(entry.getKey());
             if (!rawKey.startsWith(prefix)) {
                 continue;
             }
+            rawEntries.put(rawKey, props.get(rawKey, ""));
+        }
+        for (Map.Entry<String, Object> entry : overrides.entrySet()) {
+            if (entry.getKey().startsWith(prefix)) {
+                rawEntries.put(entry.getKey(), String.valueOf(entry.getValue()));
+            }
+        }
+
+        for (Map.Entry<String, String> entry : rawEntries.entrySet()) {
+            String rawKey = entry.getKey();
 
             String suffix = rawKey.substring(prefix.length());
             int index = suffix.indexOf('.');
@@ -311,7 +368,7 @@ public class AppConfig {
                 result.put(name, personality);
             }
 
-            String value = props.get(rawKey, "");
+            String value = entry.getValue();
             if ("description".equals(field)) {
                 personality.setDescription(value);
             } else if ("systemPrompt".equals(field)) {
@@ -333,6 +390,100 @@ public class AppConfig {
             return file;
         }
         return new File(base, file.getPath());
+    }
+
+    private static String readString(Props props, Map<String, Object> overrides, String key, String defaultValue) {
+        Object override = overrides.get(key);
+        if (override != null) {
+            return String.valueOf(override).trim();
+        }
+        return props.get(key, defaultValue);
+    }
+
+    private static int readInt(Props props, Map<String, Object> overrides, String key, int defaultValue) {
+        Object override = overrides.get(key);
+        if (override != null) {
+            try {
+                return Integer.parseInt(String.valueOf(override).trim());
+            } catch (Exception ignored) {
+                return defaultValue;
+            }
+        }
+        return props.getInt(key, defaultValue);
+    }
+
+    private static double readDouble(Props props, Map<String, Object> overrides, String key, double defaultValue) {
+        Object override = overrides.get(key);
+        if (override != null) {
+            try {
+                return Double.parseDouble(String.valueOf(override).trim());
+            } catch (Exception ignored) {
+                return defaultValue;
+            }
+        }
+        return props.getDouble(key, defaultValue);
+    }
+
+    private static boolean readBoolean(Props props, Map<String, Object> overrides, String key, boolean defaultValue) {
+        Object override = overrides.get(key);
+        if (override != null) {
+            String text = String.valueOf(override).trim();
+            return "true".equalsIgnoreCase(text)
+                    || "1".equals(text)
+                    || "yes".equalsIgnoreCase(text);
+        }
+        return props.getBool(key, defaultValue);
+    }
+
+    private static Map<String, Object> loadFlatOverrides(File runtimeHome) {
+        File overrideFile = new File(runtimeHome, "config.override.yml");
+        if (!overrideFile.exists()) {
+            return Collections.emptyMap();
+        }
+
+        try {
+            Object parsed = new Yaml().load(FileUtil.readUtf8String(overrideFile));
+            if (!(parsed instanceof Map)) {
+                return Collections.emptyMap();
+            }
+
+            Map<String, Object> result = new LinkedHashMap<String, Object>();
+            flatten("", (Map<?, ?>) parsed, result);
+            return result;
+        } catch (Exception ignored) {
+            return Collections.emptyMap();
+        }
+    }
+
+    private static void flatten(String prefix, Map<?, ?> input, Map<String, Object> output) {
+        for (Map.Entry<?, ?> entry : input.entrySet()) {
+            if (entry.getKey() == null) {
+                continue;
+            }
+            String key = prefix.length() == 0 ? String.valueOf(entry.getKey()) : prefix + "." + entry.getKey();
+            Object value = entry.getValue();
+            if (value instanceof Map) {
+                flatten(key, (Map<?, ?>) value, output);
+            } else {
+                output.put(key, value);
+            }
+        }
+    }
+
+    private static File asAbsoluteStatic(File file, File base) {
+        if (file.isAbsolute()) {
+            return file;
+        }
+        return new File(base, file.getPath());
+    }
+
+    private static String resolveRuntimePath(String rawValue, String runtimeHome, String legacyDefault, String childName) {
+        String value = StrUtil.blankToDefault(rawValue, legacyDefault);
+        if (!RuntimePathConstants.RUNTIME_HOME.equals(runtimeHome)
+                && legacyDefault.equals(value)) {
+            return new File(runtimeHome, childName).getPath();
+        }
+        return value;
     }
 
     /**
@@ -366,6 +517,21 @@ public class AppConfig {
          * SQLite 状态库路径。
          */
         private String stateDb;
+
+        /**
+         * runtime/config.override.yml 路径。
+         */
+        private String configOverrideFile;
+
+        /**
+         * runtime/.env 路径。
+         */
+        private String envFile;
+
+        /**
+         * runtime/logs 目录。
+         */
+        private String logsDir;
     }
 
     /**

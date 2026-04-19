@@ -1,6 +1,7 @@
 package com.jimuqu.agent.skillhub.support;
 
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.config.RuntimeEnvResolver;
 import com.jimuqu.agent.skillhub.model.SkillSetupState;
 import org.yaml.snakeyaml.Yaml;
 
@@ -120,7 +121,7 @@ public final class SkillFrontmatterSupport {
             for (Object item : (List<?>) required) {
                 if (item instanceof Map) {
                     Object name = ((Map<?, ?>) item).get("name");
-                    if (name != null && StrUtil.isBlank(System.getenv(String.valueOf(name)))) {
+                    if (name != null && StrUtil.isBlank(RuntimeEnvResolver.getenv(String.valueOf(name)))) {
                         return SkillSetupState.SETUP_NEEDED;
                     }
                 }
@@ -130,7 +131,7 @@ public final class SkillFrontmatterSupport {
         Map<String, Object> prerequisites = getMap(frontmatter, "prerequisites");
         List<String> envVars = parseStringList(prerequisites.get("env_vars"));
         for (String envVar : envVars) {
-            if (StrUtil.isBlank(System.getenv(envVar))) {
+            if (StrUtil.isBlank(RuntimeEnvResolver.getenv(envVar))) {
                 return SkillSetupState.SETUP_NEEDED;
             }
         }

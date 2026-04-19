@@ -4,6 +4,7 @@ import cn.hutool.core.codec.Base64;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.config.RuntimeEnvResolver;
 import org.noear.snack4.ONode;
 
 import java.io.File;
@@ -54,7 +55,7 @@ public class GitHubAuth {
             return cachedToken;
         }
 
-        String envToken = StrUtil.blankToDefault(System.getenv("GITHUB_TOKEN"), System.getenv("GH_TOKEN"));
+        String envToken = StrUtil.blankToDefault(RuntimeEnvResolver.getenv("GITHUB_TOKEN"), RuntimeEnvResolver.getenv("GH_TOKEN"));
         if (StrUtil.isNotBlank(envToken)) {
             cachedToken = envToken.trim();
             cachedMethod = "pat";
@@ -98,9 +99,9 @@ public class GitHubAuth {
     }
 
     private String tryGitHubApp() {
-        String appId = System.getenv("GITHUB_APP_ID");
-        String keyPath = System.getenv("GITHUB_APP_PRIVATE_KEY_PATH");
-        String installationId = System.getenv("GITHUB_APP_INSTALLATION_ID");
+        String appId = RuntimeEnvResolver.getenv("GITHUB_APP_ID");
+        String keyPath = RuntimeEnvResolver.getenv("GITHUB_APP_PRIVATE_KEY_PATH");
+        String installationId = RuntimeEnvResolver.getenv("GITHUB_APP_INSTALLATION_ID");
         if (StrUtil.hasBlank(appId, keyPath, installationId)) {
             return null;
         }

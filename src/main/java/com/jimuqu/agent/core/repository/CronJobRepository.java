@@ -24,6 +24,11 @@ public interface CronJobRepository {
     List<CronJobRecord> listBySource(String sourceKey) throws Exception;
 
     /**
+     * 列出全部任务。
+     */
+    List<CronJobRecord> listAll() throws Exception;
+
+    /**
      * 列出已到执行时间的任务。
      */
     List<CronJobRecord> listDue(long nowEpochMillis) throws Exception;

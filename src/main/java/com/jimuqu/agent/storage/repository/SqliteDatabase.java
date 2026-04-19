@@ -47,6 +47,38 @@ public class SqliteDatabase {
                     "updated_at integer not null" +
                     ")");
             try {
+                statement.execute("alter table sessions add column branch_name text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column parent_session_id text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column model_override text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column ndjson text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column title text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column compressed_summary text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column system_prompt_snapshot text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column last_learning_at integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
                 statement.execute("alter table sessions add column last_compression_at integer not null default 0");
             } catch (Exception ignored) {
             }

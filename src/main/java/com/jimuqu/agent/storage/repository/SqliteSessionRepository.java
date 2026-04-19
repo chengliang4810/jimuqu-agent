@@ -234,14 +234,20 @@ public class SqliteSessionRepository implements SessionRepository {
 
     @Override
     public List<SessionRecord> listRecent(int limit) throws Exception {
+        return listRecent(limit, 0);
+    }
+
+    @Override
+    public List<SessionRecord> listRecent(int limit, int offset) throws Exception {
         List<SessionRecord> results = new ArrayList<SessionRecord>();
         Connection connection = database.openConnection();
         try {
             PreparedStatement statement = connection.prepareStatement(
                     "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, created_at, updated_at " +
-                            "from sessions order by updated_at desc limit ?"
+                            "from sessions order by updated_at desc limit ? offset ?"
             );
             statement.setInt(1, limit);
+            statement.setInt(2, Math.max(0, offset));
             ResultSet resultSet = statement.executeQuery();
             try {
                 while (resultSet.next()) {
@@ -255,6 +261,46 @@ public class SqliteSessionRepository implements SessionRepository {
             connection.close();
         }
         return results;
+    }
+
+    @Override
+    public int countAll() throws Exception {
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement("select count(1) from sessions");
+            ResultSet resultSet = statement.executeQuery();
+            try {
+                return resultSet.next() ? resultSet.getInt(1) : 0;
+            } finally {
+                resultSet.close();
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
+    }
+
+    @Override
+    public void delete(String sessionId) throws Exception {
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement deleteFts = connection.prepareStatement("delete from sessions_fts where session_id = ?");
+            deleteFts.setString(1, sessionId);
+            deleteFts.executeUpdate();
+            deleteFts.close();
+
+            PreparedStatement deleteBindings = connection.prepareStatement("delete from bindings where session_id = ?");
+            deleteBindings.setString(1, sessionId);
+            deleteBindings.executeUpdate();
+            deleteBindings.close();
+
+            PreparedStatement deleteSession = connection.prepareStatement("delete from sessions where session_id = ?");
+            deleteSession.setString(1, sessionId);
+            deleteSession.executeUpdate();
+            deleteSession.close();
+        } finally {
+            connection.close();
+        }
     }
 
     @Override

@@ -64,9 +64,20 @@ import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.DefaultCheckpointService;
 import com.jimuqu.agent.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
+import com.jimuqu.agent.web.DashboardAuthFilter;
+import com.jimuqu.agent.web.DashboardAuthService;
+import com.jimuqu.agent.web.DashboardAnalyticsService;
+import com.jimuqu.agent.web.DashboardConfigService;
+import com.jimuqu.agent.web.DashboardCronService;
+import com.jimuqu.agent.web.DashboardEnvService;
+import com.jimuqu.agent.web.DashboardLogsService;
+import com.jimuqu.agent.web.DashboardSessionService;
+import com.jimuqu.agent.web.DashboardSkillsService;
+import com.jimuqu.agent.web.DashboardStatusService;
 import org.noear.solon.Solon;
 import org.noear.solon.annotation.Bean;
 import org.noear.solon.annotation.Configuration;
+import org.noear.solon.core.handle.Filter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -484,5 +495,59 @@ public class JimuquAgentConfiguration {
         DefaultCronScheduler scheduler = new DefaultCronScheduler(appConfig, cronJobRepository, conversationOrchestrator, deliveryService);
         scheduler.start();
         return scheduler;
+    }
+
+    @Bean
+    public DashboardAuthService dashboardAuthService() {
+        return new DashboardAuthService();
+    }
+
+    @Bean
+    public Filter dashboardAuthFilter(DashboardAuthService dashboardAuthService) {
+        return new DashboardAuthFilter(dashboardAuthService);
+    }
+
+    @Bean
+    public DashboardStatusService dashboardStatusService(AppConfig appConfig,
+                                                         SessionRepository sessionRepository,
+                                                         DeliveryService deliveryService) {
+        return new DashboardStatusService(appConfig, sessionRepository, deliveryService);
+    }
+
+    @Bean
+    public DashboardSessionService dashboardSessionService(SessionRepository sessionRepository) {
+        return new DashboardSessionService(sessionRepository);
+    }
+
+    @Bean
+    public DashboardAnalyticsService dashboardAnalyticsService(SessionRepository sessionRepository) {
+        return new DashboardAnalyticsService(sessionRepository);
+    }
+
+    @Bean
+    public DashboardLogsService dashboardLogsService(AppConfig appConfig) {
+        return new DashboardLogsService(appConfig);
+    }
+
+    @Bean
+    public DashboardConfigService dashboardConfigService(AppConfig appConfig) {
+        return new DashboardConfigService(appConfig);
+    }
+
+    @Bean
+    public DashboardEnvService dashboardEnvService(AppConfig appConfig) {
+        return new DashboardEnvService(appConfig);
+    }
+
+    @Bean
+    public DashboardSkillsService dashboardSkillsService(LocalSkillService localSkillService,
+                                                         SqlitePreferenceStore sqlitePreferenceStore) {
+        return new DashboardSkillsService(localSkillService, sqlitePreferenceStore);
+    }
+
+    @Bean
+    public DashboardCronService dashboardCronService(CronJobRepository cronJobRepository,
+                                                     DefaultCronScheduler defaultCronScheduler) {
+        return new DashboardCronService(cronJobRepository, defaultCronScheduler);
     }
 }

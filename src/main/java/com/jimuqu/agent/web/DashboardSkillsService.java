@@ -1,0 +1,121 @@
+package com.jimuqu.agent.web;
+
+import com.jimuqu.agent.context.LocalSkillService;
+import com.jimuqu.agent.core.model.SkillDescriptor;
+import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
+import com.jimuqu.agent.support.constants.ToolNameConstants;
+
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Dashboard 技能与工具集展示服务。
+ */
+public class DashboardSkillsService {
+    private final LocalSkillService localSkillService;
+    private final SqlitePreferenceStore preferenceStore;
+
+    public DashboardSkillsService(LocalSkillService localSkillService, SqlitePreferenceStore preferenceStore) {
+        this.localSkillService = localSkillService;
+        this.preferenceStore = preferenceStore;
+    }
+
+    public List<Map<String, Object>> getSkills() throws Exception {
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+        for (SkillDescriptor descriptor : localSkillService.listSkills(null)) {
+            Map<String, Object> item = new LinkedHashMap<String, Object>();
+            item.put("name", descriptor.canonicalName());
+            item.put("description", descriptor.getDescription());
+            item.put("category", descriptor.getCategory() == null ? "general" : descriptor.getCategory());
+            item.put("enabled", isSkillEnabled(descriptor.canonicalName()));
+            result.add(item);
+        }
+        return result;
+    }
+
+    public Map<String, Object> toggleSkill(String name, boolean enabled) throws Exception {
+        preferenceStore.setSkillEnabledGlobal(name, enabled);
+        return Collections.<String, Object>singletonMap("ok", true);
+    }
+
+    public List<Map<String, Object>> getToolsets() {
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+        result.add(toolset("code", "代码工具", "终端、文件、补丁与代码搜索能力", Arrays.asList(
+                ToolNameConstants.TERMINAL,
+                ToolNameConstants.PROCESS,
+                ToolNameConstants.READ_FILE,
+                ToolNameConstants.WRITE_FILE,
+                ToolNameConstants.PATCH,
+                ToolNameConstants.SEARCH_FILES,
+                ToolNameConstants.EXECUTE_CODE,
+                ToolNameConstants.APPROVAL,
+                ToolNameConstants.CODESEARCH
+        )));
+        result.add(toolset("agent", "代理工具", "委托与待办管理能力", Arrays.asList(
+                ToolNameConstants.DELEGATE_TASK,
+                ToolNameConstants.TODO
+        )));
+        result.add(toolset("memory", "记忆工具", "长期记忆与会话搜索能力", Arrays.asList(
+                ToolNameConstants.MEMORY,
+                ToolNameConstants.SESSION_SEARCH
+        )));
+        result.add(toolset("skills", "技能工具", "本地技能与 Skills Hub 管理能力", Arrays.asList(
+                ToolNameConstants.SKILLS_LIST,
+                ToolNameConstants.SKILL_VIEW,
+                ToolNameConstants.SKILL_MANAGE,
+                ToolNameConstants.SKILLS_HUB_SEARCH,
+                ToolNameConstants.SKILLS_HUB_INSPECT,
+                ToolNameConstants.SKILLS_HUB_INSTALL,
+                ToolNameConstants.SKILLS_HUB_LIST,
+                ToolNameConstants.SKILLS_HUB_CHECK,
+                ToolNameConstants.SKILLS_HUB_UPDATE,
+                ToolNameConstants.SKILLS_HUB_AUDIT,
+                ToolNameConstants.SKILLS_HUB_UNINSTALL,
+                ToolNameConstants.SKILLS_HUB_TAP
+        )));
+        result.add(toolset("messaging", "消息工具", "国内渠道消息投递能力", Collections.singletonList(
+                ToolNameConstants.SEND_MESSAGE
+        )));
+        result.add(toolset("automation", "自动化工具", "定时任务调度能力", Collections.singletonList(
+                ToolNameConstants.CRONJOB
+        )));
+        return result;
+    }
+
+    private Map<String, Object> toolset(String name, String label, String description, List<String> tools) {
+        boolean enabled = true;
+        for (String tool : tools) {
+            enabled = enabled && isToolEnabled(tool);
+        }
+
+        Map<String, Object> item = new LinkedHashMap<String, Object>();
+        item.put("name", name);
+        item.put("label", label);
+        item.put("description", description);
+        item.put("enabled", enabled);
+        item.put("configured", true);
+        item.put("tools", tools);
+        return item;
+    }
+
+    private boolean isSkillEnabled(String name) {
+        try {
+            return preferenceStore.isSkillEnabledGlobal(name);
+        } catch (SQLException e) {
+            return true;
+        }
+    }
+
+    private boolean isToolEnabled(String toolName) {
+        try {
+            return preferenceStore.isToolEnabledGlobal(toolName);
+        } catch (SQLException e) {
+            return true;
+        }
+    }
+}

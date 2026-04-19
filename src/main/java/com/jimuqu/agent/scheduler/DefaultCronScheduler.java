@@ -3,6 +3,7 @@ package com.jimuqu.agent.scheduler;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.core.model.CronJobRecord;
+import com.jimuqu.agent.core.model.DeliveryRequest;
 import com.jimuqu.agent.core.repository.CronJobRepository;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.model.GatewayMessage;
@@ -10,6 +11,7 @@ import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.support.CronSupport;
 import com.jimuqu.agent.support.SourceKeySupport;
+import org.noear.solon.Utils;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,7 +75,18 @@ public class DefaultCronScheduler {
         String[] parts = SourceKeySupport.split(job.getSourceKey());
         GatewayMessage synthetic = new GatewayMessage(PlatformType.fromName(parts[0]), parts[1], parts[2], job.getPrompt());
         GatewayReply reply = conversationOrchestrator.runScheduled(synthetic);
-        deliveryService.deliver(SourceKeySupport.toDeliveryRequest(job.getSourceKey(), reply.getContent()));
+        deliver(job, reply);
         cronJobRepository.markRun(job.getJobId(), now, CronSupport.nextRunAt(job.getCronExpr(), now));
+    }
+
+    private void deliver(CronJobRecord job, GatewayReply reply) throws Exception {
+        String platformName = Utils.isNotEmpty(job.getDeliverPlatform()) ? job.getDeliverPlatform() : "local";
+        if ("local".equalsIgnoreCase(platformName)) {
+            return;
+        }
+
+        PlatformType platform = PlatformType.fromName(platformName);
+        DeliveryRequest request = new DeliveryRequest(platform, job.getDeliverChatId(), null, null, null, reply.getContent());
+        deliveryService.deliver(request);
     }
 }

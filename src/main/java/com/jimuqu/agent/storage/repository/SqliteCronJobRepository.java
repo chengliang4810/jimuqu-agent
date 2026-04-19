@@ -84,6 +84,27 @@ public class SqliteCronJobRepository implements CronJobRepository {
         return jobs;
     }
 
+    @Override
+    public List<CronJobRecord> listAll() throws Exception {
+        List<CronJobRecord> jobs = new ArrayList<CronJobRecord>();
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement("select * from cron_jobs order by updated_at desc");
+            ResultSet resultSet = statement.executeQuery();
+            try {
+                while (resultSet.next()) {
+                    jobs.add(map(resultSet));
+                }
+            } finally {
+                resultSet.close();
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
+        return jobs;
+    }
+
     public List<CronJobRecord> listDue(long nowEpochMillis) throws Exception {
         List<CronJobRecord> jobs = new ArrayList<CronJobRecord>();
         Connection connection = database.openConnection();

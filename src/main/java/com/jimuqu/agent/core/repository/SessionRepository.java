@@ -54,6 +54,21 @@ public interface SessionRepository {
     List<SessionRecord> listRecent(int limit) throws Exception;
 
     /**
+     * 按更新时间分页列出最近会话。
+     */
+    List<SessionRecord> listRecent(int limit, int offset) throws Exception;
+
+    /**
+     * 返回会话总数。
+     */
+    int countAll() throws Exception;
+
+    /**
+     * 删除指定会话。
+     */
+    void delete(String sessionId) throws Exception;
+
+    /**
      * 更新会话模型覆盖配置。
      */
     void setModelOverride(String sessionId, String modelOverride) throws Exception;
