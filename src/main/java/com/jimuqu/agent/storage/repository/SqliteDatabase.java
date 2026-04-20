@@ -46,6 +46,7 @@ public class SqliteDatabase {
                     "title text," +
                     "compressed_summary text," +
                     "system_prompt_snapshot text," +
+                    "agent_snapshot_json text," +
                     "last_learning_at integer not null default 0," +
                     "last_compression_at integer not null default 0," +
                     "last_compression_input_tokens integer not null default 0," +
@@ -80,6 +81,10 @@ public class SqliteDatabase {
             }
             try {
                 statement.execute("alter table sessions add column system_prompt_snapshot text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column agent_snapshot_json text");
             } catch (Exception ignored) {
             }
             try {

@@ -57,6 +57,11 @@ public class SessionRecord {
     private String systemPromptSnapshot;
 
     /**
+     * ReAct/AgentSession 的 FlowContext 快照 JSON。
+     */
+    private String agentSnapshotJson;
+
+    /**
      * 最近一次学习闭环执行时间。
      */
     private long lastLearningAt;

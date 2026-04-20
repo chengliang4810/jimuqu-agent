@@ -4,32 +4,36 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.LlmResult;
 import com.jimuqu.agent.core.model.SessionRecord;
+import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.LlmGateway;
+import com.jimuqu.agent.storage.session.SqliteAgentSession;
 import com.jimuqu.agent.support.constants.LlmConstants;
-import lombok.RequiredArgsConstructor;
+import org.noear.solon.ai.agent.AgentSystemPrompt;
+import org.noear.solon.ai.agent.react.ReActAgent;
+import org.noear.solon.ai.agent.react.ReActResponse;
+import org.noear.solon.ai.agent.react.intercept.StopLoopInterceptor;
+import org.noear.solon.ai.agent.react.intercept.ToolRetryInterceptor;
+import org.noear.solon.ai.agent.react.intercept.ToolSanitizerInterceptor;
 import org.noear.solon.ai.chat.ChatModel;
-import org.noear.solon.ai.chat.ChatResponse;
+import org.noear.solon.ai.chat.message.ChatMessage;
 import org.noear.solon.ai.chat.message.AssistantMessage;
-import org.noear.solon.ai.chat.session.InMemoryChatSession;
+import org.noear.solon.ai.chat.prompt.Prompt;
 import org.noear.solon.ai.skills.pdf.PdfSkill;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Flux;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.function.Supplier;
 
 /**
  * SolonAiLlmGateway 实现。
  */
-@RequiredArgsConstructor
 public class SolonAiLlmGateway implements LlmGateway {
     /**
      * LLM 网关日志器。
@@ -37,7 +41,17 @@ public class SolonAiLlmGateway implements LlmGateway {
     private static final Logger log = LoggerFactory.getLogger(SolonAiLlmGateway.class);
 
     private final AppConfig appConfig;
+    private final SessionRepository sessionRepository;
     private volatile PdfSkill pdfSkill;
+
+    public SolonAiLlmGateway(AppConfig appConfig) {
+        this(appConfig, null);
+    }
+
+    public SolonAiLlmGateway(AppConfig appConfig, SessionRepository sessionRepository) {
+        this.appConfig = appConfig;
+        this.sessionRepository = sessionRepository;
+    }
 
     public LlmResult chat(SessionRecord session, String systemPrompt, String userMessage, List<Object> toolObjects) throws Exception {
         AppConfig.LlmConfig resolved = resolve(session);
@@ -48,51 +62,28 @@ public class SolonAiLlmGateway implements LlmGateway {
                 session == null ? "" : StrUtil.nullToEmpty(session.getSessionId()),
                 resolved.isStream(),
                 session != null && StrUtil.isNotBlank(session.getModelOverride()));
-        InMemoryChatSession chatSession = new InMemoryChatSession(session.getSessionId());
-        if (session.getNdjson() != null && session.getNdjson().trim().length() > 0) {
-            chatSession.loadNdjson(session.getNdjson());
+        SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
+        ChatModel chatModel = buildChatModel(resolved);
+        ReActAgent agent = buildReActAgent(chatModel, systemPrompt, toolObjects, agentSession);
+        ReActResponse response;
+        try {
+            response = agent.prompt(Prompt.of(userMessage))
+                    .session(agentSession)
+                    .options(options -> options.toolContextPut("user_message", userMessage))
+                    .call();
+        } catch (Exception e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new IllegalStateException("ReActAgent call failed", e);
         }
 
-        ChatModel.Builder builder = ChatModel.of(resolved.getApiUrl())
-                .provider(resolved.getProvider())
-                .model(resolved.getModel())
-                .timeout(Duration.ofMinutes(5))
-                .systemPrompt(systemPrompt);
-
-        if (resolved.getApiKey() != null && resolved.getApiKey().trim().length() > 0) {
-            builder.apiKey(resolved.getApiKey());
-        }
-
-        for (Object toolObject : toolObjects) {
-            builder.defaultToolAdd(toolObject);
-        }
-        builder.defaultSkillAdd(pdfSkill());
-
-        builder.modelOptions(options -> {
-            options.temperature(resolved.getTemperature());
-            options.max_tokens(resolved.getMaxTokens());
-            if (resolved.getReasoningEffort() != null && resolved.getReasoningEffort().trim().length() > 0) {
-                Map<String, Object> reasoning = new HashMap<String, Object>();
-                reasoning.put("effort", resolved.getReasoningEffort());
-                options.optionSet("reasoning", reasoning);
-            }
-        });
-
-        ChatModel chatModel = builder.build();
-        ChatResponse response = invoke(chatModel, chatSession, userMessage, resolved.isStream());
-        if (response == null) {
-            throw new IllegalStateException("模型未返回可解析响应。");
-        }
-
-        AssistantMessage assistantMessage = response.getAggregationMessage() != null
-                ? response.getAggregationMessage()
-                : response.getMessage();
+        AssistantMessage assistantMessage = response.getMessage();
 
         LlmResult result = new LlmResult();
         result.setAssistantMessage(assistantMessage);
-        result.setNdjson(chatSession.toNdjson());
+        result.setNdjson(ChatMessage.toNdjson(agentSession.getMessages()));
         result.setStreamed(resolved.isStream());
-        result.setRawResponse(stringify(response.getResponseData()));
+        result.setRawResponse(response.getContent());
         return result;
     }
 
@@ -125,39 +116,6 @@ public class SolonAiLlmGateway implements LlmGateway {
     }
 
     /**
-     * 统一执行流式或非流式调用；流式异常时退回非流式，避免主链直接中断。
-     */
-    private ChatResponse invoke(ChatModel chatModel,
-                                InMemoryChatSession chatSession,
-                                String userMessage,
-                                boolean preferStream) throws Exception {
-        if (preferStream) {
-            try {
-                ChatResponse response = Flux.from(chatModel.prompt(userMessage)
-                                .session(chatSession)
-                                .options(options -> options.toolContextPut("user_message", userMessage))
-                                .stream())
-                        .reduce((ignored, item) -> item)
-                        .block();
-                if (response != null) {
-                    return response;
-                }
-                log.warn("LLM stream returned empty response, fallback to non-stream call");
-            } catch (Exception e) {
-                if (!isRecoverableStreamFailure(e)) {
-                    throw e;
-                }
-                log.warn("LLM stream call failed, fallback to non-stream call: {}", e.getMessage());
-            }
-        }
-
-        return chatModel.prompt(userMessage)
-                .session(chatSession)
-                .options(options -> options.toolContextPut("user_message", userMessage))
-                .call();
-    }
-
-    /**
      * 校验 provider 与 URL 配置，避免隐式降级到错误协议。
      */
     private void validate(AppConfig.LlmConfig resolved) {
@@ -179,25 +137,55 @@ public class SolonAiLlmGateway implements LlmGateway {
         }
     }
 
-    /**
-     * 判断是否属于可退回非流式的协议异常。
-     */
-    private boolean isRecoverableStreamFailure(Exception e) {
-        String message = stringify(e.getMessage()).toLowerCase();
-        return message.contains("json")
-                || message.contains("decode")
-                || message.contains("content-type")
-                || message.contains("unexpected end")
-                || message.contains("connection reset")
-                || message.contains("timeout")
-                || message.contains("eof");
+    private ChatModel buildChatModel(AppConfig.LlmConfig resolved) {
+        ChatModel.Builder builder = ChatModel.of(resolved.getApiUrl())
+                .provider(resolved.getProvider())
+                .model(resolved.getModel())
+                .timeout(Duration.ofMinutes(5));
+
+        if (resolved.getApiKey() != null && resolved.getApiKey().trim().length() > 0) {
+            builder.apiKey(resolved.getApiKey());
+        }
+
+        builder.modelOptions(options -> {
+            options.temperature(resolved.getTemperature());
+            options.max_tokens(resolved.getMaxTokens());
+            if (resolved.getReasoningEffort() != null && resolved.getReasoningEffort().trim().length() > 0) {
+                options.optionSet("reasoning", java.util.Collections.<String, Object>singletonMap("effort", resolved.getReasoningEffort()));
+            }
+        });
+
+        return builder.build();
     }
 
-    /**
-     * 将底层原始响应安全转为字符串。
-     */
-    private String stringify(Object value) {
-        return value == null ? "" : String.valueOf(value);
+    private ReActAgent buildReActAgent(ChatModel chatModel,
+                                       final String systemPrompt,
+                                       List<Object> toolObjects,
+                                       SqliteAgentSession agentSession) {
+        ReActAgent.Builder builder = ReActAgent.of(chatModel)
+                .name("jimuqu_react")
+                .role("Jimuqu Agent")
+                .systemPrompt(new AgentSystemPrompt<org.noear.solon.ai.agent.react.ReActTrace>() {
+                    @Override
+                    public Locale getLocale() {
+                        return Locale.CHINESE;
+                    }
+
+                    @Override
+                    public String getSystemPrompt(org.noear.solon.ai.agent.react.ReActTrace trace) {
+                        return systemPrompt;
+                    }
+                })
+                .sessionWindowSize(Math.max(8, agentSession.getMessages().size() + 8))
+                .defaultInterceptorAdd(new ToolRetryInterceptor())
+                .defaultInterceptorAdd(new ToolSanitizerInterceptor())
+                .defaultInterceptorAdd(new StopLoopInterceptor());
+
+        for (Object toolObject : toolObjects) {
+            builder.defaultToolAdd(toolObject);
+        }
+        builder.defaultSkillAdd(pdfSkill());
+        return builder.build();
     }
 
     /**

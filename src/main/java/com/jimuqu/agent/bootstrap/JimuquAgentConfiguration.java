@@ -273,8 +273,9 @@ public class JimuquAgentConfiguration {
      * 创建大模型网关。
      */
     @Bean
-    public LlmGateway llmGateway(AppConfig appConfig) {
-        return new SolonAiLlmGateway(appConfig);
+    public LlmGateway llmGateway(AppConfig appConfig,
+                                 SessionRepository sessionRepository) {
+        return new SolonAiLlmGateway(appConfig, sessionRepository);
     }
 
     /**
