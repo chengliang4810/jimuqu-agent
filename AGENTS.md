@@ -15,6 +15,7 @@
 - AI 能力接入、Agent 编排、模型协议封装优先使用 Solon AI。
 - 通用工具优先使用 Hutool。
 - JSON 序列化与反序列化统一优先使用 `org.noear:snack4`。
+- 若 Solon / Solon AI 官方已提供对应模块、skill、dialect、plugin 或适配实现，必须优先直接采用；只有官方能力明确缺失且无法满足目标行为时，才允许自研补充。
 
 ### 2. 依赖选型原则
 

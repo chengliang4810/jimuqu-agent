@@ -16,6 +16,10 @@ import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.support.constants.ToolNameConstants;
 import lombok.RequiredArgsConstructor;
+import org.noear.solon.ai.skills.sys.NodejsSkill;
+import org.noear.solon.ai.skills.sys.PythonSkill;
+import org.noear.solon.ai.skills.sys.ShellSkill;
+import org.noear.solon.ai.skills.sys.SystemClockSkill;
 import org.noear.solon.ai.skills.web.CodeSearchTool;
 import org.noear.solon.ai.skills.web.WebfetchTool;
 import org.noear.solon.ai.skills.web.WebsearchTool;
@@ -34,13 +38,16 @@ public class DefaultToolRegistry implements ToolRegistry {
      * 默认内置工具清单。
      */
     private static final List<String> TOOL_NAMES = Arrays.asList(
-            ToolNameConstants.TERMINAL,
-            ToolNameConstants.PROCESS,
             ToolNameConstants.READ_FILE,
             ToolNameConstants.WRITE_FILE,
             ToolNameConstants.PATCH,
             ToolNameConstants.SEARCH_FILES,
-            ToolNameConstants.EXECUTE_CODE,
+            ToolNameConstants.EXISTS_CMD,
+            ToolNameConstants.LIST_FILES,
+            ToolNameConstants.EXECUTE_SHELL,
+            ToolNameConstants.EXECUTE_PYTHON,
+            ToolNameConstants.EXECUTE_JS,
+            ToolNameConstants.GET_CURRENT_TIME,
             ToolNameConstants.DELEGATE_TASK,
             ToolNameConstants.TODO,
             ToolNameConstants.MEMORY,
@@ -59,7 +66,6 @@ public class DefaultToolRegistry implements ToolRegistry {
             ToolNameConstants.SKILLS_HUB_TAP,
             ToolNameConstants.SEND_MESSAGE,
             ToolNameConstants.CRONJOB,
-            ToolNameConstants.APPROVAL,
             ToolNameConstants.CONFIG_GET,
             ToolNameConstants.CONFIG_SET,
             ToolNameConstants.CONFIG_SET_SECRET,
@@ -92,11 +98,6 @@ public class DefaultToolRegistry implements ToolRegistry {
      * 渠道投递服务。
      */
     private final DeliveryService deliveryService;
-
-    /**
-     * 进程注册表。
-     */
-    private final ProcessRegistry processRegistry;
 
     /**
      * 长期记忆服务。
@@ -148,7 +149,6 @@ public class DefaultToolRegistry implements ToolRegistry {
         List<Object> tools = new ArrayList<Object>();
 
         FileTools fileTools = new FileTools(checkpointService, sessionRepository, sourceKey);
-        ShellTools shellTools = new ShellTools(processRegistry);
         TodoTools todoTools = new TodoTools(appConfig, sourceKey);
         MemoryTools memoryTools = new MemoryTools(memoryService);
         SessionSearchTools sessionSearchTools = new SessionSearchTools(sessionSearchService, sourceKey);
@@ -158,9 +158,18 @@ public class DefaultToolRegistry implements ToolRegistry {
         CronjobTools cronjobTools = new CronjobTools(cronJobRepository, sourceKey);
         DelegateTools delegateTools = new DelegateTools(delegationService, sourceKey);
         ConfigTools configTools = new ConfigTools(runtimeSettingsService);
+        String sysWorkDir = appConfig.getRuntime().getHome();
+        ShellSkill shellSkill = new ShellSkill(sysWorkDir);
+        PythonSkill pythonSkill = new PythonSkill(sysWorkDir);
+        NodejsSkill nodejsSkill = new NodejsSkill(sysWorkDir);
+        SystemClockSkill systemClockSkill = new SystemClockSkill();
         WebsearchTool websearchTool = WebsearchTool.getInstance();
         WebfetchTool webfetchTool = WebfetchTool.getInstance();
         CodeSearchTool codeSearchTool = CodeSearchTool.getInstance();
+        boolean shellSkillAdded = false;
+        boolean pythonSkillAdded = false;
+        boolean nodejsSkillAdded = false;
+        boolean clockSkillAdded = false;
 
         for (String toolName : TOOL_NAMES) {
             if (!isEnabled(sourceKey, toolName)) {
@@ -175,14 +184,28 @@ public class DefaultToolRegistry implements ToolRegistry {
                 tools.add(new FileTools.PatchTool(fileTools));
             } else if (ToolNameConstants.SEARCH_FILES.equals(toolName)) {
                 tools.add(new FileTools.SearchFilesTool(fileTools));
-            } else if (ToolNameConstants.TERMINAL.equals(toolName)) {
-                tools.add(new ShellTools.TerminalTool(shellTools));
-            } else if (ToolNameConstants.PROCESS.equals(toolName)) {
-                tools.add(new ShellTools.ProcessTool(shellTools));
-            } else if (ToolNameConstants.EXECUTE_CODE.equals(toolName)) {
-                tools.add(new ShellTools.ExecuteCodeTool(shellTools));
-            } else if (ToolNameConstants.APPROVAL.equals(toolName)) {
-                tools.add(new ShellTools.ApprovalTool(shellTools));
+            } else if (ToolNameConstants.EXISTS_CMD.equals(toolName)
+                    || ToolNameConstants.LIST_FILES.equals(toolName)
+                    || ToolNameConstants.EXECUTE_SHELL.equals(toolName)) {
+                if (!shellSkillAdded) {
+                    tools.add(shellSkill);
+                    shellSkillAdded = true;
+                }
+            } else if (ToolNameConstants.EXECUTE_PYTHON.equals(toolName)) {
+                if (!pythonSkillAdded) {
+                    tools.add(pythonSkill);
+                    pythonSkillAdded = true;
+                }
+            } else if (ToolNameConstants.EXECUTE_JS.equals(toolName)) {
+                if (!nodejsSkillAdded) {
+                    tools.add(nodejsSkill);
+                    nodejsSkillAdded = true;
+                }
+            } else if (ToolNameConstants.GET_CURRENT_TIME.equals(toolName)) {
+                if (!clockSkillAdded) {
+                    tools.add(systemClockSkill);
+                    clockSkillAdded = true;
+                }
             } else if (ToolNameConstants.CONFIG_GET.equals(toolName)
                     || ToolNameConstants.CONFIG_SET.equals(toolName)
                     || ToolNameConstants.CONFIG_SET_SECRET.equals(toolName)) {

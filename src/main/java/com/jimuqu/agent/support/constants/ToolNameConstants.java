@@ -4,13 +4,16 @@ package com.jimuqu.agent.support.constants;
  * 工具名称常量。
  */
 public interface ToolNameConstants {
-    String TERMINAL = "terminal";
-    String PROCESS = "process";
     String READ_FILE = "read_file";
     String WRITE_FILE = "write_file";
     String PATCH = "patch";
     String SEARCH_FILES = "search_files";
-    String EXECUTE_CODE = "execute_code";
+    String EXISTS_CMD = "exists_cmd";
+    String LIST_FILES = "list_files";
+    String EXECUTE_SHELL = "execute_shell";
+    String EXECUTE_PYTHON = "execute_python";
+    String EXECUTE_JS = "execute_js";
+    String GET_CURRENT_TIME = "get_current_time";
     String DELEGATE_TASK = "delegate_task";
     String TODO = "todo";
     String MEMORY = "memory";
@@ -29,7 +32,6 @@ public interface ToolNameConstants {
     String SKILLS_HUB_TAP = "skills_hub_tap";
     String SEND_MESSAGE = "send_message";
     String CRONJOB = "cronjob";
-    String APPROVAL = "approval";
     String CONFIG_GET = "config_get";
     String CONFIG_SET = "config_set";
     String CONFIG_SET_SECRET = "config_set_secret";

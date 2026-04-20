@@ -16,6 +16,7 @@ public class ToolRegistryExposureTest {
 
         assertThat(names).contains(
                 "codesearch", "websearch", "webfetch",
+                "exists_cmd", "list_files", "execute_shell", "execute_python", "execute_js", "get_current_time",
                 "skills_list", "skill_view", "skill_manage",
                 "skills_hub_search", "skills_hub_install", "skills_hub_tap"
         );
@@ -25,6 +26,10 @@ public class ToolRegistryExposureTest {
         assertThat(joined).contains("CodeSearchTool");
         assertThat(joined).contains("WebsearchTool");
         assertThat(joined).contains("WebfetchTool");
+        assertThat(joined).contains("ShellSkill");
+        assertThat(joined).contains("PythonSkill");
+        assertThat(joined).contains("NodejsSkill");
+        assertThat(joined).contains("SystemClockSkill");
         assertThat(joined).contains("SkillsListTool");
     }
 

@@ -47,22 +47,25 @@ public class DefaultDelegationService implements DelegationService {
             ToolNameConstants.DELEGATE_TASK,
             ToolNameConstants.MEMORY,
             ToolNameConstants.SEND_MESSAGE,
-            ToolNameConstants.APPROVAL,
             ToolNameConstants.CRONJOB,
-            ToolNameConstants.EXECUTE_CODE
+            ToolNameConstants.EXECUTE_PYTHON,
+            ToolNameConstants.EXECUTE_JS
     );
 
     /**
      * 当前系统已知工具清单。
      */
     private static final List<String> ALL_TOOLS = Arrays.asList(
-            ToolNameConstants.TERMINAL,
-            ToolNameConstants.PROCESS,
             ToolNameConstants.READ_FILE,
             ToolNameConstants.WRITE_FILE,
             ToolNameConstants.PATCH,
             ToolNameConstants.SEARCH_FILES,
-            ToolNameConstants.EXECUTE_CODE,
+            ToolNameConstants.EXISTS_CMD,
+            ToolNameConstants.LIST_FILES,
+            ToolNameConstants.EXECUTE_SHELL,
+            ToolNameConstants.EXECUTE_PYTHON,
+            ToolNameConstants.EXECUTE_JS,
+            ToolNameConstants.GET_CURRENT_TIME,
             ToolNameConstants.DELEGATE_TASK,
             ToolNameConstants.TODO,
             ToolNameConstants.MEMORY,
@@ -72,7 +75,6 @@ public class DefaultDelegationService implements DelegationService {
             ToolNameConstants.SKILL_MANAGE,
             ToolNameConstants.SEND_MESSAGE,
             ToolNameConstants.CRONJOB,
-            ToolNameConstants.APPROVAL,
             ToolNameConstants.CODESEARCH,
             ToolNameConstants.WEBSEARCH,
             ToolNameConstants.WEBFETCH

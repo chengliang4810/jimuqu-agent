@@ -155,7 +155,7 @@ public class TestEnvironment {
         SessionSearchService sessionSearchService = new DefaultSessionSearchService(sessionRepository, llmGateway);
         GitHubSkillSource gitHubSkillSource = new GitHubSkillSource(gitHubAuth, skillHubHttpClient, skillHubStateStore);
         SkillHubService skillHubService = new DefaultSkillHubService(new File(System.getProperty("user.dir")), new File(config.getRuntime().getSkillsDir()), skillImportService, skillGuardService, skillHubStateStore, skillHubHttpClient, gitHubAuth, gitHubSkillSource);
-        ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, processRegistry, memoryService, sessionSearchService, localSkillService, skillHubService, checkpointService, delegationService, attachmentCacheService, runtimeSettingsService);
+        ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, memoryService, sessionSearchService, localSkillService, skillHubService, checkpointService, delegationService, attachmentCacheService, runtimeSettingsService);
         ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, runtimeSettingsService);
         holder.set(orchestrator);
         SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService);

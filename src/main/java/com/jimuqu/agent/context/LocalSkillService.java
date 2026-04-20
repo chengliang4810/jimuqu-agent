@@ -688,7 +688,14 @@ public class LocalSkillService implements SkillCatalogService {
             return java.util.Arrays.asList(ToolNameConstants.WEBSEARCH, ToolNameConstants.WEBFETCH, ToolNameConstants.CODESEARCH);
         }
         if ("terminal".equalsIgnoreCase(toolset)) {
-            return java.util.Arrays.asList(ToolNameConstants.TERMINAL, ToolNameConstants.PROCESS, ToolNameConstants.EXECUTE_CODE);
+            return java.util.Arrays.asList(
+                    ToolNameConstants.EXISTS_CMD,
+                    ToolNameConstants.LIST_FILES,
+                    ToolNameConstants.EXECUTE_SHELL,
+                    ToolNameConstants.EXECUTE_PYTHON,
+                    ToolNameConstants.EXECUTE_JS,
+                    ToolNameConstants.GET_CURRENT_TIME
+            );
         }
         if ("skills".equalsIgnoreCase(toolset)) {
             return java.util.Arrays.asList(ToolNameConstants.SKILLS_LIST, ToolNameConstants.SKILL_VIEW, ToolNameConstants.SKILL_MANAGE);
@@ -709,7 +716,7 @@ public class LocalSkillService implements SkillCatalogService {
             return java.util.Collections.singletonList(ToolNameConstants.TODO);
         }
         if ("approval".equalsIgnoreCase(toolset)) {
-            return java.util.Collections.singletonList(ToolNameConstants.APPROVAL);
+            return java.util.Collections.emptyList();
         }
         if ("config".equalsIgnoreCase(toolset)) {
             return java.util.Arrays.asList(
