@@ -11,14 +11,20 @@ import org.noear.solon.ai.chat.ChatModel;
 import org.noear.solon.ai.chat.ChatResponse;
 import org.noear.solon.ai.chat.message.AssistantMessage;
 import org.noear.solon.ai.chat.session.InMemoryChatSession;
+import org.noear.solon.ai.skills.pdf.PdfSkill;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * SolonAiLlmGateway 实现。
@@ -31,6 +37,7 @@ public class SolonAiLlmGateway implements LlmGateway {
     private static final Logger log = LoggerFactory.getLogger(SolonAiLlmGateway.class);
 
     private final AppConfig appConfig;
+    private volatile PdfSkill pdfSkill;
 
     public LlmResult chat(SessionRecord session, String systemPrompt, String userMessage, List<Object> toolObjects) throws Exception {
         AppConfig.LlmConfig resolved = resolve(session);
@@ -53,6 +60,7 @@ public class SolonAiLlmGateway implements LlmGateway {
         for (Object toolObject : toolObjects) {
             builder.defaultToolAdd(toolObject);
         }
+        builder.defaultSkillAdd(pdfSkill());
 
         builder.modelOptions(options -> {
             options.temperature(resolved.getTemperature());
@@ -184,5 +192,73 @@ public class SolonAiLlmGateway implements LlmGateway {
      */
     private String stringify(Object value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    /**
+     * 懒加载 PDF 技能，统一复用 runtime/cache/pdf 目录。
+     */
+    PdfSkill pdfSkill() {
+        if (pdfSkill == null) {
+            synchronized (this) {
+                if (pdfSkill == null) {
+                    pdfSkill = buildPdfSkill();
+                }
+            }
+        }
+        return pdfSkill;
+    }
+
+    private PdfSkill buildPdfSkill() {
+        File pdfWorkDir = new File(appConfig.getRuntime().getCacheDir(), "pdf");
+        if (!pdfWorkDir.exists() && !pdfWorkDir.mkdirs()) {
+            log.warn("Failed to create pdf work directory: {}", pdfWorkDir.getAbsolutePath());
+        }
+
+        final File fontFile = resolvePdfFontFile();
+        if (fontFile != null) {
+            log.info("PDF skill font detected: {}", fontFile.getAbsolutePath());
+            return new PdfSkill(pdfWorkDir.getAbsolutePath(), new Supplier<InputStream>() {
+                @Override
+                public InputStream get() {
+                    try {
+                        return new FileInputStream(fontFile);
+                    } catch (Exception e) {
+                        log.warn("Failed to open PDF font file: {}", fontFile.getAbsolutePath(), e);
+                        return null;
+                    }
+                }
+            });
+        }
+
+        log.warn("No PDF font detected, PDF generation will use default font fallback");
+        return new PdfSkill(pdfWorkDir.getAbsolutePath());
+    }
+
+    private File resolvePdfFontFile() {
+        String override = System.getenv("JIMUQU_PDF_FONT_PATH");
+        if (StrUtil.isNotBlank(override)) {
+            File file = new File(override.trim());
+            if (file.isFile()) {
+                return file;
+            }
+            log.warn("Configured PDF font path not found: {}", file.getAbsolutePath());
+        }
+
+        List<String> candidates = Arrays.asList(
+                "C:\\Windows\\Fonts\\msyh.ttf",
+                "C:\\Windows\\Fonts\\simhei.ttf",
+                "/Library/Fonts/Arial Unicode.ttf",
+                "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttf",
+                "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttf"
+        );
+
+        for (String path : candidates) {
+            File file = new File(path);
+            if (file.isFile()) {
+                return file;
+            }
+        }
+
+        return null;
     }
 }

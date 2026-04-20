@@ -13,10 +13,10 @@ import com.jimuqu.agent.core.service.SkillHubService;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.support.constants.ToolNameConstants;
-import com.jimuqu.agent.tool.builtin.CodeSearchTool;
-import com.jimuqu.agent.tool.builtin.WebfetchTool;
-import com.jimuqu.agent.tool.builtin.WebsearchTool;
 import lombok.RequiredArgsConstructor;
+import org.noear.solon.ai.skills.web.CodeSearchTool;
+import org.noear.solon.ai.skills.web.WebfetchTool;
+import org.noear.solon.ai.skills.web.WebsearchTool;
 
 import java.sql.SQLException;
 import java.util.ArrayList;

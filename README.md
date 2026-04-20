@@ -53,6 +53,13 @@
 - `websearch`
 - `webfetch`
 
+当前默认接入的官方 Solon AI skills：
+
+- `solon-ai-skill-web`
+  提供 `codesearch`、`websearch`、`webfetch`
+- `solon-ai-skill-pdf`
+  提供 `pdf_create`、`pdf_parse`
+
 ## 技术基线
 
 - JDK 8
@@ -60,6 +67,7 @@
 - 启动类：`com.jimuqu.agent.JimuquAgentApp`
 - 包名：`com.jimuqu.agent`
 - JSON：`org.noear:snack4`
+- 官方 skills：`org.noear:solon-ai-skill-web`、`org.noear:solon-ai-skill-pdf`
 - 模型协议：`openai`、`openai-responses`、`ollama`、`gemini`、`anthropic`
 - 数据对象与配置对象已引入 Lombok，优先使用 `@Getter`、`@Setter`、`@NoArgsConstructor`
 
@@ -103,8 +111,6 @@
   通用辅助类
 - `src/main/java/com/jimuqu/agent/support/constants`
   常量定义
-- `src/main/java/com/jimuqu/agent/tool/builtin`
-  内置搜索工具适配
 - `src/main/java/com/jimuqu/agent/tool/runtime`
   工具注册与运行时工具实现
 - `codex-skills/`
@@ -116,6 +122,10 @@
 - `runtime/context/`
 - `runtime/skills/`
 - `runtime/cache/`
+
+其中 PDF 技能默认使用：
+
+- `runtime/cache/pdf/`
 
 ## 构建与运行
 
@@ -167,6 +177,13 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 - `jimuqu.learning.toolCallThreshold`
 - `jimuqu.rollback.enabled`
 - `jimuqu.rollback.maxCheckpointsPerSource`
+
+官方 skill 接入说明：
+
+- Web 搜索与抓取能力改为直接使用官方 `solon-ai-skill-web`
+- PDF 生成与解析能力改为直接使用官方 `solon-ai-skill-pdf`
+- PDF 默认输出目录为 `runtime/cache/pdf/`
+- 若部署环境缺少中文字体，可选设置 `JIMUQU_PDF_FONT_PATH` 指向可用的 `ttf/otf` 字体文件
 
 ## 钉钉配置
 
@@ -262,6 +279,7 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 - cron 基础能力
 - 钉钉真实渠道打通
 - Solon 内置 `codesearch` / `websearch` / `webfetch` 工具接入
+- Solon 内置 `PdfSkill` 接入，支持 `pdf_create` / `pdf_parse`
 
 未做或未完全做：
 
