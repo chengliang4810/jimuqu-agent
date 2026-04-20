@@ -20,6 +20,9 @@ public class DashboardEnvService {
     public DashboardEnvService(AppConfig appConfig) {
         this.envResolver = RuntimeEnvResolver.initialize(appConfig.getRuntime().getHome());
         this.definitions = Arrays.asList(
+                new EnvVarDefinition("JIMUQU_LLM_PROVIDER", "默认模型 provider 覆盖", "provider", false, false, null, Arrays.asList("llm")),
+                new EnvVarDefinition("JIMUQU_LLM_API_URL", "默认模型 API 地址覆盖", "provider", false, false, null, Arrays.asList("llm")),
+                new EnvVarDefinition("JIMUQU_LLM_MODEL", "默认模型名覆盖", "provider", false, false, null, Arrays.asList("llm")),
                 new EnvVarDefinition("JIMUQU_LLM_API_KEY", "默认模型 API 密钥", "provider", true, false, null, Arrays.asList("llm")),
                 new EnvVarDefinition("JIMUQU_FEISHU_APP_ID", "飞书应用 ID", "messaging", false, false, null, Arrays.asList("feishu")),
                 new EnvVarDefinition("JIMUQU_FEISHU_APP_SECRET", "飞书应用密钥", "messaging", true, false, null, Arrays.asList("feishu")),

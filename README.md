@@ -161,6 +161,14 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 
 ## Docker 部署
 
+建议先复制环境变量样例文件：
+
+```bash
+cp .env.example .env
+```
+
+然后修改 `.env` 中的必填项；如果使用微信且没有现成 `accountId/token`，可以先留空，启动后在 dashboard 中扫码登录。
+
 当前推荐直接使用 GitHub Packages 镜像：
 
 - `ghcr.io/chengliang4810/jimuqu-agent:latest`

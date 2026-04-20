@@ -9,6 +9,7 @@ import com.jimuqu.agent.support.constants.RuntimePathConstants;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.noear.snack4.ONode;
 import org.noear.solon.core.Props;
 import org.yaml.snakeyaml.Yaml;
 
@@ -88,27 +89,27 @@ public class AppConfig {
         Map<String, Object> overrides = loadFlatOverrides(runtimeHome);
         RuntimeEnvResolver envResolver = RuntimeEnvResolver.initialize(runtimeHome.getAbsolutePath());
 
-        config.getRuntime().setHome(readString(props, overrides, "jimuqu.runtime.home", RuntimePathConstants.RUNTIME_HOME));
+        config.getRuntime().setHome(resolveEnvString("JIMUQU_RUNTIME_HOME", readString(props, overrides, "jimuqu.runtime.home", RuntimePathConstants.RUNTIME_HOME)));
         config.getRuntime().setContextDir(resolveRuntimePath(
-                readString(props, overrides, "jimuqu.runtime.contextDir", RuntimePathConstants.CONTEXT_DIR),
+                resolveEnvString("JIMUQU_RUNTIME_CONTEXT_DIR", readString(props, overrides, "jimuqu.runtime.contextDir", RuntimePathConstants.CONTEXT_DIR)),
                 config.getRuntime().getHome(),
                 RuntimePathConstants.CONTEXT_DIR,
                 "context"
         ));
         config.getRuntime().setSkillsDir(resolveRuntimePath(
-                readString(props, overrides, "jimuqu.runtime.skillsDir", RuntimePathConstants.SKILLS_DIR),
+                resolveEnvString("JIMUQU_RUNTIME_SKILLS_DIR", readString(props, overrides, "jimuqu.runtime.skillsDir", RuntimePathConstants.SKILLS_DIR)),
                 config.getRuntime().getHome(),
                 RuntimePathConstants.SKILLS_DIR,
                 "skills"
         ));
         config.getRuntime().setCacheDir(resolveRuntimePath(
-                readString(props, overrides, "jimuqu.runtime.cacheDir", RuntimePathConstants.CACHE_DIR),
+                resolveEnvString("JIMUQU_RUNTIME_CACHE_DIR", readString(props, overrides, "jimuqu.runtime.cacheDir", RuntimePathConstants.CACHE_DIR)),
                 config.getRuntime().getHome(),
                 RuntimePathConstants.CACHE_DIR,
                 "cache"
         ));
         config.getRuntime().setStateDb(resolveRuntimePath(
-                readString(props, overrides, "jimuqu.runtime.stateDb", RuntimePathConstants.STATE_DB),
+                resolveEnvString("JIMUQU_RUNTIME_STATE_DB", readString(props, overrides, "jimuqu.runtime.stateDb", RuntimePathConstants.STATE_DB)),
                 config.getRuntime().getHome(),
                 RuntimePathConstants.STATE_DB,
                 "state.db"
@@ -117,30 +118,30 @@ public class AppConfig {
         config.getRuntime().setEnvFile(envResolver.envFile().getPath());
         config.getRuntime().setLogsDir(new File(runtimeHome, "logs").getPath());
 
-        config.getLlm().setProvider(readString(props, overrides, "jimuqu.llm.provider", RuntimePathConstants.DEFAULT_LLM_PROVIDER));
-        config.getLlm().setApiUrl(readString(props, overrides, "jimuqu.llm.apiUrl", RuntimePathConstants.DEFAULT_LLM_API_URL));
+        config.getLlm().setProvider(resolveEnvString("JIMUQU_LLM_PROVIDER", readString(props, overrides, "jimuqu.llm.provider", RuntimePathConstants.DEFAULT_LLM_PROVIDER)));
+        config.getLlm().setApiUrl(resolveEnvString("JIMUQU_LLM_API_URL", readString(props, overrides, "jimuqu.llm.apiUrl", RuntimePathConstants.DEFAULT_LLM_API_URL)));
         config.getLlm().setApiKey(resolveSecret("JIMUQU_LLM_API_KEY", props.get("jimuqu.llm.apiKey", "")));
-        config.getLlm().setModel(readString(props, overrides, "jimuqu.llm.model", RuntimePathConstants.DEFAULT_LLM_MODEL));
-        config.getLlm().setStream(readBoolean(props, overrides, "jimuqu.llm.stream", false));
-        config.getLlm().setReasoningEffort(readString(props, overrides, "jimuqu.llm.reasoningEffort", RuntimePathConstants.DEFAULT_REASONING_EFFORT));
-        config.getLlm().setTemperature(readDouble(props, overrides, "jimuqu.llm.temperature", RuntimePathConstants.DEFAULT_TEMPERATURE));
-        config.getLlm().setMaxTokens(readInt(props, overrides, "jimuqu.llm.maxTokens", RuntimePathConstants.DEFAULT_MAX_TOKENS));
-        config.getLlm().setContextWindowTokens(readInt(props, overrides, "jimuqu.llm.contextWindowTokens", RuntimePathConstants.DEFAULT_CONTEXT_WINDOW_TOKENS));
+        config.getLlm().setModel(resolveEnvString("JIMUQU_LLM_MODEL", readString(props, overrides, "jimuqu.llm.model", RuntimePathConstants.DEFAULT_LLM_MODEL)));
+        config.getLlm().setStream(resolveBoolean("JIMUQU_LLM_STREAM", readBoolean(props, overrides, "jimuqu.llm.stream", false)));
+        config.getLlm().setReasoningEffort(resolveEnvString("JIMUQU_LLM_REASONING_EFFORT", readString(props, overrides, "jimuqu.llm.reasoningEffort", RuntimePathConstants.DEFAULT_REASONING_EFFORT)));
+        config.getLlm().setTemperature(resolveDouble("JIMUQU_LLM_TEMPERATURE", readDouble(props, overrides, "jimuqu.llm.temperature", RuntimePathConstants.DEFAULT_TEMPERATURE)));
+        config.getLlm().setMaxTokens(resolveInt("JIMUQU_LLM_MAX_TOKENS", readInt(props, overrides, "jimuqu.llm.maxTokens", RuntimePathConstants.DEFAULT_MAX_TOKENS)));
+        config.getLlm().setContextWindowTokens(resolveInt("JIMUQU_LLM_CONTEXT_WINDOW_TOKENS", readInt(props, overrides, "jimuqu.llm.contextWindowTokens", RuntimePathConstants.DEFAULT_CONTEXT_WINDOW_TOKENS)));
 
-        config.getScheduler().setEnabled(readBoolean(props, overrides, "jimuqu.scheduler.enabled", true));
-        config.getScheduler().setTickSeconds(readInt(props, overrides, "jimuqu.scheduler.tickSeconds", RuntimePathConstants.DEFAULT_SCHEDULER_TICK_SECONDS));
+        config.getScheduler().setEnabled(resolveBoolean("JIMUQU_SCHEDULER_ENABLED", readBoolean(props, overrides, "jimuqu.scheduler.enabled", true)));
+        config.getScheduler().setTickSeconds(resolveInt("JIMUQU_SCHEDULER_TICK_SECONDS", readInt(props, overrides, "jimuqu.scheduler.tickSeconds", RuntimePathConstants.DEFAULT_SCHEDULER_TICK_SECONDS)));
 
-        config.getCompression().setEnabled(readBoolean(props, overrides, "jimuqu.compression.enabled", true));
-        config.getCompression().setThresholdPercent(readDouble(props, overrides, "jimuqu.compression.thresholdPercent", CompressionConstants.DEFAULT_THRESHOLD_PERCENT));
-        config.getCompression().setSummaryModel(readString(props, overrides, "jimuqu.compression.summaryModel", ""));
-        config.getCompression().setProtectHeadMessages(readInt(props, overrides, "jimuqu.compression.protectHeadMessages", CompressionConstants.DEFAULT_PROTECT_HEAD_MESSAGES));
-        config.getCompression().setTailRatio(readDouble(props, overrides, "jimuqu.compression.tailRatio", CompressionConstants.DEFAULT_TAIL_RATIO));
+        config.getCompression().setEnabled(resolveBoolean("JIMUQU_COMPRESSION_ENABLED", readBoolean(props, overrides, "jimuqu.compression.enabled", true)));
+        config.getCompression().setThresholdPercent(resolveDouble("JIMUQU_COMPRESSION_THRESHOLD_PERCENT", readDouble(props, overrides, "jimuqu.compression.thresholdPercent", CompressionConstants.DEFAULT_THRESHOLD_PERCENT)));
+        config.getCompression().setSummaryModel(resolveEnvString("JIMUQU_COMPRESSION_SUMMARY_MODEL", readString(props, overrides, "jimuqu.compression.summaryModel", "")));
+        config.getCompression().setProtectHeadMessages(resolveInt("JIMUQU_COMPRESSION_PROTECT_HEAD_MESSAGES", readInt(props, overrides, "jimuqu.compression.protectHeadMessages", CompressionConstants.DEFAULT_PROTECT_HEAD_MESSAGES)));
+        config.getCompression().setTailRatio(resolveDouble("JIMUQU_COMPRESSION_TAIL_RATIO", readDouble(props, overrides, "jimuqu.compression.tailRatio", CompressionConstants.DEFAULT_TAIL_RATIO)));
 
-        config.getLearning().setEnabled(readBoolean(props, overrides, "jimuqu.learning.enabled", true));
-        config.getLearning().setToolCallThreshold(readInt(props, overrides, "jimuqu.learning.toolCallThreshold", 5));
+        config.getLearning().setEnabled(resolveBoolean("JIMUQU_LEARNING_ENABLED", readBoolean(props, overrides, "jimuqu.learning.enabled", true)));
+        config.getLearning().setToolCallThreshold(resolveInt("JIMUQU_LEARNING_TOOL_CALL_THRESHOLD", readInt(props, overrides, "jimuqu.learning.toolCallThreshold", 5)));
 
-        config.getRollback().setEnabled(readBoolean(props, overrides, "jimuqu.rollback.enabled", true));
-        config.getRollback().setMaxCheckpointsPerSource(readInt(props, overrides, "jimuqu.rollback.maxCheckpointsPerSource", CheckpointConstants.DEFAULT_MAX_CHECKPOINTS_PER_SOURCE));
+        config.getRollback().setEnabled(resolveBoolean("JIMUQU_ROLLBACK_ENABLED", readBoolean(props, overrides, "jimuqu.rollback.enabled", true)));
+        config.getRollback().setMaxCheckpointsPerSource(resolveInt("JIMUQU_ROLLBACK_MAX_CHECKPOINTS_PER_SOURCE", readInt(props, overrides, "jimuqu.rollback.maxCheckpointsPerSource", CheckpointConstants.DEFAULT_MAX_CHECKPOINTS_PER_SOURCE)));
 
         applyChannelConfig(
                 config.getChannels().getFeishu(),
@@ -156,13 +157,13 @@ public class AppConfig {
                 GatewayBehaviorConstants.GROUP_POLICY_ALLOWLIST,
                 "JIMUQU_FEISHU_GROUP_ALLOWED_USERS"
         );
-        config.getChannels().getFeishu().setEnabled(readBoolean(props, overrides, "jimuqu.channels.feishu.enabled", false));
+        config.getChannels().getFeishu().setEnabled(resolveBoolean("JIMUQU_FEISHU_ENABLED", readBoolean(props, overrides, "jimuqu.channels.feishu.enabled", false)));
         config.getChannels().getFeishu().setAppId(resolveSecret("JIMUQU_FEISHU_APP_ID", props.get("jimuqu.channels.feishu.appId", "")));
         config.getChannels().getFeishu().setAppSecret(resolveSecret("JIMUQU_FEISHU_APP_SECRET", props.get("jimuqu.channels.feishu.appSecret", "")));
-        config.getChannels().getFeishu().setWebsocketUrl(readString(props, overrides, "jimuqu.channels.feishu.websocketUrl", ""));
+        config.getChannels().getFeishu().setWebsocketUrl(resolveEnvString("JIMUQU_FEISHU_WEBSOCKET_URL", readString(props, overrides, "jimuqu.channels.feishu.websocketUrl", "")));
         config.getChannels().getFeishu().setBotOpenId(resolveSecret("JIMUQU_FEISHU_BOT_OPEN_ID", props.get("jimuqu.channels.feishu.botOpenId", "")));
         config.getChannels().getFeishu().setBotUserId(resolveSecret("JIMUQU_FEISHU_BOT_USER_ID", props.get("jimuqu.channels.feishu.botUserId", "")));
-        config.getChannels().getFeishu().setBotName(readString(props, overrides, "jimuqu.channels.feishu.botName", ""));
+        config.getChannels().getFeishu().setBotName(resolveEnvString("JIMUQU_FEISHU_BOT_NAME", readString(props, overrides, "jimuqu.channels.feishu.botName", "")));
 
         applyChannelConfig(
                 config.getChannels().getDingtalk(),
@@ -182,8 +183,8 @@ public class AppConfig {
         config.getChannels().getDingtalk().setClientId(resolveSecret("JIMUQU_DINGTALK_CLIENT_ID", props.get("jimuqu.channels.dingtalk.clientId", "")));
         config.getChannels().getDingtalk().setClientSecret(resolveSecret("JIMUQU_DINGTALK_CLIENT_SECRET", props.get("jimuqu.channels.dingtalk.clientSecret", "")));
         config.getChannels().getDingtalk().setRobotCode(resolveSecret("JIMUQU_DINGTALK_ROBOT_CODE", props.get("jimuqu.channels.dingtalk.robotCode", "")));
-        config.getChannels().getDingtalk().setCoolAppCode(readString(props, overrides, "jimuqu.channels.dingtalk.coolAppCode", ""));
-        config.getChannels().getDingtalk().setStreamUrl(readString(props, overrides, "jimuqu.channels.dingtalk.streamUrl", ""));
+        config.getChannels().getDingtalk().setCoolAppCode(resolveEnvString("JIMUQU_DINGTALK_COOL_APP_CODE", readString(props, overrides, "jimuqu.channels.dingtalk.coolAppCode", "")));
+        config.getChannels().getDingtalk().setStreamUrl(resolveEnvString("JIMUQU_DINGTALK_STREAM_URL", readString(props, overrides, "jimuqu.channels.dingtalk.streamUrl", "")));
 
         applyChannelConfig(
                 config.getChannels().getWecom(),
@@ -199,12 +200,12 @@ public class AppConfig {
                 GatewayBehaviorConstants.GROUP_POLICY_OPEN,
                 "JIMUQU_WECOM_GROUP_ALLOWED_USERS"
         );
-        config.getChannels().getWecom().setEnabled(readBoolean(props, overrides, "jimuqu.channels.wecom.enabled", false));
+        config.getChannels().getWecom().setEnabled(resolveBoolean("JIMUQU_WECOM_ENABLED", readBoolean(props, overrides, "jimuqu.channels.wecom.enabled", false)));
         config.getChannels().getWecom().setBotId(resolveSecret("JIMUQU_WECOM_BOT_ID", props.get("jimuqu.channels.wecom.botId", "")));
         config.getChannels().getWecom().setSecret(resolveSecret("JIMUQU_WECOM_SECRET", props.get("jimuqu.channels.wecom.secret", "")));
-        config.getChannels().getWecom().setWebsocketUrl(readString(props, overrides, "jimuqu.channels.wecom.websocketUrl", ""));
+        config.getChannels().getWecom().setWebsocketUrl(resolveEnvString("JIMUQU_WECOM_WEBSOCKET_URL", readString(props, overrides, "jimuqu.channels.wecom.websocketUrl", "")));
         config.getChannels().getWecom().setGroupMemberAllowedUsers(
-                collectGroupAllowMap(props, overrides, "jimuqu.channels.wecom.groups.")
+                collectGroupAllowMap(props, overrides, "jimuqu.channels.wecom.groups.", "JIMUQU_WECOM_GROUP_MEMBER_ALLOW_MAP_JSON")
         );
 
         applyChannelConfig(
@@ -221,16 +222,16 @@ public class AppConfig {
                 GatewayBehaviorConstants.GROUP_POLICY_DISABLED,
                 "JIMUQU_WEIXIN_GROUP_ALLOWED_USERS"
         );
-        config.getChannels().getWeixin().setEnabled(readBoolean(props, overrides, "jimuqu.channels.weixin.enabled", false));
+        config.getChannels().getWeixin().setEnabled(resolveBoolean("JIMUQU_WEIXIN_ENABLED", readBoolean(props, overrides, "jimuqu.channels.weixin.enabled", false)));
         config.getChannels().getWeixin().setToken(resolveSecret("JIMUQU_WEIXIN_TOKEN", props.get("jimuqu.channels.weixin.token", "")));
         config.getChannels().getWeixin().setAccountId(resolveSecret("JIMUQU_WEIXIN_ACCOUNT_ID", props.get("jimuqu.channels.weixin.accountId", "")));
-        config.getChannels().getWeixin().setBaseUrl(readString(props, overrides, "jimuqu.channels.weixin.baseUrl", ""));
-        config.getChannels().getWeixin().setCdnBaseUrl(readString(props, overrides, "jimuqu.channels.weixin.cdnBaseUrl", ""));
-        config.getChannels().getWeixin().setLongPollUrl(readString(props, overrides, "jimuqu.channels.weixin.longPollUrl", ""));
-        config.getChannels().getWeixin().setSplitMultilineMessages(readBoolean(props, overrides, "jimuqu.channels.weixin.splitMultilineMessages", false));
-        config.getChannels().getWeixin().setSendChunkDelaySeconds(readDouble(props, overrides, "jimuqu.channels.weixin.sendChunkDelaySeconds", 0.35D));
-        config.getChannels().getWeixin().setSendChunkRetries(readInt(props, overrides, "jimuqu.channels.weixin.sendChunkRetries", 2));
-        config.getChannels().getWeixin().setSendChunkRetryDelaySeconds(readDouble(props, overrides, "jimuqu.channels.weixin.sendChunkRetryDelaySeconds", 1.0D));
+        config.getChannels().getWeixin().setBaseUrl(resolveEnvString("JIMUQU_WEIXIN_BASE_URL", readString(props, overrides, "jimuqu.channels.weixin.baseUrl", "")));
+        config.getChannels().getWeixin().setCdnBaseUrl(resolveEnvString("JIMUQU_WEIXIN_CDN_BASE_URL", readString(props, overrides, "jimuqu.channels.weixin.cdnBaseUrl", "")));
+        config.getChannels().getWeixin().setLongPollUrl(resolveEnvString("JIMUQU_WEIXIN_LONG_POLL_URL", readString(props, overrides, "jimuqu.channels.weixin.longPollUrl", "")));
+        config.getChannels().getWeixin().setSplitMultilineMessages(resolveBoolean("JIMUQU_WEIXIN_SPLIT_MULTILINE_MESSAGES", readBoolean(props, overrides, "jimuqu.channels.weixin.splitMultilineMessages", false)));
+        config.getChannels().getWeixin().setSendChunkDelaySeconds(resolveDouble("JIMUQU_WEIXIN_SEND_CHUNK_DELAY_SECONDS", readDouble(props, overrides, "jimuqu.channels.weixin.sendChunkDelaySeconds", 0.35D)));
+        config.getChannels().getWeixin().setSendChunkRetries(resolveInt("JIMUQU_WEIXIN_SEND_CHUNK_RETRIES", readInt(props, overrides, "jimuqu.channels.weixin.sendChunkRetries", 2)));
+        config.getChannels().getWeixin().setSendChunkRetryDelaySeconds(resolveDouble("JIMUQU_WEIXIN_SEND_CHUNK_RETRY_DELAY_SECONDS", readDouble(props, overrides, "jimuqu.channels.weixin.sendChunkRetryDelaySeconds", 1.0D)));
 
         config.getGateway().setAllowedUsers(resolveList("JIMUQU_GATEWAY_ALLOWED_USERS", readRaw(props, overrides, "jimuqu.gateway.allowedUsers", "")));
         config.getGateway().setAllowAllUsers(resolveBoolean("JIMUQU_GATEWAY_ALLOW_ALL_USERS", readBoolean(props, overrides, "jimuqu.gateway.allowAllUsers", false)));
@@ -320,6 +321,17 @@ public class AppConfig {
     }
 
     /**
+     * 优先从环境变量解析普通字符串配置。
+     */
+    private static String resolveEnvString(String envName, String fallback) {
+        String envValue = RuntimeEnvResolver.getenv(envName);
+        if (StrUtil.isNotBlank(envValue)) {
+            return envValue.trim();
+        }
+        return StrUtil.nullToEmpty(fallback).trim();
+    }
+
+    /**
      * 支持通过环境变量覆盖布尔配置。
      */
     private static boolean resolveBoolean(String envName, boolean fallback) {
@@ -331,6 +343,36 @@ public class AppConfig {
         return "true".equalsIgnoreCase(normalized)
                 || "1".equals(normalized)
                 || "yes".equalsIgnoreCase(normalized);
+    }
+
+    /**
+     * 支持通过环境变量覆盖整型配置。
+     */
+    private static int resolveInt(String envName, int fallback) {
+        String envValue = RuntimeEnvResolver.getenv(envName);
+        if (StrUtil.isBlank(envValue)) {
+            return fallback;
+        }
+        try {
+            return Integer.parseInt(envValue.trim());
+        } catch (Exception ignored) {
+            return fallback;
+        }
+    }
+
+    /**
+     * 支持通过环境变量覆盖浮点配置。
+     */
+    private static double resolveDouble(String envName, double fallback) {
+        String envValue = RuntimeEnvResolver.getenv(envName);
+        if (StrUtil.isBlank(envValue)) {
+            return fallback;
+        }
+        try {
+            return Double.parseDouble(envValue.trim());
+        } catch (Exception ignored) {
+            return fallback;
+        }
     }
 
     /**
@@ -410,7 +452,8 @@ public class AppConfig {
      */
     private static Map<String, List<String>> collectGroupAllowMap(Props props,
                                                                   Map<String, Object> overrides,
-                                                                  String prefix) {
+                                                                  String prefix,
+                                                                  String envName) {
         Map<String, List<String>> result = new LinkedHashMap<String, List<String>>();
         if (props != null) {
             for (Map.Entry<Object, Object> entry : props.entrySet()) {
@@ -435,6 +478,31 @@ public class AppConfig {
                 continue;
             }
             result.put(groupId, splitObjectList(entry.getValue()));
+        }
+        String envValue = RuntimeEnvResolver.getenv(envName);
+        if (StrUtil.isNotBlank(envValue)) {
+            result.putAll(parseGroupAllowMapJson(envValue));
+        }
+        return result;
+    }
+
+    /**
+     * 支持通过 JSON 环境变量注入 group -> allowlist 映射。
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, List<String>> parseGroupAllowMapJson(String json) {
+        Map<String, List<String>> result = new LinkedHashMap<String, List<String>>();
+        Object parsed = ONode.deserialize(json, Object.class);
+        if (!(parsed instanceof Map)) {
+            return result;
+        }
+        Map<String, Object> raw = (Map<String, Object>) parsed;
+        for (Map.Entry<String, Object> entry : raw.entrySet()) {
+            String key = entry.getKey() == null ? "" : entry.getKey().trim();
+            if (key.length() == 0) {
+                continue;
+            }
+            result.put(key, splitObjectList(entry.getValue()));
         }
         return result;
     }
