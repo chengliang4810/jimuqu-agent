@@ -15,7 +15,12 @@ public final class SourceKeySupport {
      */
     public static DeliveryRequest toDeliveryRequest(String sourceKey, String text) {
         String[] parts = split(sourceKey);
-        return new DeliveryRequest(PlatformType.fromName(parts[0]), parts[1], parts[2], null, null, text);
+        DeliveryRequest request = new DeliveryRequest();
+        request.setPlatform(PlatformType.fromName(parts[0]));
+        request.setChatId(parts[1]);
+        request.setUserId(parts[2]);
+        request.setText(text);
+        return request;
     }
 
     /**

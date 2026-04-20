@@ -6,6 +6,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 统一网关入站消息模型。
  */
@@ -57,6 +60,11 @@ public class GatewayMessage {
      * 来源键覆盖值，供逻辑子会话等场景复用同一消息模型。
      */
     private String sourceKeyOverride;
+
+    /**
+     * 入站附件列表。
+     */
+    private List<MessageAttachment> attachments = new ArrayList<MessageAttachment>();
 
     /**
      * 入站时间戳。

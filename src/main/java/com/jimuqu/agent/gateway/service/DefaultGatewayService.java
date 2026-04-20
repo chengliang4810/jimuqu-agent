@@ -147,14 +147,14 @@ public class DefaultGatewayService {
             return;
         }
         try {
-            deliveryService.deliver(new DeliveryRequest(
-                    message.getPlatform(),
-                    message.getChatId(),
-                    message.getUserId(),
-                    message.getChatType(),
-                    message.getThreadId(),
-                    content
-            ));
+            DeliveryRequest request = new DeliveryRequest();
+            request.setPlatform(message.getPlatform());
+            request.setChatId(message.getChatId());
+            request.setUserId(message.getUserId());
+            request.setChatType(message.getChatType());
+            request.setThreadId(message.getThreadId());
+            request.setText(content);
+            deliveryService.deliver(request);
         } catch (Exception e) {
             log.warn("Gateway delivery failed: platform={}, chatId={}, userId={}",
                     message.getPlatform(),

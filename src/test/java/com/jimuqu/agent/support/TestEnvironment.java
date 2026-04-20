@@ -13,6 +13,7 @@ import com.jimuqu.agent.core.service.CommandService;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.core.service.ContextCompressionService;
 import com.jimuqu.agent.core.repository.CronJobRepository;
+import com.jimuqu.agent.core.repository.ChannelStateRepository;
 import com.jimuqu.agent.core.service.DelegationService;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.model.GatewayMessage;
@@ -49,6 +50,7 @@ import com.jimuqu.agent.skillhub.support.GitHubAuth;
 import com.jimuqu.agent.skillhub.support.SkillHubHttpClient;
 import com.jimuqu.agent.skillhub.support.SkillHubStateStore;
 import com.jimuqu.agent.storage.repository.SqliteCronJobRepository;
+import com.jimuqu.agent.storage.repository.SqliteChannelStateRepository;
 import com.jimuqu.agent.storage.repository.SqliteDatabase;
 import com.jimuqu.agent.storage.repository.SqliteGlobalSettingRepository;
 import com.jimuqu.agent.storage.repository.SqliteGatewayPolicyRepository;
@@ -56,6 +58,7 @@ import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.storage.repository.SqliteSessionRepository;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.DefaultCheckpointService;
+import com.jimuqu.agent.support.AttachmentCacheService;
 import com.jimuqu.agent.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import lombok.AccessLevel;
@@ -74,6 +77,7 @@ public class TestEnvironment {
     public final CronJobRepository cronJobRepository;
     public final LocalSkillService localSkillService;
     public final DefaultGatewayService gatewayService;
+    public final ConversationOrchestrator conversationOrchestrator;
     public final ToolRegistry toolRegistry;
     public final GatewayPolicyRepository gatewayPolicyRepository;
     public final GatewayAuthorizationService gatewayAuthorizationService;
@@ -118,6 +122,7 @@ public class TestEnvironment {
         SessionRepository sessionRepository = new SqliteSessionRepository(database);
         CronJobRepository cronJobRepository = new SqliteCronJobRepository(database);
         GatewayPolicyRepository gatewayPolicyRepository = new SqliteGatewayPolicyRepository(database);
+        ChannelStateRepository channelStateRepository = new SqliteChannelStateRepository(database);
         SkillHubStateStore skillHubStateStore = new SkillHubStateStore(new File(config.getRuntime().getSkillsDir()));
         SkillGuardService skillGuardService = new DefaultSkillGuardService();
         SkillHubHttpClient skillHubHttpClient = new DefaultSkillHubHttpClient();
@@ -137,11 +142,12 @@ public class TestEnvironment {
         GatewayAuthorizationService gatewayAuthorizationService = new GatewayAuthorizationService(gatewayPolicyRepository, config);
         CheckpointService checkpointService = new DefaultCheckpointService(config, database);
         ProcessRegistry processRegistry = new ProcessRegistry();
+        AttachmentCacheService attachmentCacheService = new AttachmentCacheService(config);
         DelegationService delegationService = new DefaultDelegationService(holder, preferenceStore, sessionRepository);
         SessionSearchService sessionSearchService = new DefaultSessionSearchService(sessionRepository, llmGateway);
         GitHubSkillSource gitHubSkillSource = new GitHubSkillSource(gitHubAuth, skillHubHttpClient, skillHubStateStore);
         SkillHubService skillHubService = new DefaultSkillHubService(new File(System.getProperty("user.dir")), new File(config.getRuntime().getSkillsDir()), skillImportService, skillGuardService, skillHubStateStore, skillHubHttpClient, gitHubAuth, gitHubSkillSource);
-        ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, processRegistry, memoryService, sessionSearchService, localSkillService, skillHubService, checkpointService, delegationService);
+        ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, processRegistry, memoryService, sessionSearchService, localSkillService, skillHubService, checkpointService, delegationService, attachmentCacheService);
         ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry);
         holder.set(orchestrator);
         SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService);
@@ -154,6 +160,7 @@ public class TestEnvironment {
                 cronJobRepository,
                 localSkillService,
                 gatewayService,
+                orchestrator,
                 toolRegistry,
                 gatewayPolicyRepository,
                 gatewayAuthorizationService,

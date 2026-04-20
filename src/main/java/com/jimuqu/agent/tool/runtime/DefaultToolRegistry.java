@@ -11,6 +11,7 @@ import com.jimuqu.agent.core.service.MemoryService;
 import com.jimuqu.agent.core.service.SessionSearchService;
 import com.jimuqu.agent.core.service.SkillHubService;
 import com.jimuqu.agent.core.service.ToolRegistry;
+import com.jimuqu.agent.support.AttachmentCacheService;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.support.constants.ToolNameConstants;
 import lombok.RequiredArgsConstructor;
@@ -123,6 +124,11 @@ public class DefaultToolRegistry implements ToolRegistry {
      */
     private final DelegationService delegationService;
 
+    /**
+     * 附件缓存服务。
+     */
+    private final AttachmentCacheService attachmentCacheService;
+
     @Override
     public List<String> listToolNames() {
         return new ArrayList<String>(TOOL_NAMES);
@@ -139,7 +145,7 @@ public class DefaultToolRegistry implements ToolRegistry {
         SessionSearchTools sessionSearchTools = new SessionSearchTools(sessionSearchService, sourceKey);
         SkillTools skillTools = new SkillTools(localSkillService, checkpointService, sessionRepository, sourceKey);
         SkillHubTools skillHubTools = new SkillHubTools(skillHubService);
-        MessagingTools messagingTools = new MessagingTools(deliveryService, sourceKey);
+        MessagingTools messagingTools = new MessagingTools(deliveryService, sourceKey, attachmentCacheService);
         CronjobTools cronjobTools = new CronjobTools(cronJobRepository, sourceKey);
         DelegateTools delegateTools = new DelegateTools(delegationService, sourceKey);
         WebsearchTool websearchTool = WebsearchTool.getInstance();

@@ -71,7 +71,7 @@ git -C D:\projects\hermes-agent status --short --branch
 - 复刻重点是 Agent 核心能力、国内渠道接入、模型协议适配、工具系统、记忆/技能/会话等与 Hermes 主产品价值直接相关的部分。
 - 不要因为某个技术点实现方便，就偏离成以脚本、前端展示页、营销官网、实验性研究代码为中心的项目。
 - 若出现“为了兼容 Hermes 原实现而牺牲 Java/Solon 可维护性”的情况，优先保持 Java 侧架构清晰，再在行为层面对齐。
-- 已明确不做：多模态、图像理解/生成、TTS/语音转写、Web 搜索/提取、浏览器自动化内置实现、价格和 token 统计、研究与实验能力、完整 CLI/TUI 交互层。
+- 已明确不做：多模态模型输入、图像生成、独立 TTS/语音转写服务、Web 搜索/提取、浏览器自动化内置实现、价格和 token 统计、研究与实验能力、完整 CLI/TUI 交互层。
 - 浏览器自动化能力不进入内置主线；如后续需要，按“用户自行安装 skill 扩展”的方式处理。
 
 ## 默认实现原则
@@ -128,7 +128,7 @@ git -C D:\projects\hermes-agent status --short --branch
 - 网关进程
 - 渠道鉴权与会话绑定
 - 文本消息收发
-- 附件能力按最小可用原则处理；默认不做图片理解、语音转写等内容理解型能力
+- 附件能力按最小可用原则处理；保留国内渠道图片/文件/视频/语音的传输、缓存与附件感知主链，但默认不做图片理解、语音转写等内容理解型能力
 - home channel / 状态同步 / 跨端连续会话
 - 计划任务向渠道投递结果
 - 独立 `send_message` 能力
@@ -139,7 +139,7 @@ git -C D:\projects\hermes-agent status --short --branch
 
 - 流式输出
 - 工具调用 / function calling
-- 不做多模态输入
+- 不做多模态模型输入
 - Prompt caching
 - 模型元数据、上下文长度、token 估算
 - 智能模型路由
@@ -155,7 +155,7 @@ git -C D:\projects\hermes-agent status --short --branch
 - 代码执行沙箱
 - 子 Agent / delegation / mixture of agents
 - 不做图像理解与图像生成
-- 不做 TTS / 语音转写 / voice mode
+- 不做 TTS / 独立语音转写服务 / voice mode
 - Todo / 计划工具
 - Memory 工具
 - 会话搜索
@@ -214,9 +214,9 @@ git -C D:\projects\hermes-agent status --short --branch
 
 - `sms`
 - `webhook`
-- 多模态
+- 多模态模型输入
 - 图像理解/生成
-- TTS / 语音转写
+- TTS / 独立语音转写服务
 - Web 搜索 / 提取
 - 浏览器自动化内置实现
 - 价格和 token 统计
@@ -234,6 +234,7 @@ git -C D:\projects\hermes-agent status --short --branch
 
 - 对话内 slash commands 命令语义
 - `feishu`、`dingtalk`、`wecom`、`weixin`
+- 国内渠道附件/媒体传输与附件感知主链
 - `java -jar` 部署
 - Docker 部署
 - 单实例架构

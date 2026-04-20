@@ -19,6 +19,8 @@
 - `/pairing approved [platform]`
 - `/sethome`
 - `/platforms` 展示管理员、home channel、pairing 状态
+- `send_message` 支持本地附件路径 `mediaPaths`
+- Agent 主链支持附件感知：入站附件会注入统一附件清单与本地缓存路径
 
 当前已补齐的 Hermes 核心 Agent 能力：
 
@@ -122,6 +124,7 @@
 - `runtime/context/`
 - `runtime/skills/`
 - `runtime/cache/`
+- `runtime/cache/media/<platform>/`
 
 其中 PDF 技能默认使用：
 
@@ -185,6 +188,12 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 - PDF 默认输出目录为 `runtime/cache/pdf/`
 - 若部署环境缺少中文字体，可选设置 `JIMUQU_PDF_FONT_PATH` 指向可用的 `ttf/otf` 字体文件
 
+附件与媒体说明：
+
+- `GatewayMessage` / `DeliveryRequest` 已支持统一附件模型：`kind`、`localPath`、`originalName`、`mimeType`、`fromQuote`、`transcribedText`
+- Agent 当前采用“附件感知”而非多模态输入：附件路径与元信息会注入会话文本，供搜索、重试、压缩、记忆和工具链复用
+- 当前不引入独立图像理解模型或独立语音转写服务
+
 ## 钉钉配置
 
 钉钉当前只保留：
@@ -210,6 +219,14 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 - 私聊发送目标必须使用钉钉 `senderStaffId`
 - 管理员由该平台首个私聊认领成功的用户自动固化，且只能有一个
 - 管理员一旦建立，不能通过对话命令修改
+- 当前已补入站附件下载码解析与附件感知；出站附件暂按文本降级提示展示
+
+## 飞书 / 企微 / 微信附件能力
+
+- 飞书：已补文本 + 本地附件投递，图片走原生图片消息，其他附件走文件类消息
+- 企微 Bot：已补 WebSocket 文本主链上的附件上传/发送，支持图片、文件、视频与 AMR 语音；非 AMR 音频自动降级为文件
+- 微信：已补 iLink 文本与加密 CDN 附件发送，支持图片、文件、视频；语音默认按文件附件发送
+- 企微与钉钉当前已补入站附件感知；飞书和微信的真实端到端入站链路仍需继续补齐
 
 ## 统一消息渠道授权与 home channel
 
@@ -280,12 +297,18 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 - 钉钉真实渠道打通
 - Solon 内置 `codesearch` / `websearch` / `webfetch` 工具接入
 - Solon 内置 `PdfSkill` 接入，支持 `pdf_create` / `pdf_parse`
+- 统一附件模型、附件缓存目录与 SQLite 渠道状态仓储
+- `send_message` 支持本地附件路径数组
+- Agent 会话文本支持附件清单注入
+- 企微 / 钉钉入站附件感知与附件缓存
+- 飞书 / 企微 / 微信附件发送
 
 未做或未完全做：
 
 - 飞书真实端到端
 - 企微真实端到端
 - 微信真实端到端
+- 钉钉原生附件发送
 - 浏览器自动化
 - 多模态、图像、TTS/转写
 - 插件系统、Profiles、OpenAI 兼容 API Server

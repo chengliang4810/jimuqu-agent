@@ -16,7 +16,10 @@ public class DeliveryHomeChannelFallbackTest {
         env.send("admin-dm", "admin-user", "/pairing claim-admin");
         env.gatewayService.handle(env.message("group-1", "admin-user", "group", "Dev Group", "Alice", "/sethome"));
 
-        env.deliveryService.deliver(new DeliveryRequest(PlatformType.MEMORY, null, null, null, null, "scheduled"));
+        DeliveryRequest request = new DeliveryRequest();
+        request.setPlatform(PlatformType.MEMORY);
+        request.setText("scheduled");
+        env.deliveryService.deliver(request);
         assertThat(env.memoryChannelAdapter.getLastRequest().getChatId()).isEqualTo("group-1");
         assertThat(env.memoryChannelAdapter.getLastRequest().getText()).isEqualTo("scheduled");
     }

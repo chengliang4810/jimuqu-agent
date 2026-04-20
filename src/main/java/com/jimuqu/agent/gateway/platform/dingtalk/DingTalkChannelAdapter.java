@@ -1,5 +1,7 @@
 package com.jimuqu.agent.gateway.platform.dingtalk;
 
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.http.HttpRequest;
 import com.aliyun.dingtalkoauth2_1_0.Client;
 import com.aliyun.dingtalkoauth2_1_0.models.GetAccessTokenRequest;
 import com.aliyun.dingtalkoauth2_1_0.models.GetAccessTokenResponse;
@@ -10,6 +12,9 @@ import com.aliyun.dingtalkrobot_1_0.models.BatchSendOTOResponse;
 import com.aliyun.dingtalkrobot_1_0.models.OrgGroupSendHeaders;
 import com.aliyun.dingtalkrobot_1_0.models.OrgGroupSendRequest;
 import com.aliyun.dingtalkrobot_1_0.models.OrgGroupSendResponse;
+import com.aliyun.dingtalkrobot_1_0.models.RobotMessageFileDownloadHeaders;
+import com.aliyun.dingtalkrobot_1_0.models.RobotMessageFileDownloadRequest;
+import com.aliyun.dingtalkrobot_1_0.models.RobotMessageFileDownloadResponse;
 import com.aliyun.tea.TeaException;
 import com.dingtalk.open.app.api.OpenDingTalkClient;
 import com.dingtalk.open.app.api.OpenDingTalkStreamClientBuilder;
@@ -21,21 +26,29 @@ import com.dingtalk.open.app.api.security.AuthClientCredential;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.DeliveryRequest;
 import com.jimuqu.agent.core.model.GatewayMessage;
+import com.jimuqu.agent.core.model.MessageAttachment;
 import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.core.repository.ChannelStateRepository;
 import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
+import com.jimuqu.agent.support.AttachmentCacheService;
 import org.noear.snack4.ONode;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * DingTalkChannelAdapter 实现。
  */
 public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
     private final AppConfig.ChannelConfig config;
+    private final ChannelStateRepository channelStateRepository;
+    private final AttachmentCacheService attachmentCacheService;
     private final Client oauthClient;
     private final com.aliyun.dingtalkrobot_1_0.Client robotClient;
     private volatile String accessToken;
@@ -44,9 +57,13 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
     private ExecutorService callbackExecutor;
     private final Map<String, Boolean> conversationGroupFlags = new ConcurrentHashMap<String, Boolean>();
 
-    public DingTalkChannelAdapter(AppConfig.ChannelConfig config) {
+    public DingTalkChannelAdapter(AppConfig.ChannelConfig config,
+                                  ChannelStateRepository channelStateRepository,
+                                  AttachmentCacheService attachmentCacheService) {
         super(PlatformType.DINGTALK, config);
         this.config = config;
+        this.channelStateRepository = channelStateRepository;
+        this.attachmentCacheService = attachmentCacheService;
         try {
             com.aliyun.teaopenapi.models.Config teaConfig = new com.aliyun.teaopenapi.models.Config();
             teaConfig.protocol = "https";
@@ -127,6 +144,21 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
             throw new IllegalArgumentException("DingTalk openConversationId is required");
         }
         refreshAccessTokenIfNecessary();
+        if (request.getAttachments() != null && !request.getAttachments().isEmpty()) {
+            StringBuilder buffer = new StringBuilder();
+            if (notBlank(request.getText())) {
+                buffer.append(request.getText()).append("\n\n");
+            }
+            buffer.append("当前版本钉钉附件发送暂按文本降级展示：");
+            for (MessageAttachment attachment : request.getAttachments()) {
+                buffer.append("\n- ")
+                        .append(attachment.getOriginalName())
+                        .append(" [")
+                        .append(attachment.getKind())
+                        .append("]");
+            }
+            request.setText(buffer.toString());
+        }
 
         boolean isGroup = isGroupConversation(request);
         if (isGroup) {
@@ -192,6 +224,11 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
                     String conversationId = notBlank(message.getConversationId()) ? message.getConversationId() : message.getSenderId();
                     String userId = notBlank(message.getSenderStaffId()) ? message.getSenderStaffId() : message.getSenderId();
                     conversationGroupFlags.put(conversationId, "2".equals(String.valueOf(message.getConversationType())));
+                    try {
+                        channelStateRepository.put(PlatformType.DINGTALK, conversationId, "last_user_id", userId);
+                    } catch (Exception ignored) {
+                    }
+                    List<MessageAttachment> attachments = extractAttachments(message);
                     log.info("[DINGTALK-INBOUND] conversationId={}, senderId={}, senderStaffId={}, type={}, text={}",
                             conversationId,
                             message.getSenderId(),
@@ -203,6 +240,7 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
                     gatewayMessage.setChatName(notBlank(message.getConversationTitle()) ? message.getConversationTitle() : conversationId);
                     gatewayMessage.setUserName(notBlank(message.getSenderNick()) ? message.getSenderNick() : userId);
                     gatewayMessage.setThreadId(message.getMsgId());
+                    gatewayMessage.setAttachments(attachments);
                     inboundMessageHandler().handle(gatewayMessage);
                 } catch (Exception e) {
                     log.warn("[DINGTALK] inbound dispatch failed: {}", e.getMessage(), e);
@@ -253,6 +291,10 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
     }
 
     private String extractText(ChatbotMessage message) {
+        String messageType = message.getMsgtype();
+        if ("audio".equalsIgnoreCase(messageType) && message.getContent() != null && notBlank(message.getContent().getRecognition())) {
+            return message.getContent().getRecognition().trim();
+        }
         MessageContent text = message.getText();
         if (text != null && !isBlank(text.getContent())) {
             return text.getContent().trim();
@@ -262,6 +304,71 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
             return content.getContent().trim();
         }
         return "";
+    }
+
+    private List<MessageAttachment> extractAttachments(ChatbotMessage message) {
+        List<MessageAttachment> attachments = new ArrayList<MessageAttachment>();
+        MessageContent content = message.getContent();
+        String msgType = StrUtil.nullToEmpty(message.getMsgtype()).toLowerCase();
+        if ("picture".equals(msgType) && content != null) {
+            addAttachment(attachments, "image", content.getPictureDownloadCode(), "image.jpg", "image/jpeg", null);
+        } else if ("file".equals(msgType) && content != null) {
+            addAttachment(attachments, "file", content.getDownloadCode(), content.getFileName(), AttachmentCacheService.normalizeMimeType(null, content.getFileName()), null);
+        } else if ("video".equals(msgType) && content != null) {
+            addAttachment(attachments, "video", content.getDownloadCode(), "video.mp4", "video/mp4", null);
+        } else if ("audio".equals(msgType) && content != null) {
+            addAttachment(attachments, "voice", content.getDownloadCode(), "voice.silk", "audio/silk", content.getRecognition());
+        }
+        if (content != null && content.getRichText() != null) {
+            for (MessageContent item : content.getRichText()) {
+                String itemType = StrUtil.nullToEmpty(item.getType()).toLowerCase();
+                if ("picture".equals(itemType) || "image".equals(itemType)) {
+                    addAttachment(attachments, "image", notBlank(item.getPictureDownloadCode()) ? item.getPictureDownloadCode() : item.getDownloadCode(), "image.jpg", "image/jpeg", null);
+                } else if ("file".equals(itemType)) {
+                    addAttachment(attachments, "file", item.getDownloadCode(), item.getFileName(), AttachmentCacheService.normalizeMimeType(null, item.getFileName()), null);
+                } else if ("video".equals(itemType)) {
+                    addAttachment(attachments, "video", item.getDownloadCode(), "video.mp4", "video/mp4", null);
+                } else if ("audio".equals(itemType) || "voice".equals(itemType)) {
+                    addAttachment(attachments, "voice", item.getDownloadCode(), "voice.silk", "audio/silk", item.getRecognition());
+                }
+            }
+        }
+        return attachments;
+    }
+
+    private void addAttachment(List<MessageAttachment> attachments,
+                               String kind,
+                               String downloadCode,
+                               String fileName,
+                               String mimeType,
+                               String transcribedText) {
+        if (isBlank(downloadCode)) {
+            return;
+        }
+        try {
+            String downloadUrl = resolveDownloadUrl(downloadCode);
+            byte[] data = HttpRequest.get(downloadUrl).timeout(30000).execute().bodyBytes();
+            attachments.add(attachmentCacheService.cacheBytes(PlatformType.DINGTALK, kind, fileName, mimeType, false, transcribedText, data));
+        } catch (Exception e) {
+            log.warn("[DINGTALK] attachment download failed: kind={}, code={}, message={}", kind, downloadCode, e.getMessage());
+        }
+    }
+
+    private String resolveDownloadUrl(String downloadCode) throws Exception {
+        RobotMessageFileDownloadHeaders headers = new RobotMessageFileDownloadHeaders();
+        headers.setXAcsDingtalkAccessToken(accessToken);
+        RobotMessageFileDownloadRequest request = new RobotMessageFileDownloadRequest()
+                .setDownloadCode(downloadCode)
+                .setRobotCode(config.getRobotCode());
+        RobotMessageFileDownloadResponse response = robotClient.robotMessageFileDownloadWithOptions(
+                request,
+                headers,
+                new com.aliyun.teautil.models.RuntimeOptions()
+        );
+        if (response == null || response.getBody() == null || isBlank(response.getBody().getDownloadUrl())) {
+            throw new IllegalStateException("DingTalk download url missing");
+        }
+        return response.getBody().getDownloadUrl();
     }
 
     private boolean isBlank(String value) {

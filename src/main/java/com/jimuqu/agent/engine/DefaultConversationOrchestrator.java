@@ -11,6 +11,7 @@ import com.jimuqu.agent.core.service.ContextService;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.core.service.ToolRegistry;
+import com.jimuqu.agent.support.MessageAttachmentSupport;
 import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.constants.CompressionConstants;
 import lombok.RequiredArgsConstructor;
@@ -59,16 +60,18 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     }
 
     private GatewayReply runOnSession(SessionRecord session, GatewayMessage message) throws Exception {
-        if (StrUtil.isBlank(session.getTitle()) && StrUtil.isNotBlank(message.getText())) {
-            session.setTitle(extractTitle(message.getText()));
+        String effectiveUserText = MessageAttachmentSupport.composeEffectiveUserText(message);
+        message.setText(effectiveUserText);
+        if (StrUtil.isBlank(session.getTitle()) && StrUtil.isNotBlank(effectiveUserText)) {
+            session.setTitle(extractTitle(effectiveUserText));
         }
         String systemPrompt = contextService.buildSystemPrompt(message.sourceKey());
         session.setSystemPromptSnapshot(systemPrompt);
 
-        session = contextCompressionService.compressIfNeeded(session, systemPrompt, message.getText());
+        session = contextCompressionService.compressIfNeeded(session, systemPrompt, effectiveUserText);
         String previousNdjson = session.getNdjson();
         List<Object> enabledTools = toolRegistry.resolveEnabledTools(message.sourceKey());
-        LlmResult result = llmGateway.chat(session, systemPrompt, message.getText(), enabledTools);
+        LlmResult result = llmGateway.chat(session, systemPrompt, effectiveUserText, enabledTools);
         String replyText = extractText(result.getAssistantMessage());
         if (StrUtil.isBlank(replyText) && hasRecentToolActivity(previousNdjson, result.getNdjson())) {
             session.setNdjson(result.getNdjson());

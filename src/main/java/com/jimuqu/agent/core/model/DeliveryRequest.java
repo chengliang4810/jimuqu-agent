@@ -6,6 +6,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 统一消息投递请求。
  */
@@ -43,4 +46,9 @@ public class DeliveryRequest {
      * 要投递的文本内容。
      */
     private String text;
+
+    /**
+     * 要投递的附件列表。
+     */
+    private List<MessageAttachment> attachments = new ArrayList<MessageAttachment>();
 }

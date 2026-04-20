@@ -197,6 +197,9 @@ public class AppConfig {
         );
         config.getChannels().getWeixin().setEnabled(readBoolean(props, overrides, "jimuqu.channels.weixin.enabled", false));
         config.getChannels().getWeixin().setToken(resolveSecret("JIMUQU_WEIXIN_TOKEN", props.get("jimuqu.channels.weixin.token", "")));
+        config.getChannels().getWeixin().setAccountId(resolveSecret("JIMUQU_WEIXIN_ACCOUNT_ID", props.get("jimuqu.channels.weixin.accountId", "")));
+        config.getChannels().getWeixin().setBaseUrl(readString(props, overrides, "jimuqu.channels.weixin.baseUrl", ""));
+        config.getChannels().getWeixin().setCdnBaseUrl(readString(props, overrides, "jimuqu.channels.weixin.cdnBaseUrl", ""));
         config.getChannels().getWeixin().setLongPollUrl(readString(props, overrides, "jimuqu.channels.weixin.longPollUrl", ""));
 
         config.getGateway().setAllowedUsers(resolveList("JIMUQU_GATEWAY_ALLOWED_USERS", readString(props, overrides, "jimuqu.gateway.allowedUsers", "")));
@@ -814,6 +817,11 @@ public class AppConfig {
         private String token;
 
         /**
+         * 微信 accountId。
+         */
+        private String accountId;
+
+        /**
          * 钉钉机器人编码。
          */
         private String robotCode;
@@ -837,6 +845,16 @@ public class AppConfig {
          * Long Poll 地址。
          */
         private String longPollUrl;
+
+        /**
+         * 渠道基础地址。
+         */
+        private String baseUrl;
+
+        /**
+         * 渠道 CDN 基础地址。
+         */
+        private String cdnBaseUrl;
 
         /**
          * 渠道允许名单。

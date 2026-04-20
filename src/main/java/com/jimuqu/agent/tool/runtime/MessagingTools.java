@@ -1,11 +1,18 @@
 package com.jimuqu.agent.tool.runtime;
 
+import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.core.model.DeliveryRequest;
+import com.jimuqu.agent.core.model.MessageAttachment;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.support.AttachmentCacheService;
 import lombok.RequiredArgsConstructor;
 import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * MessagingTools 实现。
@@ -14,16 +21,43 @@ import org.noear.solon.ai.annotation.ToolMapping;
 public class MessagingTools {
     private final DeliveryService deliveryService;
     private final String sourceKey;
+    private final AttachmentCacheService attachmentCacheService;
 
-    @ToolMapping(name = "send_message", description = "Send a text message to a target platform and chat. If platform or chatId is empty, send back to the current source.")
+    @ToolMapping(name = "send_message", description = "Send a text message with optional local media attachments to a target platform and chat. If platform or chatId is empty, send back to the current source.")
     public String sendMessage(@Param(name = "platform", description = "目标平台名", required = false) String platform,
                               @Param(name = "chatId", description = "目标聊天 ID", required = false) String chatId,
-                              @Param(name = "text", description = "要发送的文本") String text) throws Exception {
+                              @Param(name = "text", description = "要发送的文本") String text,
+                              @Param(name = "mediaPaths", description = "可选本地附件路径数组", required = false) List<String> mediaPaths) throws Exception {
         String[] parts = sourceKey.split(":", 3);
         PlatformType targetPlatform = PlatformType.fromName(platform == null || platform.trim().length() == 0 ? parts[0] : platform);
         String targetChatId = chatId == null || chatId.trim().length() == 0 ? parts[1] : chatId;
         String targetUserId = parts.length > 2 ? parts[2] : null;
-        deliveryService.deliver(new DeliveryRequest(targetPlatform, targetChatId, targetUserId, null, null, text));
+        DeliveryRequest request = new DeliveryRequest();
+        request.setPlatform(targetPlatform);
+        request.setChatId(targetChatId);
+        request.setUserId(targetUserId);
+        request.setText(text);
+        request.setAttachments(resolveAttachments(targetPlatform, mediaPaths));
+        deliveryService.deliver(request);
         return "Message delivered";
+    }
+
+    private List<MessageAttachment> resolveAttachments(PlatformType platform, List<String> mediaPaths) {
+        List<MessageAttachment> attachments = new ArrayList<MessageAttachment>();
+        if (mediaPaths == null) {
+            return attachments;
+        }
+
+        for (String rawPath : mediaPaths) {
+            if (StrUtil.isBlank(rawPath)) {
+                continue;
+            }
+            File file = new File(rawPath.trim());
+            if (!file.isAbsolute()) {
+                file = new File(System.getProperty("user.dir"), rawPath.trim());
+            }
+            attachments.add(attachmentCacheService.fromLocalFile(platform, file.getAbsoluteFile(), null, false, null));
+        }
+        return attachments;
     }
 }

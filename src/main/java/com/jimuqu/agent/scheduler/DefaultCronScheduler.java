@@ -86,7 +86,10 @@ public class DefaultCronScheduler {
         }
 
         PlatformType platform = PlatformType.fromName(platformName);
-        DeliveryRequest request = new DeliveryRequest(platform, job.getDeliverChatId(), null, null, null, reply.getContent());
+        DeliveryRequest request = new DeliveryRequest();
+        request.setPlatform(platform);
+        request.setChatId(job.getDeliverChatId());
+        request.setText(reply.getContent());
         deliveryService.deliver(request);
     }
 }

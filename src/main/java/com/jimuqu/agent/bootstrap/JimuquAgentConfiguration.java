@@ -11,6 +11,7 @@ import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.repository.CronJobRepository;
+import com.jimuqu.agent.core.repository.ChannelStateRepository;
 import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.repository.GatewayPolicyRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
@@ -55,6 +56,7 @@ import com.jimuqu.agent.skillhub.support.GitHubAuth;
 import com.jimuqu.agent.skillhub.support.SkillHubHttpClient;
 import com.jimuqu.agent.skillhub.support.SkillHubStateStore;
 import com.jimuqu.agent.storage.repository.SqliteCronJobRepository;
+import com.jimuqu.agent.storage.repository.SqliteChannelStateRepository;
 import com.jimuqu.agent.storage.repository.SqliteDatabase;
 import com.jimuqu.agent.storage.repository.SqliteGlobalSettingRepository;
 import com.jimuqu.agent.storage.repository.SqliteGatewayPolicyRepository;
@@ -62,6 +64,7 @@ import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.storage.repository.SqliteSessionRepository;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.DefaultCheckpointService;
+import com.jimuqu.agent.support.AttachmentCacheService;
 import com.jimuqu.agent.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import com.jimuqu.agent.web.DashboardAuthFilter;
@@ -133,6 +136,11 @@ public class JimuquAgentConfiguration {
     @Bean
     public CronJobRepository cronJobRepository(SqliteDatabase sqliteDatabase) {
         return new SqliteCronJobRepository(sqliteDatabase);
+    }
+
+    @Bean
+    public ChannelStateRepository channelStateRepository(SqliteDatabase sqliteDatabase) {
+        return new SqliteChannelStateRepository(sqliteDatabase);
     }
 
     /**
@@ -282,6 +290,11 @@ public class JimuquAgentConfiguration {
         return new ProcessRegistry();
     }
 
+    @Bean
+    public AttachmentCacheService attachmentCacheService(AppConfig appConfig) {
+        return new AttachmentCacheService(appConfig);
+    }
+
     /**
      * 创建编排器持有器。
      */
@@ -294,12 +307,14 @@ public class JimuquAgentConfiguration {
      * 创建渠道适配器映射。
      */
     @Bean
-    public Map<PlatformType, ChannelAdapter> channelAdapters(AppConfig appConfig) {
+    public Map<PlatformType, ChannelAdapter> channelAdapters(AppConfig appConfig,
+                                                             ChannelStateRepository channelStateRepository,
+                                                             AttachmentCacheService attachmentCacheService) {
         Map<PlatformType, ChannelAdapter> adapters = new LinkedHashMap<PlatformType, ChannelAdapter>();
-        adapters.put(PlatformType.FEISHU, new FeishuChannelAdapter(appConfig.getChannels().getFeishu()));
-        adapters.put(PlatformType.DINGTALK, new DingTalkChannelAdapter(appConfig.getChannels().getDingtalk()));
-        adapters.put(PlatformType.WECOM, new WeComChannelAdapter(appConfig.getChannels().getWecom()));
-        adapters.put(PlatformType.WEIXIN, new WeiXinChannelAdapter(appConfig.getChannels().getWeixin()));
+        adapters.put(PlatformType.FEISHU, new FeishuChannelAdapter(appConfig.getChannels().getFeishu(), attachmentCacheService));
+        adapters.put(PlatformType.DINGTALK, new DingTalkChannelAdapter(appConfig.getChannels().getDingtalk(), channelStateRepository, attachmentCacheService));
+        adapters.put(PlatformType.WECOM, new WeComChannelAdapter(appConfig.getChannels().getWecom(), attachmentCacheService));
+        adapters.put(PlatformType.WEIXIN, new WeiXinChannelAdapter(appConfig.getChannels().getWeixin(), channelStateRepository, attachmentCacheService));
         return adapters;
     }
 
@@ -352,7 +367,8 @@ public class JimuquAgentConfiguration {
                                      LocalSkillService localSkillService,
                                      SkillHubService skillHubService,
                                      CheckpointService checkpointService,
-                                     DelegationService delegationService) {
+                                     DelegationService delegationService,
+                                     AttachmentCacheService attachmentCacheService) {
         return new DefaultToolRegistry(
                 appConfig,
                 preferenceStore,
@@ -365,7 +381,8 @@ public class JimuquAgentConfiguration {
                 localSkillService,
                 skillHubService,
                 checkpointService,
-                delegationService
+                delegationService,
+                attachmentCacheService
         );
     }
 

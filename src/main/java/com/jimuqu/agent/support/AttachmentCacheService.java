@@ -1,0 +1,219 @@
+package com.jimuqu.agent.support;
+
+import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.core.model.MessageAttachment;
+
+import java.io.File;
+import java.util.Locale;
+import java.util.UUID;
+
+/**
+ * 附件缓存服务。
+ */
+public class AttachmentCacheService {
+    private static final long MAX_CACHE_BYTES = 32L * 1024L * 1024L;
+
+    private final File cacheRoot;
+
+    public AttachmentCacheService(AppConfig appConfig) {
+        this.cacheRoot = new File(appConfig.getRuntime().getCacheDir(), "media");
+    }
+
+    /**
+     * 将原始字节落盘并返回附件模型。
+     */
+    public MessageAttachment cacheBytes(PlatformType platform,
+                                        String kind,
+                                        String originalName,
+                                        String mimeType,
+                                        boolean fromQuote,
+                                        String transcribedText,
+                                        byte[] data) {
+        if (data == null) {
+            throw new IllegalArgumentException("Attachment bytes are required");
+        }
+        if (data.length > MAX_CACHE_BYTES) {
+            throw new IllegalStateException("Attachment too large: " + data.length);
+        }
+
+        File target = new File(platformDir(platform), prefixedName(originalName));
+        FileUtil.mkParentDirs(target);
+        FileUtil.writeBytes(data, target);
+
+        MessageAttachment attachment = new MessageAttachment();
+        attachment.setKind(normalizeKind(kind, originalName, mimeType));
+        attachment.setLocalPath(target.getAbsolutePath());
+        attachment.setOriginalName(safeName(originalName));
+        attachment.setMimeType(normalizeMimeType(mimeType, originalName));
+        attachment.setFromQuote(fromQuote);
+        attachment.setTranscribedText(StrUtil.nullToEmpty(transcribedText).trim());
+        return attachment;
+    }
+
+    /**
+     * 由现有本地文件构造附件模型。
+     */
+    public MessageAttachment fromLocalFile(PlatformType platform,
+                                           File file,
+                                           String explicitKind,
+                                           boolean fromQuote,
+                                           String transcribedText) {
+        if (file == null || !file.isFile()) {
+            throw new IllegalArgumentException("Attachment file does not exist: " + file);
+        }
+
+        MessageAttachment attachment = new MessageAttachment();
+        attachment.setKind(normalizeKind(explicitKind, file.getName(), null));
+        attachment.setLocalPath(file.getAbsolutePath());
+        attachment.setOriginalName(file.getName());
+        attachment.setMimeType(normalizeMimeType(null, file.getName()));
+        attachment.setFromQuote(fromQuote);
+        attachment.setTranscribedText(StrUtil.nullToEmpty(transcribedText).trim());
+        return attachment;
+    }
+
+    public File platformDir(PlatformType platform) {
+        return new File(cacheRoot, String.valueOf(platform == null ? PlatformType.MEMORY : platform).toLowerCase(Locale.ROOT));
+    }
+
+    public static String normalizeKind(String kind, String name, String mimeType) {
+        String normalized = StrUtil.nullToEmpty(kind).trim().toLowerCase(Locale.ROOT);
+        if ("image".equals(normalized) || "file".equals(normalized) || "video".equals(normalized) || "voice".equals(normalized)) {
+            return normalized;
+        }
+
+        String mime = StrUtil.nullToEmpty(mimeType).toLowerCase(Locale.ROOT);
+        String ext = extension(name);
+        if (mime.startsWith("image/") || matches(ext, ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")) {
+            return "image";
+        }
+        if (mime.startsWith("video/") || matches(ext, ".mp4", ".mov", ".avi", ".mkv", ".webm", ".3gp", ".m4v")) {
+            return "video";
+        }
+        if (mime.startsWith("audio/") || ".silk".equals(ext) || matches(ext, ".ogg", ".opus", ".mp3", ".wav", ".m4a", ".aac", ".flac", ".amr")) {
+            return "voice";
+        }
+        return "file";
+    }
+
+    public static String normalizeMimeType(String mimeType, String name) {
+        String normalized = StrUtil.nullToEmpty(mimeType).trim();
+        if (normalized.length() > 0) {
+            return normalized;
+        }
+
+        String ext = extension(name);
+        if (matches(ext, ".png")) {
+            return "image/png";
+        }
+        if (matches(ext, ".jpg", ".jpeg")) {
+            return "image/jpeg";
+        }
+        if (matches(ext, ".gif")) {
+            return "image/gif";
+        }
+        if (matches(ext, ".webp")) {
+            return "image/webp";
+        }
+        if (matches(ext, ".bmp")) {
+            return "image/bmp";
+        }
+        if (matches(ext, ".mp4", ".m4v")) {
+            return "video/mp4";
+        }
+        if (matches(ext, ".mov")) {
+            return "video/quicktime";
+        }
+        if (matches(ext, ".avi")) {
+            return "video/x-msvideo";
+        }
+        if (matches(ext, ".mkv")) {
+            return "video/x-matroska";
+        }
+        if (matches(ext, ".webm")) {
+            return "video/webm";
+        }
+        if (matches(ext, ".ogg", ".opus")) {
+            return "audio/ogg";
+        }
+        if (matches(ext, ".mp3")) {
+            return "audio/mpeg";
+        }
+        if (matches(ext, ".wav")) {
+            return "audio/wav";
+        }
+        if (matches(ext, ".m4a")) {
+            return "audio/mp4";
+        }
+        if (matches(ext, ".aac")) {
+            return "audio/aac";
+        }
+        if (matches(ext, ".flac")) {
+            return "audio/flac";
+        }
+        if (matches(ext, ".amr")) {
+            return "audio/amr";
+        }
+        if (matches(ext, ".silk")) {
+            return "audio/silk";
+        }
+        if (matches(ext, ".pdf")) {
+            return "application/pdf";
+        }
+        if (matches(ext, ".txt")) {
+            return "text/plain";
+        }
+        if (matches(ext, ".md")) {
+            return "text/markdown";
+        }
+        if (matches(ext, ".docx")) {
+            return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        }
+        if (matches(ext, ".xlsx")) {
+            return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        }
+        if (matches(ext, ".pptx")) {
+            return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+        }
+        return "application/octet-stream";
+    }
+
+    private String prefixedName(String originalName) {
+        return UUID.randomUUID().toString().replace("-", "") + "_" + safeName(originalName);
+    }
+
+    private static String safeName(String originalName) {
+        String value = StrUtil.blankToDefault(originalName, "attachment.bin")
+                .replace("\\", "_")
+                .replace("/", "_")
+                .replace(":", "_")
+                .replace("*", "_")
+                .replace("?", "_")
+                .replace("\"", "_")
+                .replace("<", "_")
+                .replace(">", "_")
+                .replace("|", "_");
+        return value.length() == 0 ? "attachment.bin" : value;
+    }
+
+    private static String extension(String name) {
+        String value = StrUtil.nullToEmpty(name).trim().toLowerCase(Locale.ROOT);
+        int index = value.lastIndexOf('.');
+        if (index < 0) {
+            return "";
+        }
+        return value.substring(index);
+    }
+
+    private static boolean matches(String ext, String... values) {
+        for (String value : values) {
+            if (value.equalsIgnoreCase(ext)) {
+                return true;
+            }
+        }
+        return false;
+    }
+}

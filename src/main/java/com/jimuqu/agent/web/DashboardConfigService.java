@@ -118,6 +118,9 @@ public class DashboardConfigService {
         addField(new FieldDefinition("channels.wecom.websocketUrl", "string", "messaging", "企微 websocket 地址"));
 
         addChannelFields("weixin", null, "JIMUQU_WEIXIN_ALLOWED_USERS", "JIMUQU_WEIXIN_ALLOW_ALL_USERS", "JIMUQU_WEIXIN_UNAUTHORIZED_DM_BEHAVIOR");
+        addField(new FieldDefinition("channels.weixin.accountId", "string", "messaging", "微信 iLink accountId").envName("JIMUQU_WEIXIN_ACCOUNT_ID"));
+        addField(new FieldDefinition("channels.weixin.baseUrl", "string", "messaging", "微信 iLink API 地址"));
+        addField(new FieldDefinition("channels.weixin.cdnBaseUrl", "string", "messaging", "微信 CDN 地址"));
         addField(new FieldDefinition("channels.weixin.longPollUrl", "string", "messaging", "微信 long-poll 地址"));
     }
 

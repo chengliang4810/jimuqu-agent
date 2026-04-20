@@ -76,6 +76,10 @@ jimuqu.channels.weixin.enabled: false
 jimuqu.channels.weixin.allowedUsers:
 jimuqu.channels.weixin.allowAllUsers: false
 jimuqu.channels.weixin.unauthorizedDmBehavior: pair
+jimuqu.channels.weixin.accountId:
+jimuqu.channels.weixin.baseUrl: https://ilinkai.weixin.qq.com
+jimuqu.channels.weixin.cdnBaseUrl: https://novac2c.cdn.weixin.qq.com/c2c
+jimuqu.channels.weixin.token:
 
 # 全局网关授权兜底配置
 jimuqu.gateway.allowedUsers:

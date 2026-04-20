@@ -21,7 +21,15 @@ public class SqliteDatabase {
     }
 
     public Connection openConnection() throws SQLException {
-        return DriverManager.getConnection(jdbcUrl);
+        Connection connection = DriverManager.getConnection(jdbcUrl);
+        Statement statement = connection.createStatement();
+        try {
+            statement.execute("pragma busy_timeout=5000");
+            statement.execute("pragma journal_mode=WAL");
+        } finally {
+            statement.close();
+        }
+        return connection;
     }
 
     private void initSchema() throws SQLException {
@@ -190,6 +198,15 @@ public class SqliteDatabase {
                     "restored_at integer not null default 0" +
                     ")");
             statement.execute("create index if not exists idx_checkpoints_source_created on checkpoints(source_key, created_at desc)");
+            statement.execute("create table if not exists channel_states (" +
+                    "platform text not null," +
+                    "scope_key text not null," +
+                    "state_key text not null," +
+                    "state_value text," +
+                    "updated_at integer not null," +
+                    "primary key (platform, scope_key, state_key)" +
+                    ")");
+            statement.execute("create index if not exists idx_channel_states_platform_scope on channel_states(platform, scope_key)");
             statement.close();
         } finally {
             connection.close();
