@@ -4,6 +4,12 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.ContentType;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
+import com.lark.oapi.event.EventDispatcher;
+import com.lark.oapi.service.im.ImService;
+import com.lark.oapi.service.im.v1.model.EventMessage;
+import com.lark.oapi.service.im.v1.model.P2MessageReceiveV1;
+import com.lark.oapi.service.im.v1.model.P2MessageReceiveV1Data;
+import com.lark.oapi.service.im.v1.model.UserId;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.DeliveryRequest;
 import com.jimuqu.agent.core.model.GatewayMessage;
@@ -17,6 +23,8 @@ import org.noear.snack4.ONode;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * FeishuChannelAdapter 实现。
@@ -32,6 +40,8 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
     private final AttachmentCacheService attachmentCacheService;
     private volatile String tenantAccessToken;
     private volatile long tokenExpireAt;
+    private volatile com.lark.oapi.ws.Client wsClient;
+    private ExecutorService inboundExecutor;
 
     public FeishuChannelAdapter(AppConfig.ChannelConfig config, AttachmentCacheService attachmentCacheService) {
         super(PlatformType.FEISHU, config);
@@ -53,8 +63,33 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
         }
         try {
             refreshTenantTokenIfNecessary();
+            inboundExecutor = Executors.newSingleThreadExecutor();
+            EventDispatcher dispatcher = EventDispatcher.newBuilder("", "")
+                    .onP2MessageReceiveV1(new ImService.P2MessageReceiveV1Handler() {
+                        @Override
+                        public void handle(P2MessageReceiveV1 event) {
+                            if (event == null || event.getEvent() == null || inboundExecutor == null) {
+                                return;
+                            }
+                            inboundExecutor.submit(new Runnable() {
+                                @Override
+                                public void run() {
+                                    try {
+                                        handleWebsocketEvent(event.getEvent());
+                                    } catch (Exception e) {
+                                        log.warn("[FEISHU] websocket inbound dispatch failed: {}", e.getMessage(), e);
+                                    }
+                                }
+                            });
+                        }
+                    })
+                    .build();
+            wsClient = new com.lark.oapi.ws.Client.Builder(config.getAppId(), config.getAppSecret())
+                    .eventHandler(dispatcher)
+                    .build();
+            wsClient.start();
             setConnected(true);
-            setDetail("tenant token ready");
+            setDetail("websocket connected");
             return true;
         } catch (Exception e) {
             setConnected(false);
@@ -62,6 +97,17 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
             log.warn("[FEISHU] connect failed: {}", e.getMessage());
             return false;
         }
+    }
+
+    @Override
+    public void disconnect() {
+        shutdownWebsocketClient();
+        if (inboundExecutor != null) {
+            inboundExecutor.shutdownNow();
+            inboundExecutor = null;
+        }
+        setConnected(false);
+        setDetail("disconnected");
     }
 
     @Override
@@ -95,7 +141,7 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
             return new ONode().set("code", 0).set("msg", "ok").toJson();
         }
         try {
-            GatewayMessage message = toGatewayMessage(payload.get("event"));
+            GatewayMessage message = toGatewayMessageFromWebhook(payload.get("event"));
             if (message != null && inboundMessageHandler() != null) {
                 inboundMessageHandler().handle(message);
             }
@@ -105,16 +151,31 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
         return new ONode().set("code", 0).set("msg", "ok").toJson();
     }
 
-    private GatewayMessage toGatewayMessage(ONode event) {
+    public void handleWebsocketEvent(P2MessageReceiveV1Data event) {
+        GatewayMessage message = toGatewayMessage(event == null ? null : event.getMessage(), event == null ? null : event.getSender());
+        if (message != null && inboundMessageHandler() != null) {
+            try {
+                inboundMessageHandler().handle(message);
+            } catch (Exception e) {
+                throw new IllegalStateException("Feishu websocket handle failed", e);
+            }
+        }
+    }
+
+    private GatewayMessage toGatewayMessageFromWebhook(ONode event) {
         ONode messageNode = event.get("message");
+        ONode senderNode = event.get("sender");
+        if (messageNode == null || messageNode.isNull()) {
+            return null;
+        }
         String messageType = messageNode.get("message_type").getString();
         String rawContent = messageNode.get("content").getString();
         ONode content = StrUtil.isBlank(rawContent) ? new ONode() : ONode.ofJson(rawContent);
         String chatId = messageNode.get("chat_id").getString();
         String chatType = "group".equalsIgnoreCase(messageNode.get("chat_type").getString()) ? "group" : "dm";
-        String userId = event.get("sender").get("sender_id").get("open_id").getString();
+        String userId = senderNode.get("sender_id").get("open_id").getString();
         if (StrUtil.isBlank(userId)) {
-            userId = event.get("sender").get("sender_id").get("user_id").getString();
+            userId = senderNode.get("sender_id").get("user_id").getString();
         }
         String text = extractInboundText(messageType, content);
         List<MessageAttachment> attachments = extractInboundAttachments(messageType, content, messageNode.get("message_id").getString());
@@ -126,6 +187,35 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
         message.setChatName(chatId);
         message.setUserName(userId);
         message.setThreadId(messageNode.get("message_id").getString());
+        message.setAttachments(attachments);
+        return message;
+    }
+
+    private GatewayMessage toGatewayMessage(EventMessage messageNode,
+                                            com.lark.oapi.service.im.v1.model.EventSender sender) {
+        if (messageNode == null) {
+            return null;
+        }
+        String messageType = messageNode.getMessageType();
+        String rawContent = messageNode.getContent();
+        ONode content = StrUtil.isBlank(rawContent) ? new ONode() : ONode.ofJson(rawContent);
+        String chatId = messageNode.getChatId();
+        String chatType = "group".equalsIgnoreCase(messageNode.getChatType()) ? "group" : "dm";
+        UserId senderId = sender == null ? null : sender.getSenderId();
+        String userId = senderId == null ? null : senderId.getOpenId();
+        if (StrUtil.isBlank(userId) && senderId != null) {
+            userId = senderId.getUserId();
+        }
+        String text = extractInboundText(messageType, content);
+        List<MessageAttachment> attachments = extractInboundAttachments(messageType, content, messageNode.getMessageId());
+        if (StrUtil.isBlank(text) && attachments.isEmpty()) {
+            return null;
+        }
+        GatewayMessage message = new GatewayMessage(PlatformType.FEISHU, chatId, userId, text);
+        message.setChatType(chatType);
+        message.setChatName(chatId);
+        message.setUserName(userId);
+        message.setThreadId(messageNode.getMessageId());
         message.setAttachments(attachments);
         return message;
     }
@@ -335,6 +425,30 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
         tenantAccessToken = node.get("tenant_access_token").getString();
         long expire = node.get("expire").getLong(7200L);
         tokenExpireAt = now + Math.max(60000L, (expire - 60L) * 1000L);
+    }
+
+    private void shutdownWebsocketClient() {
+        if (wsClient == null) {
+            return;
+        }
+        try {
+            java.lang.reflect.Field autoReconnectField = com.lark.oapi.ws.Client.class.getDeclaredField("autoReconnect");
+            autoReconnectField.setAccessible(true);
+            autoReconnectField.set(wsClient, Boolean.FALSE);
+            java.lang.reflect.Method disconnectMethod = com.lark.oapi.ws.Client.class.getDeclaredMethod("disconnect");
+            disconnectMethod.setAccessible(true);
+            disconnectMethod.invoke(wsClient);
+            java.lang.reflect.Field executorField = com.lark.oapi.ws.Client.class.getDeclaredField("executor");
+            executorField.setAccessible(true);
+            Object executor = executorField.get(wsClient);
+            if (executor instanceof ExecutorService) {
+                ((ExecutorService) executor).shutdownNow();
+            }
+        } catch (Exception e) {
+            log.debug("[FEISHU] websocket shutdown cleanup failed: {}", e.getMessage(), e);
+        } finally {
+            wsClient = null;
+        }
     }
 
     @RequiredArgsConstructor
