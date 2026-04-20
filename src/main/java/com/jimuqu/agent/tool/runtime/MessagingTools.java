@@ -1,6 +1,7 @@
 package com.jimuqu.agent.tool.runtime;
 
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.DeliveryRequest;
 import com.jimuqu.agent.core.model.MessageAttachment;
 import com.jimuqu.agent.core.service.DeliveryService;
@@ -25,6 +26,7 @@ public class MessagingTools {
     private final DeliveryService deliveryService;
     private final String sourceKey;
     private final AttachmentCacheService attachmentCacheService;
+    private final AppConfig appConfig;
 
     @ToolMapping(name = "send_message", description = "Send a text message with optional local media attachments to a target platform and chat. If platform or chatId is empty, send back to the current source.")
     public String sendMessage(@Param(name = "platform", description = "目标平台名", required = false) String platform,
@@ -57,13 +59,44 @@ public class MessagingTools {
             if (StrUtil.isBlank(rawPath)) {
                 continue;
             }
-            File file = new File(rawPath.trim());
-            if (!file.isAbsolute()) {
-                file = new File(System.getProperty("user.dir"), rawPath.trim());
-            }
+            File file = resolveAttachmentFile(rawPath.trim());
             attachments.add(attachmentCacheService.fromLocalFile(platform, file.getAbsoluteFile(), null, false, null));
         }
         return attachments;
+    }
+
+    private File resolveAttachmentFile(String rawPath) {
+        File direct = new File(rawPath);
+        if (direct.isFile()) {
+            return direct;
+        }
+
+        File workspaceFile = new File(System.getProperty("user.dir"), rawPath);
+        if (workspaceFile.isFile()) {
+            return workspaceFile;
+        }
+
+        String name = direct.getName();
+        for (File candidate : fallbackCandidates(name)) {
+            if (candidate.isFile()) {
+                return candidate;
+            }
+        }
+
+        return direct.isAbsolute() ? direct : workspaceFile;
+    }
+
+    private List<File> fallbackCandidates(String fileName) {
+        List<File> candidates = new ArrayList<File>();
+        if (appConfig != null && appConfig.getRuntime() != null) {
+            File runtimeHome = new File(appConfig.getRuntime().getHome());
+            File cacheDir = new File(appConfig.getRuntime().getCacheDir());
+            candidates.add(new File(cacheDir, "pdf/" + fileName));
+            candidates.add(new File(cacheDir, fileName));
+            candidates.add(new File(runtimeHome, fileName));
+        }
+        candidates.add(new File(System.getProperty("user.dir"), fileName));
+        return candidates;
     }
 
     @SuppressWarnings("unchecked")

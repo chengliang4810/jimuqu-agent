@@ -154,7 +154,7 @@ public class DefaultToolRegistry implements ToolRegistry {
         SessionSearchTools sessionSearchTools = new SessionSearchTools(sessionSearchService, sourceKey);
         SkillTools skillTools = new SkillTools(localSkillService, checkpointService, sessionRepository, sourceKey);
         SkillHubTools skillHubTools = new SkillHubTools(skillHubService);
-        MessagingTools messagingTools = new MessagingTools(deliveryService, sourceKey, attachmentCacheService);
+        MessagingTools messagingTools = new MessagingTools(deliveryService, sourceKey, attachmentCacheService, appConfig);
         CronjobTools cronjobTools = new CronjobTools(cronJobRepository, sourceKey);
         DelegateTools delegateTools = new DelegateTools(delegationService, sourceKey);
         ConfigTools configTools = new ConfigTools(runtimeSettingsService);
