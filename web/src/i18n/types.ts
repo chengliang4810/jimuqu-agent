@@ -73,6 +73,17 @@ export interface Translations {
     activeSessions: string;
     recentSessions: string;
     connectedPlatforms: string;
+    doctorTitle: string;
+    setupReady: string;
+    missingConfig: string;
+    connectionMode: string;
+    missingEnv: string;
+    features: string;
+    nextStep: string;
+    weixinQrStart: string;
+    weixinQrPending: string;
+    weixinQrConfirmed: string;
+    weixinQrFailed: string;
     running: string;
     starting: string;
     failed: string;
@@ -164,10 +175,10 @@ export interface Translations {
     triggerNow: string;
     delivery: {
       local: string;
-      telegram: string;
-      discord: string;
-      slack: string;
-      email: string;
+      feishu: string;
+      dingtalk: string;
+      wecom: string;
+      weixin: string;
     };
   };
 

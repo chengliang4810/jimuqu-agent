@@ -9,6 +9,7 @@ import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.repository.ChannelStateRepository;
 import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
 import com.jimuqu.agent.support.AttachmentCacheService;
+import com.jimuqu.agent.support.constants.GatewayBehaviorConstants;
 import lombok.RequiredArgsConstructor;
 import okhttp3.*;
 import org.noear.snack4.ONode;
@@ -32,6 +33,7 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
     private static final String APP_CMD_CALLBACK = "aibot_msg_callback";
     private static final String APP_CMD_LEGACY_CALLBACK = "aibot_callback";
     private static final String APP_CMD_SEND = "aibot_send_msg";
+    private static final String APP_CMD_RESPONSE = "aibot_respond_msg";
     private static final String APP_CMD_UPLOAD_MEDIA_INIT = "aibot_upload_media_init";
     private static final String APP_CMD_UPLOAD_MEDIA_CHUNK = "aibot_upload_media_chunk";
     private static final String APP_CMD_UPLOAD_MEDIA_FINISH = "aibot_upload_media_finish";
@@ -45,6 +47,7 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
     private final AttachmentCacheService attachmentCacheService;
     private final OkHttpClient client;
     private final ConcurrentMap<String, CompletableFuture<ONode>> pendingResponses = new ConcurrentHashMap<String, CompletableFuture<ONode>>();
+    private final ConcurrentMap<String, String> replyReqIds = new ConcurrentHashMap<String, String>();
     private volatile WebSocket webSocket;
     private ExecutorService callbackExecutor;
 
@@ -55,16 +58,30 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
         this.client = new OkHttpClient.Builder()
                 .readTimeout(0, TimeUnit.MILLISECONDS)
                 .build();
+        setConnectionMode("websocket");
+        setFeatures("text", "attachments", "quoted-media", "reply-mode", "aes-media");
+        setSetupState(config != null && config.isEnabled() ? "configured" : "disabled");
     }
 
     @Override
     public boolean connect() {
         if (!isEnabled()) {
+            setSetupState("disabled");
             setDetail("disabled");
             return false;
         }
-        if (StrUtil.isBlank(config.getBotId()) || StrUtil.isBlank(config.getSecret())) {
+        java.util.ArrayList<String> missing = new java.util.ArrayList<String>();
+        if (StrUtil.isBlank(config.getBotId())) {
+            missing.add("JIMUQU_WECOM_BOT_ID");
+        }
+        if (StrUtil.isBlank(config.getSecret())) {
+            missing.add("JIMUQU_WECOM_SECRET");
+        }
+        if (!missing.isEmpty()) {
             setConnected(false);
+            setSetupState("missing_config");
+            setMissingEnv(missing);
+            setLastError("wecom_missing_credentials", "missing botId/secret");
             setDetail("missing botId/secret");
             log.warn("[WECOM] Missing botId/secret");
             return false;
@@ -88,6 +105,9 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
                 throw new IllegalStateException("WeCom subscribe failed: " + auth.toJson());
             }
             setConnected(true);
+            setSetupState("connected");
+            setMissingEnv(new String[0]);
+            clearLastError();
             setDetail("websocket subscribed");
             return true;
         } catch (Exception e) {
@@ -95,6 +115,8 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
                 webSocket.cancel();
             }
             setConnected(false);
+            setSetupState("error");
+            setLastError("wecom_connect_failed", e.getMessage());
             setDetail("connect failed: " + e.getMessage());
             throw new IllegalStateException("WeCom connect failed", e);
         }
@@ -120,13 +142,7 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
             throw new IllegalArgumentException("WeCom chatId is required");
         }
         if (StrUtil.isNotBlank(request.getText())) {
-            ONode response = request(APP_CMD_SEND, new ONode()
-                    .set("chatid", request.getChatId())
-                    .set("msgtype", "markdown")
-                    .getOrNew("markdown")
-                    .set("content", request.getText())
-                    .parent()
-                    .asObject(), 15);
+            ONode response = sendTextMessage(request.getChatId(), request.getText(), request.getThreadId());
             int ret = response.get("ret").getInt(0);
             if (ret != 0) {
                 throw new IllegalStateException("WeCom send failed: " + response.toJson());
@@ -134,7 +150,7 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
         }
         if (request.getAttachments() != null) {
             for (MessageAttachment attachment : request.getAttachments()) {
-                sendAttachment(request.getChatId(), attachment);
+                sendAttachment(request.getChatId(), attachment, request.getThreadId());
             }
         }
     }
@@ -191,6 +207,7 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
             }
             String cmd = node.get("cmd").getString();
             if (APP_CMD_CALLBACK.equals(cmd) || APP_CMD_LEGACY_CALLBACK.equals(cmd)) {
+                rememberReplyReqId(node.get("body").get("msgid").getString(), payloadReqId(node));
                 handleInbound(node);
             }
         }
@@ -230,8 +247,15 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
         String chatId = body.get("chatid").getString();
         String userId = body.get("from").get("userid").getString();
         String chatType = "group".equalsIgnoreCase(body.get("chattype").getString()) ? "group" : "dm";
+        if (!allowChat(chatType, chatId, userId)) {
+            return null;
+        }
         String text = extractText(body);
-        List<MessageAttachment> attachments = extractAttachments(body);
+        List<MessageAttachment> attachments = extractAttachments(body, false);
+        ONode quote = findQuoteNode(body);
+        if (quote != null && quote.isObject()) {
+            attachments.addAll(extractAttachments(quote, true));
+        }
         if (StrUtil.isBlank(text) && attachments.isEmpty()) {
             return null;
         }
@@ -270,30 +294,30 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
         return "";
     }
 
-    private List<MessageAttachment> extractAttachments(ONode body) throws Exception {
+    private List<MessageAttachment> extractAttachments(ONode body, boolean fromQuote) throws Exception {
         List<MessageAttachment> attachments = new ArrayList<MessageAttachment>();
         String msgType = body.get("msgtype").getString();
         if ("image".equalsIgnoreCase(msgType)) {
-            addAttachment(attachments, "image", body.get("image"), false);
+            addAttachment(attachments, "image", body.get("image"), fromQuote);
         } else if ("file".equalsIgnoreCase(msgType)) {
-            addAttachment(attachments, "file", body.get("file"), false);
+            addAttachment(attachments, "file", body.get("file"), fromQuote);
         } else if ("video".equalsIgnoreCase(msgType)) {
-            addAttachment(attachments, "video", body.get("video"), false);
+            addAttachment(attachments, "video", body.get("video"), fromQuote);
         } else if ("voice".equalsIgnoreCase(msgType)) {
-            addAttachment(attachments, "voice", body.get("voice"), false);
+            addAttachment(attachments, "voice", body.get("voice"), fromQuote);
         } else if ("mixed".equalsIgnoreCase(msgType)) {
             ONode items = body.get("mixed").get("msg_item");
             for (int i = 0; i < items.size(); i++) {
                 ONode item = items.get(i);
                 String itemType = item.get("msgtype").getString();
                 if ("image".equalsIgnoreCase(itemType)) {
-                    addAttachment(attachments, "image", item.get("image"), false);
+                    addAttachment(attachments, "image", item.get("image"), fromQuote);
                 } else if ("file".equalsIgnoreCase(itemType)) {
-                    addAttachment(attachments, "file", item.get("file"), false);
+                    addAttachment(attachments, "file", item.get("file"), fromQuote);
                 } else if ("video".equalsIgnoreCase(itemType)) {
-                    addAttachment(attachments, "video", item.get("video"), false);
+                    addAttachment(attachments, "video", item.get("video"), fromQuote);
                 } else if ("voice".equalsIgnoreCase(itemType)) {
-                    addAttachment(attachments, "voice", item.get("voice"), false);
+                    addAttachment(attachments, "voice", item.get("voice"), fromQuote);
                 }
             }
         }
@@ -342,7 +366,7 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
         }
     }
 
-    private void sendAttachment(String chatId, MessageAttachment attachment) {
+    private void sendAttachment(String chatId, MessageAttachment attachment, String replyToMessageId) {
         File file = new File(attachment.getLocalPath());
         if (!file.isFile()) {
             throw new IllegalStateException("WeCom attachment file not found: " + attachment.getLocalPath());
@@ -351,17 +375,156 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
         byte[] bytes = cn.hutool.core.io.FileUtil.readBytes(file);
         String mediaType = resolveOutboundMediaType(attachment, bytes.length);
         String mediaId = uploadMediaBytes(bytes, mediaType, file.getName());
-        ONode response = request(APP_CMD_SEND, new ONode()
+        ONode body = new ONode()
                 .set("chatid", chatId)
                 .set("msgtype", mediaType)
                 .getOrNew(mediaType)
                 .set("media_id", mediaId)
                 .parent()
-                .asObject(), 30);
+                .asObject();
+        ONode response = sendByMode(body, chatId, replyToMessageId, mediaType, 30);
         int errCode = response.get("errcode").getInt(0);
         if (errCode != 0) {
             throw new IllegalStateException("WeCom media send failed: " + response.toJson());
         }
+    }
+
+    private ONode sendTextMessage(String chatId, String text, String replyToMessageId) {
+        ONode body = new ONode()
+                .set("chatid", chatId)
+                .set("msgtype", "markdown")
+                .getOrNew("markdown")
+                .set("content", text)
+                .parent()
+                .asObject();
+        return sendByMode(body, chatId, replyToMessageId, "markdown", 15);
+    }
+
+    private ONode sendByMode(ONode body, String chatId, String replyToMessageId, String description, int timeoutSeconds) {
+        String replyReqId = replyReqIdForMessage(replyToMessageId);
+        try {
+            if (StrUtil.isNotBlank(replyReqId)) {
+                return requestWithReplyReqId(APP_CMD_RESPONSE, replyReqId, body, timeoutSeconds);
+            }
+        } catch (Exception e) {
+            log.warn("[WECOM] reply-mode {} failed, fallback to proactive send: {}", description, e.getMessage());
+        }
+        return request(APP_CMD_SEND, body, timeoutSeconds);
+    }
+
+    private ONode requestWithReplyReqId(String cmd, String replyReqId, ONode body, int timeoutSeconds) {
+        if (webSocket == null) {
+            throw new IllegalStateException("WeCom websocket is not connected");
+        }
+        CompletableFuture<ONode> future = new CompletableFuture<ONode>();
+        pendingResponses.put(replyReqId, future);
+        String payload = new ONode()
+                .set("cmd", cmd)
+                .getOrNew("headers")
+                .set("req_id", replyReqId)
+                .parent()
+                .set("body", body)
+                .toJson();
+        if (!webSocket.send(payload)) {
+            pendingResponses.remove(replyReqId);
+            throw new IllegalStateException("WeCom websocket send failed");
+        }
+        try {
+            return future.get(timeoutSeconds, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            pendingResponses.remove(replyReqId);
+            throw new IllegalStateException("WeCom reply request timeout", e);
+        }
+    }
+
+    private String payloadReqId(ONode payload) {
+        String reqId = payload.get("headers").get("req_id").getString();
+        if (StrUtil.isBlank(reqId)) {
+            reqId = payload.get("payload").get("headers").get("req_id").getString();
+        }
+        return reqId;
+    }
+
+    private void rememberReplyReqId(String messageId, String reqId) {
+        String normalizedMessageId = StrUtil.nullToEmpty(messageId).trim();
+        String normalizedReqId = StrUtil.nullToEmpty(reqId).trim();
+        if (normalizedMessageId.length() == 0 || normalizedReqId.length() == 0) {
+            return;
+        }
+        replyReqIds.put(normalizedMessageId, normalizedReqId);
+        while (replyReqIds.size() > 1000) {
+            String firstKey = replyReqIds.keySet().iterator().next();
+            replyReqIds.remove(firstKey);
+        }
+    }
+
+    private String replyReqIdForMessage(String messageId) {
+        String normalized = StrUtil.nullToEmpty(messageId).trim();
+        return normalized.length() == 0 ? null : replyReqIds.get(normalized);
+    }
+
+    private boolean allowChat(String chatType, String chatId, String userId) {
+        if (config.isAllowAllUsers()) {
+            return true;
+        }
+        if ("group".equalsIgnoreCase(chatType)) {
+            String policy = StrUtil.blankToDefault(config.getGroupPolicy(), GatewayBehaviorConstants.GROUP_POLICY_OPEN).toLowerCase();
+            if (GatewayBehaviorConstants.GROUP_POLICY_DISABLED.equals(policy)) {
+                return false;
+            }
+            if (GatewayBehaviorConstants.GROUP_POLICY_ALLOWLIST.equals(policy)
+                    && !contains(config.getGroupAllowedUsers(), chatId)) {
+                return false;
+            }
+            return allowGroupSender(chatId, userId);
+        }
+        String dmPolicy = StrUtil.blankToDefault(config.getDmPolicy(), GatewayBehaviorConstants.DM_POLICY_OPEN).toLowerCase();
+        if (GatewayBehaviorConstants.DM_POLICY_DISABLED.equals(dmPolicy)) {
+            return false;
+        }
+        if (GatewayBehaviorConstants.DM_POLICY_ALLOWLIST.equals(dmPolicy)) {
+            return contains(config.getAllowedUsers(), userId);
+        }
+        return true;
+    }
+
+    private boolean allowGroupSender(String chatId, String userId) {
+        Map<String, List<String>> allowMap = config.getGroupMemberAllowedUsers();
+        if (allowMap == null || allowMap.isEmpty()) {
+            return true;
+        }
+        List<String> entries = allowMap.get(chatId);
+        if ((entries == null || entries.isEmpty()) && allowMap.containsKey("*")) {
+            entries = allowMap.get("*");
+        }
+        if (entries == null || entries.isEmpty()) {
+            return true;
+        }
+        return contains(entries, userId);
+    }
+
+    private boolean contains(List<String> values, String target) {
+        if (values == null || target == null) {
+            return false;
+        }
+        for (String value : values) {
+            String normalized = StrUtil.nullToEmpty(value).trim();
+            if ("*".equals(normalized) || target.equalsIgnoreCase(normalized)
+                    || target.equalsIgnoreCase(normalized.replaceFirst("(?i)^wecom:", "").replaceFirst("(?i)^(user|group):", ""))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private ONode findQuoteNode(ONode body) {
+        for (String key : new String[]{"quote", "quoted", "quote_msg", "reference"}) {
+            ONode node = body.get(key);
+            if (node != null && node.isObject()) {
+                return node;
+            }
+        }
+        return null;
     }
 
     private String resolveOutboundMediaType(MessageAttachment attachment, int sizeBytes) {

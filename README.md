@@ -20,7 +20,10 @@
 - `/sethome`
 - `/platforms` 展示管理员、home channel、pairing 状态
 - `send_message` 支持本地附件路径 `mediaPaths`
+- `send_message` 支持可选 `channelExtrasJson`，用于钉钉 AI card 等渠道扩展参数
 - Agent 主链支持附件感知：入站附件会注入统一附件清单与本地缓存路径
+- Dashboard-first 渠道接入与 doctor：`/api/status`、`/api/gateway/doctor`
+- 微信 iLink QR 登录：`POST /api/gateway/setup/weixin/qr` + `GET /api/gateway/setup/weixin/qr/{ticket}`
 
 当前已补齐的 Hermes 核心 Agent 能力：
 
@@ -199,7 +202,7 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 钉钉当前只保留：
 
 - 入站：`stream mode`
-- 出站：官方机器人 OpenAPI
+- 出站：官方机器人 OpenAPI + 官方会话文件发送
 
 必须配置：
 
@@ -219,14 +222,31 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 - 私聊发送目标必须使用钉钉 `senderStaffId`
 - 管理员由该平台首个私聊认领成功的用户自动固化，且只能有一个
 - 管理员一旦建立，不能通过对话命令修改
-- 当前已补入站附件下载码解析与附件感知；出站附件暂按文本降级提示展示
+- 当前已补入站附件下载码解析、会话上下文持久化与官方文件空间发送；图片 / 文件 / 语音走原生会话附件发送，视频仍按文件附件发送
 
-## 飞书 / 企微 / 微信 / 钉钉附件能力
+## Dashboard 接入与 Doctor
 
-- 飞书：默认优先官方 Java SDK websocket 入站，保留 webhook 作为 fallback；文本 + 本地附件投递，图片走原生图片消息，其他附件走文件类消息
-- 企微 Bot：已补 WebSocket 文本主链上的附件上传/发送，支持图片、文件、视频与 AMR 语音；非 AMR 音频自动降级为文件
-- 微信：已补 iLink 长轮询入站、上下文 token / sync 游标状态持久化，以及加密 CDN 附件发送；支持图片、文件、视频；语音默认按文件附件发送
-- 钉钉：已补 stream mode 入站附件下载码解析，并在存在最近 `session_webhook` 时支持原生图片 / 文件 / 语音发送；视频当前仍按文件处理
+- 当前 dashboard 负责国内渠道的 setup / doctor，不再补完整 CLI wizard
+- 状态页会展示每个渠道的：
+  - `setupState`
+  - `connectionMode`
+  - `missingEnv`
+  - `features`
+  - `lastErrorCode`
+  - `lastErrorMessage`
+- 微信支持从 dashboard 发起 iLink QR 登录；成功后会写入：
+  - `runtime/.env`：`JIMUQU_WEIXIN_ACCOUNT_ID`、`JIMUQU_WEIXIN_TOKEN`
+  - `runtime/config.override.yml`：仅在返回非默认 `baseUrl` 时写入 `channels.weixin.baseUrl`
+
+## 飞书 / 企微 / 微信 / 钉钉渠道能力
+
+- 飞书：仅保留官方 Java SDK websocket 入站；补齐文本 / 图片 / 音频 / 视频 / 文件 / post 富文本附件提取，群聊按 @mention 门控，并接入 card action / reaction 事件
+- 飞书：支持基于官方 `application/v6` + `bot/v3/info` 的 bot identity 自动发现，用于更准确的群聊 @mention 判定；若权限不足则保持 best-effort 降级
+- 企微 Bot：WebSocket 文本主链补齐 reply-mode `req_id`、per-group sender allowlist、quoted/mixed message 附件、图片 / 文件 / 视频 / AMR 语音上传发送；非 AMR 音频自动降级为文件
+- 微信：保留 Hermes 原生 iLink 长轮询；补齐 `context_token` / `sync_buf` SQLite 持久化、quoted media、typing、文本分片 / 重试、dashboard QR 登录、加密 CDN 附件发送
+- 钉钉：保留 Stream Mode 入站；出站文本仍走官方机器人消息，附件改走官方会话文件上传 / 发送主链，不再硬依赖最近一次 `session_webhook`；视频继续按文件附件发送
+- 钉钉：新增官方 `SendRobotInteractiveCard` AI card 发送与 `CARD_CALLBACK_TOPIC` 回调接入；当前通过 `DeliveryRequest.channelExtras` / `send_message.channelExtrasJson` 显式触发
+- 钉钉：emoji reaction 当前为 best-effort 入站解析，仅在 stream 事件里出现 `reaction` / `emoji` 类消息时转成统一文本事件；未宣称已验证原生官方 reaction API 出站
 
 ## 统一消息渠道授权与 home channel
 
@@ -247,8 +267,22 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 
 - 平台级：
   - `jimuqu.channels.<platform>.allowedUsers`
+  - `jimuqu.channels.<platform>.dmPolicy`
+  - `jimuqu.channels.<platform>.groupPolicy`
+  - `jimuqu.channels.<platform>.groupAllowedUsers`
   - `jimuqu.channels.<platform>.allowAllUsers`
   - `jimuqu.channels.<platform>.unauthorizedDmBehavior`
+- 渠道扩展：
+  - `jimuqu.channels.feishu.botOpenId`
+  - `jimuqu.channels.feishu.botUserId`
+  - `jimuqu.channels.feishu.botName`
+  - `jimuqu.channels.wecom.groups.<groupId>.allowFrom`
+  - `jimuqu.channels.weixin.splitMultilineMessages`
+  - `jimuqu.channels.weixin.sendChunkDelaySeconds`
+  - `jimuqu.channels.weixin.sendChunkRetries`
+  - `jimuqu.channels.weixin.sendChunkRetryDelaySeconds`
+- `send_message` 渠道扩展示例：
+  - 钉钉 AI card：`channelExtrasJson={"mode":"ai_card","cardTemplateId":"tpl_xxx","cardData":{"title":"demo"}}`
 - 全局：
   - `jimuqu.gateway.allowedUsers`
   - `jimuqu.gateway.allowAllUsers`
@@ -265,6 +299,10 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 - [DeliveryHomeChannelFallbackTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/DeliveryHomeChannelFallbackTest.java)
 - [ToolRegistryExposureTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/ToolRegistryExposureTest.java)
 - [AppConfigPathNormalizationTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/AppConfigPathNormalizationTest.java)
+- [ChannelConfigPolicyLoadTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/ChannelConfigPolicyLoadTest.java)
+- [WeixinQrSetupServiceTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/WeixinQrSetupServiceTest.java)
+- [FeishuBotIdentityDiscoveryTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/FeishuBotIdentityDiscoveryTest.java)
+- [DingTalkAiCardRoutingTest](D:/projects/jimuqu-agent/src/test/java/com/jimuqu/agent/DingTalkAiCardRoutingTest.java)
 
 实时模型联调：
 
@@ -304,7 +342,12 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 - 飞书 / 企微 / 微信附件发送
 - 飞书 websocket 入站文本链路
 - 微信长轮询入站链路与附件感知
-- 钉钉基于 `session_webhook` 的原生图片 / 文件 / 语音发送
+- dashboard-first 渠道 doctor / 微信 QR onboarding
+- 飞书 websocket-only 主链，card action / reaction 事件接入
+- 飞书官方 app info / bot info identity 自动发现
+- 企微 reply-mode `req_id` 与 per-group allowlist
+- 钉钉官方会话文件原生附件发送
+- 钉钉 AI card 发送与 card callback 入站
 
 未做或未完全做：
 

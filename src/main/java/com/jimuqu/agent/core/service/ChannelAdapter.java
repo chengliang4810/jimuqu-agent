@@ -1,6 +1,7 @@
 package com.jimuqu.agent.core.service;
 
 import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.core.model.ChannelStatus;
 import com.jimuqu.agent.core.model.DeliveryRequest;
 
 /**
@@ -47,5 +48,12 @@ public interface ChannelAdapter {
      */
     default void setInboundMessageHandler(InboundMessageHandler inboundMessageHandler) {
         // 留给具体渠道按需实现。
+    }
+
+    /**
+     * 返回渠道状态快照，供 dashboard / doctor 聚合。
+     */
+    default ChannelStatus statusSnapshot() {
+        return new ChannelStatus(platform(), isEnabled(), isConnected(), detail());
     }
 }

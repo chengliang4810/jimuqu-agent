@@ -49,8 +49,15 @@ jimuqu.agent.personalities.technical.style: 优先用清晰术语描述系统行
 # 飞书渠道
 jimuqu.channels.feishu.enabled: false
 jimuqu.channels.feishu.allowedUsers:
+jimuqu.channels.feishu.dmPolicy: open
+jimuqu.channels.feishu.groupPolicy: allowlist
+jimuqu.channels.feishu.groupAllowedUsers:
 jimuqu.channels.feishu.allowAllUsers: false
 jimuqu.channels.feishu.unauthorizedDmBehavior: pair
+jimuqu.channels.feishu.botOpenId:
+jimuqu.channels.feishu.botUserId:
+jimuqu.channels.feishu.botName:
+jimuqu.channels.feishu.websocketUrl:
 
 # 钉钉渠道，仅支持 stream mode 入站与官方机器人出站
 # 建议优先使用环境变量注入敏感配置：
@@ -60,26 +67,42 @@ jimuqu.channels.feishu.unauthorizedDmBehavior: pair
 # JIMUQU_DINGTALK_ROBOT_CODE
 jimuqu.channels.dingtalk.enabled: false
 jimuqu.channels.dingtalk.allowedUsers:
+jimuqu.channels.dingtalk.dmPolicy: open
+jimuqu.channels.dingtalk.groupPolicy: open
+jimuqu.channels.dingtalk.groupAllowedUsers:
 jimuqu.channels.dingtalk.allowAllUsers: false
 jimuqu.channels.dingtalk.unauthorizedDmBehavior: pair
 jimuqu.channels.dingtalk.robotCode:
 jimuqu.channels.dingtalk.coolAppCode:
+jimuqu.channels.dingtalk.streamUrl:
 
 # 企微渠道
 jimuqu.channels.wecom.enabled: false
 jimuqu.channels.wecom.allowedUsers:
+jimuqu.channels.wecom.dmPolicy: open
+jimuqu.channels.wecom.groupPolicy: open
+jimuqu.channels.wecom.groupAllowedUsers:
 jimuqu.channels.wecom.allowAllUsers: false
 jimuqu.channels.wecom.unauthorizedDmBehavior: pair
+jimuqu.channels.wecom.websocketUrl:
 
 # 微信渠道
 jimuqu.channels.weixin.enabled: false
 jimuqu.channels.weixin.allowedUsers:
+jimuqu.channels.weixin.dmPolicy: open
+jimuqu.channels.weixin.groupPolicy: disabled
+jimuqu.channels.weixin.groupAllowedUsers:
 jimuqu.channels.weixin.allowAllUsers: false
 jimuqu.channels.weixin.unauthorizedDmBehavior: pair
 jimuqu.channels.weixin.accountId:
 jimuqu.channels.weixin.baseUrl: https://ilinkai.weixin.qq.com
 jimuqu.channels.weixin.cdnBaseUrl: https://novac2c.cdn.weixin.qq.com/c2c
+jimuqu.channels.weixin.longPollUrl:
 jimuqu.channels.weixin.token:
+jimuqu.channels.weixin.splitMultilineMessages: false
+jimuqu.channels.weixin.sendChunkDelaySeconds: 0.35
+jimuqu.channels.weixin.sendChunkRetries: 2
+jimuqu.channels.weixin.sendChunkRetryDelaySeconds: 1.0
 
 # 全局网关授权兜底配置
 jimuqu.gateway.allowedUsers:

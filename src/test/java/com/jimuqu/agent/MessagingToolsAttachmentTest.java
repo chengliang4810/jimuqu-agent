@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,7 +34,7 @@ public class MessagingToolsAttachmentTest {
         String originalUserDir = System.getProperty("user.dir");
         System.setProperty("user.dir", tempDir.toString());
         try {
-            tools.sendMessage(null, null, "请发送附件", Arrays.asList("demo.png", voice.getAbsolutePath()));
+            tools.sendMessage(null, null, "请发送附件", Arrays.asList("demo.png", voice.getAbsolutePath()), null);
         } finally {
             System.setProperty("user.dir", originalUserDir);
         }
@@ -56,10 +57,29 @@ public class MessagingToolsAttachmentTest {
                 new AttachmentCacheService(env.appConfig)
         );
 
-        tools.sendMessage(null, null, "纯文本", Collections.<String>emptyList());
+        tools.sendMessage(null, null, "纯文本", Collections.<String>emptyList(), null);
 
         DeliveryRequest request = env.memoryChannelAdapter.getLastRequest();
         assertThat(request.getText()).isEqualTo("纯文本");
         assertThat(request.getAttachments()).isEmpty();
+    }
+
+    @Test
+    void shouldPassChannelExtrasJson() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        MessagingTools tools = new MessagingTools(
+                env.deliveryService,
+                "MEMORY:chat-1:user-1",
+                new AttachmentCacheService(env.appConfig)
+        );
+
+        tools.sendMessage(null, null, "发卡片", Collections.<String>emptyList(),
+                "{\"mode\":\"ai_card\",\"cardTemplateId\":\"tpl-1\",\"cardData\":{\"title\":\"demo\"}}");
+
+        DeliveryRequest request = env.memoryChannelAdapter.getLastRequest();
+        assertThat(request.getPlatform().name()).isEqualTo("MEMORY");
+        assertThat(request.getChannelExtras()).containsEntry("mode", "ai_card");
+        assertThat(request.getChannelExtras()).containsEntry("cardTemplateId", "tpl-1");
+        assertThat(((Map<?, ?>) request.getChannelExtras().get("cardData")).get("title")).isEqualTo("demo");
     }
 }

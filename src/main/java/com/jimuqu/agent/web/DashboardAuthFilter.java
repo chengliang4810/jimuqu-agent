@@ -21,13 +21,13 @@ public class DashboardAuthFilter implements Filter {
     public void doFilter(Context ctx, FilterChain chain) throws Throwable {
         authService.applyCors(ctx);
 
-        if ("OPTIONS".equalsIgnoreCase(ctx.method()) && ctx.path().startsWith("/api/") && !ctx.path().startsWith("/api/gateway/")) {
+        if ("OPTIONS".equalsIgnoreCase(ctx.method()) && ctx.path().startsWith("/api/")) {
             ctx.status(204);
             return;
         }
 
         String path = ctx.path();
-        if (path.startsWith("/api/") && !path.startsWith("/api/gateway/") && !authService.isPublicApiPath(path) && !authService.isAuthorized(ctx)) {
+        if (path.startsWith("/api/") && !authService.isPublicApiPath(path) && !authService.isAuthorized(ctx)) {
             ctx.status(401);
             ctx.contentType("application/json;charset=UTF-8");
             ctx.output(ONode.serialize(Collections.singletonMap("detail", "Unauthorized")));

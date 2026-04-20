@@ -295,10 +295,10 @@ export default function CronPage() {
                     onValueChange={(v) => setDeliver(v)}
                   >
                     <SelectOption value="local">{t.cron.delivery.local}</SelectOption>
-                    <SelectOption value="feishu">{t.cron.delivery.telegram}</SelectOption>
-                    <SelectOption value="dingtalk">{t.cron.delivery.discord}</SelectOption>
-                    <SelectOption value="wecom">{t.cron.delivery.slack}</SelectOption>
-                    <SelectOption value="weixin">{t.cron.delivery.email}</SelectOption>
+                    <SelectOption value="feishu">{t.cron.delivery.feishu}</SelectOption>
+                    <SelectOption value="dingtalk">{t.cron.delivery.dingtalk}</SelectOption>
+                    <SelectOption value="wecom">{t.cron.delivery.wecom}</SelectOption>
+                    <SelectOption value="weixin">{t.cron.delivery.weixin}</SelectOption>
                   </Select>
                 </div>
               </div>

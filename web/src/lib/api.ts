@@ -36,6 +36,13 @@ async function getSessionToken(): Promise<string> {
 
 export const api = {
   getStatus: () => fetchJSON<StatusResponse>("/api/status"),
+  getGatewayDoctor: () => fetchJSON<GatewayDoctorResponse>("/api/gateway/doctor"),
+  startWeixinQrLogin: () =>
+    fetchJSON<WeixinQrTicket>("/api/gateway/setup/weixin/qr", {
+      method: "POST",
+    }),
+  getWeixinQrTicket: (ticket: string) =>
+    fetchJSON<WeixinQrTicket>(`/api/gateway/setup/weixin/qr/${encodeURIComponent(ticket)}`),
   getSessions: (limit = 20, offset = 0) =>
     fetchJSON<PaginatedSessions>(`/api/sessions?limit=${limit}&offset=${offset}`),
   getSessionMessages: (id: string) =>
@@ -185,8 +192,13 @@ export const api = {
 };
 
 export interface PlatformStatus {
+  connection_mode?: string | null;
+  detail?: string | null;
   error_code?: string;
   error_message?: string;
+  features?: string[];
+  missing_env?: string[];
+  setup_state?: string | null;
   state: string;
   updated_at: string;
 }
@@ -206,6 +218,42 @@ export interface StatusResponse {
   latest_config_version: number;
   release_date: string;
   version: string;
+}
+
+export interface GatewayDoctorPlatform {
+  connection_mode?: string | null;
+  connected: boolean;
+  detail?: string | null;
+  enabled: boolean;
+  features: string[];
+  last_error_code?: string | null;
+  last_error_message?: string | null;
+  missing_env: string[];
+  next_step?: string | null;
+  platform: string;
+  setup_state?: string | null;
+}
+
+export interface GatewayDoctorResponse {
+  generated_at: string;
+  platforms: GatewayDoctorPlatform[];
+  runtime_home: string;
+}
+
+export interface WeixinQrTicket {
+  account_id?: string | null;
+  base_url?: string | null;
+  created_at?: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+  expires_at?: string | null;
+  message?: string | null;
+  qr_code?: string | null;
+  qr_image_url?: string | null;
+  status: string;
+  ticket: string;
+  updated_at?: string | null;
+  user_id?: string | null;
 }
 
 export interface SessionInfo {

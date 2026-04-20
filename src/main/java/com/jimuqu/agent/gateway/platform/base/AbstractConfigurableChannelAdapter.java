@@ -2,11 +2,18 @@ package com.jimuqu.agent.gateway.platform.base;
 
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.core.model.ChannelStatus;
 import com.jimuqu.agent.core.model.DeliveryRequest;
 import com.jimuqu.agent.core.service.ChannelAdapter;
 import com.jimuqu.agent.core.service.InboundMessageHandler;
+import com.jimuqu.agent.support.constants.GatewayBehaviorConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * 可配置渠道适配器基类，负责处理启用状态、连接状态和基础日志。
@@ -38,6 +45,36 @@ public abstract class AbstractConfigurableChannelAdapter implements ChannelAdapt
     private String detail;
 
     /**
+     * 渠道 setup 状态。
+     */
+    private String setupState;
+
+    /**
+     * 渠道连接模式。
+     */
+    private String connectionMode;
+
+    /**
+     * 缺失环境变量。
+     */
+    private final List<String> missingEnv = new ArrayList<String>();
+
+    /**
+     * 功能标签。
+     */
+    private final List<String> features = new ArrayList<String>();
+
+    /**
+     * 最近一次错误码。
+     */
+    private String lastErrorCode;
+
+    /**
+     * 最近一次错误消息。
+     */
+    private String lastErrorMessage;
+
+    /**
      * 入站消息处理器。
      */
     private InboundMessageHandler inboundMessageHandler;
@@ -49,6 +86,8 @@ public abstract class AbstractConfigurableChannelAdapter implements ChannelAdapt
         this.platformType = platformType;
         this.enabled = config != null && config.isEnabled();
         this.detail = enabled ? "configured" : "disabled";
+        this.setupState = enabled ? "configured" : "disabled";
+        this.connectionMode = "custom";
     }
 
     /**
@@ -114,6 +153,18 @@ public abstract class AbstractConfigurableChannelAdapter implements ChannelAdapt
         log.info("[{}:{}] {}", request.getPlatform(), request.getChatId(), request.getText());
     }
 
+    @Override
+    public ChannelStatus statusSnapshot() {
+        ChannelStatus status = new ChannelStatus(platformType, enabled, connected, detail);
+        status.setSetupState(setupState);
+        status.setConnectionMode(connectionMode);
+        status.setMissingEnv(new ArrayList<String>(missingEnv));
+        status.setFeatures(new ArrayList<String>(features));
+        status.setLastErrorCode(lastErrorCode);
+        status.setLastErrorMessage(lastErrorMessage);
+        return status;
+    }
+
     /**
      * 注册入站消息处理器。
      */
@@ -141,5 +192,82 @@ public abstract class AbstractConfigurableChannelAdapter implements ChannelAdapt
      */
     protected void setDetail(String detail) {
         this.detail = detail;
+    }
+
+    /**
+     * 标记渠道连接模式。
+     */
+    protected void setConnectionMode(String connectionMode) {
+        this.connectionMode = connectionMode == null ? "custom" : connectionMode;
+    }
+
+    /**
+     * 标记渠道 setup 状态。
+     */
+    protected void setSetupState(String setupState) {
+        this.setupState = setupState == null ? GatewayBehaviorConstants.NONE : setupState;
+    }
+
+    /**
+     * 覆盖缺失配置项。
+     */
+    protected void setMissingEnv(String... values) {
+        missingEnv.clear();
+        if (values == null) {
+            return;
+        }
+        for (String value : values) {
+            if (value != null && value.trim().length() > 0) {
+                missingEnv.add(value.trim());
+            }
+        }
+    }
+
+    /**
+     * 覆盖缺失配置项。
+     */
+    protected void setMissingEnv(List<String> values) {
+        missingEnv.clear();
+        if (values == null) {
+            return;
+        }
+        for (String value : values) {
+            if (value != null && value.trim().length() > 0) {
+                missingEnv.add(value.trim());
+            }
+        }
+    }
+
+    /**
+     * 设置功能标签。
+     */
+    protected void setFeatures(String... values) {
+        features.clear();
+        if (values != null) {
+            features.addAll(Arrays.asList(values));
+        }
+    }
+
+    /**
+     * 返回功能标签快照。
+     */
+    protected List<String> features() {
+        return Collections.unmodifiableList(features);
+    }
+
+    /**
+     * 清理最近一次错误。
+     */
+    protected void clearLastError() {
+        this.lastErrorCode = null;
+        this.lastErrorMessage = null;
+    }
+
+    /**
+     * 记录最近一次错误。
+     */
+    protected void setLastError(String code, String message) {
+        this.lastErrorCode = code;
+        this.lastErrorMessage = message;
     }
 }

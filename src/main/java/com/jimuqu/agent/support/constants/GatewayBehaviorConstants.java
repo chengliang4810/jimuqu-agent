@@ -5,6 +5,41 @@ package com.jimuqu.agent.support.constants;
  */
 public interface GatewayBehaviorConstants {
     /**
+     * 私聊策略：开放。
+     */
+    String DM_POLICY_OPEN = "open";
+
+    /**
+     * 私聊策略：允许名单。
+     */
+    String DM_POLICY_ALLOWLIST = "allowlist";
+
+    /**
+     * 私聊策略：禁用。
+     */
+    String DM_POLICY_DISABLED = "disabled";
+
+    /**
+     * 私聊策略：走 pairing。
+     */
+    String DM_POLICY_PAIRING = "pairing";
+
+    /**
+     * 群聊策略：开放。
+     */
+    String GROUP_POLICY_OPEN = "open";
+
+    /**
+     * 群聊策略：允许名单。
+     */
+    String GROUP_POLICY_ALLOWLIST = "allowlist";
+
+    /**
+     * 群聊策略：禁用。
+     */
+    String GROUP_POLICY_DISABLED = "disabled";
+
+    /**
      * 未授权私聊用户进入 pairing 流程。
      */
     String UNAUTHORIZED_DM_BEHAVIOR_PAIR = "pair";

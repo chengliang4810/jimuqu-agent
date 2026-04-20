@@ -17,6 +17,7 @@ import com.jimuqu.agent.core.model.MessageAttachment;
 import com.jimuqu.agent.core.repository.ChannelStateRepository;
 import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
 import com.jimuqu.agent.support.AttachmentCacheService;
+import com.jimuqu.agent.support.constants.GatewayBehaviorConstants;
 import org.noear.snack4.ONode;
 
 import javax.crypto.Cipher;
@@ -24,6 +25,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,10 +42,13 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     private static final String DEFAULT_CDN_BASE_URL = "https://novac2c.cdn.weixin.qq.com/c2c";
     private static final String SEND_ENDPOINT = "ilink/bot/sendmessage";
     private static final String GET_UPDATES_ENDPOINT = "ilink/bot/getupdates";
+    private static final String SEND_TYPING_ENDPOINT = "ilink/bot/sendtyping";
+    private static final String GET_CONFIG_ENDPOINT = "ilink/bot/getconfig";
     private static final String GET_UPLOAD_URL_ENDPOINT = "ilink/bot/getuploadurl";
     private static final String CONTEXT_TOKEN_KEY = "context_token";
     private static final String SYNC_BUF_KEY = "sync_buf";
     private static final int LONG_POLL_TIMEOUT_MS = 35_000;
+    private static final int CONFIG_TIMEOUT_MS = 10_000;
     private static final int MESSAGE_DEDUP_TTL_MILLIS = 5 * 60 * 1000;
 
     private static final int MSG_TYPE_BOT = 2;
@@ -55,11 +60,14 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     private static final int MEDIA_IMAGE = 1;
     private static final int MEDIA_VIDEO = 2;
     private static final int MEDIA_FILE = 3;
+    private static final int TYPING_START = 1;
+    private static final int TYPING_STOP = 2;
 
     private final AppConfig.ChannelConfig config;
     private final ChannelStateRepository channelStateRepository;
     private final AttachmentCacheService attachmentCacheService;
     private final ConcurrentMap<String, Long> recentMessageIds = new ConcurrentHashMap<String, Long>();
+    private final ConcurrentMap<String, TypingTicketState> typingTickets = new ConcurrentHashMap<String, TypingTicketState>();
     private volatile ExecutorService pollExecutor;
     private volatile boolean polling;
 
@@ -70,22 +78,39 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         this.config = config;
         this.channelStateRepository = channelStateRepository;
         this.attachmentCacheService = attachmentCacheService;
+        setConnectionMode("long-poll");
+        setFeatures("text", "attachments", "quoted-media", "typing", "qr-login");
+        setSetupState(config != null && config.isEnabled() ? "configured" : "disabled");
     }
 
     @Override
     public boolean connect() {
         if (!isEnabled()) {
+            setSetupState("disabled");
             setDetail("disabled");
             return false;
         }
-        if (StrUtil.isBlank(config.getToken()) || StrUtil.isBlank(config.getAccountId())) {
+        java.util.ArrayList<String> missing = new java.util.ArrayList<String>();
+        if (StrUtil.isBlank(config.getToken())) {
+            missing.add("JIMUQU_WEIXIN_TOKEN");
+        }
+        if (StrUtil.isBlank(config.getAccountId())) {
+            missing.add("JIMUQU_WEIXIN_ACCOUNT_ID");
+        }
+        if (!missing.isEmpty()) {
             setConnected(false);
+            setSetupState("missing_config");
+            setMissingEnv(missing);
+            setLastError("weixin_missing_credentials", "missing token/accountId");
             setDetail("missing token/accountId");
             log.warn("[WEIXIN] Missing token/accountId");
             return false;
         }
+        setMissingEnv(new String[0]);
+        clearLastError();
         setConnected(true);
-        setDetail("token/accountId configured");
+        setSetupState("connected");
+        setDetail("long-poll configured");
         startPolling();
         return true;
     }
@@ -119,23 +144,121 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     }
 
     private void sendText(String chatId, String text) {
-        ONode message = baseMessage(chatId);
-        String contextToken = loadContextToken(chatId);
-        if (StrUtil.isNotBlank(contextToken)) {
-            message.set("context_token", contextToken);
+        List<String> chunks = splitTextForDelivery(text);
+        for (int i = 0; i < chunks.size(); i++) {
+            sendTextChunk(chatId, chunks.get(i));
+            if (i + 1 < chunks.size()) {
+                sleepQuietlyMillis((long) (config.getSendChunkDelaySeconds() * 1000L));
+            }
         }
-        message.getOrNew("item_list").asArray().add(new ONode()
-                .set("type", ITEM_TEXT)
-                .getOrNew("text_item")
-                .set("text", text)
-                .parent()
-                .parent());
-        ONode response = apiPost(SEND_ENDPOINT, new ONode().set("msg", message).asObject());
-        if (response.get("errcode").getInt(0) == -14 && StrUtil.isNotBlank(contextToken)) {
-            message.remove("context_token");
-            response = apiPost(SEND_ENDPOINT, new ONode().set("msg", message).asObject());
+    }
+
+    private void sendTextChunk(String chatId, String text) {
+        int attempts = Math.max(1, config.getSendChunkRetries() + 1);
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                ONode message = baseMessage(chatId);
+                String contextToken = loadContextToken(chatId);
+                if (StrUtil.isNotBlank(contextToken)) {
+                    message.set("context_token", contextToken);
+                }
+                message.getOrNew("item_list").asArray().add(new ONode()
+                        .set("type", ITEM_TEXT)
+                        .getOrNew("text_item")
+                        .set("text", text)
+                        .parent()
+                        .parent());
+                ONode response = apiPost(SEND_ENDPOINT, new ONode().set("msg", message).asObject());
+                if (response.get("errcode").getInt(0) == -14 && StrUtil.isNotBlank(contextToken)) {
+                    message.remove("context_token");
+                    response = apiPost(SEND_ENDPOINT, new ONode().set("msg", message).asObject());
+                }
+                ensureSuccess(response, "Weixin text send failed");
+                clearLastError();
+                return;
+            } catch (Exception e) {
+                setLastError("weixin_send_text_failed", safeMessage(e));
+                if (attempt >= attempts) {
+                    throw e;
+                }
+                sleepQuietlyMillis((long) (config.getSendChunkRetryDelaySeconds() * 1000L));
+            }
         }
-        ensureSuccess(response, "Weixin text send failed");
+    }
+
+    private List<String> splitTextForDelivery(String text) {
+        ArrayList<String> chunks = new ArrayList<String>();
+        String normalized = StrUtil.nullToEmpty(text).trim();
+        if (normalized.length() == 0) {
+            return chunks;
+        }
+        if (!config.isSplitMultilineMessages() && normalized.length() <= 4000) {
+            chunks.add(normalized);
+            return chunks;
+        }
+        if (config.isSplitMultilineMessages() && normalized.indexOf('\n') >= 0 && normalized.length() <= 4000) {
+            String[] lines = normalized.split("\\R");
+            for (String line : lines) {
+                String trimmed = line == null ? "" : line.trim();
+                if (trimmed.length() > 0) {
+                    chunks.add(trimmed);
+                }
+            }
+            if (!chunks.isEmpty()) {
+                return chunks;
+            }
+        }
+
+        String[] paragraphs = normalized.split("\\n\\s*\\n");
+        StringBuilder current = new StringBuilder();
+        for (String paragraph : paragraphs) {
+            String trimmed = paragraph == null ? "" : paragraph.trim();
+            if (trimmed.length() == 0) {
+                continue;
+            }
+            if (trimmed.length() > 4000) {
+                appendChunk(chunks, current);
+                splitHard(trimmed, chunks);
+                continue;
+            }
+            String candidate = current.length() == 0 ? trimmed : current.toString() + "\n\n" + trimmed;
+            if (candidate.length() > 4000) {
+                appendChunk(chunks, current);
+                current.append(trimmed);
+            } else {
+                if (current.length() > 0) {
+                    current.append("\n\n");
+                }
+                current.append(trimmed);
+            }
+        }
+        appendChunk(chunks, current);
+        if (chunks.isEmpty()) {
+            splitHard(normalized, chunks);
+        }
+        return chunks;
+    }
+
+    private void appendChunk(List<String> chunks, StringBuilder current) {
+        if (current.length() == 0) {
+            return;
+        }
+        chunks.add(current.toString());
+        current.setLength(0);
+    }
+
+    private void splitHard(String text, List<String> chunks) {
+        int start = 0;
+        while (start < text.length()) {
+            int end = Math.min(start + 4000, text.length());
+            chunks.add(text.substring(start, end));
+            start = end;
+        }
+    }
+
+    private String safeMessage(Exception e) {
+        String message = e.getMessage();
+        return StrUtil.isBlank(message) ? e.getClass().getSimpleName() : message.trim();
     }
 
     private void sendAttachment(String chatId, MessageAttachment attachment) {
@@ -241,21 +364,7 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     }
 
     private ONode apiPost(String endpoint, ONode payload) {
-        String baseUrl = StrUtil.blankToDefault(config.getBaseUrl(), DEFAULT_BASE_URL).replaceAll("/+$", "");
-        payload.set("base_info", new ONode().set("channel_version", "2.2.0").asObject());
-        String body = payload.toJson();
-        String response = HttpRequest.post(baseUrl + "/" + endpoint)
-                .header("AuthorizationType", "ilink_bot_token")
-                .header("Authorization", "Bearer " + config.getToken())
-                .header("iLink-App-Id", "bot")
-                .header("iLink-App-ClientVersion", String.valueOf((2 << 16) | (2 << 8)))
-                .header("X-WECHAT-UIN", Base64.getEncoder().encodeToString(String.valueOf(Math.abs(RandomUtil.randomInt())).getBytes(StandardCharsets.UTF_8)))
-                .contentType(ContentType.JSON.toString())
-                .body(body)
-                .timeout(Math.max(20_000, LONG_POLL_TIMEOUT_MS + 5_000))
-                .execute()
-                .body();
-        return ONode.ofJson(response);
+        return apiPost(endpoint, payload, LONG_POLL_TIMEOUT_MS + 5_000);
     }
 
     private String resolveUploadUrl(ONode uploadInfo, String fileKey) {
@@ -345,9 +454,19 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
                 int ret = response.get("ret").getInt(0);
                 if (errCode != 0 || ret != 0) {
                     log.warn("[WEIXIN] getupdates failed: {}", response.toJson());
+                    if (errCode == -14 || ret == -14) {
+                        setLastError("weixin_session_expired", response.toJson());
+                        setDetail("session expired");
+                        sleepQuietly(10);
+                        continue;
+                    }
+                    setLastError("weixin_poll_failed", response.toJson());
+                    setDetail("poll failed");
                     sleepQuietly(2);
                     continue;
                 }
+                clearLastError();
+                setDetail("long-poll active");
                 String nextSyncBuf = response.get("get_updates_buf").getString();
                 if (StrUtil.isNotBlank(nextSyncBuf)) {
                     syncBuf = nextSyncBuf;
@@ -408,9 +527,17 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         gatewayMessage.setThreadId(messageId);
         gatewayMessage.setAttachments(attachments);
         try {
+            if ("dm".equals(chatTarget.chatType)) {
+                maybeFetchTypingTicket(chatTarget.chatId, contextToken);
+                sendTyping(chatTarget.chatId, TYPING_START);
+            }
             inboundMessageHandler().handle(gatewayMessage);
         } catch (Exception e) {
             log.warn("[WEIXIN] inbound dispatch failed: {}", e.getMessage(), e);
+        } finally {
+            if ("dm".equals(chatTarget.chatType)) {
+                sendTyping(chatTarget.chatId, TYPING_STOP);
+            }
         }
     }
 
@@ -559,14 +686,73 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         if (config.isAllowAllUsers()) {
             return true;
         }
-        return config.getAllowedUsers() == null || config.getAllowedUsers().isEmpty() || config.getAllowedUsers().contains(userId);
+        String policy = StrUtil.blankToDefault(config.getDmPolicy(), GatewayBehaviorConstants.DM_POLICY_OPEN).toLowerCase();
+        if (GatewayBehaviorConstants.DM_POLICY_DISABLED.equals(policy)) {
+            return false;
+        }
+        if (GatewayBehaviorConstants.DM_POLICY_ALLOWLIST.equals(policy)) {
+            return contains(config.getAllowedUsers(), userId);
+        }
+        return true;
     }
 
     private boolean allowGroup(String chatId) {
         if (config.isAllowAllUsers()) {
             return true;
         }
-        return config.getAllowedUsers() == null || config.getAllowedUsers().isEmpty() || config.getAllowedUsers().contains(chatId);
+        String policy = StrUtil.blankToDefault(config.getGroupPolicy(), GatewayBehaviorConstants.GROUP_POLICY_DISABLED).toLowerCase();
+        if (GatewayBehaviorConstants.GROUP_POLICY_DISABLED.equals(policy)) {
+            return false;
+        }
+        if (GatewayBehaviorConstants.GROUP_POLICY_ALLOWLIST.equals(policy)) {
+            return contains(config.getGroupAllowedUsers(), chatId);
+        }
+        return true;
+    }
+
+    private boolean contains(List<String> values, String target) {
+        if (values == null || target == null) {
+            return false;
+        }
+        if (values.contains(GatewayBehaviorConstants.ALLOW_ALL_MARKER)) {
+            return true;
+        }
+        return values.contains(target);
+    }
+
+    private void maybeFetchTypingTicket(String userId, String contextToken) {
+        TypingTicketState existing = typingTickets.get(userId);
+        if (existing != null && existing.isValid()) {
+            return;
+        }
+        try {
+            ONode response = apiPost(GET_CONFIG_ENDPOINT, new ONode()
+                    .set("ilink_user_id", userId)
+                    .set("context_token", contextToken)
+                    .asObject(), CONFIG_TIMEOUT_MS);
+            String typingTicket = response.get("typing_ticket").getString();
+            if (StrUtil.isNotBlank(typingTicket)) {
+                typingTickets.put(userId, new TypingTicketState(typingTicket, System.currentTimeMillis() + 10L * 60L * 1000L));
+            }
+        } catch (Exception e) {
+            log.debug("[WEIXIN] fetch typing ticket failed: {}", e.getMessage());
+        }
+    }
+
+    private void sendTyping(String userId, int status) {
+        TypingTicketState state = typingTickets.get(userId);
+        if (state == null || !state.isValid()) {
+            return;
+        }
+        try {
+            apiPost(SEND_TYPING_ENDPOINT, new ONode()
+                    .set("ilink_user_id", userId)
+                    .set("typing_ticket", state.ticket)
+                    .set("status", status)
+                    .asObject(), CONFIG_TIMEOUT_MS);
+        } catch (Exception e) {
+            log.debug("[WEIXIN] send typing failed: {}", e.getMessage());
+        }
     }
 
     private boolean isDuplicate(String messageId) {
@@ -616,6 +802,46 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         }
     }
 
+    private void sleepQuietlyMillis(long millis) {
+        try {
+            TimeUnit.MILLISECONDS.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private ONode apiPost(String endpoint, ONode payload, int timeoutMs) {
+        String baseUrl = resolveBaseUrl(endpoint);
+        payload.set("base_info", new ONode().set("channel_version", "2.2.0").asObject());
+        String body = payload.toJson();
+        String response = HttpRequest.post(baseUrl + "/" + endpoint)
+                .header("AuthorizationType", "ilink_bot_token")
+                .header("Authorization", "Bearer " + config.getToken())
+                .header("iLink-App-Id", "bot")
+                .header("iLink-App-ClientVersion", String.valueOf((2 << 16) | (2 << 8)))
+                .header("X-WECHAT-UIN", Base64.getEncoder().encodeToString(String.valueOf(Math.abs(RandomUtil.randomInt())).getBytes(StandardCharsets.UTF_8)))
+                .contentType(ContentType.JSON.toString())
+                .body(body)
+                .timeout(Math.max(20_000, timeoutMs))
+                .execute()
+                .body();
+        return ONode.ofJson(response);
+    }
+
+    private String resolveBaseUrl(String endpoint) {
+        String configured = StrUtil.blankToDefault(config.getBaseUrl(), DEFAULT_BASE_URL).replaceAll("/+$", "");
+        if (GET_UPDATES_ENDPOINT.equals(endpoint) && StrUtil.isNotBlank(config.getLongPollUrl())) {
+            String longPoll = config.getLongPollUrl().trim();
+            if (longPoll.endsWith("/" + GET_UPDATES_ENDPOINT)) {
+                return longPoll.substring(0, longPoll.length() - GET_UPDATES_ENDPOINT.length() - 1);
+            }
+            if (longPoll.startsWith("http://") || longPoll.startsWith("https://")) {
+                return longPoll.replaceAll("/+$", "");
+            }
+        }
+        return configured;
+    }
+
     private static class ChatTarget {
         private final String chatType;
         private final String chatId;
@@ -623,6 +849,20 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         private ChatTarget(String chatType, String chatId) {
             this.chatType = chatType;
             this.chatId = chatId;
+        }
+    }
+
+    private static class TypingTicketState {
+        private final String ticket;
+        private final long expiresAt;
+
+        private TypingTicketState(String ticket, long expiresAt) {
+            this.ticket = ticket;
+            this.expiresAt = expiresAt;
+        }
+
+        private boolean isValid() {
+            return ticket != null && ticket.length() > 0 && expiresAt > System.currentTimeMillis();
         }
     }
 }

@@ -10,10 +10,11 @@ import {
   WifiOff,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import type { PlatformStatus, SessionInfo, StatusResponse } from "@/lib/api";
+import type { GatewayDoctorPlatform, GatewayDoctorResponse, PlatformStatus, SessionInfo, StatusResponse, WeixinQrTicket } from "@/lib/api";
 import { timeAgo, isoTimeAgo } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 
 function platformLabel(name: string): string {
@@ -36,17 +37,31 @@ function sourceLabel(name?: string | null): string {
 export default function StatusPage() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [doctor, setDoctor] = useState<GatewayDoctorResponse | null>(null);
+  const [weixinQr, setWeixinQr] = useState<WeixinQrTicket | null>(null);
+  const [startingQr, setStartingQr] = useState(false);
   const { t } = useI18n();
 
   useEffect(() => {
     const load = () => {
       api.getStatus().then(setStatus).catch(() => {});
       api.getSessions(50).then((resp) => setSessions(resp.sessions)).catch(() => {});
+      api.getGatewayDoctor().then(setDoctor).catch(() => {});
     };
     load();
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!weixinQr || (weixinQr.status !== "pending" && weixinQr.status !== "scanned" && weixinQr.status !== "initializing")) {
+      return;
+    }
+    const interval = setInterval(() => {
+      api.getWeixinQrTicket(weixinQr.ticket).then(setWeixinQr).catch(() => {});
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [weixinQr]);
 
   if (!status) {
     return (
@@ -114,6 +129,17 @@ export default function StatusPage() {
   const platforms = Object.entries(status.gateway_platforms ?? {});
   const activeSessions = sessions.filter((s) => s.is_active);
   const recentSessions = sessions.filter((s) => !s.is_active).slice(0, 5);
+  const doctorPlatforms = doctor?.platforms ?? [];
+
+  async function handleStartWeixinQr() {
+    setStartingQr(true);
+    try {
+      const ticket = await api.startWeixinQrLogin();
+      setWeixinQr(ticket);
+    } finally {
+      setStartingQr(false);
+    }
+  }
 
   // Collect alerts that need attention
   const alerts: { message: string; detail?: string }[] = [];
@@ -179,6 +205,15 @@ export default function StatusPage() {
 
       {platforms.length > 0 && (
         <PlatformsCard platforms={platforms} platformStateBadge={PLATFORM_STATE_BADGE} />
+      )}
+
+      {doctorPlatforms.length > 0 && (
+        <DoctorCard
+          platforms={doctorPlatforms}
+          weixinQr={weixinQr}
+          startingQr={startingQr}
+          onStartWeixinQr={handleStartWeixinQr}
+        />
       )}
 
       {activeSessions.length > 0 && (
@@ -324,4 +359,95 @@ function PlatformsCard({ platforms, platformStateBadge }: PlatformsCardProps) {
 interface PlatformsCardProps {
   platforms: [string, PlatformStatus][];
   platformStateBadge: Record<string, { variant: "success" | "warning" | "destructive" | "outline"; label: string }>;
+}
+
+function DoctorCard({
+  platforms,
+  weixinQr,
+  startingQr,
+  onStartWeixinQr,
+}: {
+  platforms: GatewayDoctorPlatform[];
+  weixinQr: WeixinQrTicket | null;
+  startingQr: boolean;
+  onStartWeixinQr: () => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+          <CardTitle className="text-base">{t.status.doctorTitle}</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        {platforms.map((item) => (
+          <div
+            key={item.platform}
+            className="rounded-[20px] border border-border/70 bg-white/48 p-3"
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{platformLabel(item.platform)}</span>
+                  <Badge variant={item.connected ? "success" : item.missing_env.length > 0 ? "warning" : "outline"}>
+                    {item.connected ? t.status.setupReady : item.missing_env.length > 0 ? t.status.missingConfig : (item.setup_state ?? t.common.unknown)}
+                  </Badge>
+                </div>
+                <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
+                  <span>{t.status.connectionMode}: {item.connection_mode ?? "custom"}</span>
+                  {item.detail && <span>{item.detail}</span>}
+                  {item.missing_env.length > 0 && (
+                    <span>{t.status.missingEnv}: {item.missing_env.join(", ")}</span>
+                  )}
+                  {item.features.length > 0 && (
+                    <span>{t.status.features}: {item.features.join(", ")}</span>
+                  )}
+                  {item.next_step && (
+                    <span>{t.status.nextStep}: {item.next_step}</span>
+                  )}
+                  {item.last_error_message && (
+                    <span className="text-destructive">{item.last_error_message}</span>
+                  )}
+                </div>
+              </div>
+
+              {item.platform === "weixin" && (
+                <div className="flex flex-col items-start gap-2 sm:items-end">
+                  <Button
+                    size="sm"
+                    onClick={onStartWeixinQr}
+                    disabled={startingQr || (weixinQr?.status === "pending" || weixinQr?.status === "scanned" || weixinQr?.status === "initializing")}
+                  >
+                    {startingQr ? t.common.loading : t.status.weixinQrStart}
+                  </Button>
+                  {weixinQr && (
+                    <div className="max-w-[220px] text-xs text-muted-foreground">
+                      <div>
+                        {weixinQr.status === "confirmed"
+                          ? t.status.weixinQrConfirmed
+                          : weixinQr.status === "failed"
+                            ? t.status.weixinQrFailed
+                            : t.status.weixinQrPending}
+                      </div>
+                      {weixinQr.message && <div className="mt-1">{weixinQr.message}</div>}
+                      {weixinQr.qr_image_url && (weixinQr.status === "pending" || weixinQr.status === "scanned" || weixinQr.status === "initializing") && (
+                        <img
+                          src={weixinQr.qr_image_url}
+                          alt="weixin qr"
+                          className="mt-2 h-28 w-28 rounded-md border border-border bg-white p-1"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
 }

@@ -23,6 +23,8 @@ import java.util.Map;
  * Dashboard 配置读写与 schema 服务。
  */
 public class DashboardConfigService {
+    private static final List<String> PASSTHROUGH_PREFIXES = Arrays.asList("channels.wecom.groups.");
+
     private final AppConfig appConfig;
     private final RuntimeEnvResolver envResolver;
     private final Map<String, FieldDefinition> fields = new LinkedHashMap<String, FieldDefinition>();
@@ -71,6 +73,14 @@ public class DashboardConfigService {
         return Collections.<String, Object>singletonMap("ok", true);
     }
 
+    public Map<String, Object> savePartialFlat(Map<String, Object> flatUpdates) {
+        validateKeys(flatUpdates.keySet());
+        Map<String, Object> merged = mergeBaseValues();
+        merged.putAll(flatUpdates);
+        writeOverrideFile(merged);
+        return Collections.<String, Object>singletonMap("ok", true);
+    }
+
     private void registerFields() {
         addField(new FieldDefinition("llm.provider", "select", "general", "模型协议提供方")
                 .options("openai", "openai-responses", "ollama", "gemini", "anthropic"));
@@ -109,19 +119,38 @@ public class DashboardConfigService {
 
         addChannelFields("feishu", null, "JIMUQU_FEISHU_ALLOWED_USERS", "JIMUQU_FEISHU_ALLOW_ALL_USERS", "JIMUQU_FEISHU_UNAUTHORIZED_DM_BEHAVIOR");
         addField(new FieldDefinition("channels.feishu.websocketUrl", "string", "messaging", "飞书 websocket 地址"));
+        addField(new FieldDefinition("channels.feishu.dmPolicy", "select", "messaging", "飞书私聊策略").options("open", "allowlist", "disabled", "pairing"));
+        addField(new FieldDefinition("channels.feishu.groupPolicy", "select", "messaging", "飞书群聊策略").options("open", "allowlist", "disabled"));
+        addField(new FieldDefinition("channels.feishu.groupAllowedUsers", "list", "messaging", "飞书群聊 allowlist").envName("JIMUQU_FEISHU_GROUP_ALLOWED_USERS"));
+        addField(new FieldDefinition("channels.feishu.botOpenId", "string", "messaging", "飞书 bot Open ID").envName("JIMUQU_FEISHU_BOT_OPEN_ID"));
+        addField(new FieldDefinition("channels.feishu.botUserId", "string", "messaging", "飞书 bot User ID").envName("JIMUQU_FEISHU_BOT_USER_ID"));
+        addField(new FieldDefinition("channels.feishu.botName", "string", "messaging", "飞书 bot 展示名"));
 
         addChannelFields("dingtalk", "JIMUQU_DINGTALK_ENABLED", "JIMUQU_DINGTALK_ALLOWED_USERS", "JIMUQU_DINGTALK_ALLOW_ALL_USERS", "JIMUQU_DINGTALK_UNAUTHORIZED_DM_BEHAVIOR");
         addField(new FieldDefinition("channels.dingtalk.coolAppCode", "string", "messaging", "可选钉钉 Cool App 编码"));
         addField(new FieldDefinition("channels.dingtalk.streamUrl", "string", "messaging", "钉钉 stream 地址"));
+        addField(new FieldDefinition("channels.dingtalk.dmPolicy", "select", "messaging", "钉钉私聊策略").options("open", "allowlist", "disabled", "pairing"));
+        addField(new FieldDefinition("channels.dingtalk.groupPolicy", "select", "messaging", "钉钉群聊策略").options("open", "allowlist", "disabled"));
+        addField(new FieldDefinition("channels.dingtalk.groupAllowedUsers", "list", "messaging", "钉钉群聊 allowlist").envName("JIMUQU_DINGTALK_GROUP_ALLOWED_USERS"));
 
         addChannelFields("wecom", null, "JIMUQU_WECOM_ALLOWED_USERS", "JIMUQU_WECOM_ALLOW_ALL_USERS", "JIMUQU_WECOM_UNAUTHORIZED_DM_BEHAVIOR");
         addField(new FieldDefinition("channels.wecom.websocketUrl", "string", "messaging", "企微 websocket 地址"));
+        addField(new FieldDefinition("channels.wecom.dmPolicy", "select", "messaging", "企微私聊策略").options("open", "allowlist", "disabled", "pairing"));
+        addField(new FieldDefinition("channels.wecom.groupPolicy", "select", "messaging", "企微群聊策略").options("open", "allowlist", "disabled"));
+        addField(new FieldDefinition("channels.wecom.groupAllowedUsers", "list", "messaging", "企微群聊 allowlist").envName("JIMUQU_WECOM_GROUP_ALLOWED_USERS"));
 
         addChannelFields("weixin", null, "JIMUQU_WEIXIN_ALLOWED_USERS", "JIMUQU_WEIXIN_ALLOW_ALL_USERS", "JIMUQU_WEIXIN_UNAUTHORIZED_DM_BEHAVIOR");
         addField(new FieldDefinition("channels.weixin.accountId", "string", "messaging", "微信 iLink accountId").envName("JIMUQU_WEIXIN_ACCOUNT_ID"));
         addField(new FieldDefinition("channels.weixin.baseUrl", "string", "messaging", "微信 iLink API 地址"));
         addField(new FieldDefinition("channels.weixin.cdnBaseUrl", "string", "messaging", "微信 CDN 地址"));
         addField(new FieldDefinition("channels.weixin.longPollUrl", "string", "messaging", "微信 long-poll 地址"));
+        addField(new FieldDefinition("channels.weixin.dmPolicy", "select", "messaging", "微信私聊策略").options("open", "allowlist", "disabled", "pairing"));
+        addField(new FieldDefinition("channels.weixin.groupPolicy", "select", "messaging", "微信群聊策略").options("open", "allowlist", "disabled"));
+        addField(new FieldDefinition("channels.weixin.groupAllowedUsers", "list", "messaging", "微信群聊 allowlist").envName("JIMUQU_WEIXIN_GROUP_ALLOWED_USERS"));
+        addField(new FieldDefinition("channels.weixin.splitMultilineMessages", "boolean", "messaging", "微信多行消息拆分"));
+        addField(new FieldDefinition("channels.weixin.sendChunkDelaySeconds", "number", "messaging", "微信分片发送间隔（秒）"));
+        addField(new FieldDefinition("channels.weixin.sendChunkRetries", "number", "messaging", "微信分片重试次数"));
+        addField(new FieldDefinition("channels.weixin.sendChunkRetryDelaySeconds", "number", "messaging", "微信分片重试间隔（秒）"));
     }
 
     private void addChannelFields(String name, String enabledEnv, String allowedUsersEnv, String allowAllEnv, String behaviorEnv) {
@@ -171,6 +200,11 @@ public class DashboardConfigService {
             }
             current.put(field.key, value);
         }
+        for (Map.Entry<String, Object> entry : overrides.entrySet()) {
+            if (isSupportedPassthroughKey(entry.getKey())) {
+                current.put(entry.getKey(), entry.getValue());
+            }
+        }
         return current;
     }
 
@@ -218,7 +252,7 @@ public class DashboardConfigService {
             if (key.startsWith("jimuqu.")) {
                 key = key.substring("jimuqu.".length());
             }
-            if (fields.containsKey(key)) {
+            if (fields.containsKey(key) || isSupportedPassthroughKey(key)) {
                 fieldValues.put(key, entry.getValue());
             }
         }
@@ -247,7 +281,7 @@ public class DashboardConfigService {
 
         Map<String, Object> filtered = new LinkedHashMap<String, Object>();
         for (Map.Entry<String, Object> entry : output.entrySet()) {
-            if (fields.containsKey(entry.getKey())) {
+            if (fields.containsKey(entry.getKey()) || isSupportedPassthroughKey(entry.getKey())) {
                 filtered.put(entry.getKey(), entry.getValue());
             }
         }
@@ -295,10 +329,23 @@ public class DashboardConfigService {
             if (key.startsWith("runtime.") || key.startsWith("jimuqu.runtime.")) {
                 throw new IllegalStateException("jimuqu.runtime.* is not editable from the dashboard");
             }
-            if (!fields.containsKey(key)) {
+            if (!fields.containsKey(key) && !isSupportedPassthroughKey(key)) {
                 throw new IllegalStateException("Unsupported config key: " + key);
             }
         }
+    }
+
+    private Map<String, Object> mergeBaseValues() {
+        return new LinkedHashMap<String, Object>(loadOverrideFields());
+    }
+
+    private boolean isSupportedPassthroughKey(String key) {
+        for (String prefix : PASSTHROUGH_PREFIXES) {
+            if (key != null && key.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void writeOverrideFile(Map<String, Object> fieldValues) {

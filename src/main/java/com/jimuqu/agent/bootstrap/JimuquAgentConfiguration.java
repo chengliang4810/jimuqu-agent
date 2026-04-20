@@ -73,10 +73,12 @@ import com.jimuqu.agent.web.DashboardAnalyticsService;
 import com.jimuqu.agent.web.DashboardConfigService;
 import com.jimuqu.agent.web.DashboardCronService;
 import com.jimuqu.agent.web.DashboardEnvService;
+import com.jimuqu.agent.web.DashboardGatewayDoctorService;
 import com.jimuqu.agent.web.DashboardLogsService;
 import com.jimuqu.agent.web.DashboardSessionService;
 import com.jimuqu.agent.web.DashboardSkillsService;
 import com.jimuqu.agent.web.DashboardStatusService;
+import com.jimuqu.agent.web.WeixinQrSetupService;
 import org.noear.solon.Solon;
 import org.noear.solon.annotation.Bean;
 import org.noear.solon.annotation.Configuration;
@@ -554,6 +556,18 @@ public class JimuquAgentConfiguration {
     @Bean
     public DashboardEnvService dashboardEnvService(AppConfig appConfig) {
         return new DashboardEnvService(appConfig);
+    }
+
+    @Bean
+    public DashboardGatewayDoctorService dashboardGatewayDoctorService(AppConfig appConfig,
+                                                                       DeliveryService deliveryService) {
+        return new DashboardGatewayDoctorService(appConfig, deliveryService);
+    }
+
+    @Bean
+    public WeixinQrSetupService weixinQrSetupService(AppConfig appConfig,
+                                                     DashboardConfigService dashboardConfigService) {
+        return new WeixinQrSetupService(appConfig, dashboardConfigService);
     }
 
     @Bean

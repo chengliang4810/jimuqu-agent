@@ -2,10 +2,20 @@ package com.jimuqu.agent.gateway.platform.dingtalk;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpRequest;
+import cn.hutool.http.HttpResponse;
 import com.aliyun.dingtalkoauth2_1_0.Client;
 import com.aliyun.dingtalkoauth2_1_0.models.GetAccessTokenRequest;
 import com.aliyun.dingtalkoauth2_1_0.models.GetAccessTokenResponse;
 import com.aliyun.dingtalkoauth2_1_0.models.GetAccessTokenResponseBody;
+import com.aliyun.dingtalkconv_file_1_0.models.GetSpaceHeaders;
+import com.aliyun.dingtalkconv_file_1_0.models.GetSpaceRequest;
+import com.aliyun.dingtalkconv_file_1_0.models.GetSpaceResponse;
+import com.aliyun.dingtalkconv_file_1_0.models.SendHeaders;
+import com.aliyun.dingtalkconv_file_1_0.models.SendRequest;
+import com.aliyun.dingtalkconv_file_1_0.models.SendResponse;
+import com.aliyun.dingtalkim_1_0.models.SendRobotInteractiveCardHeaders;
+import com.aliyun.dingtalkim_1_0.models.SendRobotInteractiveCardRequest;
+import com.aliyun.dingtalkim_1_0.models.SendRobotInteractiveCardResponse;
 import com.aliyun.dingtalkrobot_1_0.models.BatchSendOTOHeaders;
 import com.aliyun.dingtalkrobot_1_0.models.BatchSendOTORequest;
 import com.aliyun.dingtalkrobot_1_0.models.BatchSendOTOResponse;
@@ -15,6 +25,12 @@ import com.aliyun.dingtalkrobot_1_0.models.OrgGroupSendResponse;
 import com.aliyun.dingtalkrobot_1_0.models.RobotMessageFileDownloadHeaders;
 import com.aliyun.dingtalkrobot_1_0.models.RobotMessageFileDownloadRequest;
 import com.aliyun.dingtalkrobot_1_0.models.RobotMessageFileDownloadResponse;
+import com.aliyun.dingtalkstorage_2_0.models.CommitFileHeaders;
+import com.aliyun.dingtalkstorage_2_0.models.CommitFileRequest;
+import com.aliyun.dingtalkstorage_2_0.models.CommitFileResponse;
+import com.aliyun.dingtalkstorage_2_0.models.GetFileUploadInfoHeaders;
+import com.aliyun.dingtalkstorage_2_0.models.GetFileUploadInfoRequest;
+import com.aliyun.dingtalkstorage_2_0.models.GetFileUploadInfoResponse;
 import com.aliyun.tea.TeaException;
 import com.dingtalk.open.app.api.OpenDingTalkClient;
 import com.dingtalk.open.app.api.OpenDingTalkStreamClientBuilder;
@@ -31,11 +47,14 @@ import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.repository.ChannelStateRepository;
 import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
 import com.jimuqu.agent.support.AttachmentCacheService;
+import com.jimuqu.agent.support.constants.GatewayBehaviorConstants;
 import org.noear.snack4.ONode;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,17 +67,26 @@ import java.util.concurrent.TimeUnit;
  */
 public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
     private static final String MEDIA_UPLOAD_URL = "https://oapi.dingtalk.com/media/upload";
+    private static final String STATE_LAST_USER_ID = "last_user_id";
+    private static final String STATE_LAST_UNION_ID = "last_union_id";
+    private static final String STATE_LAST_SPACE_ID = "last_space_id";
+    private static final String STATE_SESSION_WEBHOOK = "session_webhook";
+    private static final String STATE_SESSION_WEBHOOK_EXPIRES_AT = "session_webhook_expires_at";
     private final AppConfig.ChannelConfig config;
     private final ChannelStateRepository channelStateRepository;
     private final AttachmentCacheService attachmentCacheService;
     private final Client oauthClient;
     private final com.aliyun.dingtalkrobot_1_0.Client robotClient;
+    private final com.aliyun.dingtalkconv_file_1_0.Client convFileClient;
+    private final com.aliyun.dingtalkstorage_2_0.Client storageClient;
+    private final com.aliyun.dingtalkim_1_0.Client imClient;
     private volatile String accessToken;
     private volatile long accessTokenExpireAt;
     private volatile OpenDingTalkClient streamClient;
     private ExecutorService callbackExecutor;
     private final Map<String, Boolean> conversationGroupFlags = new ConcurrentHashMap<String, Boolean>();
     private final Map<String, SessionWebhookState> sessionWebhooks = new ConcurrentHashMap<String, SessionWebhookState>();
+    private final Map<String, String> cardInstanceBindings = new ConcurrentHashMap<String, String>();
 
     public DingTalkChannelAdapter(AppConfig.ChannelConfig config,
                                   ChannelStateRepository channelStateRepository,
@@ -73,9 +101,15 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
             teaConfig.regionId = "central";
             this.oauthClient = new Client(teaConfig);
             this.robotClient = new com.aliyun.dingtalkrobot_1_0.Client(teaConfig);
+            this.convFileClient = new com.aliyun.dingtalkconv_file_1_0.Client(teaConfig);
+            this.storageClient = new com.aliyun.dingtalkstorage_2_0.Client(teaConfig);
+            this.imClient = new com.aliyun.dingtalkim_1_0.Client(teaConfig);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to initialize DingTalk SDK clients", e);
         }
+        setConnectionMode("stream");
+        setFeatures("text", "attachments", "group-mention", "stream", "ai-card", "card-callback", "emoji-reaction");
+        setSetupState(config != null && config.isEnabled() ? "configured" : "disabled");
     }
 
     @Override
@@ -86,7 +120,23 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
                 !isBlank(config.getClientSecret()),
                 !isBlank(config.getRobotCode()));
         if (!isEnabled()) {
+            setSetupState("disabled");
             return false;
+        }
+        java.util.ArrayList<String> missing = new java.util.ArrayList<String>();
+        if (isBlank(config.getClientId())) {
+            missing.add("JIMUQU_DINGTALK_CLIENT_ID");
+        }
+        if (isBlank(config.getClientSecret())) {
+            missing.add("JIMUQU_DINGTALK_CLIENT_SECRET");
+        }
+        if (isBlank(config.getRobotCode())) {
+            missing.add("JIMUQU_DINGTALK_ROBOT_CODE");
+        }
+        if (!missing.isEmpty()) {
+            setSetupState("missing_config");
+            setMissingEnv(missing);
+            setLastError("dingtalk_missing_credentials", "missing clientId/clientSecret/robotCode");
         }
         if (isBlank(config.getClientId()) || isBlank(config.getClientSecret())) {
             setDetail("missing clientId/clientSecret");
@@ -110,14 +160,26 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
                             return new HashMap<String, Object>();
                         }
                     })
+                    .registerCallbackListener(DingTalkStreamTopics.CARD_CALLBACK_TOPIC, new OpenDingTalkCallbackListener<Map<String, Object>, Map<String, Object>>() {
+                        @Override
+                        public Map<String, Object> execute(Map<String, Object> payload) {
+                            handleCardCallback(payload);
+                            return new HashMap<String, Object>();
+                        }
+                    })
                     .build();
             streamClient.start();
             setConnected(true);
+            setSetupState("connected");
+            setMissingEnv(new String[0]);
+            clearLastError();
             setDetail("stream mode connected");
             log.info("[DINGTALK] stream mode connected");
             return true;
         } catch (Exception e) {
             setConnected(false);
+            setSetupState("error");
+            setLastError("dingtalk_stream_connect_failed", e.getMessage());
             setDetail("stream mode connect failed: " + e.getMessage());
             log.warn("[DINGTALK] Stream mode connect failed", e);
             return false;
@@ -147,6 +209,10 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
             throw new IllegalArgumentException("DingTalk openConversationId is required");
         }
         refreshAccessTokenIfNecessary();
+        if (isAiCardRequest(request)) {
+            sendAiCard(request);
+            return;
+        }
         if (request.getAttachments() != null && !request.getAttachments().isEmpty()) {
             if (notBlank(request.getText())) {
                 sendText(request);
@@ -169,18 +235,23 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
             public void run() {
                 try {
                     String text = extractText(message);
-                    if (isBlank(text)) {
+                    String conversationId = notBlank(message.getConversationId()) ? message.getConversationId() : message.getSenderId();
+                    String chatType = "2".equals(String.valueOf(message.getConversationType())) ? "group" : "dm";
+                    String userId = notBlank(message.getSenderStaffId()) ? message.getSenderStaffId() : message.getSenderId();
+                    if (!allowInbound(message, conversationId, chatType, userId)) {
                         return;
                     }
-                    String conversationId = notBlank(message.getConversationId()) ? message.getConversationId() : message.getSenderId();
-                    String userId = notBlank(message.getSenderStaffId()) ? message.getSenderStaffId() : message.getSenderId();
+                    List<MessageAttachment> attachments = extractAttachments(message);
+                    if (isBlank(text) && attachments.isEmpty()) {
+                        return;
+                    }
                     conversationGroupFlags.put(conversationId, "2".equals(String.valueOf(message.getConversationType())));
                     rememberSessionWebhook(conversationId, message.getSessionWebhook(), message.getSessionWebhookExpiredTime());
                     try {
-                        channelStateRepository.put(PlatformType.DINGTALK, conversationId, "last_user_id", userId);
+                        channelStateRepository.put(PlatformType.DINGTALK, conversationId, STATE_LAST_USER_ID, userId);
+                        channelStateRepository.put(PlatformType.DINGTALK, conversationId, STATE_LAST_UNION_ID, StrUtil.nullToEmpty(message.getSenderId()));
                     } catch (Exception ignored) {
                     }
-                    List<MessageAttachment> attachments = extractAttachments(message);
                     log.info("[DINGTALK-INBOUND] conversationId={}, senderId={}, senderStaffId={}, type={}, text={}",
                             conversationId,
                             message.getSenderId(),
@@ -188,7 +259,7 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
                             message.getConversationType(),
                             text);
                     GatewayMessage gatewayMessage = new GatewayMessage(PlatformType.DINGTALK, conversationId, userId, text);
-                    gatewayMessage.setChatType("2".equals(String.valueOf(message.getConversationType())) ? "group" : "dm");
+                    gatewayMessage.setChatType(chatType);
                     gatewayMessage.setChatName(notBlank(message.getConversationTitle()) ? message.getConversationTitle() : conversationId);
                     gatewayMessage.setUserName(notBlank(message.getSenderNick()) ? message.getSenderNick() : userId);
                     gatewayMessage.setThreadId(message.getMsgId());
@@ -201,7 +272,26 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
         });
     }
 
-    private synchronized void refreshAccessTokenIfNecessary() throws Exception {
+    private void handleCardCallback(final Map<String, Object> payload) {
+        if (callbackExecutor == null || inboundMessageHandler() == null || payload == null) {
+            return;
+        }
+        callbackExecutor.submit(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    GatewayMessage message = toCardCallbackMessage(payload);
+                    if (message != null) {
+                        inboundMessageHandler().handle(message);
+                    }
+                } catch (Exception e) {
+                    log.warn("[DINGTALK] card callback dispatch failed: {}", e.getMessage(), e);
+                }
+            }
+        });
+    }
+
+    protected synchronized void refreshAccessTokenIfNecessary() throws Exception {
         long now = System.currentTimeMillis();
         if (!isBlank(accessToken) && accessTokenExpireAt > now + 60000L) {
             return;
@@ -244,6 +334,10 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
 
     private String extractText(ChatbotMessage message) {
         String messageType = message.getMsgtype();
+        if ("reaction".equalsIgnoreCase(messageType) || "emoji".equalsIgnoreCase(messageType)) {
+            String contentText = message.getContent() == null ? null : message.getContent().getContent();
+            return StrUtil.blankToDefault(contentText, "reaction");
+        }
         if ("audio".equalsIgnoreCase(messageType) && message.getContent() != null && notBlank(message.getContent().getRecognition())) {
             return message.getContent().getRecognition().trim();
         }
@@ -349,7 +443,11 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
                 throw e;
             }
         } else {
-            if (isBlank(request.getUserId())) {
+            String privateUserId = request.getUserId();
+            if (isBlank(privateUserId)) {
+                privateUserId = channelStateRepository.get(PlatformType.DINGTALK, request.getChatId(), STATE_LAST_USER_ID);
+            }
+            if (isBlank(privateUserId)) {
                 throw new IllegalStateException("DingTalk private chat send requires userId from inbound context.");
             }
             try {
@@ -358,7 +456,7 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
 
                 BatchSendOTORequest sendRequest = new BatchSendOTORequest();
                 sendRequest.setRobotCode(config.getRobotCode());
-                sendRequest.setUserIds(java.util.Collections.singletonList(request.getUserId()));
+                sendRequest.setUserIds(java.util.Collections.singletonList(privateUserId));
                 sendRequest.setMsgKey("sampleMarkdown");
                 sendRequest.setMsgParam(buildMarkdownParam(request.getText()));
 
@@ -375,23 +473,92 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
     }
 
     private void sendAttachment(DeliveryRequest request, MessageAttachment attachment) throws Exception {
-        SessionWebhookState webhook = sessionWebhooks.get(request.getChatId());
-        if (webhook == null || !webhook.isValid()) {
-            throw new IllegalStateException("DingTalk attachment send requires a live session_webhook from a recent inbound message");
+        DeliveryContext context = resolveDeliveryContext(request);
+        String fileName = StrUtil.blankToDefault(attachment.getOriginalName(), new File(attachment.getLocalPath()).getName());
+        byte[] data = cn.hutool.core.io.FileUtil.readBytes(new File(attachment.getLocalPath()));
+        String spaceId = resolveSpaceId(context);
+        String uploadKey = getUploadInfo(context.unionId, fileName, data.length, spaceId);
+        uploadFileBytes(uploadKey, data, context.unionId, spaceId, fileName);
+        String dentryId = commitUploadedFile(uploadKey, context.unionId, spaceId, fileName, data.length);
+        sendConversationFile(context, spaceId, dentryId);
+        log.info("[DINGTALK:{}] native attachment sent {}", request.getChatId(), fileName);
+    }
+
+    protected boolean isAiCardRequest(DeliveryRequest request) {
+        Map<String, Object> extras = request.getChannelExtras();
+        if (extras == null || extras.isEmpty()) {
+            return false;
         }
-        String mediaId = uploadMedia(attachment);
-        String kind = AttachmentCacheService.normalizeKind(attachment.getKind(), attachment.getOriginalName(), attachment.getMimeType());
-        ONode payload = buildWebhookMediaPayload(kind, mediaId, attachment);
-        String response = HttpRequest.post(webhook.url)
-                .contentType("application/json")
-                .body(payload.toJson())
-                .timeout(15000)
-                .execute()
-                .body();
-        log.info("[DINGTALK:{}] attachment sent {}", request.getChatId(), attachment.getOriginalName());
-        if (response == null) {
-            throw new IllegalStateException("DingTalk attachment send returned empty response");
+        String mode = stringValue(extras.get("mode"));
+        return "ai_card".equalsIgnoreCase(mode) || "dingtalk_ai_card".equalsIgnoreCase(mode)
+                || StrUtil.isNotBlank(stringValue(extras.get("cardTemplateId")));
+    }
+
+    protected void sendAiCard(DeliveryRequest request) throws Exception {
+        Map<String, Object> extras = request.getChannelExtras() == null
+                ? Collections.<String, Object>emptyMap()
+                : request.getChannelExtras();
+        String cardTemplateId = stringValue(extras.get("cardTemplateId"));
+        String cardData = jsonString(extras.get("cardData"));
+        if (isBlank(cardTemplateId) || isBlank(cardData)) {
+            throw new IllegalStateException("DingTalk AI card send requires channelExtras.cardTemplateId and channelExtras.cardData");
         }
+
+        SendRobotInteractiveCardHeaders headers = new SendRobotInteractiveCardHeaders();
+        headers.setXAcsDingtalkAccessToken(accessToken);
+        SendRobotInteractiveCardRequest sendRequest = new SendRobotInteractiveCardRequest();
+        sendRequest.setRobotCode(config.getRobotCode());
+        sendRequest.setCardTemplateId(cardTemplateId);
+        sendRequest.setCardData(cardData);
+        sendRequest.setCardBizId(StrUtil.blankToDefault(stringValue(extras.get("cardBizId")), "jimuqu-card-" + System.currentTimeMillis()));
+
+        SendRobotInteractiveCardRequest.SendRobotInteractiveCardRequestSendOptions sendOptions =
+                new SendRobotInteractiveCardRequest.SendRobotInteractiveCardRequestSendOptions();
+        if (extras.containsKey("atAll")) {
+            sendOptions.setAtAll(Boolean.valueOf(Boolean.parseBoolean(String.valueOf(extras.get("atAll")))));
+        }
+        if (extras.containsKey("cardPropertyJson")) {
+            sendOptions.setCardPropertyJson(stringValue(extras.get("cardPropertyJson")));
+        }
+        if (extras.containsKey("atUserListJson")) {
+            sendOptions.setAtUserListJson(stringValue(extras.get("atUserListJson")));
+        }
+        if (extras.containsKey("receiverListJson")) {
+            sendOptions.setReceiverListJson(stringValue(extras.get("receiverListJson")));
+        }
+        if (hasAnySendOptions(sendOptions)) {
+            sendRequest.setSendOptions(sendOptions);
+        }
+
+        if (isGroupConversation(request)) {
+            sendRequest.setOpenConversationId(request.getChatId());
+        } else {
+            String receiver = request.getUserId();
+            if (isBlank(receiver)) {
+                receiver = channelStateRepository.get(PlatformType.DINGTALK, request.getChatId(), STATE_LAST_USER_ID);
+            }
+            if (isBlank(receiver)) {
+                throw new IllegalStateException("DingTalk AI card send requires userId from inbound context for private chat");
+            }
+            sendRequest.setSingleChatReceiver(receiver);
+        }
+
+        if (extras.containsKey("callbackUrl")) {
+            sendRequest.setCallbackUrl(stringValue(extras.get("callbackUrl")));
+        }
+
+        SendRobotInteractiveCardResponse response = imClient.sendRobotInteractiveCardWithOptions(
+                sendRequest,
+                headers,
+                new com.aliyun.teautil.models.RuntimeOptions()
+        );
+        if (response == null || response.getBody() == null || isBlank(response.getBody().getProcessQueryKey())) {
+            throw new IllegalStateException("DingTalk AI card send failed");
+        }
+        if (request.getThreadId() != null && request.getThreadId().trim().length() > 0) {
+            cardInstanceBindings.put(response.getBody().getProcessQueryKey(), request.getThreadId().trim());
+        }
+        log.info("[DINGTALK:{}] ai card sent processKey={}", request.getChatId(), response.getBody().getProcessQueryKey());
     }
 
     private String uploadMedia(MessageAttachment attachment) {
@@ -450,6 +617,235 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
         }
         long expiresAt = expiredTime == null ? 0L : expiredTime.longValue();
         sessionWebhooks.put(chatId, new SessionWebhookState(sessionWebhook, expiresAt));
+        try {
+            channelStateRepository.put(PlatformType.DINGTALK, chatId, STATE_SESSION_WEBHOOK, sessionWebhook);
+            channelStateRepository.put(PlatformType.DINGTALK, chatId, STATE_SESSION_WEBHOOK_EXPIRES_AT, String.valueOf(expiresAt));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private boolean allowInbound(ChatbotMessage message, String conversationId, String chatType, String userId) {
+        if ("group".equals(chatType)) {
+            if (!Boolean.TRUE.equals(message.getInAtList())) {
+                return false;
+            }
+            String groupPolicy = StrUtil.blankToDefault(config.getGroupPolicy(), GatewayBehaviorConstants.GROUP_POLICY_OPEN).toLowerCase();
+            if (GatewayBehaviorConstants.GROUP_POLICY_DISABLED.equals(groupPolicy)) {
+                return false;
+            }
+            if (GatewayBehaviorConstants.GROUP_POLICY_ALLOWLIST.equals(groupPolicy) && !contains(config.getGroupAllowedUsers(), conversationId)) {
+                return false;
+            }
+            return true;
+        }
+        String dmPolicy = StrUtil.blankToDefault(config.getDmPolicy(), GatewayBehaviorConstants.DM_POLICY_OPEN).toLowerCase();
+        if (GatewayBehaviorConstants.DM_POLICY_DISABLED.equals(dmPolicy)) {
+            return false;
+        }
+        if (GatewayBehaviorConstants.DM_POLICY_ALLOWLIST.equals(dmPolicy)) {
+            return contains(config.getAllowedUsers(), userId);
+        }
+        return true;
+    }
+
+    private boolean contains(List<String> values, String target) {
+        if (values == null || target == null) {
+            return false;
+        }
+        for (String value : values) {
+            String normalized = StrUtil.nullToEmpty(value).trim();
+            if ("*".equals(normalized) || target.equalsIgnoreCase(normalized)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private GatewayMessage toCardCallbackMessage(Map<String, Object> payload) {
+        ONode node = ONode.ofJson(ONode.serialize(payload));
+        String processKey = firstNonBlank(
+                node.get("processQueryKey").getString(),
+                node.get("process_query_key").getString(),
+                node.get("outTrackId").getString(),
+                node.get("out_track_id").getString(),
+                node.get("cardBizId").getString(),
+                node.get("card_biz_id").getString()
+        );
+        String chatId = firstNonBlank(
+                node.get("openConversationId").getString(),
+                node.get("open_conversation_id").getString(),
+                findNested(node, "conversation", "openConversationId"),
+                cardInstanceBindings.get(processKey)
+        );
+        String userId = firstNonBlank(
+                node.get("userId").getString(),
+                node.get("staffId").getString(),
+                node.get("unionId").getString(),
+                findNested(node, "operator", "staffId"),
+                findNested(node, "operator", "userId")
+        );
+        if (isBlank(chatId)) {
+            chatId = "dingtalk-card";
+        }
+        String text = "Card action: " + node.toJson();
+        GatewayMessage message = new GatewayMessage(PlatformType.DINGTALK, chatId, userId, text);
+        message.setChatType(conversationGroupFlags.containsKey(chatId) && Boolean.TRUE.equals(conversationGroupFlags.get(chatId))
+                ? GatewayBehaviorConstants.CHAT_TYPE_GROUP
+                : GatewayBehaviorConstants.CHAT_TYPE_DM);
+        message.setChatName(chatId);
+        message.setUserName(StrUtil.blankToDefault(userId, "dingtalk-card"));
+        message.setThreadId(StrUtil.blankToDefault(processKey, "card-callback-" + System.currentTimeMillis()));
+        return message;
+    }
+
+    private String findNested(ONode node, String parentKey, String childKey) {
+        ONode parent = node.get(parentKey);
+        if (parent == null || parent.isNull()) {
+            return null;
+        }
+        return parent.get(childKey).getString();
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (notBlank(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private boolean hasAnySendOptions(SendRobotInteractiveCardRequest.SendRobotInteractiveCardRequestSendOptions options) {
+        return options != null
+                && (options.getAtAll() != null
+                || notBlank(options.getAtUserListJson())
+                || notBlank(options.getCardPropertyJson())
+                || notBlank(options.getReceiverListJson()));
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value).trim();
+    }
+
+    private String jsonString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String) {
+            return ((String) value).trim();
+        }
+        return ONode.serialize(value);
+    }
+
+    private DeliveryContext resolveDeliveryContext(DeliveryRequest request) throws Exception {
+        DeliveryContext context = new DeliveryContext();
+        context.chatId = request.getChatId();
+        context.group = isGroupConversation(request);
+        context.unionId = channelStateRepository.get(PlatformType.DINGTALK, request.getChatId(), STATE_LAST_UNION_ID);
+        if (isBlank(context.unionId)) {
+            throw new IllegalStateException("DingTalk attachment send requires a recent inbound conversation context to resolve unionId");
+        }
+        return context;
+    }
+
+    private String resolveSpaceId(DeliveryContext context) throws Exception {
+        String cached = channelStateRepository.get(PlatformType.DINGTALK, context.chatId, STATE_LAST_SPACE_ID);
+        if (notBlank(cached)) {
+            return cached;
+        }
+        GetSpaceHeaders headers = new GetSpaceHeaders();
+        headers.setXAcsDingtalkAccessToken(accessToken);
+        GetSpaceRequest request = new GetSpaceRequest()
+                .setOpenConversationId(context.chatId)
+                .setUnionId(context.unionId);
+        GetSpaceResponse response = convFileClient.getSpaceWithOptions(request, headers, new com.aliyun.teautil.models.RuntimeOptions());
+        if (response == null || response.getBody() == null || response.getBody().getSpace() == null || isBlank(response.getBody().getSpace().getSpaceId())) {
+            throw new IllegalStateException("DingTalk conversation space lookup failed");
+        }
+        String spaceId = response.getBody().getSpace().getSpaceId();
+        channelStateRepository.put(PlatformType.DINGTALK, context.chatId, STATE_LAST_SPACE_ID, spaceId);
+        return spaceId;
+    }
+
+    private String getUploadInfo(String unionId, String fileName, int size, String spaceId) throws Exception {
+        GetFileUploadInfoHeaders headers = new GetFileUploadInfoHeaders();
+        headers.setXAcsDingtalkAccessToken(accessToken);
+        GetFileUploadInfoRequest.GetFileUploadInfoRequestOption option = new GetFileUploadInfoRequest.GetFileUploadInfoRequestOption()
+                .setStorageDriver("DINGTALK")
+                .setPreCheckParam(new GetFileUploadInfoRequest.GetFileUploadInfoRequestOptionPreCheckParam()
+                        .setName(fileName)
+                        .setSize(Long.valueOf(size)));
+        GetFileUploadInfoRequest request = new GetFileUploadInfoRequest()
+                .setProtocol("HEADER_SIGNATURE")
+                .setUnionId(unionId)
+                .setOption(option);
+        GetFileUploadInfoResponse response = storageClient.getFileUploadInfoWithOptions(spaceId, request, headers, new com.aliyun.teautil.models.RuntimeOptions());
+        if (response == null || response.getBody() == null || isBlank(response.getBody().getUploadKey())) {
+            throw new IllegalStateException("DingTalk upload init failed");
+        }
+        DeliveryUploadState.current.set(response.getBody());
+        return response.getBody().getUploadKey();
+    }
+
+    private void uploadFileBytes(String uploadKey, byte[] data, String unionId, String spaceId, String fileName) {
+        com.aliyun.dingtalkstorage_2_0.models.GetFileUploadInfoResponseBody body = DeliveryUploadState.current.get();
+        if (body == null || body.getHeaderSignatureInfo() == null
+                || body.getHeaderSignatureInfo().getResourceUrls() == null
+                || body.getHeaderSignatureInfo().getResourceUrls().isEmpty()) {
+            throw new IllegalStateException("DingTalk upload info missing signed resource url");
+        }
+        String uploadUrl = body.getHeaderSignatureInfo().getResourceUrls().get(0);
+        HttpRequest request = HttpRequest.put(uploadUrl)
+                .timeout(120000)
+                .body(data);
+        Map<String, String> headers = body.getHeaderSignatureInfo().getHeaders();
+        if (headers != null) {
+            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                request.header(entry.getKey(), entry.getValue());
+            }
+        }
+        HttpResponse response = request.execute();
+        try {
+            if (response.getStatus() >= 400) {
+                throw new IllegalStateException("DingTalk upload bytes failed: HTTP " + response.getStatus());
+            }
+        } finally {
+            response.close();
+        }
+    }
+
+    private String commitUploadedFile(String uploadKey, String unionId, String spaceId, String fileName, int size) throws Exception {
+        CommitFileHeaders headers = new CommitFileHeaders();
+        headers.setXAcsDingtalkAccessToken(accessToken);
+        CommitFileRequest request = new CommitFileRequest()
+                .setName(fileName)
+                .setUploadKey(uploadKey)
+                .setUnionId(unionId)
+                .setOption(new CommitFileRequest.CommitFileRequestOption()
+                        .setSize(Long.valueOf(size))
+                        .setConflictStrategy("AUTO_RENAME"));
+        CommitFileResponse response = storageClient.commitFileWithOptions(spaceId, request, headers, new com.aliyun.teautil.models.RuntimeOptions());
+        if (response == null || response.getBody() == null || response.getBody().getDentry() == null || isBlank(response.getBody().getDentry().getId())) {
+            throw new IllegalStateException("DingTalk commit file failed");
+        }
+        return response.getBody().getDentry().getId();
+    }
+
+    private void sendConversationFile(DeliveryContext context, String spaceId, String dentryId) throws Exception {
+        SendHeaders headers = new SendHeaders();
+        headers.setXAcsDingtalkAccessToken(accessToken);
+        SendRequest request = new SendRequest()
+                .setOpenConversationId(context.chatId)
+                .setSpaceId(spaceId)
+                .setDentryId(dentryId)
+                .setUnionId(context.unionId);
+        SendResponse response = convFileClient.sendWithOptions(request, headers, new com.aliyun.teautil.models.RuntimeOptions());
+        if (response == null || response.getBody() == null || response.getBody().getFile() == null || isBlank(response.getBody().getFile().getId())) {
+            throw new IllegalStateException("DingTalk conversation file send failed");
+        }
     }
 
     private boolean isBlank(String value) {
@@ -486,5 +882,16 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
         private boolean isValid() {
             return expiresAt <= 0 || expiresAt > System.currentTimeMillis();
         }
+    }
+
+    private static class DeliveryContext {
+        private String chatId;
+        private String unionId;
+        private boolean group;
+    }
+
+    private static class DeliveryUploadState {
+        private static final ThreadLocal<com.aliyun.dingtalkstorage_2_0.models.GetFileUploadInfoResponseBody> current =
+                new ThreadLocal<com.aliyun.dingtalkstorage_2_0.models.GetFileUploadInfoResponseBody>();
     }
 }

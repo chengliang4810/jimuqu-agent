@@ -56,7 +56,7 @@ public class DashboardStatusService {
             }
             String detail = StrUtil.nullToEmpty(status.getDetail());
             boolean fatal = status.isEnabled() && !status.isConnected()
-                    && (detail.contains("failed") || detail.contains("missing"));
+                    && (StrUtil.isNotBlank(status.getLastErrorCode()) || StrUtil.isNotBlank(status.getLastErrorMessage()));
             if (fatal) {
                 anyFatal = true;
             }
@@ -66,8 +66,13 @@ public class DashboardStatusService {
                     ? (status.isConnected() ? "connected" : (fatal ? "fatal" : "disconnected"))
                     : "disabled");
             item.put("updated_at", isoNow());
-            item.put("error_message", fatal ? detail : null);
-            item.put("error_code", fatal ? "channel_unavailable" : null);
+            item.put("detail", detail);
+            item.put("setup_state", status.getSetupState());
+            item.put("connection_mode", status.getConnectionMode());
+            item.put("missing_env", status.getMissingEnv());
+            item.put("features", status.getFeatures());
+            item.put("error_message", fatal ? StrUtil.blankToDefault(status.getLastErrorMessage(), detail) : null);
+            item.put("error_code", fatal ? StrUtil.blankToDefault(status.getLastErrorCode(), "channel_unavailable") : null);
             platformStates.put(status.getPlatform().name().toLowerCase(), item);
         }
 
@@ -129,9 +134,9 @@ public class DashboardStatusService {
 
     private String firstFatalDetail(List<ChannelStatus> statuses) {
         for (ChannelStatus status : statuses) {
-            String detail = StrUtil.nullToEmpty(status.getDetail());
-            if (status.isEnabled() && !status.isConnected() && (detail.contains("failed") || detail.contains("missing"))) {
-                return detail;
+            if (status.isEnabled() && !status.isConnected()
+                    && (StrUtil.isNotBlank(status.getLastErrorCode()) || StrUtil.isNotBlank(status.getLastErrorMessage()))) {
+                return StrUtil.blankToDefault(status.getLastErrorMessage(), status.getDetail());
             }
         }
         return null;

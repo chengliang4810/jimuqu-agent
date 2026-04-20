@@ -68,6 +68,7 @@ public class DashboardControllerHttpTest {
         HttpResult status = request("GET", "/api/status", null, null);
         assertThat(status.status).isEqualTo(200);
         assertThat(status.body).contains("\"version\"");
+        assertThat(status.body).contains("\"setup_state\"");
 
         HttpResult unauthorizedEnv = request("GET", "/api/env", null, null);
         assertThat(unauthorizedEnv.status).isEqualTo(401);
@@ -75,6 +76,13 @@ public class DashboardControllerHttpTest {
         HttpResult authorizedEnv = request("GET", "/api/env", null, token);
         assertThat(authorizedEnv.status).isEqualTo(200);
         assertThat(authorizedEnv.body).contains("JIMUQU_LLM_API_KEY");
+
+        HttpResult unauthorizedDoctor = request("GET", "/api/gateway/doctor", null, null);
+        assertThat(unauthorizedDoctor.status).isEqualTo(401);
+
+        HttpResult authorizedDoctor = request("GET", "/api/gateway/doctor", null, token);
+        assertThat(authorizedDoctor.status).isEqualTo(200);
+        assertThat(authorizedDoctor.body).contains("\"platforms\"");
     }
 
     @Test

@@ -56,7 +56,7 @@ public class AdapterBackedDeliveryService implements DeliveryService {
     public List<ChannelStatus> statuses() {
         List<ChannelStatus> items = new ArrayList<ChannelStatus>();
         for (ChannelAdapter adapter : adapters.values()) {
-            items.add(new ChannelStatus(adapter.platform(), adapter.isEnabled(), adapter.isConnected(), adapter.detail()));
+            items.add(adapter.statusSnapshot());
         }
         return items;
     }

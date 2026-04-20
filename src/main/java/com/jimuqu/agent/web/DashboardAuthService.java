@@ -19,7 +19,8 @@ public class DashboardAuthService {
             "/api/status",
             "/api/config/defaults",
             "/api/config/schema",
-            "/api/model/info"
+            "/api/model/info",
+            "/api/gateway/message"
     ));
 
     private final String sessionToken = UUID.randomUUID().toString().replace("-", "");

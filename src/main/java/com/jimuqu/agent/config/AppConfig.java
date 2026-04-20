@@ -149,12 +149,20 @@ public class AppConfig {
                 "feishu",
                 "JIMUQU_FEISHU_ALLOWED_USERS",
                 "JIMUQU_FEISHU_ALLOW_ALL_USERS",
-                "JIMUQU_FEISHU_UNAUTHORIZED_DM_BEHAVIOR"
+                "JIMUQU_FEISHU_UNAUTHORIZED_DM_BEHAVIOR",
+                "JIMUQU_FEISHU_DM_POLICY",
+                GatewayBehaviorConstants.DM_POLICY_OPEN,
+                "JIMUQU_FEISHU_GROUP_POLICY",
+                GatewayBehaviorConstants.GROUP_POLICY_ALLOWLIST,
+                "JIMUQU_FEISHU_GROUP_ALLOWED_USERS"
         );
         config.getChannels().getFeishu().setEnabled(readBoolean(props, overrides, "jimuqu.channels.feishu.enabled", false));
         config.getChannels().getFeishu().setAppId(resolveSecret("JIMUQU_FEISHU_APP_ID", props.get("jimuqu.channels.feishu.appId", "")));
         config.getChannels().getFeishu().setAppSecret(resolveSecret("JIMUQU_FEISHU_APP_SECRET", props.get("jimuqu.channels.feishu.appSecret", "")));
         config.getChannels().getFeishu().setWebsocketUrl(readString(props, overrides, "jimuqu.channels.feishu.websocketUrl", ""));
+        config.getChannels().getFeishu().setBotOpenId(resolveSecret("JIMUQU_FEISHU_BOT_OPEN_ID", props.get("jimuqu.channels.feishu.botOpenId", "")));
+        config.getChannels().getFeishu().setBotUserId(resolveSecret("JIMUQU_FEISHU_BOT_USER_ID", props.get("jimuqu.channels.feishu.botUserId", "")));
+        config.getChannels().getFeishu().setBotName(readString(props, overrides, "jimuqu.channels.feishu.botName", ""));
 
         applyChannelConfig(
                 config.getChannels().getDingtalk(),
@@ -163,7 +171,12 @@ public class AppConfig {
                 "dingtalk",
                 "JIMUQU_DINGTALK_ALLOWED_USERS",
                 "JIMUQU_DINGTALK_ALLOW_ALL_USERS",
-                "JIMUQU_DINGTALK_UNAUTHORIZED_DM_BEHAVIOR"
+                "JIMUQU_DINGTALK_UNAUTHORIZED_DM_BEHAVIOR",
+                "JIMUQU_DINGTALK_DM_POLICY",
+                GatewayBehaviorConstants.DM_POLICY_OPEN,
+                "JIMUQU_DINGTALK_GROUP_POLICY",
+                GatewayBehaviorConstants.GROUP_POLICY_OPEN,
+                "JIMUQU_DINGTALK_GROUP_ALLOWED_USERS"
         );
         config.getChannels().getDingtalk().setEnabled(resolveBoolean("JIMUQU_DINGTALK_ENABLED", readBoolean(props, overrides, "jimuqu.channels.dingtalk.enabled", false)));
         config.getChannels().getDingtalk().setClientId(resolveSecret("JIMUQU_DINGTALK_CLIENT_ID", props.get("jimuqu.channels.dingtalk.clientId", "")));
@@ -179,12 +192,20 @@ public class AppConfig {
                 "wecom",
                 "JIMUQU_WECOM_ALLOWED_USERS",
                 "JIMUQU_WECOM_ALLOW_ALL_USERS",
-                "JIMUQU_WECOM_UNAUTHORIZED_DM_BEHAVIOR"
+                "JIMUQU_WECOM_UNAUTHORIZED_DM_BEHAVIOR",
+                "JIMUQU_WECOM_DM_POLICY",
+                GatewayBehaviorConstants.DM_POLICY_OPEN,
+                "JIMUQU_WECOM_GROUP_POLICY",
+                GatewayBehaviorConstants.GROUP_POLICY_OPEN,
+                "JIMUQU_WECOM_GROUP_ALLOWED_USERS"
         );
         config.getChannels().getWecom().setEnabled(readBoolean(props, overrides, "jimuqu.channels.wecom.enabled", false));
         config.getChannels().getWecom().setBotId(resolveSecret("JIMUQU_WECOM_BOT_ID", props.get("jimuqu.channels.wecom.botId", "")));
         config.getChannels().getWecom().setSecret(resolveSecret("JIMUQU_WECOM_SECRET", props.get("jimuqu.channels.wecom.secret", "")));
         config.getChannels().getWecom().setWebsocketUrl(readString(props, overrides, "jimuqu.channels.wecom.websocketUrl", ""));
+        config.getChannels().getWecom().setGroupMemberAllowedUsers(
+                collectGroupAllowMap(props, overrides, "jimuqu.channels.wecom.groups.")
+        );
 
         applyChannelConfig(
                 config.getChannels().getWeixin(),
@@ -193,7 +214,12 @@ public class AppConfig {
                 "weixin",
                 "JIMUQU_WEIXIN_ALLOWED_USERS",
                 "JIMUQU_WEIXIN_ALLOW_ALL_USERS",
-                "JIMUQU_WEIXIN_UNAUTHORIZED_DM_BEHAVIOR"
+                "JIMUQU_WEIXIN_UNAUTHORIZED_DM_BEHAVIOR",
+                "JIMUQU_WEIXIN_DM_POLICY",
+                GatewayBehaviorConstants.DM_POLICY_OPEN,
+                "JIMUQU_WEIXIN_GROUP_POLICY",
+                GatewayBehaviorConstants.GROUP_POLICY_DISABLED,
+                "JIMUQU_WEIXIN_GROUP_ALLOWED_USERS"
         );
         config.getChannels().getWeixin().setEnabled(readBoolean(props, overrides, "jimuqu.channels.weixin.enabled", false));
         config.getChannels().getWeixin().setToken(resolveSecret("JIMUQU_WEIXIN_TOKEN", props.get("jimuqu.channels.weixin.token", "")));
@@ -201,8 +227,12 @@ public class AppConfig {
         config.getChannels().getWeixin().setBaseUrl(readString(props, overrides, "jimuqu.channels.weixin.baseUrl", ""));
         config.getChannels().getWeixin().setCdnBaseUrl(readString(props, overrides, "jimuqu.channels.weixin.cdnBaseUrl", ""));
         config.getChannels().getWeixin().setLongPollUrl(readString(props, overrides, "jimuqu.channels.weixin.longPollUrl", ""));
+        config.getChannels().getWeixin().setSplitMultilineMessages(readBoolean(props, overrides, "jimuqu.channels.weixin.splitMultilineMessages", false));
+        config.getChannels().getWeixin().setSendChunkDelaySeconds(readDouble(props, overrides, "jimuqu.channels.weixin.sendChunkDelaySeconds", 0.35D));
+        config.getChannels().getWeixin().setSendChunkRetries(readInt(props, overrides, "jimuqu.channels.weixin.sendChunkRetries", 2));
+        config.getChannels().getWeixin().setSendChunkRetryDelaySeconds(readDouble(props, overrides, "jimuqu.channels.weixin.sendChunkRetryDelaySeconds", 1.0D));
 
-        config.getGateway().setAllowedUsers(resolveList("JIMUQU_GATEWAY_ALLOWED_USERS", readString(props, overrides, "jimuqu.gateway.allowedUsers", "")));
+        config.getGateway().setAllowedUsers(resolveList("JIMUQU_GATEWAY_ALLOWED_USERS", readRaw(props, overrides, "jimuqu.gateway.allowedUsers", "")));
         config.getGateway().setAllowAllUsers(resolveBoolean("JIMUQU_GATEWAY_ALLOW_ALL_USERS", readBoolean(props, overrides, "jimuqu.gateway.allowAllUsers", false)));
         config.getAgent().setPersonalities(loadPersonalities(props, overrides));
 
@@ -250,12 +280,31 @@ public class AppConfig {
                                            String channelName,
                                            String allowedUsersEnvName,
                                            String allowAllUsersEnvName,
-                                           String unauthorizedBehaviorEnvName) {
-        channelConfig.setAllowedUsers(resolveList(allowedUsersEnvName, readString(props, overrides, "jimuqu.channels." + channelName + ".allowedUsers", "")));
+                                           String unauthorizedBehaviorEnvName,
+                                           String dmPolicyEnvName,
+                                           String defaultDmPolicy,
+                                           String groupPolicyEnvName,
+                                           String defaultGroupPolicy,
+                                           String groupAllowedUsersEnvName) {
+        channelConfig.setAllowedUsers(resolveList(allowedUsersEnvName, readRaw(props, overrides, "jimuqu.channels." + channelName + ".allowedUsers", "")));
         channelConfig.setAllowAllUsers(resolveBoolean(allowAllUsersEnvName, readBoolean(props, overrides, "jimuqu.channels." + channelName + ".allowAllUsers", false)));
         channelConfig.setUnauthorizedDmBehavior(resolveBehavior(
                 unauthorizedBehaviorEnvName,
                 readString(props, overrides, "jimuqu.channels." + channelName + ".unauthorizedDmBehavior", GatewayBehaviorConstants.UNAUTHORIZED_DM_BEHAVIOR_PAIR)
+        ));
+        channelConfig.setDmPolicy(resolvePolicy(
+                dmPolicyEnvName,
+                readString(props, overrides, "jimuqu.channels." + channelName + ".dmPolicy", defaultDmPolicy),
+                defaultDmPolicy
+        ));
+        channelConfig.setGroupPolicy(resolvePolicy(
+                groupPolicyEnvName,
+                readString(props, overrides, "jimuqu.channels." + channelName + ".groupPolicy", defaultGroupPolicy),
+                defaultGroupPolicy
+        ));
+        channelConfig.setGroupAllowedUsers(resolveList(
+                groupAllowedUsersEnvName,
+                readRaw(props, overrides, "jimuqu.channels." + channelName + ".groupAllowedUsers", "")
         ));
     }
 
@@ -287,12 +336,12 @@ public class AppConfig {
     /**
      * 支持逗号分隔的用户列表解析。
      */
-    private static List<String> resolveList(String envName, String fallback) {
+    private static List<String> resolveList(String envName, Object fallback) {
         String envValue = RuntimeEnvResolver.getenv(envName);
         if (StrUtil.isNotBlank(envValue)) {
             return splitList(envValue);
         }
-        return splitList(fallback);
+        return splitObjectList(fallback);
     }
 
     /**
@@ -310,6 +359,17 @@ public class AppConfig {
     }
 
     /**
+     * 统一解析访问策略值。
+     */
+    private static String resolvePolicy(String envName, String fallback, String defaultValue) {
+        String envValue = RuntimeEnvResolver.getenv(envName);
+        String value = StrUtil.isNotBlank(envValue)
+                ? envValue.trim()
+                : StrUtil.nullToDefault(fallback, defaultValue).trim();
+        return value.length() == 0 ? defaultValue : value.toLowerCase();
+    }
+
+    /**
      * 将逗号分隔列表转为字符串集合。
      */
     private static List<String> splitList(String raw) {
@@ -324,6 +384,59 @@ public class AppConfig {
             }
         }
         return values;
+    }
+
+    /**
+     * 支持从 YAML 列表或字符串中解析动态 allowlist。
+     */
+    private static List<String> splitObjectList(Object raw) {
+        if (raw == null) {
+            return Collections.emptyList();
+        }
+        if (raw instanceof List) {
+            List<String> values = new ArrayList<String>();
+            for (Object item : (List<?>) raw) {
+                if (item != null && String.valueOf(item).trim().length() > 0) {
+                    values.add(String.valueOf(item).trim());
+                }
+            }
+            return values;
+        }
+        return splitList(String.valueOf(raw));
+    }
+
+    /**
+     * 收集形如 channels.wecom.groups.<groupId>.allowFrom 的动态配置。
+     */
+    private static Map<String, List<String>> collectGroupAllowMap(Props props,
+                                                                  Map<String, Object> overrides,
+                                                                  String prefix) {
+        Map<String, List<String>> result = new LinkedHashMap<String, List<String>>();
+        if (props != null) {
+            for (Map.Entry<Object, Object> entry : props.entrySet()) {
+                String key = String.valueOf(entry.getKey());
+                if (!key.startsWith(prefix) || !key.endsWith(".allowFrom")) {
+                    continue;
+                }
+                String groupId = key.substring(prefix.length(), key.length() - ".allowFrom".length()).trim();
+                if (groupId.length() == 0) {
+                    continue;
+                }
+                result.put(groupId, splitObjectList(entry.getValue()));
+            }
+        }
+        for (Map.Entry<String, Object> entry : overrides.entrySet()) {
+            String key = entry.getKey();
+            if (!key.startsWith(prefix) || !key.endsWith(".allowFrom")) {
+                continue;
+            }
+            String groupId = key.substring(prefix.length(), key.length() - ".allowFrom".length()).trim();
+            if (groupId.length() == 0) {
+                continue;
+            }
+            result.put(groupId, splitObjectList(entry.getValue()));
+        }
+        return result;
     }
 
     /**
@@ -401,6 +514,14 @@ public class AppConfig {
             return String.valueOf(override).trim();
         }
         return props.get(key, defaultValue);
+    }
+
+    private static Object readRaw(Props props, Map<String, Object> overrides, String key, Object defaultValue) {
+        if (overrides.containsKey(key)) {
+            return overrides.get(key);
+        }
+        Object value = props.get(key);
+        return value == null ? defaultValue : value;
     }
 
     private static int readInt(Props props, Map<String, Object> overrides, String key, int defaultValue) {
@@ -862,6 +983,41 @@ public class AppConfig {
         private List<String> allowedUsers = new ArrayList<String>();
 
         /**
+         * 私聊访问策略。
+         */
+        private String dmPolicy = GatewayBehaviorConstants.DM_POLICY_OPEN;
+
+        /**
+         * 群聊访问策略。
+         */
+        private String groupPolicy = GatewayBehaviorConstants.GROUP_POLICY_OPEN;
+
+        /**
+         * 群聊允许名单。
+         */
+        private List<String> groupAllowedUsers = new ArrayList<String>();
+
+        /**
+         * 企微按群发送者 allowlist。
+         */
+        private Map<String, List<String>> groupMemberAllowedUsers = new LinkedHashMap<String, List<String>>();
+
+        /**
+         * 飞书 bot open id。
+         */
+        private String botOpenId;
+
+        /**
+         * 飞书 bot user id。
+         */
+        private String botUserId;
+
+        /**
+         * 飞书 bot 展示名。
+         */
+        private String botName;
+
+        /**
          * 是否允许该渠道所有用户访问。
          */
         private boolean allowAllUsers;
@@ -870,6 +1026,26 @@ public class AppConfig {
          * 未授权私聊行为。
          */
         private String unauthorizedDmBehavior = GatewayBehaviorConstants.UNAUTHORIZED_DM_BEHAVIOR_PAIR;
+
+        /**
+         * 微信是否按多行强制拆分。
+         */
+        private boolean splitMultilineMessages;
+
+        /**
+         * 微信分片发送间隔。
+         */
+        private double sendChunkDelaySeconds = 0.35D;
+
+        /**
+         * 微信分片重试次数。
+         */
+        private int sendChunkRetries = 2;
+
+        /**
+         * 微信分片重试间隔。
+         */
+        private double sendChunkRetryDelaySeconds = 1.0D;
     }
 
     /**
