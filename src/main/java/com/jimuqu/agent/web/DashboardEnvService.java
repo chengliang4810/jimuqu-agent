@@ -85,16 +85,32 @@ public class DashboardEnvService {
     }
 
     public Map<String, Object> set(String key, String value) {
+        return set(key, value, true);
+    }
+
+    public Map<String, Object> set(String key, String value, boolean reconnectChannels) {
         ensureSupported(key);
         envResolver.setFileValue(key, value);
-        gatewayRuntimeRefreshService.refreshNow();
+        if (reconnectChannels) {
+            gatewayRuntimeRefreshService.refreshNow();
+        } else {
+            gatewayRuntimeRefreshService.refreshConfigOnly();
+        }
         return Collections.<String, Object>singletonMap("ok", true);
     }
 
     public Map<String, Object> remove(String key) {
+        return remove(key, true);
+    }
+
+    public Map<String, Object> remove(String key, boolean reconnectChannels) {
         ensureSupported(key);
         envResolver.removeFileValue(key);
-        gatewayRuntimeRefreshService.refreshNow();
+        if (reconnectChannels) {
+            gatewayRuntimeRefreshService.refreshNow();
+        } else {
+            gatewayRuntimeRefreshService.refreshConfigOnly();
+        }
         return Collections.<String, Object>singletonMap("ok", true);
     }
 

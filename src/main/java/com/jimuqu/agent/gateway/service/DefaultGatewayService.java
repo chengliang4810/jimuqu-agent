@@ -229,7 +229,22 @@ public class DefaultGatewayService {
      * 提炼用户可见错误信息。
      */
     private String safeMessage(Exception e) {
-        String message = e.getMessage();
+        Throwable cause = rootCause(e);
+        if (cause instanceof InterruptedException) {
+            return "当前操作被中断，请重试一次。";
+        }
+        String message = cause == null ? null : cause.getMessage();
+        if (message == null || message.trim().length() == 0) {
+            message = e.getMessage();
+        }
         return message == null || message.trim().length() == 0 ? e.getClass().getSimpleName() : message.trim();
+    }
+
+    private Throwable rootCause(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null && current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current;
     }
 }

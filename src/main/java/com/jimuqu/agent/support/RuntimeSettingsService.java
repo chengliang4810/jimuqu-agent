@@ -171,7 +171,7 @@ public class RuntimeSettingsService {
         if (StrUtil.isNotBlank(model)) {
             updates.put("llm.model", model.trim());
         }
-        dashboardConfigService.savePartialFlat(updates);
+        dashboardConfigService.savePartialFlat(updates, false);
     }
 
     public Object getConfigValue(String key) {
@@ -183,11 +183,11 @@ public class RuntimeSettingsService {
         ensureConfigKeyAllowed(key);
         Map<String, Object> updates = new LinkedHashMap<String, Object>();
         updates.put(key, parseValueForKey(key, rawValue));
-        dashboardConfigService.savePartialFlat(updates);
+        dashboardConfigService.savePartialFlat(updates, shouldReconnectChannelsForConfigKey(key));
     }
 
     public void setSecretValue(String envKey, String value) {
-        dashboardEnvService.set(envKey, value);
+        dashboardEnvService.set(envKey, value, shouldReconnectChannelsForEnvKey(envKey));
     }
 
     private void ensureConfigKeyAllowed(String key) {
@@ -279,6 +279,14 @@ public class RuntimeSettingsService {
             buffer.append(value.trim());
         }
         return buffer.toString();
+    }
+
+    private boolean shouldReconnectChannelsForConfigKey(String key) {
+        return key != null && key.startsWith("channels.");
+    }
+
+    private boolean shouldReconnectChannelsForEnvKey(String envKey) {
+        return envKey != null && !envKey.startsWith("JIMUQU_LLM_");
     }
 
     public static class ResolvedModel {

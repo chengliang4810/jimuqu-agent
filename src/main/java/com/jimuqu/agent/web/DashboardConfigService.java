@@ -79,11 +79,19 @@ public class DashboardConfigService {
     }
 
     public Map<String, Object> savePartialFlat(Map<String, Object> flatUpdates) {
+        return savePartialFlat(flatUpdates, true);
+    }
+
+    public Map<String, Object> savePartialFlat(Map<String, Object> flatUpdates, boolean reconnectChannels) {
         validateKeys(flatUpdates.keySet());
         Map<String, Object> merged = mergeBaseValues();
         merged.putAll(flatUpdates);
         writeOverrideFile(merged);
-        gatewayRuntimeRefreshService.refreshNow();
+        if (reconnectChannels) {
+            gatewayRuntimeRefreshService.refreshNow();
+        } else {
+            gatewayRuntimeRefreshService.refreshConfigOnly();
+        }
         return Collections.<String, Object>singletonMap("ok", true);
     }
 

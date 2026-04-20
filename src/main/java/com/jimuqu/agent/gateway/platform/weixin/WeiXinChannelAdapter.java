@@ -69,6 +69,7 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     private final ConcurrentMap<String, Long> recentMessageIds = new ConcurrentHashMap<String, Long>();
     private final ConcurrentMap<String, TypingTicketState> typingTickets = new ConcurrentHashMap<String, TypingTicketState>();
     private volatile ExecutorService pollExecutor;
+    private volatile ExecutorService inboundExecutor;
     private volatile boolean polling;
 
     public WeiXinChannelAdapter(AppConfig.ChannelConfig config,
@@ -111,6 +112,7 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         setConnected(true);
         setSetupState("connected");
         setDetail("long-poll configured");
+        ensureInboundExecutor();
         startPolling();
         return true;
     }
@@ -121,6 +123,10 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         if (pollExecutor != null) {
             pollExecutor.shutdownNow();
             pollExecutor = null;
+        }
+        if (inboundExecutor != null) {
+            inboundExecutor.shutdown();
+            inboundExecutor = null;
         }
         setConnected(false);
         setDetail("disconnected");
@@ -449,6 +455,13 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         });
     }
 
+    private synchronized ExecutorService ensureInboundExecutor() {
+        if (inboundExecutor == null || inboundExecutor.isShutdown() || inboundExecutor.isTerminated()) {
+            inboundExecutor = Executors.newSingleThreadExecutor();
+        }
+        return inboundExecutor;
+    }
+
     private void pollLoop() {
         String syncBuf = loadSyncBuf();
         while (polling && !Thread.currentThread().isInterrupted()) {
@@ -531,18 +544,34 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         gatewayMessage.setUserName(senderId);
         gatewayMessage.setThreadId(messageId);
         gatewayMessage.setAttachments(attachments);
+        dispatchInboundMessage(gatewayMessage, chatTarget.chatType, chatTarget.chatId, contextToken);
+    }
+
+    private void dispatchInboundMessage(final GatewayMessage gatewayMessage,
+                                        final String chatType,
+                                        final String chatId,
+                                        final String contextToken) {
         try {
-            if ("dm".equals(chatTarget.chatType)) {
-                maybeFetchTypingTicket(chatTarget.chatId, contextToken);
-                sendTyping(chatTarget.chatId, TYPING_START);
-            }
-            inboundMessageHandler().handle(gatewayMessage);
+            ensureInboundExecutor().submit(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        if ("dm".equals(chatType)) {
+                            maybeFetchTypingTicket(chatId, contextToken);
+                            sendTyping(chatId, TYPING_START);
+                        }
+                        inboundMessageHandler().handle(gatewayMessage);
+                    } catch (Exception e) {
+                        log.warn("[WEIXIN] inbound dispatch failed: {}", e.getMessage(), e);
+                    } finally {
+                        if ("dm".equals(chatType)) {
+                            sendTyping(chatId, TYPING_STOP);
+                        }
+                    }
+                }
+            });
         } catch (Exception e) {
-            log.warn("[WEIXIN] inbound dispatch failed: {}", e.getMessage(), e);
-        } finally {
-            if ("dm".equals(chatTarget.chatType)) {
-                sendTyping(chatTarget.chatId, TYPING_STOP);
-            }
+            log.warn("[WEIXIN] inbound submit failed: {}", e.getMessage(), e);
         }
     }
 

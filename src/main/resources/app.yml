@@ -2,9 +2,9 @@ server.port: 8080
 solon.app.name: jimuqu-agent
 
 solon.logging.appender.console.level: INFO
-solon.logging.appender.console.pattern: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{48} - %msg%n"
+solon.logging.appender.console.pattern: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{48} - %msg%n%ex"
 solon.logging.appender.file.level: INFO
-solon.logging.appender.file.pattern: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{48} - %msg%n"
+solon.logging.appender.file.pattern: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{48} - %msg%n%ex"
 solon.logging.appender.file.maxFileSize: 10 MB
 solon.logging.appender.file.maxHistory: 7
 solon.logging.logger.root.level: INFO

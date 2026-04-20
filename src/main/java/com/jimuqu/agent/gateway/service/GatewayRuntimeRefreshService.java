@@ -40,6 +40,14 @@ public class GatewayRuntimeRefreshService {
     }
 
     public synchronized void refreshNow() {
+        refreshInternal(true);
+    }
+
+    public synchronized void refreshConfigOnly() {
+        refreshInternal(false);
+    }
+
+    private void refreshInternal(boolean reconnectChannels) {
         AppConfig latest;
         try {
             if (Solon.cfg() == null) {
@@ -56,6 +64,9 @@ public class GatewayRuntimeRefreshService {
         appConfig.applyFrom(latest);
         lastEnvMtime = fileMtime(appConfig.getRuntime().getEnvFile());
         lastConfigMtime = fileMtime(appConfig.getRuntime().getConfigOverrideFile());
+        if (!reconnectChannels) {
+            return;
+        }
         for (ChannelAdapter adapter : channelAdapters.values()) {
             try {
                 adapter.disconnect();
@@ -72,7 +83,8 @@ public class GatewayRuntimeRefreshService {
             } catch (Exception e) {
                 log.warn("[CHANNEL-REFRESH] reconnect failed: platform={}, message={}",
                         adapter.platform(),
-                        e.getMessage());
+                        e.getMessage(),
+                        e);
             }
         }
     }
