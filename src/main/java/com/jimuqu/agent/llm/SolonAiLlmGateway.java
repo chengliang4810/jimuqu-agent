@@ -242,6 +242,9 @@ public class SolonAiLlmGateway implements LlmGateway {
                 "C:\\Windows\\Fonts\\msyh.ttf",
                 "C:\\Windows\\Fonts\\simhei.ttf",
                 "/Library/Fonts/Arial Unicode.ttf",
+                "/usr/share/fonts/truetype/arphic-gbsn00lp/gbsn00lp.ttf",
+                "/usr/share/fonts/truetype/arphic/gbsn00lp.ttf",
+                "/usr/share/fonts/truetype/gbsn00lp.ttf",
                 "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttf",
                 "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttf"
         );

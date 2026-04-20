@@ -37,13 +37,16 @@
 
 当前默认内置工具包含：
 
-- `terminal`
-- `process`
 - `read_file`
 - `write_file`
 - `patch`
 - `search_files`
-- `execute_code`
+- `exists_cmd`
+- `list_files`
+- `execute_shell`
+- `execute_python`
+- `execute_js`
+- `get_current_time`
 - `delegate_task`
 - `todo`
 - `memory`
@@ -53,7 +56,6 @@
 - `skill_manage`
 - `send_message`
 - `cronjob`
-- `approval`
 - `codesearch`
 - `websearch`
 - `webfetch`
@@ -64,6 +66,8 @@
   提供 `codesearch`、`websearch`、`webfetch`
 - `solon-ai-skill-pdf`
   提供 `pdf_create`、`pdf_parse`
+- `solon-ai-skill-sys`
+  提供 `exists_cmd`、`list_files`、`execute_shell`、`execute_python`、`execute_js`、`get_current_time`
 
 ## 技术基线
 
@@ -191,6 +195,10 @@ docker run -d \
 - 运行时数据目录挂载到 `/app/runtime`
 - 应用默认监听 `8080`
 - 若你使用 dashboard、SQLite、skills、媒体缓存或微信扫码登录，`./runtime` 必须持久化
+- 运行镜像已补成更接近真机的完整环境，内置 `apt-get`、`bash`、`git`、`curl`、`wget`、`jq`
+- 同时内置 `python3/pip`、`nodejs/npm`，可直接支撑官方 `solon-ai-skill-sys`
+- 镜像内已安装 `fonts-arphic-gbsn00lp` 和 `fonts-noto-cjk`
+- 默认已设置 `JIMUQU_PDF_FONT_PATH=/usr/share/fonts/truetype/arphic-gbsn00lp/gbsn00lp.ttf`，容器内生成中文 PDF 时开箱即用
 
 健康检查：
 
@@ -293,7 +301,8 @@ git push origin v0.0.1
 - Web 搜索与抓取能力改为直接使用官方 `solon-ai-skill-web`
 - PDF 生成与解析能力改为直接使用官方 `solon-ai-skill-pdf`
 - PDF 默认输出目录为 `runtime/cache/pdf/`
-- 若部署环境缺少中文字体，可选设置 `JIMUQU_PDF_FONT_PATH` 指向可用的 `ttf/otf` 字体文件
+- Docker 镜像内已默认配置中文 TrueType 字体，无需额外设置即可处理中文 PDF
+- 非 Docker 或自定义环境下，仍可通过 `JIMUQU_PDF_FONT_PATH` 覆盖成可用的 `ttf/otf` 字体文件
 
 附件与媒体说明：
 

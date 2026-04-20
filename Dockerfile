@@ -19,11 +19,59 @@ COPY --from=frontend /workspace/web/dist /workspace/web/dist
 RUN mvn -DskipTests -Dskip.web.build=true package \
     && cp "$(find target -maxdepth 1 -type f -name 'jimuqu-agent-*.jar' ! -name 'original-*' | head -n 1)" /tmp/jimuqu-agent.jar
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:17-jdk
 
 WORKDIR /app
 
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    TZ=Asia/Shanghai \
+    PYTHONIOENCODING=UTF-8 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    JIMUQU_PDF_FONT_PATH=/usr/share/fonts/truetype/arphic-gbsn00lp/gbsn00lp.ttf
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        bash \
+        git \
+        curl \
+        wget \
+        jq \
+        less \
+        nano \
+        vim-tiny \
+        procps \
+        psmisc \
+        net-tools \
+        iputils-ping \
+        dnsutils \
+        file \
+        tree \
+        unzip \
+        zip \
+        ca-certificates \
+        tzdata \
+        locales \
+        fontconfig \
+        python3 \
+        python3-pip \
+        python3-venv \
+        nodejs \
+        npm \
+        fonts-arphic-gbsn00lp \
+        fonts-noto-cjk \
+    && locale-gen C.UTF-8 \
+    && fc-cache -f \
+    && update-ca-certificates \
+    && ln -sf /usr/bin/python3 /usr/local/bin/python \
+    && ln -sf /usr/bin/pip3 /usr/local/bin/pip \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /tmp/jimuqu-agent.jar /app/jimuqu-agent.jar
+
+RUN mkdir -p /app/runtime
 
 EXPOSE 8080
 
