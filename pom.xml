@@ -18,6 +18,7 @@
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
         <npm.executable>npm</npm.executable>
+        <skip.web.build>false</skip.web.build>
         <solon.version>3.10.3</solon.version>
         <hutool.version>5.8.44</hutool.version>
         <snack4.version>4.0.42</snack4.version>
@@ -172,6 +173,7 @@
                             <goal>exec</goal>
                         </goals>
                         <configuration>
+                            <skip>${skip.web.build}</skip>
                             <workingDirectory>${project.basedir}/web</workingDirectory>
                             <executable>${npm.executable}</executable>
                             <arguments>
@@ -186,6 +188,7 @@
                             <goal>exec</goal>
                         </goals>
                         <configuration>
+                            <skip>${skip.web.build}</skip>
                             <workingDirectory>${project.basedir}/web</workingDirectory>
                             <executable>${npm.executable}</executable>
                             <arguments>
