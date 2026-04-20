@@ -164,14 +164,12 @@ public class RuntimeSettingsService {
     }
 
     public void setGlobalModel(String provider, String model) {
-        Map<String, Object> updates = new LinkedHashMap<String, Object>();
         if (StrUtil.isNotBlank(provider)) {
-            updates.put("llm.provider", provider.trim());
+            persistConfigValue("llm.provider", provider.trim(), false);
         }
         if (StrUtil.isNotBlank(model)) {
-            updates.put("llm.model", model.trim());
+            persistConfigValue("llm.model", model.trim(), false);
         }
-        dashboardConfigService.savePartialFlat(updates, false);
     }
 
     public Object getConfigValue(String key) {
@@ -181,9 +179,7 @@ public class RuntimeSettingsService {
 
     public void setConfigValue(String key, String rawValue) {
         ensureConfigKeyAllowed(key);
-        Map<String, Object> updates = new LinkedHashMap<String, Object>();
-        updates.put(key, parseValueForKey(key, rawValue));
-        dashboardConfigService.savePartialFlat(updates, shouldReconnectChannelsForConfigKey(key));
+        persistConfigValue(key, parseValueForKey(key, rawValue), shouldReconnectChannelsForConfigKey(key));
     }
 
     public void setSecretValue(String envKey, String value) {
@@ -279,6 +275,42 @@ public class RuntimeSettingsService {
             buffer.append(value.trim());
         }
         return buffer.toString();
+    }
+
+    private void persistConfigValue(String key, Object value, boolean reconnectChannels) {
+        Map<String, Object> updates = new LinkedHashMap<String, Object>();
+        updates.put(key, value);
+        String envKey = dashboardConfigService.envNameFor(key);
+        if (StrUtil.isNotBlank(envKey)) {
+            dashboardConfigService.savePartialFlat(updates, false);
+            dashboardEnvService.set(envKey, serializeValue(value), reconnectChannels);
+        } else {
+            dashboardConfigService.savePartialFlat(updates, reconnectChannels);
+        }
+    }
+
+    private String serializeValue(Object value) {
+        if (value == null) {
+            return "";
+        }
+        if (value instanceof List) {
+            StringBuilder buffer = new StringBuilder();
+            for (Object item : (List<?>) value) {
+                if (item == null) {
+                    continue;
+                }
+                String text = String.valueOf(item).trim();
+                if (text.length() == 0) {
+                    continue;
+                }
+                if (buffer.length() > 0) {
+                    buffer.append(',');
+                }
+                buffer.append(text);
+            }
+            return buffer.toString();
+        }
+        return String.valueOf(value);
     }
 
     private boolean shouldReconnectChannelsForConfigKey(String key) {

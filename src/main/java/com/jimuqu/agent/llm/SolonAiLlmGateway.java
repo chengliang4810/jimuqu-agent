@@ -42,6 +42,12 @@ public class SolonAiLlmGateway implements LlmGateway {
     public LlmResult chat(SessionRecord session, String systemPrompt, String userMessage, List<Object> toolObjects) throws Exception {
         AppConfig.LlmConfig resolved = resolve(session);
         validate(resolved);
+        log.info("LLM request: provider={}, model={}, sessionId={}, stream={}, sessionOverride={}",
+                resolved.getProvider(),
+                resolved.getModel(),
+                session == null ? "" : StrUtil.nullToEmpty(session.getSessionId()),
+                resolved.isStream(),
+                session != null && StrUtil.isNotBlank(session.getModelOverride()));
         InMemoryChatSession chatSession = new InMemoryChatSession(session.getSessionId());
         if (session.getNdjson() != null && session.getNdjson().trim().length() > 0) {
             chatSession.loadNdjson(session.getNdjson());

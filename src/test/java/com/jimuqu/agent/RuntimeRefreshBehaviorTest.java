@@ -1,5 +1,6 @@
 package com.jimuqu.agent;
 
+import cn.hutool.core.io.FileUtil;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.model.ChannelStatus;
 import com.jimuqu.agent.core.model.DeliveryRequest;
@@ -27,6 +28,22 @@ public class RuntimeRefreshBehaviorTest {
         runtimeSettingsService.setConfigValue("llm.model", "gpt-5.2");
 
         assertThat(env.appConfig.getLlm().getModel()).isEqualTo("gpt-5.2");
+        assertThat(adapter.disconnectCount).isZero();
+        assertThat(adapter.connectCount).isZero();
+    }
+
+    @Test
+    void shouldUpdateEnvBackedLlmModelEffectively() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        RecordingChannelAdapter adapter = new RecordingChannelAdapter(PlatformType.WEIXIN);
+        FileUtil.writeUtf8String("JIMUQU_LLM_MODEL=gpt-5.4\n", env.appConfig.getRuntime().getEnvFile());
+        RuntimeSettingsService runtimeSettingsService = runtimeSettingsService(env, adapter);
+
+        runtimeSettingsService.setConfigValue("llm.model", "gpt-5.2");
+
+        assertThat(env.appConfig.getLlm().getModel()).isEqualTo("gpt-5.2");
+        assertThat(runtimeSettingsService.getConfigValue("llm.model")).isEqualTo("gpt-5.2");
+        assertThat(FileUtil.readUtf8String(env.appConfig.getRuntime().getEnvFile())).contains("JIMUQU_LLM_MODEL=gpt-5.2");
         assertThat(adapter.disconnectCount).isZero();
         assertThat(adapter.connectCount).isZero();
     }

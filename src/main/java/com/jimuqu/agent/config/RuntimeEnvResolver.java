@@ -55,7 +55,7 @@ public class RuntimeEnvResolver {
     }
 
     /**
-     * 读取生效环境值。OS 环境变量优先于 runtime/.env。
+     * 读取生效环境值。runtime/.env 优先于 OS 环境变量，便于运行时热更新覆盖启动注入值。
      */
     public static String getenv(String key) {
         return getInstance().get(key);
@@ -72,13 +72,13 @@ public class RuntimeEnvResolver {
      * 读取指定键的生效值。
      */
     public String get(String key) {
-        String processValue = System.getenv(key);
-        if (StrUtil.isNotBlank(processValue)) {
-            return processValue.trim();
-        }
         reloadIfNeeded();
         String fileValue = fileValues.get(key);
-        return fileValue == null ? null : fileValue.trim();
+        if (StrUtil.isNotBlank(fileValue)) {
+            return fileValue.trim();
+        }
+        String processValue = System.getenv(key);
+        return processValue == null ? null : processValue.trim();
     }
 
     /**
@@ -90,7 +90,7 @@ public class RuntimeEnvResolver {
     }
 
     /**
-     * 返回生效值快照，文件值会被同名 OS 环境变量覆盖。
+     * 返回生效值快照，runtime/.env 中的值优先于同名 OS 环境变量。
      */
     public Map<String, String> effectiveValues(Iterable<String> keys) {
         Map<String, String> result = new LinkedHashMap<String, String>();

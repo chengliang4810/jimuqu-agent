@@ -62,6 +62,11 @@ public class DashboardConfigService {
         return Collections.<String, Object>singletonMap("yaml", dumpYaml(resolveCurrentValues()));
     }
 
+    public String envNameFor(String key) {
+        FieldDefinition definition = fields.get(key);
+        return definition == null ? null : definition.envName;
+    }
+
     public Map<String, Object> saveConfig(Map<String, Object> nestedConfig) {
         Map<String, Object> flat = flattenFieldMap(nestedConfig);
         validateKeys(flat.keySet());
@@ -97,22 +102,36 @@ public class DashboardConfigService {
 
     private void registerFields() {
         addField(new FieldDefinition("llm.provider", "select", "general", "模型协议提供方")
+                .envName("JIMUQU_LLM_PROVIDER")
                 .options("openai", "openai-responses", "ollama", "gemini", "anthropic"));
-        addField(new FieldDefinition("llm.apiUrl", "string", "general", "所选提供方的 API 地址"));
-        addField(new FieldDefinition("llm.model", "string", "general", "默认模型名"));
-        addField(new FieldDefinition("llm.stream", "boolean", "general", "是否启用流式输出"));
+        addField(new FieldDefinition("llm.apiUrl", "string", "general", "所选提供方的 API 地址")
+                .envName("JIMUQU_LLM_API_URL"));
+        addField(new FieldDefinition("llm.model", "string", "general", "默认模型名")
+                .envName("JIMUQU_LLM_MODEL"));
+        addField(new FieldDefinition("llm.stream", "boolean", "general", "是否启用流式输出")
+                .envName("JIMUQU_LLM_STREAM"));
         addField(new FieldDefinition("llm.reasoningEffort", "select", "general", "默认推理强度")
+                .envName("JIMUQU_LLM_REASONING_EFFORT")
                 .options("minimal", "low", "medium", "high"));
-        addField(new FieldDefinition("llm.temperature", "number", "general", "采样温度"));
-        addField(new FieldDefinition("llm.maxTokens", "number", "general", "最大输出 token"));
-        addField(new FieldDefinition("llm.contextWindowTokens", "number", "general", "上下文窗口 token"));
-        addField(new FieldDefinition("scheduler.enabled", "boolean", "general", "启用定时调度"));
-        addField(new FieldDefinition("scheduler.tickSeconds", "number", "general", "调度轮询周期（秒）"));
+        addField(new FieldDefinition("llm.temperature", "number", "general", "采样温度")
+                .envName("JIMUQU_LLM_TEMPERATURE"));
+        addField(new FieldDefinition("llm.maxTokens", "number", "general", "最大输出 token")
+                .envName("JIMUQU_LLM_MAX_TOKENS"));
+        addField(new FieldDefinition("llm.contextWindowTokens", "number", "general", "上下文窗口 token")
+                .envName("JIMUQU_LLM_CONTEXT_WINDOW_TOKENS"));
+        addField(new FieldDefinition("scheduler.enabled", "boolean", "general", "启用定时调度")
+                .envName("JIMUQU_SCHEDULER_ENABLED"));
+        addField(new FieldDefinition("scheduler.tickSeconds", "number", "general", "调度轮询周期（秒）")
+                .envName("JIMUQU_SCHEDULER_TICK_SECONDS"));
 
-        addField(new FieldDefinition("learning.enabled", "boolean", "agent", "启用主回复后的自动学习"));
-        addField(new FieldDefinition("learning.toolCallThreshold", "number", "agent", "触发学习所需的最少工具调用数"));
-        addField(new FieldDefinition("rollback.enabled", "boolean", "agent", "启用 checkpoint 回滚"));
-        addField(new FieldDefinition("rollback.maxCheckpointsPerSource", "number", "agent", "每个来源保留的最大 checkpoint 数"));
+        addField(new FieldDefinition("learning.enabled", "boolean", "agent", "启用主回复后的自动学习")
+                .envName("JIMUQU_LEARNING_ENABLED"));
+        addField(new FieldDefinition("learning.toolCallThreshold", "number", "agent", "触发学习所需的最少工具调用数")
+                .envName("JIMUQU_LEARNING_TOOL_CALL_THRESHOLD"));
+        addField(new FieldDefinition("rollback.enabled", "boolean", "agent", "启用 checkpoint 回滚")
+                .envName("JIMUQU_ROLLBACK_ENABLED"));
+        addField(new FieldDefinition("rollback.maxCheckpointsPerSource", "number", "agent", "每个来源保留的最大 checkpoint 数")
+                .envName("JIMUQU_ROLLBACK_MAX_CHECKPOINTS_PER_SOURCE"));
         addField(new FieldDefinition("agent.personalities.helpful.description", "string", "agent", "helpful 人格描述"));
         addField(new FieldDefinition("agent.personalities.helpful.systemPrompt", "text", "agent", "helpful 人格系统提示词"));
         addField(new FieldDefinition("agent.personalities.concise.description", "string", "agent", "concise 人格描述"));
@@ -122,49 +141,66 @@ public class DashboardConfigService {
         addField(new FieldDefinition("agent.personalities.technical.tone", "string", "agent", "technical 人格语气"));
         addField(new FieldDefinition("agent.personalities.technical.style", "string", "agent", "technical 人格风格"));
 
-        addField(new FieldDefinition("compression.enabled", "boolean", "compression", "启用上下文压缩"));
-        addField(new FieldDefinition("compression.thresholdPercent", "number", "compression", "触发压缩的阈值比例"));
-        addField(new FieldDefinition("compression.summaryModel", "string", "compression", "可选压缩摘要模型"));
-        addField(new FieldDefinition("compression.protectHeadMessages", "number", "compression", "头部保护消息数"));
-        addField(new FieldDefinition("compression.tailRatio", "number", "compression", "尾部保护比例"));
+        addField(new FieldDefinition("compression.enabled", "boolean", "compression", "启用上下文压缩")
+                .envName("JIMUQU_COMPRESSION_ENABLED"));
+        addField(new FieldDefinition("compression.thresholdPercent", "number", "compression", "触发压缩的阈值比例")
+                .envName("JIMUQU_COMPRESSION_THRESHOLD_PERCENT"));
+        addField(new FieldDefinition("compression.summaryModel", "string", "compression", "可选压缩摘要模型")
+                .envName("JIMUQU_COMPRESSION_SUMMARY_MODEL"));
+        addField(new FieldDefinition("compression.protectHeadMessages", "number", "compression", "头部保护消息数")
+                .envName("JIMUQU_COMPRESSION_PROTECT_HEAD_MESSAGES"));
+        addField(new FieldDefinition("compression.tailRatio", "number", "compression", "尾部保护比例")
+                .envName("JIMUQU_COMPRESSION_TAIL_RATIO"));
 
         addField(new FieldDefinition("gateway.allowedUsers", "list", "security", "全局允许用户列表").envName("JIMUQU_GATEWAY_ALLOWED_USERS"));
         addField(new FieldDefinition("gateway.allowAllUsers", "boolean", "security", "是否全局允许所有用户").envName("JIMUQU_GATEWAY_ALLOW_ALL_USERS"));
 
-        addChannelFields("feishu", null, "JIMUQU_FEISHU_ALLOWED_USERS", "JIMUQU_FEISHU_ALLOW_ALL_USERS", "JIMUQU_FEISHU_UNAUTHORIZED_DM_BEHAVIOR");
-        addField(new FieldDefinition("channels.feishu.websocketUrl", "string", "messaging", "飞书 websocket 地址"));
+        addChannelFields("feishu", "JIMUQU_FEISHU_ENABLED", "JIMUQU_FEISHU_ALLOWED_USERS", "JIMUQU_FEISHU_ALLOW_ALL_USERS", "JIMUQU_FEISHU_UNAUTHORIZED_DM_BEHAVIOR");
+        addField(new FieldDefinition("channels.feishu.websocketUrl", "string", "messaging", "飞书 websocket 地址")
+                .envName("JIMUQU_FEISHU_WEBSOCKET_URL"));
         addField(new FieldDefinition("channels.feishu.dmPolicy", "select", "messaging", "飞书私聊策略").options("open", "allowlist", "disabled", "pairing"));
         addField(new FieldDefinition("channels.feishu.groupPolicy", "select", "messaging", "飞书群聊策略").options("open", "allowlist", "disabled"));
         addField(new FieldDefinition("channels.feishu.groupAllowedUsers", "list", "messaging", "飞书群聊 allowlist").envName("JIMUQU_FEISHU_GROUP_ALLOWED_USERS"));
         addField(new FieldDefinition("channels.feishu.botOpenId", "string", "messaging", "飞书 bot Open ID").envName("JIMUQU_FEISHU_BOT_OPEN_ID"));
         addField(new FieldDefinition("channels.feishu.botUserId", "string", "messaging", "飞书 bot User ID").envName("JIMUQU_FEISHU_BOT_USER_ID"));
-        addField(new FieldDefinition("channels.feishu.botName", "string", "messaging", "飞书 bot 展示名"));
+        addField(new FieldDefinition("channels.feishu.botName", "string", "messaging", "飞书 bot 展示名")
+                .envName("JIMUQU_FEISHU_BOT_NAME"));
 
         addChannelFields("dingtalk", "JIMUQU_DINGTALK_ENABLED", "JIMUQU_DINGTALK_ALLOWED_USERS", "JIMUQU_DINGTALK_ALLOW_ALL_USERS", "JIMUQU_DINGTALK_UNAUTHORIZED_DM_BEHAVIOR");
-        addField(new FieldDefinition("channels.dingtalk.coolAppCode", "string", "messaging", "可选钉钉 Cool App 编码"));
-        addField(new FieldDefinition("channels.dingtalk.streamUrl", "string", "messaging", "钉钉 stream 地址"));
+        addField(new FieldDefinition("channels.dingtalk.coolAppCode", "string", "messaging", "可选钉钉 Cool App 编码")
+                .envName("JIMUQU_DINGTALK_COOL_APP_CODE"));
+        addField(new FieldDefinition("channels.dingtalk.streamUrl", "string", "messaging", "钉钉 stream 地址")
+                .envName("JIMUQU_DINGTALK_STREAM_URL"));
         addField(new FieldDefinition("channels.dingtalk.dmPolicy", "select", "messaging", "钉钉私聊策略").options("open", "allowlist", "disabled", "pairing"));
         addField(new FieldDefinition("channels.dingtalk.groupPolicy", "select", "messaging", "钉钉群聊策略").options("open", "allowlist", "disabled"));
         addField(new FieldDefinition("channels.dingtalk.groupAllowedUsers", "list", "messaging", "钉钉群聊 allowlist").envName("JIMUQU_DINGTALK_GROUP_ALLOWED_USERS"));
 
-        addChannelFields("wecom", null, "JIMUQU_WECOM_ALLOWED_USERS", "JIMUQU_WECOM_ALLOW_ALL_USERS", "JIMUQU_WECOM_UNAUTHORIZED_DM_BEHAVIOR");
-        addField(new FieldDefinition("channels.wecom.websocketUrl", "string", "messaging", "企微 websocket 地址"));
+        addChannelFields("wecom", "JIMUQU_WECOM_ENABLED", "JIMUQU_WECOM_ALLOWED_USERS", "JIMUQU_WECOM_ALLOW_ALL_USERS", "JIMUQU_WECOM_UNAUTHORIZED_DM_BEHAVIOR");
+        addField(new FieldDefinition("channels.wecom.websocketUrl", "string", "messaging", "企微 websocket 地址")
+                .envName("JIMUQU_WECOM_WEBSOCKET_URL"));
         addField(new FieldDefinition("channels.wecom.dmPolicy", "select", "messaging", "企微私聊策略").options("open", "allowlist", "disabled", "pairing"));
         addField(new FieldDefinition("channels.wecom.groupPolicy", "select", "messaging", "企微群聊策略").options("open", "allowlist", "disabled"));
         addField(new FieldDefinition("channels.wecom.groupAllowedUsers", "list", "messaging", "企微群聊 allowlist").envName("JIMUQU_WECOM_GROUP_ALLOWED_USERS"));
 
-        addChannelFields("weixin", null, "JIMUQU_WEIXIN_ALLOWED_USERS", "JIMUQU_WEIXIN_ALLOW_ALL_USERS", "JIMUQU_WEIXIN_UNAUTHORIZED_DM_BEHAVIOR");
+        addChannelFields("weixin", "JIMUQU_WEIXIN_ENABLED", "JIMUQU_WEIXIN_ALLOWED_USERS", "JIMUQU_WEIXIN_ALLOW_ALL_USERS", "JIMUQU_WEIXIN_UNAUTHORIZED_DM_BEHAVIOR");
         addField(new FieldDefinition("channels.weixin.accountId", "string", "messaging", "微信 iLink accountId").envName("JIMUQU_WEIXIN_ACCOUNT_ID"));
-        addField(new FieldDefinition("channels.weixin.baseUrl", "string", "messaging", "微信 iLink API 地址"));
-        addField(new FieldDefinition("channels.weixin.cdnBaseUrl", "string", "messaging", "微信 CDN 地址"));
-        addField(new FieldDefinition("channels.weixin.longPollUrl", "string", "messaging", "微信 long-poll 地址"));
+        addField(new FieldDefinition("channels.weixin.baseUrl", "string", "messaging", "微信 iLink API 地址")
+                .envName("JIMUQU_WEIXIN_BASE_URL"));
+        addField(new FieldDefinition("channels.weixin.cdnBaseUrl", "string", "messaging", "微信 CDN 地址")
+                .envName("JIMUQU_WEIXIN_CDN_BASE_URL"));
+        addField(new FieldDefinition("channels.weixin.longPollUrl", "string", "messaging", "微信 long-poll 地址")
+                .envName("JIMUQU_WEIXIN_LONG_POLL_URL"));
         addField(new FieldDefinition("channels.weixin.dmPolicy", "select", "messaging", "微信私聊策略").options("open", "allowlist", "disabled", "pairing"));
         addField(new FieldDefinition("channels.weixin.groupPolicy", "select", "messaging", "微信群聊策略").options("open", "allowlist", "disabled"));
         addField(new FieldDefinition("channels.weixin.groupAllowedUsers", "list", "messaging", "微信群聊 allowlist").envName("JIMUQU_WEIXIN_GROUP_ALLOWED_USERS"));
-        addField(new FieldDefinition("channels.weixin.splitMultilineMessages", "boolean", "messaging", "微信多行消息拆分"));
-        addField(new FieldDefinition("channels.weixin.sendChunkDelaySeconds", "number", "messaging", "微信分片发送间隔（秒）"));
-        addField(new FieldDefinition("channels.weixin.sendChunkRetries", "number", "messaging", "微信分片重试次数"));
-        addField(new FieldDefinition("channels.weixin.sendChunkRetryDelaySeconds", "number", "messaging", "微信分片重试间隔（秒）"));
+        addField(new FieldDefinition("channels.weixin.splitMultilineMessages", "boolean", "messaging", "微信多行消息拆分")
+                .envName("JIMUQU_WEIXIN_SPLIT_MULTILINE_MESSAGES"));
+        addField(new FieldDefinition("channels.weixin.sendChunkDelaySeconds", "number", "messaging", "微信分片发送间隔（秒）")
+                .envName("JIMUQU_WEIXIN_SEND_CHUNK_DELAY_SECONDS"));
+        addField(new FieldDefinition("channels.weixin.sendChunkRetries", "number", "messaging", "微信分片重试次数")
+                .envName("JIMUQU_WEIXIN_SEND_CHUNK_RETRIES"));
+        addField(new FieldDefinition("channels.weixin.sendChunkRetryDelaySeconds", "number", "messaging", "微信分片重试间隔（秒）")
+                .envName("JIMUQU_WEIXIN_SEND_CHUNK_RETRY_DELAY_SECONDS"));
     }
 
     private void addChannelFields(String name, String enabledEnv, String allowedUsersEnv, String allowAllEnv, String behaviorEnv) {
