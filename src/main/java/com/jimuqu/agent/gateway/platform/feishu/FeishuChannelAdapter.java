@@ -3,8 +3,10 @@ package com.jimuqu.agent.gateway.platform.feishu;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.ContentType;
 import cn.hutool.http.HttpRequest;
+import cn.hutool.http.HttpResponse;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.DeliveryRequest;
+import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.MessageAttachment;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
@@ -13,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.noear.snack4.ONode;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -23,6 +26,7 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
     private static final String SEND_URL = "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id";
     private static final String IMAGE_UPLOAD_URL = "https://open.feishu.cn/open-apis/im/v1/images";
     private static final String FILE_UPLOAD_URL = "https://open.feishu.cn/open-apis/im/v1/files";
+    private static final String MESSAGE_RESOURCE_URL = "https://open.feishu.cn/open-apis/im/v1/messages/%s/resources/%s?type=%s";
 
     private final AppConfig.ChannelConfig config;
     private final AttachmentCacheService attachmentCacheService;
@@ -78,6 +82,119 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
             }
         } catch (Exception e) {
             throw new IllegalStateException("Feishu send failed", e);
+        }
+    }
+
+    public String handleWebhook(String rawBody) {
+        ONode payload = ONode.ofJson(rawBody);
+        if ("url_verification".equals(payload.get("type").getString())) {
+            return new ONode().set("challenge", payload.get("challenge").getString()).toJson();
+        }
+        String eventType = payload.get("header").get("event_type").getString();
+        if (!"im.message.receive_v1".equals(eventType)) {
+            return new ONode().set("code", 0).set("msg", "ok").toJson();
+        }
+        try {
+            GatewayMessage message = toGatewayMessage(payload.get("event"));
+            if (message != null && inboundMessageHandler() != null) {
+                inboundMessageHandler().handle(message);
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("Feishu webhook handle failed", e);
+        }
+        return new ONode().set("code", 0).set("msg", "ok").toJson();
+    }
+
+    private GatewayMessage toGatewayMessage(ONode event) {
+        ONode messageNode = event.get("message");
+        String messageType = messageNode.get("message_type").getString();
+        String rawContent = messageNode.get("content").getString();
+        ONode content = StrUtil.isBlank(rawContent) ? new ONode() : ONode.ofJson(rawContent);
+        String chatId = messageNode.get("chat_id").getString();
+        String chatType = "group".equalsIgnoreCase(messageNode.get("chat_type").getString()) ? "group" : "dm";
+        String userId = event.get("sender").get("sender_id").get("open_id").getString();
+        if (StrUtil.isBlank(userId)) {
+            userId = event.get("sender").get("sender_id").get("user_id").getString();
+        }
+        String text = extractInboundText(messageType, content);
+        List<MessageAttachment> attachments = extractInboundAttachments(messageType, content, messageNode.get("message_id").getString());
+        if (StrUtil.isBlank(text) && attachments.isEmpty()) {
+            return null;
+        }
+        GatewayMessage message = new GatewayMessage(PlatformType.FEISHU, chatId, userId, text);
+        message.setChatType(chatType);
+        message.setChatName(chatId);
+        message.setUserName(userId);
+        message.setThreadId(messageNode.get("message_id").getString());
+        message.setAttachments(attachments);
+        return message;
+    }
+
+    private String extractInboundText(String messageType, ONode content) {
+        if ("text".equalsIgnoreCase(messageType)) {
+            return content.get("text").getString();
+        }
+        return "";
+    }
+
+    private List<MessageAttachment> extractInboundAttachments(String messageType, ONode content, String messageId) {
+        List<MessageAttachment> attachments = new ArrayList<MessageAttachment>();
+        if ("image".equalsIgnoreCase(messageType)) {
+            MessageAttachment attachment = downloadMessageResource("image", messageId, content.get("image_key").getString(), "image.jpg");
+            if (attachment != null) {
+                attachments.add(attachment);
+            }
+        } else if ("file".equalsIgnoreCase(messageType)) {
+            MessageAttachment attachment = downloadMessageResource("file", messageId, content.get("file_key").getString(), content.get("file_name").getString());
+            if (attachment != null) {
+                attachments.add(attachment);
+            }
+        } else if ("audio".equalsIgnoreCase(messageType)) {
+            MessageAttachment attachment = downloadMessageResource("audio", messageId, content.get("file_key").getString(), content.get("file_name").getString());
+            if (attachment != null) {
+                attachment.setKind("voice");
+                attachments.add(attachment);
+            }
+        } else if ("media".equalsIgnoreCase(messageType)) {
+            MessageAttachment attachment = downloadMessageResource("media", messageId, content.get("file_key").getString(), content.get("file_name").getString());
+            if (attachment != null) {
+                attachment.setKind("video");
+                attachments.add(attachment);
+            }
+        }
+        return attachments;
+    }
+
+    private MessageAttachment downloadMessageResource(String resourceType, String messageId, String fileKey, String fallbackName) {
+        if (StrUtil.isBlank(messageId) || StrUtil.isBlank(fileKey)) {
+            return null;
+        }
+        refreshTenantTokenIfNecessary();
+        String url = String.format(MESSAGE_RESOURCE_URL, messageId, fileKey, resourceType);
+        HttpResponse response = HttpRequest.get(url)
+                .header("Authorization", "Bearer " + tenantAccessToken)
+                .timeout(30000)
+                .execute();
+        try {
+            if (response.getStatus() >= 400) {
+                throw new IllegalStateException("Feishu resource download failed: " + response.body());
+            }
+            String fileName = fallbackName;
+            if (StrUtil.isBlank(fileName)) {
+                fileName = fileKey;
+            }
+            String mimeType = AttachmentCacheService.normalizeMimeType(response.header("Content-Type"), fileName);
+            return attachmentCacheService.cacheBytes(
+                    PlatformType.FEISHU,
+                    AttachmentCacheService.normalizeKind(resourceType, fileName, mimeType),
+                    fileName,
+                    mimeType,
+                    false,
+                    null,
+                    response.bodyBytes()
+            );
+        } finally {
+            response.close();
         }
     }
 
