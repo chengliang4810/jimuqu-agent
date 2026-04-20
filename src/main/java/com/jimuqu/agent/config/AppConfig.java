@@ -266,6 +266,138 @@ public class AppConfig {
     }
 
     /**
+     * 用新的配置快照覆盖当前实例，保留对象引用稳定。
+     */
+    public void applyFrom(AppConfig other) {
+        if (other == null) {
+            return;
+        }
+        copyRuntime(other.getRuntime());
+        copyLlm(other.getLlm());
+        copyScheduler(other.getScheduler());
+        copyCompression(other.getCompression());
+        copyLearning(other.getLearning());
+        copyRollback(other.getRollback());
+        copyChannel(this.channels.getFeishu(), other.getChannels().getFeishu());
+        copyChannel(this.channels.getDingtalk(), other.getChannels().getDingtalk());
+        copyChannel(this.channels.getWecom(), other.getChannels().getWecom());
+        copyChannel(this.channels.getWeixin(), other.getChannels().getWeixin());
+        this.gateway.setAllowedUsers(new ArrayList<String>(other.getGateway().getAllowedUsers()));
+        this.gateway.setAllowAllUsers(other.getGateway().isAllowAllUsers());
+        this.agent.setPersonalities(clonePersonalities(other.getAgent().getPersonalities()));
+    }
+
+    private void copyRuntime(RuntimeConfig other) {
+        this.runtime.setHome(other.getHome());
+        this.runtime.setContextDir(other.getContextDir());
+        this.runtime.setSkillsDir(other.getSkillsDir());
+        this.runtime.setCacheDir(other.getCacheDir());
+        this.runtime.setStateDb(other.getStateDb());
+        this.runtime.setConfigOverrideFile(other.getConfigOverrideFile());
+        this.runtime.setEnvFile(other.getEnvFile());
+        this.runtime.setLogsDir(other.getLogsDir());
+    }
+
+    private void copyLlm(LlmConfig other) {
+        this.llm.setProvider(other.getProvider());
+        this.llm.setApiUrl(other.getApiUrl());
+        this.llm.setApiKey(other.getApiKey());
+        this.llm.setModel(other.getModel());
+        this.llm.setStream(other.isStream());
+        this.llm.setReasoningEffort(other.getReasoningEffort());
+        this.llm.setTemperature(other.getTemperature());
+        this.llm.setMaxTokens(other.getMaxTokens());
+        this.llm.setContextWindowTokens(other.getContextWindowTokens());
+    }
+
+    private void copyScheduler(SchedulerConfig other) {
+        this.scheduler.setEnabled(other.isEnabled());
+        this.scheduler.setTickSeconds(other.getTickSeconds());
+    }
+
+    private void copyCompression(CompressionConfig other) {
+        this.compression.setEnabled(other.isEnabled());
+        this.compression.setThresholdPercent(other.getThresholdPercent());
+        this.compression.setSummaryModel(other.getSummaryModel());
+        this.compression.setProtectHeadMessages(other.getProtectHeadMessages());
+        this.compression.setTailRatio(other.getTailRatio());
+    }
+
+    private void copyLearning(LearningConfig other) {
+        this.learning.setEnabled(other.isEnabled());
+        this.learning.setToolCallThreshold(other.getToolCallThreshold());
+    }
+
+    private void copyRollback(RollbackConfig other) {
+        this.rollback.setEnabled(other.isEnabled());
+        this.rollback.setMaxCheckpointsPerSource(other.getMaxCheckpointsPerSource());
+    }
+
+    private void copyChannel(ChannelConfig target, ChannelConfig source) {
+        target.setEnabled(source.isEnabled());
+        target.setAppId(source.getAppId());
+        target.setAppSecret(source.getAppSecret());
+        target.setClientId(source.getClientId());
+        target.setClientSecret(source.getClientSecret());
+        target.setBotId(source.getBotId());
+        target.setSecret(source.getSecret());
+        target.setToken(source.getToken());
+        target.setAccountId(source.getAccountId());
+        target.setRobotCode(source.getRobotCode());
+        target.setCoolAppCode(source.getCoolAppCode());
+        target.setWebsocketUrl(source.getWebsocketUrl());
+        target.setStreamUrl(source.getStreamUrl());
+        target.setLongPollUrl(source.getLongPollUrl());
+        target.setBaseUrl(source.getBaseUrl());
+        target.setCdnBaseUrl(source.getCdnBaseUrl());
+        target.setAllowedUsers(new ArrayList<String>(source.getAllowedUsers()));
+        target.setDmPolicy(source.getDmPolicy());
+        target.setGroupPolicy(source.getGroupPolicy());
+        target.setGroupAllowedUsers(new ArrayList<String>(source.getGroupAllowedUsers()));
+        target.setGroupMemberAllowedUsers(cloneGroupAllowMap(source.getGroupMemberAllowedUsers()));
+        target.setBotOpenId(source.getBotOpenId());
+        target.setBotUserId(source.getBotUserId());
+        target.setBotName(source.getBotName());
+        target.setAllowAllUsers(source.isAllowAllUsers());
+        target.setUnauthorizedDmBehavior(source.getUnauthorizedDmBehavior());
+        target.setSplitMultilineMessages(source.isSplitMultilineMessages());
+        target.setSendChunkDelaySeconds(source.getSendChunkDelaySeconds());
+        target.setSendChunkRetries(source.getSendChunkRetries());
+        target.setSendChunkRetryDelaySeconds(source.getSendChunkRetryDelaySeconds());
+    }
+
+    private Map<String, PersonalityConfig> clonePersonalities(Map<String, PersonalityConfig> source) {
+        Map<String, PersonalityConfig> result = new LinkedHashMap<String, PersonalityConfig>();
+        if (source == null) {
+            return result;
+        }
+        for (Map.Entry<String, PersonalityConfig> entry : source.entrySet()) {
+            PersonalityConfig config = new PersonalityConfig();
+            if (entry.getValue() != null) {
+                config.setDescription(entry.getValue().getDescription());
+                config.setSystemPrompt(entry.getValue().getSystemPrompt());
+                config.setTone(entry.getValue().getTone());
+                config.setStyle(entry.getValue().getStyle());
+            }
+            result.put(entry.getKey(), config);
+        }
+        return result;
+    }
+
+    private Map<String, List<String>> cloneGroupAllowMap(Map<String, List<String>> source) {
+        Map<String, List<String>> result = new LinkedHashMap<String, List<String>>();
+        if (source == null) {
+            return result;
+        }
+        for (Map.Entry<String, List<String>> entry : source.entrySet()) {
+            result.put(entry.getKey(), entry.getValue() == null
+                    ? new ArrayList<String>()
+                    : new ArrayList<String>(entry.getValue()));
+        }
+        return result;
+    }
+
+    /**
      * 批量装配渠道共性配置。
      *
      * @param channelConfig               目标渠道配置

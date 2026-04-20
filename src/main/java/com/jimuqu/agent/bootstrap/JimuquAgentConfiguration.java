@@ -44,6 +44,7 @@ import com.jimuqu.agent.gateway.platform.dingtalk.DingTalkChannelAdapter;
 import com.jimuqu.agent.gateway.platform.feishu.FeishuChannelAdapter;
 import com.jimuqu.agent.gateway.platform.wecom.WeComChannelAdapter;
 import com.jimuqu.agent.gateway.platform.weixin.WeiXinChannelAdapter;
+import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.agent.gateway.service.DefaultGatewayService;
 import com.jimuqu.agent.llm.SolonAiLlmGateway;
 import com.jimuqu.agent.scheduler.DefaultCronScheduler;
@@ -345,6 +346,12 @@ public class JimuquAgentConfiguration {
         return new AdapterBackedDeliveryService(channelAdapters, gatewayPolicyRepository);
     }
 
+    @Bean
+    public GatewayRuntimeRefreshService gatewayRuntimeRefreshService(AppConfig appConfig,
+                                                                     Map<PlatformType, ChannelAdapter> channelAdapters) {
+        return new GatewayRuntimeRefreshService(appConfig, channelAdapters);
+    }
+
     /**
      * 创建授权服务。
      */
@@ -529,8 +536,9 @@ public class JimuquAgentConfiguration {
     @Bean
     public DashboardStatusService dashboardStatusService(AppConfig appConfig,
                                                          SessionRepository sessionRepository,
-                                                         DeliveryService deliveryService) {
-        return new DashboardStatusService(appConfig, sessionRepository, deliveryService);
+                                                         DeliveryService deliveryService,
+                                                         GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
+        return new DashboardStatusService(appConfig, sessionRepository, deliveryService, gatewayRuntimeRefreshService);
     }
 
     @Bean
@@ -549,25 +557,29 @@ public class JimuquAgentConfiguration {
     }
 
     @Bean
-    public DashboardConfigService dashboardConfigService(AppConfig appConfig) {
-        return new DashboardConfigService(appConfig);
+    public DashboardConfigService dashboardConfigService(AppConfig appConfig,
+                                                         GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
+        return new DashboardConfigService(appConfig, gatewayRuntimeRefreshService);
     }
 
     @Bean
-    public DashboardEnvService dashboardEnvService(AppConfig appConfig) {
-        return new DashboardEnvService(appConfig);
+    public DashboardEnvService dashboardEnvService(AppConfig appConfig,
+                                                   GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
+        return new DashboardEnvService(appConfig, gatewayRuntimeRefreshService);
     }
 
     @Bean
     public DashboardGatewayDoctorService dashboardGatewayDoctorService(AppConfig appConfig,
-                                                                       DeliveryService deliveryService) {
-        return new DashboardGatewayDoctorService(appConfig, deliveryService);
+                                                                       DeliveryService deliveryService,
+                                                                       GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
+        return new DashboardGatewayDoctorService(appConfig, deliveryService, gatewayRuntimeRefreshService);
     }
 
     @Bean
     public WeixinQrSetupService weixinQrSetupService(AppConfig appConfig,
-                                                     DashboardConfigService dashboardConfigService) {
-        return new WeixinQrSetupService(appConfig, dashboardConfigService);
+                                                     DashboardConfigService dashboardConfigService,
+                                                     GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
+        return new WeixinQrSetupService(appConfig, dashboardConfigService, gatewayRuntimeRefreshService);
     }
 
     @Bean

@@ -22,16 +22,20 @@ public class DashboardStatusService {
     private final AppConfig appConfig;
     private final SessionRepository sessionRepository;
     private final DeliveryService deliveryService;
+    private final com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
 
     public DashboardStatusService(AppConfig appConfig,
                                   SessionRepository sessionRepository,
-                                  DeliveryService deliveryService) {
+                                  DeliveryService deliveryService,
+                                  com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
         this.appConfig = appConfig;
         this.sessionRepository = sessionRepository;
         this.deliveryService = deliveryService;
+        this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
     }
 
     public Map<String, Object> getStatus() throws Exception {
+        gatewayRuntimeRefreshService.refreshIfNeeded();
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         List<SessionRecord> recentSessions = sessionRepository.listRecent(20);
         List<ChannelStatus> statuses = deliveryService.statuses();

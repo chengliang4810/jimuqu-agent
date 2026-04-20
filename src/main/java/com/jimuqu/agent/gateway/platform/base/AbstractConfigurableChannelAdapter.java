@@ -30,9 +30,9 @@ public abstract class AbstractConfigurableChannelAdapter implements ChannelAdapt
     private final PlatformType platformType;
 
     /**
-     * 是否启用。
+     * 动态渠道配置引用。
      */
-    private final boolean enabled;
+    private final AppConfig.ChannelConfig channelConfig;
 
     /**
      * 当前连接状态。
@@ -84,9 +84,9 @@ public abstract class AbstractConfigurableChannelAdapter implements ChannelAdapt
      */
     protected AbstractConfigurableChannelAdapter(PlatformType platformType, AppConfig.ChannelConfig config) {
         this.platformType = platformType;
-        this.enabled = config != null && config.isEnabled();
-        this.detail = enabled ? "configured" : "disabled";
-        this.setupState = enabled ? "configured" : "disabled";
+        this.channelConfig = config;
+        this.detail = isEnabled() ? "configured" : "disabled";
+        this.setupState = isEnabled() ? "configured" : "disabled";
         this.connectionMode = "custom";
     }
 
@@ -103,7 +103,7 @@ public abstract class AbstractConfigurableChannelAdapter implements ChannelAdapt
      */
     @Override
     public boolean isEnabled() {
-        return enabled;
+        return channelConfig != null && channelConfig.isEnabled();
     }
 
     /**
@@ -111,7 +111,7 @@ public abstract class AbstractConfigurableChannelAdapter implements ChannelAdapt
      */
     @Override
     public boolean connect() {
-        if (!enabled) {
+        if (!isEnabled()) {
             detail = "disabled";
             return false;
         }
@@ -155,7 +155,7 @@ public abstract class AbstractConfigurableChannelAdapter implements ChannelAdapt
 
     @Override
     public ChannelStatus statusSnapshot() {
-        ChannelStatus status = new ChannelStatus(platformType, enabled, connected, detail);
+        ChannelStatus status = new ChannelStatus(platformType, isEnabled(), connected, detail);
         status.setSetupState(setupState);
         status.setConnectionMode(connectionMode);
         status.setMissingEnv(new ArrayList<String>(missingEnv));

@@ -1,0 +1,11 @@
+services:
+  jimuqu-agent:
+    image: ghcr.io/chengliang4810/jimuqu-agent:latest
+    container_name: jimuqu-agent
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./runtime:/app/runtime

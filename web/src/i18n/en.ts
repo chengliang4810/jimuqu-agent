@@ -81,6 +81,8 @@ export const en: Translations = {
     weixinQrPending: "QR login in progress",
     weixinQrConfirmed: "QR login confirmed",
     weixinQrFailed: "QR login failed",
+    weixinQrOpenPage: "Open QR page",
+    weixinQrPageHint: "The server returned a QR page URL. If the embedded view fails, open it in a new tab.",
     running: "Running",
     starting: "Starting",
     failed: "Failed",

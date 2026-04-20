@@ -200,7 +200,9 @@ curl http://127.0.0.1:8080/health
 
 ## Docker Compose 部署
 
-`docker-compose.yml` 示例：
+仓库已包含可直接使用的 [docker-compose.yml](D:/projects/jimuqu-agent/docker-compose.yml)。
+
+内容如下：
 
 ```yaml
 services:

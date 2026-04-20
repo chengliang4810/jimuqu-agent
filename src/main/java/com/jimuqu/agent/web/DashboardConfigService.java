@@ -27,12 +27,15 @@ public class DashboardConfigService {
 
     private final AppConfig appConfig;
     private final RuntimeEnvResolver envResolver;
+    private final com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
     private final Map<String, FieldDefinition> fields = new LinkedHashMap<String, FieldDefinition>();
     private final List<String> categoryOrder = Arrays.asList("general", "agent", "compression", "security", "messaging");
 
-    public DashboardConfigService(AppConfig appConfig) {
+    public DashboardConfigService(AppConfig appConfig,
+                                  com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
         this.appConfig = appConfig;
         this.envResolver = RuntimeEnvResolver.getInstance();
+        this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
         registerFields();
     }
 
@@ -63,6 +66,7 @@ public class DashboardConfigService {
         Map<String, Object> flat = flattenFieldMap(nestedConfig);
         validateKeys(flat.keySet());
         writeOverrideFile(flat);
+        gatewayRuntimeRefreshService.refreshNow();
         return Collections.<String, Object>singletonMap("ok", true);
     }
 
@@ -70,6 +74,7 @@ public class DashboardConfigService {
         Map<String, Object> flat = loadFieldMap(yamlText);
         validateKeys(flat.keySet());
         writeOverrideFile(flat);
+        gatewayRuntimeRefreshService.refreshNow();
         return Collections.<String, Object>singletonMap("ok", true);
     }
 
@@ -78,6 +83,7 @@ public class DashboardConfigService {
         Map<String, Object> merged = mergeBaseValues();
         merged.putAll(flatUpdates);
         writeOverrideFile(merged);
+        gatewayRuntimeRefreshService.refreshNow();
         return Collections.<String, Object>singletonMap("ok", true);
     }
 

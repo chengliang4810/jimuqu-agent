@@ -20,13 +20,18 @@ import java.util.TimeZone;
 public class DashboardGatewayDoctorService {
     private final AppConfig appConfig;
     private final DeliveryService deliveryService;
+    private final com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
 
-    public DashboardGatewayDoctorService(AppConfig appConfig, DeliveryService deliveryService) {
+    public DashboardGatewayDoctorService(AppConfig appConfig,
+                                         DeliveryService deliveryService,
+                                         com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
         this.appConfig = appConfig;
         this.deliveryService = deliveryService;
+        this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
     }
 
     public Map<String, Object> doctor() throws Exception {
+        gatewayRuntimeRefreshService.refreshIfNeeded();
         List<Map<String, Object>> platforms = new ArrayList<Map<String, Object>>();
         List<ChannelStatus> statuses = deliveryService.statuses();
         for (String platform : Arrays.asList("feishu", "dingtalk", "wecom", "weixin")) {

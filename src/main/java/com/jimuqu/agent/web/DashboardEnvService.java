@@ -16,26 +16,33 @@ import java.util.Map;
 public class DashboardEnvService {
     private final RuntimeEnvResolver envResolver;
     private final List<EnvVarDefinition> definitions;
+    private final com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
 
-    public DashboardEnvService(AppConfig appConfig) {
+    public DashboardEnvService(AppConfig appConfig,
+                               com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
         this.envResolver = RuntimeEnvResolver.initialize(appConfig.getRuntime().getHome());
+        this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
         this.definitions = Arrays.asList(
                 new EnvVarDefinition("JIMUQU_LLM_PROVIDER", "默认模型 provider 覆盖", "provider", false, false, null, Arrays.asList("llm")),
                 new EnvVarDefinition("JIMUQU_LLM_API_URL", "默认模型 API 地址覆盖", "provider", false, false, null, Arrays.asList("llm")),
                 new EnvVarDefinition("JIMUQU_LLM_MODEL", "默认模型名覆盖", "provider", false, false, null, Arrays.asList("llm")),
                 new EnvVarDefinition("JIMUQU_LLM_API_KEY", "默认模型 API 密钥", "provider", true, false, null, Arrays.asList("llm")),
+                new EnvVarDefinition("JIMUQU_FEISHU_ENABLED", "启用飞书渠道", "messaging", false, false, null, Arrays.asList("feishu")),
                 new EnvVarDefinition("JIMUQU_FEISHU_APP_ID", "飞书应用 ID", "messaging", false, false, null, Arrays.asList("feishu")),
                 new EnvVarDefinition("JIMUQU_FEISHU_APP_SECRET", "飞书应用密钥", "messaging", true, false, null, Arrays.asList("feishu")),
                 new EnvVarDefinition("JIMUQU_FEISHU_GROUP_ALLOWED_USERS", "飞书群聊 allowlist", "messaging", false, true, null, Arrays.asList("feishu")),
                 new EnvVarDefinition("JIMUQU_FEISHU_BOT_OPEN_ID", "飞书 bot Open ID", "messaging", false, true, null, Arrays.asList("feishu")),
                 new EnvVarDefinition("JIMUQU_FEISHU_BOT_USER_ID", "飞书 bot User ID", "messaging", false, true, null, Arrays.asList("feishu")),
+                new EnvVarDefinition("JIMUQU_DINGTALK_ENABLED", "启用钉钉渠道", "messaging", false, false, null, Arrays.asList("dingtalk")),
                 new EnvVarDefinition("JIMUQU_DINGTALK_CLIENT_ID", "钉钉客户端 ID", "messaging", false, false, null, Arrays.asList("dingtalk")),
                 new EnvVarDefinition("JIMUQU_DINGTALK_CLIENT_SECRET", "钉钉客户端密钥", "messaging", true, false, null, Arrays.asList("dingtalk")),
                 new EnvVarDefinition("JIMUQU_DINGTALK_ROBOT_CODE", "钉钉机器人编码", "messaging", true, false, null, Arrays.asList("dingtalk")),
                 new EnvVarDefinition("JIMUQU_DINGTALK_GROUP_ALLOWED_USERS", "钉钉群聊 allowlist", "messaging", false, true, null, Arrays.asList("dingtalk")),
+                new EnvVarDefinition("JIMUQU_WECOM_ENABLED", "启用企微渠道", "messaging", false, false, null, Arrays.asList("wecom")),
                 new EnvVarDefinition("JIMUQU_WECOM_BOT_ID", "企微机器人 ID", "messaging", false, false, null, Arrays.asList("wecom")),
                 new EnvVarDefinition("JIMUQU_WECOM_SECRET", "企微机器人密钥", "messaging", true, false, null, Arrays.asList("wecom")),
                 new EnvVarDefinition("JIMUQU_WECOM_GROUP_ALLOWED_USERS", "企微群聊 allowlist", "messaging", false, true, null, Arrays.asList("wecom")),
+                new EnvVarDefinition("JIMUQU_WEIXIN_ENABLED", "启用微信渠道", "messaging", false, false, null, Arrays.asList("weixin")),
                 new EnvVarDefinition("JIMUQU_WEIXIN_TOKEN", "微信令牌", "messaging", true, false, null, Arrays.asList("weixin")),
                 new EnvVarDefinition("JIMUQU_WEIXIN_ACCOUNT_ID", "微信 iLink accountId", "messaging", false, false, null, Arrays.asList("weixin")),
                 new EnvVarDefinition("JIMUQU_WEIXIN_GROUP_ALLOWED_USERS", "微信群聊 allowlist", "messaging", false, true, null, Arrays.asList("weixin")),
@@ -80,12 +87,14 @@ public class DashboardEnvService {
     public Map<String, Object> set(String key, String value) {
         ensureSupported(key);
         envResolver.setFileValue(key, value);
+        gatewayRuntimeRefreshService.refreshNow();
         return Collections.<String, Object>singletonMap("ok", true);
     }
 
     public Map<String, Object> remove(String key) {
         ensureSupported(key);
         envResolver.removeFileValue(key);
+        gatewayRuntimeRefreshService.refreshNow();
         return Collections.<String, Object>singletonMap("ok", true);
     }
 

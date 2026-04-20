@@ -34,6 +34,11 @@ function sourceLabel(name?: string | null): string {
   return name;
 }
 
+function isQrPageUrl(url?: string | null): boolean {
+  if (!url) return false;
+  return url.includes("liteapp.weixin.qq.com/q/") || url.includes("/q/") || !/\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(url);
+}
+
 export default function StatusPage() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -434,11 +439,30 @@ function DoctorCard({
                       </div>
                       {weixinQr.message && <div className="mt-1">{weixinQr.message}</div>}
                       {weixinQr.qr_image_url && (weixinQr.status === "pending" || weixinQr.status === "scanned" || weixinQr.status === "initializing") && (
-                        <img
-                          src={weixinQr.qr_image_url}
-                          alt="weixin qr"
-                          className="mt-2 h-28 w-28 rounded-md border border-border bg-white p-1"
-                        />
+                        isQrPageUrl(weixinQr.qr_image_url) ? (
+                          <div className="mt-2 flex max-w-[320px] flex-col gap-2">
+                            <a
+                              href={weixinQr.qr_image_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline underline-offset-2"
+                            >
+                              {t.status.weixinQrOpenPage}
+                            </a>
+                            <div>{t.status.weixinQrPageHint}</div>
+                            <iframe
+                              src={weixinQr.qr_image_url}
+                              title="weixin qr page"
+                              className="h-80 w-80 rounded-md border border-border bg-white"
+                            />
+                          </div>
+                        ) : (
+                          <img
+                            src={weixinQr.qr_image_url}
+                            alt="weixin qr"
+                            className="mt-2 h-28 w-28 rounded-md border border-border bg-white p-1"
+                          />
+                        )
                       )}
                     </div>
                   )}

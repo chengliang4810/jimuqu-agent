@@ -81,6 +81,8 @@ export const zh: Translations = {
     weixinQrPending: "扫码进行中",
     weixinQrConfirmed: "扫码成功",
     weixinQrFailed: "扫码失败",
+    weixinQrOpenPage: "打开扫码页",
+    weixinQrPageHint: "当前返回的是扫码页面链接，若内嵌显示异常，请直接新标签页打开。",
     running: "运行中",
     starting: "启动中",
     failed: "失败",

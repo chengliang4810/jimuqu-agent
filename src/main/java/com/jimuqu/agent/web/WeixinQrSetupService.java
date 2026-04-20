@@ -30,13 +30,17 @@ public class WeixinQrSetupService {
 
     private final AppConfig appConfig;
     private final DashboardConfigService configService;
+    private final com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
     private final RuntimeEnvResolver envResolver;
     private final ExecutorService executor = Executors.newCachedThreadPool();
     private final ConcurrentMap<String, TicketState> tickets = new ConcurrentHashMap<String, TicketState>();
 
-    public WeixinQrSetupService(AppConfig appConfig, DashboardConfigService configService) {
+    public WeixinQrSetupService(AppConfig appConfig,
+                                DashboardConfigService configService,
+                                com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
         this.appConfig = appConfig;
         this.configService = configService;
+        this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
         this.envResolver = RuntimeEnvResolver.initialize(appConfig.getRuntime().getHome());
     }
 
@@ -165,6 +169,7 @@ public class WeixinQrSetupService {
             updates.put("channels.weixin.baseUrl", baseUrl);
             configService.savePartialFlat(updates);
         }
+        gatewayRuntimeRefreshService.refreshNow();
     }
 
     private void mark(TicketState state, String status, String message) {

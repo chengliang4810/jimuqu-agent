@@ -84,6 +84,8 @@ export interface Translations {
     weixinQrPending: string;
     weixinQrConfirmed: string;
     weixinQrFailed: string;
+    weixinQrOpenPage: string;
+    weixinQrPageHint: string;
     running: string;
     starting: string;
     failed: string;
