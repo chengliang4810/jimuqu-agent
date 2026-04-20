@@ -162,12 +162,12 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
                 if (StrUtil.isNotBlank(contextToken)) {
                     message.set("context_token", contextToken);
                 }
-                message.getOrNew("item_list").asArray().add(new ONode()
-                        .set("type", ITEM_TEXT)
-                        .getOrNew("text_item")
-                        .set("text", text)
-                        .parent()
-                        .parent());
+                ONode textItem = new ONode();
+                textItem.set("text", text);
+                ONode item = new ONode();
+                item.set("type", ITEM_TEXT);
+                item.set("text_item", textItem);
+                message.get("item_list").add(item);
                 ONode response = apiPost(SEND_ENDPOINT, new ONode().set("msg", message).asObject());
                 if (response.get("errcode").getInt(0) == -14 && StrUtil.isNotBlank(contextToken)) {
                     message.remove("context_token");
@@ -302,16 +302,15 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     }
 
     private ONode baseMessage(String chatId) {
-        return new ONode()
-                .set("from_user_id", "")
-                .set("to_user_id", chatId)
-                .set("client_id", "jimuqu-weixin-" + UUID.randomUUID().toString().replace("-", ""))
-                .set("message_type", MSG_TYPE_BOT)
-                .set("message_state", MSG_STATE_FINISH)
-                .getOrNew("item_list")
-                .asArray()
-                .parent()
-                .asObject();
+        ONode message = new ONode();
+        message.asObject();
+        message.set("from_user_id", "");
+        message.set("to_user_id", chatId);
+        message.set("client_id", "jimuqu-weixin-" + UUID.randomUUID().toString().replace("-", ""));
+        message.set("message_type", MSG_TYPE_BOT);
+        message.set("message_state", MSG_STATE_FINISH);
+        message.getOrNew("item_list").asArray();
+        return message;
     }
 
     private ONode buildMediaItem(int mediaType,
@@ -322,45 +321,51 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
                                  byte[] aesKey) {
         String encodedAesKey = Base64.getEncoder().encodeToString(HexUtil.encodeHexStr(aesKey).getBytes(StandardCharsets.UTF_8));
         if (mediaType == MEDIA_IMAGE) {
-            return new ONode()
-                    .set("type", ITEM_IMAGE)
-                    .getOrNew("image_item")
-                    .getOrNew("media")
-                    .set("encrypt_query_param", encryptedParam)
-                    .set("aes_key", encodedAesKey)
-                    .set("encrypt_type", 1)
-                    .parent()
-                    .set("mid_size", ciphertextSize)
-                    .parent()
-                    .parent();
+            ONode media = new ONode();
+            media.set("encrypt_query_param", encryptedParam);
+            media.set("aes_key", encodedAesKey);
+            media.set("encrypt_type", 1);
+
+            ONode imageItem = new ONode();
+            imageItem.set("media", media);
+            imageItem.set("mid_size", ciphertextSize);
+
+            ONode item = new ONode();
+            item.set("type", ITEM_IMAGE);
+            item.set("image_item", imageItem);
+            return item;
         }
         if (mediaType == MEDIA_VIDEO) {
-            return new ONode()
-                    .set("type", ITEM_VIDEO)
-                    .getOrNew("video_item")
-                    .getOrNew("media")
-                    .set("encrypt_query_param", encryptedParam)
-                    .set("aes_key", encodedAesKey)
-                    .set("encrypt_type", 1)
-                    .parent()
-                    .set("video_size", ciphertextSize)
-                    .set("play_length", 0)
-                    .set("video_md5", DigestUtil.md5Hex(new File(attachment.getLocalPath())))
-                    .parent()
-                    .parent();
+            ONode media = new ONode();
+            media.set("encrypt_query_param", encryptedParam);
+            media.set("aes_key", encodedAesKey);
+            media.set("encrypt_type", 1);
+
+            ONode videoItem = new ONode();
+            videoItem.set("media", media);
+            videoItem.set("video_size", ciphertextSize);
+            videoItem.set("play_length", 0);
+            videoItem.set("video_md5", DigestUtil.md5Hex(new File(attachment.getLocalPath())));
+
+            ONode item = new ONode();
+            item.set("type", ITEM_VIDEO);
+            item.set("video_item", videoItem);
+            return item;
         }
-        return new ONode()
-                .set("type", ITEM_FILE)
-                .getOrNew("file_item")
-                .getOrNew("media")
-                .set("encrypt_query_param", encryptedParam)
-                .set("aes_key", encodedAesKey)
-                .set("encrypt_type", 1)
-                .parent()
-                .set("file_name", fileNameOf(attachment))
-                .set("len", String.valueOf(plaintextSize))
-                .parent()
-                .parent();
+        ONode media = new ONode();
+        media.set("encrypt_query_param", encryptedParam);
+        media.set("aes_key", encodedAesKey);
+        media.set("encrypt_type", 1);
+
+        ONode fileItem = new ONode();
+        fileItem.set("media", media);
+        fileItem.set("file_name", fileNameOf(attachment));
+        fileItem.set("len", String.valueOf(plaintextSize));
+
+        ONode item = new ONode();
+        item.set("type", ITEM_FILE);
+        item.set("file_item", fileItem);
+        return item;
     }
 
     private ONode apiPost(String endpoint, ONode payload) {
