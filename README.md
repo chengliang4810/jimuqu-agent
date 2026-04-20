@@ -159,6 +159,95 @@ java -jar target/jimuqu-agent-0.0.1.jar --server.port=8080
 Invoke-WebRequest http://127.0.0.1:8080/health
 ```
 
+## Docker 部署
+
+当前推荐直接使用 GitHub Packages 镜像：
+
+- `ghcr.io/chengliang4810/jimuqu-agent:latest`
+
+单容器部署示例：
+
+```bash
+docker run -d \
+  --name jimuqu-agent \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  --env-file .env \
+  -v ./runtime:/app/runtime \
+  ghcr.io/chengliang4810/jimuqu-agent:latest
+```
+
+说明：
+
+- 容器内默认运行目录为 `/app`
+- 运行时数据目录挂载到 `/app/runtime`
+- 应用默认监听 `8080`
+- 若你使用 dashboard、SQLite、skills、媒体缓存或微信扫码登录，`./runtime` 必须持久化
+
+健康检查：
+
+```bash
+curl http://127.0.0.1:8080/health
+```
+
+## Docker Compose 部署
+
+`docker-compose.yml` 示例：
+
+```yaml
+services:
+  jimuqu-agent:
+    image: ghcr.io/chengliang4810/jimuqu-agent:latest
+    container_name: jimuqu-agent
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./runtime:/app/runtime
+```
+
+启动：
+
+```bash
+docker compose up -d
+```
+
+查看日志：
+
+```bash
+docker compose logs -f jimuqu-agent
+```
+
+停止：
+
+```bash
+docker compose down
+```
+
+## GitHub Releases 与 Packages
+
+仓库已补 GitHub Actions 自动发布链路：
+
+- [packages.yml](D:/projects/jimuqu-agent/.github/workflows/packages.yml)
+  - `push main` 时自动构建并推送 `ghcr.io/chengliang4810/jimuqu-agent:latest`
+  - `push v* tag` 时自动推送对应 tag 镜像
+- [release.yml](D:/projects/jimuqu-agent/.github/workflows/release.yml)
+  - `push v* tag` 时自动构建 jar、生成 GitHub Release、上传 jar 与 `sha256`
+
+推荐发布流程：
+
+```bash
+git tag v0.0.1
+git push origin v0.0.1
+```
+
+发布后可直接使用 Packages 镜像地址部署：
+
+- `ghcr.io/chengliang4810/jimuqu-agent:latest`
+- `ghcr.io/chengliang4810/jimuqu-agent:v0.0.1`
+
 ## 大模型配置
 
 默认模型走 `openai-responses`，默认配置在 [app.yml](D:/projects/jimuqu-agent/src/main/resources/app.yml)。

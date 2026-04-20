@@ -1,0 +1,58 @@
+name: Publish Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build release artifact
+        run: mvn -DskipTests package
+
+      - name: Resolve artifact path
+        id: artifact
+        shell: bash
+        run: |
+          VERSION="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          JAR_PATH="target/jimuqu-agent-${VERSION}.jar"
+          if [ ! -f "$JAR_PATH" ]; then
+            JAR_PATH="$(find target -maxdepth 1 -type f -name 'jimuqu-agent-*.jar' ! -name 'original-*' | head -n 1)"
+          fi
+          if [ ! -f "$JAR_PATH" ]; then
+            echo "Release jar not found"
+            exit 1
+          fi
+          sha256sum "$JAR_PATH" > "${JAR_PATH}.sha256"
+          echo "jar_path=$JAR_PATH" >> "$GITHUB_OUTPUT"
+          echo "sha_path=${JAR_PATH}.sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            ${{ steps.artifact.outputs.jar_path }}
+            ${{ steps.artifact.outputs.sha_path }}

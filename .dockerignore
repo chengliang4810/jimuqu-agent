@@ -1,0 +1,7 @@
+.git
+.github
+target
+runtime
+web/node_modules
+web/dist
+*.log
