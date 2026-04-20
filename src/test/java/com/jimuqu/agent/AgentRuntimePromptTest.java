@@ -10,9 +10,8 @@ public class AgentRuntimePromptTest {
     @Test
     void shouldInjectAgentRuntimeBlockIntoSystemPrompt() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
-        env.send("chat-a", "user-a", "hello");
-        env.send("chat-a", "user-a", "/pairing claim-admin");
-        env.send("chat-a", "user-a", "你好");
+        env.appConfig.getGateway().setAllowAllUsers(true);
+        env.conversationOrchestrator.handleIncoming(env.message("chat-a", "user-a", "你好"));
 
         FakeLlmGateway fake = (FakeLlmGateway) env.llmGateway;
         assertThat(fake.lastSystemPrompt)

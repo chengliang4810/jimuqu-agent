@@ -230,6 +230,11 @@ docker compose up -d
 docker compose logs -f jimuqu-agent
 ```
 
+说明：
+
+- 控制台日志会直接输出到 `docker logs`
+- 滚动文件日志会写到 `runtime/logs/agent.log`、`runtime/logs/gateway.log`、`runtime/logs/errors.log`
+
 停止：
 
 ```bash
