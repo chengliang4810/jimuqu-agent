@@ -66,6 +66,7 @@ import com.jimuqu.agent.storage.repository.SqliteSessionRepository;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.DefaultCheckpointService;
 import com.jimuqu.agent.support.AttachmentCacheService;
+import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import com.jimuqu.agent.web.DashboardAuthFilter;
@@ -347,6 +348,15 @@ public class JimuquAgentConfiguration {
     }
 
     @Bean
+    public RuntimeSettingsService runtimeSettingsService(AppConfig appConfig,
+                                                         GlobalSettingRepository globalSettingRepository,
+                                                         DeliveryService deliveryService,
+                                                         DashboardConfigService dashboardConfigService,
+                                                         DashboardEnvService dashboardEnvService) {
+        return new RuntimeSettingsService(appConfig, globalSettingRepository, deliveryService, dashboardConfigService, dashboardEnvService);
+    }
+
+    @Bean
     public GatewayRuntimeRefreshService gatewayRuntimeRefreshService(AppConfig appConfig,
                                                                      Map<PlatformType, ChannelAdapter> channelAdapters) {
         return new GatewayRuntimeRefreshService(appConfig, channelAdapters);
@@ -377,7 +387,8 @@ public class JimuquAgentConfiguration {
                                      SkillHubService skillHubService,
                                      CheckpointService checkpointService,
                                      DelegationService delegationService,
-                                     AttachmentCacheService attachmentCacheService) {
+                                     AttachmentCacheService attachmentCacheService,
+                                     RuntimeSettingsService runtimeSettingsService) {
         return new DefaultToolRegistry(
                 appConfig,
                 preferenceStore,
@@ -391,7 +402,8 @@ public class JimuquAgentConfiguration {
                 skillHubService,
                 checkpointService,
                 delegationService,
-                attachmentCacheService
+                attachmentCacheService,
+                runtimeSettingsService
         );
     }
 
@@ -404,8 +416,9 @@ public class JimuquAgentConfiguration {
                                                              ContextCompressionService contextCompressionService,
                                                              LlmGateway llmGateway,
                                                              ToolRegistry toolRegistry,
-                                                             ConversationOrchestratorHolder holder) {
-        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry);
+                                                             ConversationOrchestratorHolder holder,
+                                                             RuntimeSettingsService runtimeSettingsService) {
+        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, runtimeSettingsService);
         holder.set(orchestrator);
         return orchestrator;
     }
@@ -449,7 +462,8 @@ public class JimuquAgentConfiguration {
                                          SkillHubService skillHubService,
                                          AppConfig appConfig,
                                          GlobalSettingRepository globalSettingRepository,
-                                         ProcessRegistry processRegistry) {
+                                         ProcessRegistry processRegistry,
+                                         RuntimeSettingsService runtimeSettingsService) {
         return new DefaultCommandService(
                 sessionRepository,
                 toolRegistry,
@@ -464,7 +478,8 @@ public class JimuquAgentConfiguration {
                 skillHubService,
                 appConfig,
                 globalSettingRepository,
-                processRegistry
+                processRegistry,
+                runtimeSettingsService
         );
     }
 

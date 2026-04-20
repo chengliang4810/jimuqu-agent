@@ -17,6 +17,11 @@ public interface ToolRegistry {
     List<Object> resolveEnabledTools(String sourceKey);
 
     /**
+     * 列出某个来源键当前启用的工具名。
+     */
+    List<String> resolveEnabledToolNames(String sourceKey);
+
+    /**
      * 启用指定工具。
      */
     void enableTools(String sourceKey, List<String> toolNames);

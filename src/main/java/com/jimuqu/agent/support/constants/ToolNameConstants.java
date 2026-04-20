@@ -30,6 +30,9 @@ public interface ToolNameConstants {
     String SEND_MESSAGE = "send_message";
     String CRONJOB = "cronjob";
     String APPROVAL = "approval";
+    String CONFIG_GET = "config_get";
+    String CONFIG_SET = "config_set";
+    String CONFIG_SET_SECRET = "config_set_secret";
     String CODESEARCH = "codesearch";
     String WEBSEARCH = "websearch";
     String WEBFETCH = "webfetch";

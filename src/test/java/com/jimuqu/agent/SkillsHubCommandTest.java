@@ -22,7 +22,11 @@ import com.jimuqu.agent.skillhub.model.SkillBrowseResult;
 import com.jimuqu.agent.skillhub.model.SkillMeta;
 import com.jimuqu.agent.skillhub.model.TapRecord;
 import com.jimuqu.agent.support.TestEnvironment;
+import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
+import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
+import com.jimuqu.agent.web.DashboardConfigService;
+import com.jimuqu.agent.web.DashboardEnvService;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -70,6 +74,14 @@ public class SkillsHubCommandTest {
     }
 
     private DefaultCommandService commandService(TestEnvironment env, SkillHubService skillHubService) {
+        GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(env.appConfig, new java.util.LinkedHashMap<com.jimuqu.agent.core.enums.PlatformType, com.jimuqu.agent.core.service.ChannelAdapter>());
+        RuntimeSettingsService runtimeSettingsService = new RuntimeSettingsService(
+                env.appConfig,
+                env.globalSettingRepository,
+                env.deliveryService,
+                new DashboardConfigService(env.appConfig, refreshService),
+                new DashboardEnvService(env.appConfig, refreshService)
+        );
         return new DefaultCommandService(
                 env.sessionRepository,
                 env.toolRegistry,
@@ -99,7 +111,8 @@ public class SkillsHubCommandTest {
                 skillHubService,
                 env.appConfig,
                 env.globalSettingRepository,
-                env.processRegistry
+                env.processRegistry,
+                runtimeSettingsService
         );
     }
 

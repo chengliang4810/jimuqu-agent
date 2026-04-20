@@ -711,6 +711,13 @@ public class LocalSkillService implements SkillCatalogService {
         if ("approval".equalsIgnoreCase(toolset)) {
             return java.util.Collections.singletonList(ToolNameConstants.APPROVAL);
         }
+        if ("config".equalsIgnoreCase(toolset)) {
+            return java.util.Arrays.asList(
+                    ToolNameConstants.CONFIG_GET,
+                    ToolNameConstants.CONFIG_SET,
+                    ToolNameConstants.CONFIG_SET_SECRET
+            );
+        }
         return java.util.Collections.emptyList();
     }
 

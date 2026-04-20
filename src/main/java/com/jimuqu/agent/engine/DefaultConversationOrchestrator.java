@@ -11,6 +11,7 @@ import com.jimuqu.agent.core.service.ContextService;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.core.service.ToolRegistry;
+import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.MessageAttachmentSupport;
 import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.constants.CompressionConstants;
@@ -42,6 +43,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     private final ContextCompressionService contextCompressionService;
     private final LlmGateway llmGateway;
     private final ToolRegistry toolRegistry;
+    private final RuntimeSettingsService runtimeSettingsService;
 
     public GatewayReply handleIncoming(GatewayMessage message) throws Exception {
         SessionRecord session = sessionRepository.getBoundSession(message.sourceKey());
@@ -65,12 +67,15 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         if (StrUtil.isBlank(session.getTitle()) && StrUtil.isNotBlank(effectiveUserText)) {
             session.setTitle(extractTitle(effectiveUserText));
         }
-        String systemPrompt = contextService.buildSystemPrompt(message.sourceKey());
+        List<String> enabledToolNames = toolRegistry.resolveEnabledToolNames(message.sourceKey());
+        List<Object> enabledTools = toolRegistry.resolveEnabledTools(message.sourceKey());
+        String systemPrompt = contextService.buildSystemPrompt(message.sourceKey())
+                + "\n\n"
+                + runtimeSettingsService.buildAgentRuntimePrompt(message.sourceKey(), session, enabledToolNames);
         session.setSystemPromptSnapshot(systemPrompt);
 
         session = contextCompressionService.compressIfNeeded(session, systemPrompt, effectiveUserText);
         String previousNdjson = session.getNdjson();
-        List<Object> enabledTools = toolRegistry.resolveEnabledTools(message.sourceKey());
         LlmResult result = llmGateway.chat(session, systemPrompt, effectiveUserText, enabledTools);
         String replyText = extractText(result.getAssistantMessage());
         if (StrUtil.isBlank(replyText) && hasRecentToolActivity(previousNdjson, result.getNdjson())) {

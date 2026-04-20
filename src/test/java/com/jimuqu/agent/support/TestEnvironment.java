@@ -59,8 +59,12 @@ import com.jimuqu.agent.storage.repository.SqliteSessionRepository;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.DefaultCheckpointService;
 import com.jimuqu.agent.support.AttachmentCacheService;
+import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
+import com.jimuqu.agent.web.DashboardConfigService;
+import com.jimuqu.agent.web.DashboardEnvService;
+import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 
@@ -143,15 +147,19 @@ public class TestEnvironment {
         CheckpointService checkpointService = new DefaultCheckpointService(config, database);
         ProcessRegistry processRegistry = new ProcessRegistry();
         AttachmentCacheService attachmentCacheService = new AttachmentCacheService(config);
+        GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(config, adapters);
+        DashboardConfigService dashboardConfigService = new DashboardConfigService(config, refreshService);
+        DashboardEnvService dashboardEnvService = new DashboardEnvService(config, refreshService);
+        RuntimeSettingsService runtimeSettingsService = new RuntimeSettingsService(config, globalSettingRepository, deliveryService, dashboardConfigService, dashboardEnvService);
         DelegationService delegationService = new DefaultDelegationService(holder, preferenceStore, sessionRepository);
         SessionSearchService sessionSearchService = new DefaultSessionSearchService(sessionRepository, llmGateway);
         GitHubSkillSource gitHubSkillSource = new GitHubSkillSource(gitHubAuth, skillHubHttpClient, skillHubStateStore);
         SkillHubService skillHubService = new DefaultSkillHubService(new File(System.getProperty("user.dir")), new File(config.getRuntime().getSkillsDir()), skillImportService, skillGuardService, skillHubStateStore, skillHubHttpClient, gitHubAuth, gitHubSkillSource);
-        ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, processRegistry, memoryService, sessionSearchService, localSkillService, skillHubService, checkpointService, delegationService, attachmentCacheService);
-        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry);
+        ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, processRegistry, memoryService, sessionSearchService, localSkillService, skillHubService, checkpointService, delegationService, attachmentCacheService, runtimeSettingsService);
+        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, runtimeSettingsService);
         holder.set(orchestrator);
         SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService);
-        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry);
+        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService);
         DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService, sessionRepository, gatewayAuthorizationService, skillLearningService, memoryManager);
         return new TestEnvironment(
                 config,
@@ -202,6 +210,9 @@ public class TestEnvironment {
         config.getRuntime().setSkillsDir(new File(runtimeHome, "skills").getAbsolutePath());
         config.getRuntime().setCacheDir(new File(runtimeHome, "cache").getAbsolutePath());
         config.getRuntime().setStateDb(new File(runtimeHome, "state.db").getAbsolutePath());
+        config.getRuntime().setConfigOverrideFile(new File(runtimeHome, "config.override.yml").getAbsolutePath());
+        config.getRuntime().setEnvFile(new File(runtimeHome, ".env").getAbsolutePath());
+        config.getRuntime().setLogsDir(new File(runtimeHome, "logs").getAbsolutePath());
         config.getLlm().setProvider("openai-responses");
         config.getLlm().setApiUrl("https://subapi.jimuqu.com/v1/responses");
         config.getLlm().setModel("gpt-5.4");

@@ -12,6 +12,7 @@ import com.jimuqu.agent.core.service.SessionSearchService;
 import com.jimuqu.agent.core.service.SkillHubService;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.support.AttachmentCacheService;
+import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.support.constants.ToolNameConstants;
 import lombok.RequiredArgsConstructor;
@@ -59,6 +60,9 @@ public class DefaultToolRegistry implements ToolRegistry {
             ToolNameConstants.SEND_MESSAGE,
             ToolNameConstants.CRONJOB,
             ToolNameConstants.APPROVAL,
+            ToolNameConstants.CONFIG_GET,
+            ToolNameConstants.CONFIG_SET,
+            ToolNameConstants.CONFIG_SET_SECRET,
             ToolNameConstants.CODESEARCH,
             ToolNameConstants.WEBSEARCH,
             ToolNameConstants.WEBFETCH
@@ -129,6 +133,11 @@ public class DefaultToolRegistry implements ToolRegistry {
      */
     private final AttachmentCacheService attachmentCacheService;
 
+    /**
+     * 运行时配置服务。
+     */
+    private final RuntimeSettingsService runtimeSettingsService;
+
     @Override
     public List<String> listToolNames() {
         return new ArrayList<String>(TOOL_NAMES);
@@ -148,6 +157,7 @@ public class DefaultToolRegistry implements ToolRegistry {
         MessagingTools messagingTools = new MessagingTools(deliveryService, sourceKey, attachmentCacheService);
         CronjobTools cronjobTools = new CronjobTools(cronJobRepository, sourceKey);
         DelegateTools delegateTools = new DelegateTools(delegationService, sourceKey);
+        ConfigTools configTools = new ConfigTools(runtimeSettingsService);
         WebsearchTool websearchTool = WebsearchTool.getInstance();
         WebfetchTool webfetchTool = WebfetchTool.getInstance();
         CodeSearchTool codeSearchTool = CodeSearchTool.getInstance();
@@ -173,6 +183,10 @@ public class DefaultToolRegistry implements ToolRegistry {
                 tools.add(new ShellTools.ExecuteCodeTool(shellTools));
             } else if (ToolNameConstants.APPROVAL.equals(toolName)) {
                 tools.add(new ShellTools.ApprovalTool(shellTools));
+            } else if (ToolNameConstants.CONFIG_GET.equals(toolName)
+                    || ToolNameConstants.CONFIG_SET.equals(toolName)
+                    || ToolNameConstants.CONFIG_SET_SECRET.equals(toolName)) {
+                tools.add(configTools);
             } else if (ToolNameConstants.TODO.equals(toolName)) {
                 tools.add(todoTools);
             } else if (ToolNameConstants.MEMORY.equals(toolName)) {
@@ -218,6 +232,17 @@ public class DefaultToolRegistry implements ToolRegistry {
             }
         }
         return tools;
+    }
+
+    @Override
+    public List<String> resolveEnabledToolNames(String sourceKey) {
+        List<String> result = new ArrayList<String>();
+        for (String toolName : TOOL_NAMES) {
+            if (isEnabled(sourceKey, toolName)) {
+                result.add(toolName);
+            }
+        }
+        return result;
     }
 
     @Override

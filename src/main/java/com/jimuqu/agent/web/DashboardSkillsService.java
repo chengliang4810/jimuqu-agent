@@ -84,6 +84,11 @@ public class DashboardSkillsService {
         result.add(toolset("automation", "自动化工具", "定时任务调度能力", Collections.singletonList(
                 ToolNameConstants.CRONJOB
         )));
+        result.add(toolset("config", "配置工具", "读取和修改运行时配置与密钥", Arrays.asList(
+                ToolNameConstants.CONFIG_GET,
+                ToolNameConstants.CONFIG_SET,
+                ToolNameConstants.CONFIG_SET_SECRET
+        )));
         return result;
     }
 

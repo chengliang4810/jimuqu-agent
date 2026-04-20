@@ -30,6 +30,7 @@ import com.jimuqu.agent.skillhub.model.TapRecord;
 import com.jimuqu.agent.support.CronSupport;
 import com.jimuqu.agent.support.IdSupport;
 import com.jimuqu.agent.support.MessageSupport;
+import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.SourceKeySupport;
 import com.jimuqu.agent.support.constants.AgentSettingConstants;
 import com.jimuqu.agent.support.constants.GatewayCommandConstants;
@@ -111,6 +112,11 @@ public class DefaultCommandService implements CommandService {
      * 进程注册表。
      */
     private final ProcessRegistry processRegistry;
+
+    /**
+     * 运行时设置服务。
+     */
+    private final RuntimeSettingsService runtimeSettingsService;
 
     /**
      * 判断当前命令是否由默认命令服务承接。
@@ -241,8 +247,41 @@ public class DefaultCommandService implements CommandService {
 
         if (GatewayCommandConstants.COMMAND_MODEL.equals(command)) {
             SessionRecord session = requireSession(message.sourceKey());
-            sessionRepository.setModelOverride(session.getSessionId(), args);
-            GatewayReply reply = GatewayReply.ok("已切换模型覆盖配置为：" + args);
+            if (StrUtil.isBlank(args)) {
+                GatewayReply reply = GatewayReply.ok(runtimeSettingsService.describeModel(session));
+                reply.setSessionId(session.getSessionId());
+                reply.setBranchName(session.getBranchName());
+                return reply;
+            }
+
+            ModelCommandInput input = parseModelCommand(args);
+            if (input.clear) {
+                sessionRepository.setModelOverride(session.getSessionId(), null);
+                GatewayReply reply = GatewayReply.ok("已清除当前会话模型覆盖，下一条消息将回退到全局默认模型。");
+                reply.setSessionId(session.getSessionId());
+                reply.setBranchName(session.getBranchName());
+                return reply;
+            }
+            if (StrUtil.isBlank(input.model)) {
+                return GatewayReply.error("用法：/model [--global] <model> 或 /model [--global] <provider>:<model>");
+            }
+
+            if (input.global) {
+                runtimeSettingsService.setGlobalModel(input.provider, input.model);
+                GatewayReply reply = GatewayReply.ok("已更新全局默认模型为："
+                        + (StrUtil.isNotBlank(input.provider) ? input.provider + ":" : "")
+                        + input.model
+                        + "（下一条消息生效）");
+                reply.setSessionId(session.getSessionId());
+                reply.setBranchName(session.getBranchName());
+                return reply;
+            }
+
+            String override = StrUtil.isNotBlank(input.provider)
+                    ? input.provider + ":" + input.model
+                    : input.model;
+            sessionRepository.setModelOverride(session.getSessionId(), override);
+            GatewayReply reply = GatewayReply.ok("已切换当前会话模型为：" + override + "（下一条消息生效）");
             reply.setSessionId(session.getSessionId());
             reply.setBranchName(session.getBranchName());
             return reply;
@@ -601,6 +640,42 @@ public class DefaultCommandService implements CommandService {
         } catch (Exception e) {
             return "default";
         }
+    }
+
+    private ModelCommandInput parseModelCommand(String args) {
+        String[] tokens = args.trim().split("\\s+");
+        ModelCommandInput result = new ModelCommandInput();
+        StringBuilder remainder = new StringBuilder();
+        for (String token : tokens) {
+            if ("--global".equalsIgnoreCase(token)) {
+                result.global = true;
+                continue;
+            }
+            if (remainder.length() > 0) {
+                remainder.append(' ');
+            }
+            remainder.append(token);
+        }
+        String spec = remainder.toString().trim();
+        if ("clear".equalsIgnoreCase(spec) || "default".equalsIgnoreCase(spec) || "none".equalsIgnoreCase(spec)) {
+            result.clear = true;
+            return result;
+        }
+        if (spec.contains(":")) {
+            String[] parts = spec.split(":", 2);
+            result.provider = parts[0].trim();
+            result.model = parts[1].trim();
+        } else {
+            result.model = spec;
+        }
+        return result;
+    }
+
+    private static class ModelCommandInput {
+        private boolean global;
+        private boolean clear;
+        private String provider;
+        private String model;
     }
 
     private String handleTap(String target) throws Exception {

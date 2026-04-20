@@ -4,6 +4,7 @@ import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.service.ChannelAdapter;
 import org.noear.solon.Solon;
+import org.noear.solon.core.Props;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,11 +43,14 @@ public class GatewayRuntimeRefreshService {
         AppConfig latest;
         try {
             if (Solon.cfg() == null) {
-                return;
+                Props props = new Props();
+                props.put("jimuqu.runtime.home", appConfig.getRuntime().getHome());
+                latest = AppConfig.load(props);
+            } else {
+                latest = AppConfig.load(Solon.cfg());
             }
-            latest = AppConfig.load(Solon.cfg());
         } catch (Throwable e) {
-            log.debug("Skip runtime refresh because Solon config is unavailable", e);
+            log.debug("Skip runtime refresh because config reload failed", e);
             return;
         }
         appConfig.applyFrom(latest);
