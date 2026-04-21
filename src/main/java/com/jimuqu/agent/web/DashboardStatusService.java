@@ -118,6 +118,9 @@ public class DashboardStatusService {
         result.put("latest_tag", versionStatus.getLatestTag());
         result.put("update_available", versionStatus.isUpdateAvailable());
         result.put("release_url", versionStatus.getReleaseUrl());
+        result.put("release_api_url", versionStatus.getReleaseApiUrl());
+        result.put("update_error_message", versionStatus.getUpdateErrorMessage());
+        result.put("update_error_at", versionStatus.getUpdateErrorAt() > 0 ? versionStatus.getUpdateErrorAt() : null);
         return result;
     }
 

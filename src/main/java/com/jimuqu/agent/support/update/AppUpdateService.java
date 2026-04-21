@@ -9,8 +9,10 @@ import com.jimuqu.agent.config.AppConfig;
 import org.noear.snack4.ONode;
 
 import java.io.File;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.URI;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 /**
@@ -21,6 +23,8 @@ public class AppUpdateService {
 
     private final AppConfig appConfig;
     private final AppVersionService versionService;
+    private volatile String lastErrorMessage;
+    private volatile long lastErrorAt;
 
     public AppUpdateService(AppConfig appConfig, AppVersionService versionService) {
         this.appConfig = appConfig;
@@ -35,6 +39,9 @@ public class AppUpdateService {
         status.setCurrentTag(versionService.currentTag());
         status.setDeploymentMode(versionService.deploymentMode());
         status.setRepo(versionService.releaseRepo());
+        status.setReleaseApiUrl(versionService.releaseApiUrl());
+        status.setUpdateErrorMessage(lastErrorMessage);
+        status.setUpdateErrorAt(lastErrorAt);
         if (latest != null) {
             status.setLatestVersion(latest.getVersion());
             status.setLatestTag(latest.getTag());
@@ -53,8 +60,14 @@ public class AppUpdateService {
         buffer.append("应用版本: ").append(status.getCurrentTag()).append('\n');
         buffer.append("部署方式: ").append(status.getDeploymentMode()).append('\n');
         buffer.append("发布仓库: ").append(status.getRepo()).append('\n');
+        buffer.append("Release API: ").append(status.getReleaseApiUrl()).append('\n');
         if (StrUtil.isBlank(status.getLatestTag())) {
-            buffer.append("最新版本: 检查失败或暂不可用");
+            if (StrUtil.isNotBlank(status.getUpdateErrorMessage())) {
+                buffer.append("最新版本: 检查失败\n");
+                buffer.append("失败原因: ").append(status.getUpdateErrorMessage());
+            } else {
+                buffer.append("最新版本: 尚未检查或暂不可用");
+            }
             return buffer.toString();
         }
         buffer.append("最新版本: ").append(status.getLatestTag());
@@ -69,7 +82,7 @@ public class AppUpdateService {
         if ("docker".equals(status.getDeploymentMode())) {
             buffer.append("在线升级: Docker 部署不支持进程内自更新，请在宿主机拉取新镜像并重建容器。");
         } else if ("jar".equals(status.getDeploymentMode()) && status.isUpdateAvailable()) {
-            buffer.append("在线升级: 可执行 `/update` 自动下载并重启到最新 jar。");
+            buffer.append("在线升级: 可执行 `/version update` 自动下载并重启到最新 jar。");
         } else if ("jar".equals(status.getDeploymentMode())) {
             buffer.append("在线升级: 当前 jar 已是最新，无需升级。");
         } else {
@@ -81,7 +94,8 @@ public class AppUpdateService {
     public UpdateResult startUpdate() {
         VersionStatus status = getVersionStatus(true);
         if (StrUtil.isBlank(status.getLatestTag())) {
-            return UpdateResult.error("无法检查 GitHub 最新版本，请稍后重试。");
+            return UpdateResult.error("无法检查最新版本："
+                    + StrUtil.blankToDefault(status.getUpdateErrorMessage(), "未知错误"));
         }
         if (!status.isUpdateAvailable()) {
             return UpdateResult.ok("当前已是最新版本：" + status.getCurrentTag());
@@ -176,6 +190,7 @@ public class AppUpdateService {
                 ONode node = ONode.ofJson(FileUtil.readUtf8String(cacheFile));
                 long timestamp = node.get("timestamp").getLong(0L);
                 if (System.currentTimeMillis() - timestamp < CACHE_TTL_MILLIS) {
+                    clearLastError();
                     return ReleaseInfo.fromNode(node.get("release"));
                 }
             } catch (Exception ignored) {
@@ -190,6 +205,7 @@ public class AppUpdateService {
         if (releaseInfo == null) {
             return null;
         }
+        clearLastError();
         try {
             ONode node = new ONode();
             node.set("timestamp", System.currentTimeMillis());
@@ -203,23 +219,31 @@ public class AppUpdateService {
     }
 
     protected ReleaseInfo fetchLatestReleaseFromRemote() {
-        String repo = versionService.releaseRepo();
-        String apiUrl = "https://api.github.com/repos/" + repo + "/releases/latest";
+        String apiUrl = versionService.releaseApiUrl();
         try {
             HttpRequest request = HttpRequest.get(apiUrl)
                     .header(Header.ACCEPT, "application/vnd.github+json")
                     .timeout(5000);
+            Proxy proxy = resolveProxy();
+            if (proxy != null) {
+                request.setProxy(proxy);
+            }
             String token = firstNonBlank(System.getenv("GITHUB_TOKEN"), System.getenv("GH_TOKEN"));
             if (StrUtil.isNotBlank(token)) {
                 request.header(Header.AUTHORIZATION, "Bearer " + token.trim());
             }
             HttpResponse response = request.execute();
             if (response.getStatus() >= 400) {
+                setLastError("GitHub API 请求失败，HTTP " + response.getStatus());
                 return null;
             }
             ONode node = ONode.ofJson(response.body());
             ReleaseInfo releaseInfo = new ReleaseInfo();
             releaseInfo.setTag(node.get("tag_name").getString());
+            if (StrUtil.isBlank(releaseInfo.getTag())) {
+                setLastError("Release API 响应缺少 tag_name");
+                return null;
+            }
             releaseInfo.setVersion(AppVersionService.stripLeadingV(releaseInfo.getTag()));
             releaseInfo.setHtmlUrl(node.get("html_url").getString());
             releaseInfo.setPublishedAt(node.get("published_at").getString());
@@ -238,6 +262,7 @@ public class AppUpdateService {
             }
             return releaseInfo;
         } catch (Exception e) {
+            setLastError(e.getClass().getSimpleName() + ": " + e.getMessage());
             return null;
         }
     }
@@ -255,6 +280,36 @@ public class AppUpdateService {
 
     private File cacheFile() {
         return new File(versionService.runtimeHome(), ".update_check.json");
+    }
+
+    private Proxy resolveProxy() {
+        String proxyUrl = versionService.updateProxyUrl();
+        if (StrUtil.isBlank(proxyUrl)) {
+            return null;
+        }
+        try {
+            URI uri = URI.create(proxyUrl);
+            String host = uri.getHost();
+            int port = uri.getPort();
+            if (StrUtil.isBlank(host) || port <= 0) {
+                setLastError("更新代理地址无效: " + proxyUrl);
+                return null;
+            }
+            return new Proxy(Proxy.Type.HTTP, new InetSocketAddress(host, port));
+        } catch (Exception e) {
+            setLastError("更新代理地址解析失败: " + proxyUrl);
+            return null;
+        }
+    }
+
+    private void setLastError(String message) {
+        this.lastErrorMessage = StrUtil.nullToEmpty(message).trim();
+        this.lastErrorAt = System.currentTimeMillis();
+    }
+
+    private void clearLastError() {
+        this.lastErrorMessage = null;
+        this.lastErrorAt = 0L;
     }
 
     private static String firstNonBlank(String... values) {
@@ -303,10 +358,13 @@ public class AppUpdateService {
         private String deploymentMode;
         private String repo;
         private String releaseUrl;
+        private String releaseApiUrl;
         private String publishedAt;
         private String jarAssetUrl;
         private String jarAssetName;
         private boolean updateAvailable;
+        private String updateErrorMessage;
+        private long updateErrorAt;
 
         public String getCurrentVersion() { return currentVersion; }
         public void setCurrentVersion(String currentVersion) { this.currentVersion = currentVersion; }
@@ -322,6 +380,8 @@ public class AppUpdateService {
         public void setRepo(String repo) { this.repo = repo; }
         public String getReleaseUrl() { return releaseUrl; }
         public void setReleaseUrl(String releaseUrl) { this.releaseUrl = releaseUrl; }
+        public String getReleaseApiUrl() { return releaseApiUrl; }
+        public void setReleaseApiUrl(String releaseApiUrl) { this.releaseApiUrl = releaseApiUrl; }
         public String getPublishedAt() { return publishedAt; }
         public void setPublishedAt(String publishedAt) { this.publishedAt = publishedAt; }
         public String getJarAssetUrl() { return jarAssetUrl; }
@@ -330,6 +390,10 @@ public class AppUpdateService {
         public void setJarAssetName(String jarAssetName) { this.jarAssetName = jarAssetName; }
         public boolean isUpdateAvailable() { return updateAvailable; }
         public void setUpdateAvailable(boolean updateAvailable) { this.updateAvailable = updateAvailable; }
+        public String getUpdateErrorMessage() { return updateErrorMessage; }
+        public void setUpdateErrorMessage(String updateErrorMessage) { this.updateErrorMessage = updateErrorMessage; }
+        public long getUpdateErrorAt() { return updateErrorAt; }
+        public void setUpdateErrorAt(long updateErrorAt) { this.updateErrorAt = updateErrorAt; }
     }
 
     protected static class ReleaseInfo {

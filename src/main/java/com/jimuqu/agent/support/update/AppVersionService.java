@@ -9,7 +9,6 @@ import java.io.File;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -51,6 +50,27 @@ public class AppVersionService {
                 System.getProperty("jimuqu.update.repo")
         );
         return StrUtil.blankToDefault(override, DEFAULT_REPO).trim();
+    }
+
+    public String releaseApiUrl() {
+        String override = firstNonBlank(
+                System.getenv("JIMUQU_UPDATE_RELEASE_API_URL"),
+                System.getProperty("jimuqu.update.releaseApiUrl")
+        );
+        if (StrUtil.isNotBlank(override)) {
+            return override.trim();
+        }
+        return "https://api.github.com/repos/" + releaseRepo() + "/releases/latest";
+    }
+
+    public String updateProxyUrl() {
+        String override = firstNonBlank(
+                System.getenv("JIMUQU_UPDATE_HTTP_PROXY"),
+                System.getProperty("jimuqu.update.httpProxy"),
+                System.getenv("HTTPS_PROXY"),
+                System.getenv("HTTP_PROXY")
+        );
+        return StrUtil.nullToEmpty(override).trim();
     }
 
     public String deploymentMode() {

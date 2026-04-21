@@ -307,6 +307,17 @@ git push origin v0.0.1
 - Docker 镜像内已默认配置中文 TrueType 字体，无需额外设置即可处理中文 PDF
 - 非 Docker 或自定义环境下，仍可通过 `JIMUQU_PDF_FONT_PATH` 覆盖成可用的 `ttf/otf` 字体文件
 
+版本检查与在线升级相关环境变量：
+
+- `JIMUQU_UPDATE_REPO`
+  覆盖 GitHub 仓库，格式 `owner/repo`
+- `JIMUQU_UPDATE_RELEASE_API_URL`
+  直接覆盖“最新版本”检查 API 地址
+- `JIMUQU_UPDATE_HTTP_PROXY`
+  为版本检查请求设置 HTTP 代理，例如 `http://proxy.example:7890`
+- `GITHUB_TOKEN` / `GH_TOKEN`
+  可选，用于提高 GitHub API 速率限制
+
 附件与媒体说明：
 
 - `GatewayMessage` / `DeliveryRequest` 已支持统一附件模型：`kind`、`localPath`、`originalName`、`mimeType`、`fromQuote`、`transcribedText`
@@ -358,6 +369,8 @@ git push origin v0.0.1
   - `latest_tag`
   - `update_available`
   - `release_url`
+  - `release_api_url`
+  - `update_error_message`
 - 微信支持从 dashboard 发起 iLink QR 登录；成功后会写入：
   - `runtime/.env`：`JIMUQU_WEIXIN_ACCOUNT_ID`、`JIMUQU_WEIXIN_TOKEN`
   - `runtime/config.override.yml`：仅在返回非默认 `baseUrl` 时写入 `channels.weixin.baseUrl`
