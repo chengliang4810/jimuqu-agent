@@ -46,6 +46,14 @@ jimuqu.learning.toolCallThreshold: 5
 jimuqu.rollback.enabled: true
 jimuqu.rollback.maxCheckpointsPerSource: 20
 
+# ReAct 推理控制
+jimuqu.react.maxSteps: 12
+jimuqu.react.retryMax: 3
+jimuqu.react.retryDelayMs: 2000
+jimuqu.react.delegateMaxSteps: 18
+jimuqu.react.delegateRetryMax: 4
+jimuqu.react.delegateRetryDelayMs: 2500
+
 # 预定义人格
 jimuqu.agent.personalities.helpful.description: 友好、通用的默认助手
 jimuqu.agent.personalities.helpful.systemPrompt: 你是一个友好、可靠的中文技术助手，优先给出准确、可执行的答案。

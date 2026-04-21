@@ -291,6 +291,12 @@ git push origin v0.0.1
 新增的核心 Agent 配置：
 
 - `jimuqu.llm.contextWindowTokens`
+- `jimuqu.react.maxSteps`
+- `jimuqu.react.retryMax`
+- `jimuqu.react.retryDelayMs`
+- `jimuqu.react.delegateMaxSteps`
+- `jimuqu.react.delegateRetryMax`
+- `jimuqu.react.delegateRetryDelayMs`
 - `jimuqu.compression.enabled`
 - `jimuqu.compression.thresholdPercent`
 - `jimuqu.compression.summaryModel`
@@ -298,6 +304,13 @@ git push origin v0.0.1
 - `jimuqu.learning.toolCallThreshold`
 - `jimuqu.rollback.enabled`
 - `jimuqu.rollback.maxCheckpointsPerSource`
+
+当前默认 ReAct 策略：
+
+- 主代理：`maxSteps=12`、`retryMax=3`、`retryDelayMs=2000`
+- 子代理：`delegateMaxSteps=18`、`delegateRetryMax=4`、`delegateRetryDelayMs=2500`
+- `retryConfig` 作用于模型决策重试，不是工具重试
+- `maxSteps` 统计的是 ReAct 推理轮次（Reason 步），不是单纯工具调用次数
 
 官方 skill 接入说明：
 

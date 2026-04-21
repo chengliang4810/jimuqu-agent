@@ -162,6 +162,10 @@ public class SolonAiLlmGateway implements LlmGateway {
                                        final String systemPrompt,
                                        List<Object> toolObjects,
                                        SqliteAgentSession agentSession) {
+        boolean delegateSession = isDelegateSession(agentSession);
+        int maxSteps = delegateSession ? appConfig.getReact().getDelegateMaxSteps() : appConfig.getReact().getMaxSteps();
+        int retryMax = delegateSession ? appConfig.getReact().getDelegateRetryMax() : appConfig.getReact().getRetryMax();
+        long retryDelayMs = delegateSession ? appConfig.getReact().getDelegateRetryDelayMs() : appConfig.getReact().getRetryDelayMs();
         ReActAgent.Builder builder = ReActAgent.of(chatModel)
                 .name("jimuqu_react")
                 .role("Jimuqu Agent")
@@ -177,6 +181,8 @@ public class SolonAiLlmGateway implements LlmGateway {
                     }
                 })
                 .sessionWindowSize(Math.max(8, agentSession.getMessages().size() + 8))
+                .retryConfig(retryMax, retryDelayMs)
+                .maxSteps(maxSteps)
                 .defaultInterceptorAdd(new ToolRetryInterceptor())
                 .defaultInterceptorAdd(new ToolSanitizerInterceptor())
                 .defaultInterceptorAdd(new StopLoopInterceptor());
@@ -186,6 +192,18 @@ public class SolonAiLlmGateway implements LlmGateway {
         }
         builder.defaultSkillAdd(pdfSkill());
         return builder.build();
+    }
+
+    private boolean isDelegateSession(SqliteAgentSession agentSession) {
+        Object sourceKey = agentSession.getContext().get("source_key");
+        if (sourceKey != null && String.valueOf(sourceKey).contains(":delegate:")) {
+            return true;
+        }
+        Object parentSessionId = agentSession.getContext().get("parent_session_id");
+        if (parentSessionId != null && StrUtil.isNotBlank(String.valueOf(parentSessionId))) {
+            return true;
+        }
+        return false;
     }
 
     /**

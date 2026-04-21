@@ -30,5 +30,9 @@ public class ConfigToolsTest {
         String response = (String) method.invoke(configSetTool, "channels.weixin.enabled", "true");
         assertThat(ONode.ofJson(response).get("success").getBoolean()).isTrue();
         assertThat(env.appConfig.getChannels().getWeixin().isEnabled()).isTrue();
+
+        String reactResponse = (String) method.invoke(configSetTool, "react.delegateMaxSteps", "24");
+        assertThat(ONode.ofJson(reactResponse).get("success").getBoolean()).isTrue();
+        assertThat(env.appConfig.getReact().getDelegateMaxSteps()).isEqualTo(24);
     }
 }

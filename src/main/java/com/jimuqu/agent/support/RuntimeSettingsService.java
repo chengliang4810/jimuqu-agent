@@ -42,6 +42,12 @@ public class RuntimeSettingsService {
             "learning.toolCallThreshold",
             "rollback.enabled",
             "rollback.maxCheckpointsPerSource",
+            "react.maxSteps",
+            "react.retryMax",
+            "react.retryDelayMs",
+            "react.delegateMaxSteps",
+            "react.delegateRetryMax",
+            "react.delegateRetryDelayMs",
             "gateway.allowedUsers",
             "gateway.allowAllUsers"
     );
@@ -224,6 +230,12 @@ public class RuntimeSettingsService {
                 || "scheduler.tickSeconds".equals(key)
                 || "learning.toolCallThreshold".equals(key)
                 || "rollback.maxCheckpointsPerSource".equals(key)
+                || "react.maxSteps".equals(key)
+                || "react.retryMax".equals(key)
+                || "react.retryDelayMs".equals(key)
+                || "react.delegateMaxSteps".equals(key)
+                || "react.delegateRetryMax".equals(key)
+                || "react.delegateRetryDelayMs".equals(key)
                 || "compression.protectHeadMessages".equals(key)
                 || "llm.maxTokens".equals(key)
                 || "llm.contextWindowTokens".equals(key)) {

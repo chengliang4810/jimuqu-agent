@@ -18,6 +18,12 @@ public class CoreEnvOverrideLoadTest {
         FileUtil.writeUtf8String(
                 "JIMUQU_SCHEDULER_ENABLED=false\n"
                         + "JIMUQU_SCHEDULER_TICK_SECONDS=15\n"
+                        + "JIMUQU_REACT_MAX_STEPS=14\n"
+                        + "JIMUQU_REACT_RETRY_MAX=5\n"
+                        + "JIMUQU_REACT_RETRY_DELAY_MS=3000\n"
+                        + "JIMUQU_REACT_DELEGATE_MAX_STEPS=22\n"
+                        + "JIMUQU_REACT_DELEGATE_RETRY_MAX=6\n"
+                        + "JIMUQU_REACT_DELEGATE_RETRY_DELAY_MS=3500\n"
                         + "JIMUQU_COMPRESSION_ENABLED=false\n"
                         + "JIMUQU_COMPRESSION_THRESHOLD_PERCENT=0.75\n"
                         + "JIMUQU_FEISHU_ENABLED=true\n"
@@ -48,6 +54,12 @@ public class CoreEnvOverrideLoadTest {
 
         assertThat(config.getScheduler().isEnabled()).isFalse();
         assertThat(config.getScheduler().getTickSeconds()).isEqualTo(15);
+        assertThat(config.getReact().getMaxSteps()).isEqualTo(14);
+        assertThat(config.getReact().getRetryMax()).isEqualTo(5);
+        assertThat(config.getReact().getRetryDelayMs()).isEqualTo(3000);
+        assertThat(config.getReact().getDelegateMaxSteps()).isEqualTo(22);
+        assertThat(config.getReact().getDelegateRetryMax()).isEqualTo(6);
+        assertThat(config.getReact().getDelegateRetryDelayMs()).isEqualTo(3500);
         assertThat(config.getCompression().isEnabled()).isFalse();
         assertThat(config.getCompression().getThresholdPercent()).isEqualTo(0.75D);
 

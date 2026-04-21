@@ -132,6 +132,18 @@ public class DashboardConfigService {
                 .envName("JIMUQU_ROLLBACK_ENABLED"));
         addField(new FieldDefinition("rollback.maxCheckpointsPerSource", "number", "agent", "每个来源保留的最大 checkpoint 数")
                 .envName("JIMUQU_ROLLBACK_MAX_CHECKPOINTS_PER_SOURCE"));
+        addField(new FieldDefinition("react.maxSteps", "number", "agent", "主代理最大推理步数")
+                .envName("JIMUQU_REACT_MAX_STEPS"));
+        addField(new FieldDefinition("react.retryMax", "number", "agent", "主代理决策重试次数")
+                .envName("JIMUQU_REACT_RETRY_MAX"));
+        addField(new FieldDefinition("react.retryDelayMs", "number", "agent", "主代理决策重试基础延迟（毫秒）")
+                .envName("JIMUQU_REACT_RETRY_DELAY_MS"));
+        addField(new FieldDefinition("react.delegateMaxSteps", "number", "agent", "子代理最大推理步数")
+                .envName("JIMUQU_REACT_DELEGATE_MAX_STEPS"));
+        addField(new FieldDefinition("react.delegateRetryMax", "number", "agent", "子代理决策重试次数")
+                .envName("JIMUQU_REACT_DELEGATE_RETRY_MAX"));
+        addField(new FieldDefinition("react.delegateRetryDelayMs", "number", "agent", "子代理决策重试基础延迟（毫秒）")
+                .envName("JIMUQU_REACT_DELEGATE_RETRY_DELAY_MS"));
         addField(new FieldDefinition("agent.personalities.helpful.description", "string", "agent", "helpful 人格描述"));
         addField(new FieldDefinition("agent.personalities.helpful.systemPrompt", "text", "agent", "helpful 人格系统提示词"));
         addField(new FieldDefinition("agent.personalities.concise.description", "string", "agent", "concise 人格描述"));

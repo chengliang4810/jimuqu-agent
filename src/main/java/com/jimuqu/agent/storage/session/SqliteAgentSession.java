@@ -37,6 +37,8 @@ public class SqliteAgentSession implements AgentSession {
         this.sessionRepository = sessionRepository;
         this.cache = new InMemoryAgentSession(loadContext(sessionRecord));
         this.cache.getContext().put(Agent.KEY_SESSION, this);
+        this.cache.getContext().put("source_key", sessionRecord.getSourceKey());
+        this.cache.getContext().put("parent_session_id", sessionRecord.getParentSessionId());
         loadMessages(sessionRecord);
     }
 

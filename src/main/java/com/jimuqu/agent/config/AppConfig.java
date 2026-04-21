@@ -74,6 +74,11 @@ public class AppConfig {
     private AgentConfig agent = new AgentConfig();
 
     /**
+     * ReAct 运行配置。
+     */
+    private ReActConfig react = new ReActConfig();
+
+    /**
      * 从 Solon Props 构建应用配置。
      *
      * @param props Solon 启动时加载的配置源
@@ -236,6 +241,12 @@ public class AppConfig {
         config.getGateway().setAllowedUsers(resolveList("JIMUQU_GATEWAY_ALLOWED_USERS", readRaw(props, overrides, "jimuqu.gateway.allowedUsers", "")));
         config.getGateway().setAllowAllUsers(resolveBoolean("JIMUQU_GATEWAY_ALLOW_ALL_USERS", readBoolean(props, overrides, "jimuqu.gateway.allowAllUsers", false)));
         config.getAgent().setPersonalities(loadPersonalities(props, overrides));
+        config.getReact().setMaxSteps(resolveInt("JIMUQU_REACT_MAX_STEPS", readInt(props, overrides, "jimuqu.react.maxSteps", 12)));
+        config.getReact().setRetryMax(resolveInt("JIMUQU_REACT_RETRY_MAX", readInt(props, overrides, "jimuqu.react.retryMax", 3)));
+        config.getReact().setRetryDelayMs(resolveInt("JIMUQU_REACT_RETRY_DELAY_MS", readInt(props, overrides, "jimuqu.react.retryDelayMs", 2000)));
+        config.getReact().setDelegateMaxSteps(resolveInt("JIMUQU_REACT_DELEGATE_MAX_STEPS", readInt(props, overrides, "jimuqu.react.delegateMaxSteps", 18)));
+        config.getReact().setDelegateRetryMax(resolveInt("JIMUQU_REACT_DELEGATE_RETRY_MAX", readInt(props, overrides, "jimuqu.react.delegateRetryMax", 4)));
+        config.getReact().setDelegateRetryDelayMs(resolveInt("JIMUQU_REACT_DELEGATE_RETRY_DELAY_MS", readInt(props, overrides, "jimuqu.react.delegateRetryDelayMs", 2500)));
 
         config.normalizePaths();
         return config;
@@ -278,6 +289,7 @@ public class AppConfig {
         copyCompression(other.getCompression());
         copyLearning(other.getLearning());
         copyRollback(other.getRollback());
+        copyReact(other.getReact());
         copyChannel(this.channels.getFeishu(), other.getChannels().getFeishu());
         copyChannel(this.channels.getDingtalk(), other.getChannels().getDingtalk());
         copyChannel(this.channels.getWecom(), other.getChannels().getWecom());
@@ -331,6 +343,15 @@ public class AppConfig {
     private void copyRollback(RollbackConfig other) {
         this.rollback.setEnabled(other.isEnabled());
         this.rollback.setMaxCheckpointsPerSource(other.getMaxCheckpointsPerSource());
+    }
+
+    private void copyReact(ReActConfig other) {
+        this.react.setMaxSteps(other.getMaxSteps());
+        this.react.setRetryMax(other.getRetryMax());
+        this.react.setRetryDelayMs(other.getRetryDelayMs());
+        this.react.setDelegateMaxSteps(other.getDelegateMaxSteps());
+        this.react.setDelegateRetryMax(other.getDelegateRetryMax());
+        this.react.setDelegateRetryDelayMs(other.getDelegateRetryDelayMs());
     }
 
     private void copyChannel(ChannelConfig target, ChannelConfig source) {
@@ -1009,6 +1030,44 @@ public class AppConfig {
          * 预定义人格列表。
          */
         private Map<String, PersonalityConfig> personalities = new LinkedHashMap<String, PersonalityConfig>();
+    }
+
+    /**
+     * ReAct 推理控制配置。
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class ReActConfig {
+        /**
+         * 主代理最大推理步数。
+         */
+        private int maxSteps = 12;
+
+        /**
+         * 主代理决策重试次数。
+         */
+        private int retryMax = 3;
+
+        /**
+         * 主代理决策重试基础延迟（毫秒）。
+         */
+        private int retryDelayMs = 2000;
+
+        /**
+         * 子代理最大推理步数。
+         */
+        private int delegateMaxSteps = 18;
+
+        /**
+         * 子代理决策重试次数。
+         */
+        private int delegateRetryMax = 4;
+
+        /**
+         * 子代理决策重试基础延迟（毫秒）。
+         */
+        private int delegateRetryDelayMs = 2500;
     }
 
     /**
