@@ -8,6 +8,7 @@ import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.support.constants.AgentSettingConstants;
+import com.jimuqu.agent.support.constants.ToolNameConstants;
 import com.jimuqu.agent.support.update.AppVersionService;
 import com.jimuqu.agent.web.DashboardConfigService;
 import com.jimuqu.agent.web.DashboardEnvService;
@@ -168,6 +169,7 @@ public class RuntimeSettingsService {
         buffer.append("enabled_tools=").append(join(enabledToolNames)).append('\n');
         buffer.append("channels=").append(join(channelStates)).append('\n');
         buffer.append("runtime_home=").append(StrUtil.nullToEmpty(appConfig.getRuntime().getHome())).append('\n');
+        appendShellGuidance(buffer, enabledToolNames);
         buffer.append("Only change your own configuration through /model, config_set, or config_set_secret. Global changes take effect on the next message.");
         return buffer.toString();
     }
@@ -307,6 +309,15 @@ public class RuntimeSettingsService {
             buffer.append(value.trim());
         }
         return buffer.toString();
+    }
+
+    private void appendShellGuidance(StringBuilder buffer, List<String> enabledToolNames) {
+        if (enabledToolNames == null || !enabledToolNames.contains(ToolNameConstants.EXECUTE_SHELL)) {
+            return;
+        }
+
+        buffer.append("shell_probe_policy=Prefer execute_shell for environment detection. On Linux, do not rely on exists_cmd because shell builtins like command -v may be misdetected when invoked outside a shell.\n");
+        buffer.append("shell_probe_example=Use execute_shell with commands like: command -v git >/dev/null 2>&1 && git --version || echo git_missing\n");
     }
 
     private void persistConfigValue(String key, Object value, boolean reconnectChannels) {

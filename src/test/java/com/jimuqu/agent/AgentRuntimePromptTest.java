@@ -23,6 +23,8 @@ public class AgentRuntimePromptTest {
                 .contains("effective_provider=openai-responses")
                 .contains("effective_model=gpt-5.4")
                 .contains("react_summarization_enabled=true")
-                .contains("enabled_tools=");
+                .contains("enabled_tools=")
+                .contains("shell_probe_policy=Prefer execute_shell for environment detection.")
+                .contains("shell_probe_example=Use execute_shell with commands like: command -v git >/dev/null 2>&1 && git --version || echo git_missing");
     }
 }

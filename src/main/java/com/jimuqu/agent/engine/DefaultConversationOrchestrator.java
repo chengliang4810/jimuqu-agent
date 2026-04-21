@@ -38,6 +38,16 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
      */
     private static final String EMPTY_REPLY_FALLBACK = "本轮已完成工具调用，但模型没有返回可读结论。请使用 /retry 重试，或继续给出下一步指令。";
 
+    /**
+     * 当 ReAct 步数耗尽时，要求模型基于现有轨迹做一次无工具收敛总结。
+     */
+    private static final String MAX_STEPS_RECOVERY_PROMPT = "你刚刚因为最大推理步数限制而停止。不要再次调用工具。请基于当前会话中已经完成的分析、工具结果、文件修改和观察，直接输出中文收敛答复：优先给出已经完成的结果；若任务仍未彻底完成，明确说明还差什么、最推荐的下一步是什么。";
+
+    /**
+     * 当步数耗尽后的收敛恢复仍失败时，返回给用户的兜底文案。
+     */
+    private static final String MAX_STEPS_RECOVERY_FALLBACK = "本轮执行已达到最大步骤限制，已保留当前进展。请继续给出更聚焦的下一步，或使用 /retry 继续。";
+
     private final SessionRepository sessionRepository;
     private final ContextService contextService;
     private final ContextCompressionService contextCompressionService;
@@ -85,6 +95,18 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
                 mergeUsage(result, recovered);
                 result = recovered;
                 replyText = extractText(recovered.getAssistantMessage());
+            }
+        }
+
+        if (isMaxStepsReply(replyText)) {
+            session.setNdjson(result.getNdjson());
+            LlmResult recovered = tryRecoverMaxStepsReply(session, systemPrompt);
+            if (hasUsableRecoveryReply(recovered)) {
+                mergeUsage(result, recovered);
+                result = recovered;
+                replyText = extractText(recovered.getAssistantMessage());
+            } else {
+                replyText = MAX_STEPS_RECOVERY_FALLBACK;
             }
         }
 
@@ -160,6 +182,36 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    /**
+     * 针对“达到最大步数上限”场景，再做一次无工具收敛总结。
+     */
+    private LlmResult tryRecoverMaxStepsReply(SessionRecord session, String systemPrompt) {
+        try {
+            return llmGateway.chat(session, systemPrompt, MAX_STEPS_RECOVERY_PROMPT, Collections.emptyList());
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private boolean hasUsableRecoveryReply(LlmResult recovered) {
+        if (recovered == null) {
+            return false;
+        }
+        String text = extractText(recovered.getAssistantMessage());
+        return StrUtil.isNotBlank(text) && !isMaxStepsReply(text);
+    }
+
+    private boolean isMaxStepsReply(String replyText) {
+        if (StrUtil.isBlank(replyText)) {
+            return false;
+        }
+
+        String normalized = replyText.trim().toLowerCase();
+        return normalized.startsWith("agent error: maximum steps reached")
+                || normalized.contains("maximum steps reached")
+                || replyText.contains("已达到硬性步数上限");
     }
 
     /**
