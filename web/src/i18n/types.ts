@@ -115,6 +115,7 @@ export interface Translations {
     noMessages: string;
     untitledSession: string;
     deleteSession: string;
+    lastTurnTokens: string;
     previousPage: string;
     nextPage: string;
     roles: {

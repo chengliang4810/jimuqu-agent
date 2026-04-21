@@ -111,6 +111,7 @@ export const zh: Translations = {
     noMessages: "暂无消息",
     untitledSession: "无标题会话",
     deleteSession: "删除会话",
+    lastTurnTokens: "最近一轮",
     previousPage: "上一页",
     nextPage: "下一页",
     roles: {

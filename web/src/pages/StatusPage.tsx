@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { formatTokenCount } from "@/lib/format";
 
 function platformLabel(name: string): string {
   if (name === "feishu") return "飞书";
@@ -247,7 +248,7 @@ export default function StatusPage() {
                   </div>
 
                   <span className="text-xs text-muted-foreground truncate">
-                    <span className="font-mono-ui">{(s.model ?? t.common.unknown).split("/").pop()}</span> · {s.message_count} {t.common.msgs} · {timeAgo(s.last_active)}
+                    <span className="font-mono-ui">{(s.model ?? t.common.unknown).split("/").pop()}</span> · {s.message_count} {t.common.msgs}{(s.total_tokens ?? 0) > 0 ? ` · ${formatTokenCount(s.total_tokens ?? 0)} Token` : ""} · {timeAgo(s.last_active)}
                   </span>
                 </div>
               </div>
@@ -275,7 +276,7 @@ export default function StatusPage() {
                   <span className="font-medium text-sm truncate">{s.title ?? t.common.untitled}</span>
 
                   <span className="text-xs text-muted-foreground truncate">
-                    <span className="font-mono-ui">{(s.model ?? t.common.unknown).split("/").pop()}</span> · {s.message_count} {t.common.msgs} · {timeAgo(s.last_active)}
+                    <span className="font-mono-ui">{(s.model ?? t.common.unknown).split("/").pop()}</span> · {s.message_count} {t.common.msgs}{(s.total_tokens ?? 0) > 0 ? ` · ${formatTokenCount(s.total_tokens ?? 0)} Token` : ""} · {timeAgo(s.last_active)}
                   </span>
 
                   {s.preview && (

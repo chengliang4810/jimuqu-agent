@@ -111,6 +111,7 @@ export const en: Translations = {
     noMessages: "No messages",
     untitledSession: "Untitled session",
     deleteSession: "Delete session",
+    lastTurnTokens: "Last turn",
     previousPage: "Previous page",
     nextPage: "Next page",
     roles: {

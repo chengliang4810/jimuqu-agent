@@ -82,12 +82,14 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             session.setNdjson(result.getNdjson());
             LlmResult recovered = tryRecoverEmptyReply(session, systemPrompt);
             if (recovered != null) {
+                mergeUsage(result, recovered);
                 result = recovered;
                 replyText = extractText(recovered.getAssistantMessage());
             }
         }
 
         session.setNdjson(result.getNdjson());
+        applyUsage(session, result);
         session.setUpdatedAt(System.currentTimeMillis());
         sessionRepository.save(session);
 
@@ -171,5 +173,51 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             }
         }
         return count;
+    }
+
+    /**
+     * 将本轮 usage 汇总写入会话记录。
+     */
+    private void applyUsage(SessionRecord session, LlmResult result) {
+        if (session == null || result == null) {
+            return;
+        }
+
+        session.setLastInputTokens(result.getInputTokens());
+        session.setLastOutputTokens(result.getOutputTokens());
+        session.setLastReasoningTokens(result.getReasoningTokens());
+        session.setLastCacheReadTokens(result.getCacheReadTokens());
+        session.setLastTotalTokens(result.getTotalTokens());
+
+        session.setCumulativeInputTokens(session.getCumulativeInputTokens() + Math.max(0L, result.getInputTokens()));
+        session.setCumulativeOutputTokens(session.getCumulativeOutputTokens() + Math.max(0L, result.getOutputTokens()));
+        session.setCumulativeReasoningTokens(session.getCumulativeReasoningTokens() + Math.max(0L, result.getReasoningTokens()));
+        session.setCumulativeCacheReadTokens(session.getCumulativeCacheReadTokens() + Math.max(0L, result.getCacheReadTokens()));
+        session.setCumulativeTotalTokens(session.getCumulativeTotalTokens() + Math.max(0L, result.getTotalTokens()));
+
+        if (result.getTotalTokens() > 0 || result.getInputTokens() > 0 || result.getOutputTokens() > 0) {
+            session.setLastUsageAt(System.currentTimeMillis());
+        }
+
+        if (StrUtil.isNotBlank(result.getProvider())) {
+            session.setLastResolvedProvider(result.getProvider());
+        }
+        if (StrUtil.isNotBlank(result.getModel())) {
+            session.setLastResolvedModel(result.getModel());
+        }
+    }
+
+    /**
+     * 将恢复调用前已消耗的 usage 合并进最终结果。
+     */
+    private void mergeUsage(LlmResult base, LlmResult extra) {
+        if (base == null || extra == null) {
+            return;
+        }
+        extra.setInputTokens(Math.max(0L, extra.getInputTokens()) + Math.max(0L, base.getInputTokens()));
+        extra.setOutputTokens(Math.max(0L, extra.getOutputTokens()) + Math.max(0L, base.getOutputTokens()));
+        extra.setReasoningTokens(Math.max(0L, extra.getReasoningTokens()) + Math.max(0L, base.getReasoningTokens()));
+        extra.setCacheReadTokens(Math.max(0L, extra.getCacheReadTokens()) + Math.max(0L, base.getCacheReadTokens()));
+        extra.setTotalTokens(Math.max(0L, extra.getTotalTokens()) + Math.max(0L, base.getTotalTokens()));
     }
 }

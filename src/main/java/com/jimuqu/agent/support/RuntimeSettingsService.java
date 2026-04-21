@@ -156,6 +156,9 @@ public class RuntimeSettingsService {
         buffer.append("default_model=").append(StrUtil.nullToEmpty(appConfig.getLlm().getModel())).append('\n');
         buffer.append("effective_provider=").append(StrUtil.nullToEmpty(resolved.provider)).append('\n');
         buffer.append("effective_model=").append(StrUtil.nullToEmpty(resolved.model)).append('\n');
+        buffer.append("session_input_tokens=").append(session == null ? 0 : session.getCumulativeInputTokens()).append('\n');
+        buffer.append("session_output_tokens=").append(session == null ? 0 : session.getCumulativeOutputTokens()).append('\n');
+        buffer.append("session_total_tokens=").append(session == null ? 0 : session.getCumulativeTotalTokens()).append('\n');
         buffer.append("react_summarization_enabled=").append(appConfig.getReact().isSummarizationEnabled()).append('\n');
         buffer.append("react_summarization_max_messages=").append(appConfig.getReact().getSummarizationMaxMessages()).append('\n');
         buffer.append("react_summarization_max_tokens=").append(appConfig.getReact().getSummarizationMaxTokens()).append('\n');

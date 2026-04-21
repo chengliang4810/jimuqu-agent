@@ -52,6 +52,19 @@ public class SqliteDatabase {
                     "last_compression_input_tokens integer not null default 0," +
                     "compression_failure_count integer not null default 0," +
                     "last_compression_failed_at integer not null default 0," +
+                    "last_input_tokens integer not null default 0," +
+                    "last_output_tokens integer not null default 0," +
+                    "last_reasoning_tokens integer not null default 0," +
+                    "last_cache_read_tokens integer not null default 0," +
+                    "last_total_tokens integer not null default 0," +
+                    "cumulative_input_tokens integer not null default 0," +
+                    "cumulative_output_tokens integer not null default 0," +
+                    "cumulative_reasoning_tokens integer not null default 0," +
+                    "cumulative_cache_read_tokens integer not null default 0," +
+                    "cumulative_total_tokens integer not null default 0," +
+                    "last_usage_at integer not null default 0," +
+                    "last_resolved_provider text," +
+                    "last_resolved_model text," +
                     "created_at integer not null," +
                     "updated_at integer not null" +
                     ")");
@@ -105,6 +118,58 @@ public class SqliteDatabase {
             }
             try {
                 statement.execute("alter table sessions add column last_compression_failed_at integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column last_input_tokens integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column last_output_tokens integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column last_reasoning_tokens integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column last_cache_read_tokens integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column last_total_tokens integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column cumulative_input_tokens integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column cumulative_output_tokens integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column cumulative_reasoning_tokens integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column cumulative_cache_read_tokens integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column cumulative_total_tokens integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column last_usage_at integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column last_resolved_provider text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column last_resolved_model text");
             } catch (Exception ignored) {
             }
             statement.execute("create index if not exists idx_sessions_source on sessions(source_key)");

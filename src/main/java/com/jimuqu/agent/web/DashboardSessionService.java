@@ -88,6 +88,19 @@ public class DashboardSessionService {
 
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("session_id", sessionId);
+        result.put("model", StrUtil.blankToDefault(record.getLastResolvedModel(), StrUtil.blankToDefault(record.getModelOverride(), null)));
+        result.put("provider", StrUtil.blankToDefault(record.getLastResolvedProvider(), null));
+        result.put("input_tokens", record.getCumulativeInputTokens());
+        result.put("output_tokens", record.getCumulativeOutputTokens());
+        result.put("reasoning_tokens", record.getCumulativeReasoningTokens());
+        result.put("cache_read_tokens", record.getCumulativeCacheReadTokens());
+        result.put("total_tokens", record.getCumulativeTotalTokens());
+        result.put("last_input_tokens", record.getLastInputTokens());
+        result.put("last_output_tokens", record.getLastOutputTokens());
+        result.put("last_reasoning_tokens", record.getLastReasoningTokens());
+        result.put("last_cache_read_tokens", record.getLastCacheReadTokens());
+        result.put("last_total_tokens", record.getLastTotalTokens());
+        result.put("last_usage_at", record.getLastUsageAt());
         result.put("messages", messages);
         return result;
     }
@@ -104,7 +117,7 @@ public class DashboardSessionService {
             item.put("snippet", buildSnippet(record, query));
             item.put("role", null);
             item.put("source", parseSource(record.getSourceKey()));
-            item.put("model", record.getModelOverride());
+            item.put("model", StrUtil.blankToDefault(record.getLastResolvedModel(), record.getModelOverride()));
             item.put("session_started", record.getCreatedAt());
             results.add(item);
         }
@@ -132,7 +145,8 @@ public class DashboardSessionService {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("id", record.getSessionId());
         result.put("source", parseSource(record.getSourceKey()));
-        result.put("model", StrUtil.blankToDefault(record.getModelOverride(), null));
+        result.put("model", StrUtil.blankToDefault(record.getLastResolvedModel(), StrUtil.blankToDefault(record.getModelOverride(), null)));
+        result.put("provider", StrUtil.blankToDefault(record.getLastResolvedProvider(), null));
         result.put("title", record.getTitle());
         result.put("started_at", record.getCreatedAt());
         result.put("ended_at", null);
@@ -140,8 +154,13 @@ public class DashboardSessionService {
         result.put("is_active", record.getUpdatedAt() >= System.currentTimeMillis() - 5L * 60L * 1000L);
         result.put("message_count", messages.size());
         result.put("tool_call_count", toolCallCount);
-        result.put("input_tokens", 0);
-        result.put("output_tokens", 0);
+        result.put("input_tokens", record.getCumulativeInputTokens());
+        result.put("output_tokens", record.getCumulativeOutputTokens());
+        result.put("reasoning_tokens", record.getCumulativeReasoningTokens());
+        result.put("cache_read_tokens", record.getCumulativeCacheReadTokens());
+        result.put("total_tokens", record.getCumulativeTotalTokens());
+        result.put("last_total_tokens", record.getLastTotalTokens());
+        result.put("last_usage_at", record.getLastUsageAt());
         result.put("preview", trim(StrUtil.blankToDefault(MessageSupport.getLastUserMessage(record.getNdjson()), record.getCompressedSummary()), 160));
         return result;
     }

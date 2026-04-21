@@ -133,6 +133,7 @@ public class DefaultCommandService implements CommandService {
                 GatewayCommandConstants.COMMAND_BRANCH,
                 GatewayCommandConstants.COMMAND_RESUME,
                 GatewayCommandConstants.COMMAND_STATUS,
+                GatewayCommandConstants.COMMAND_USAGE,
                 GatewayCommandConstants.COMMAND_STOP,
                 GatewayCommandConstants.COMMAND_PERSONALITY,
                 GatewayCommandConstants.COMMAND_VERSION,
@@ -235,6 +236,14 @@ public class DefaultCommandService implements CommandService {
                             + ", model=" + StrUtil.nullToDefault(session.getModelOverride(), "default")
                             + ", personality=" + currentPersonalityName()
             );
+            reply.setSessionId(session.getSessionId());
+            reply.setBranchName(session.getBranchName());
+            return reply;
+        }
+
+        if (GatewayCommandConstants.COMMAND_USAGE.equals(command)) {
+            SessionRecord session = requireSession(message.sourceKey());
+            GatewayReply reply = GatewayReply.ok(formatUsage(session));
             reply.setSessionId(session.getSessionId());
             reply.setBranchName(session.getBranchName());
             return reply;
@@ -848,6 +857,7 @@ public class DefaultCommandService implements CommandService {
                 + GatewayCommandConstants.SLASH_BRANCH + " [name]\n"
                 + GatewayCommandConstants.SLASH_RESUME + " <session-or-branch>\n"
                 + GatewayCommandConstants.SLASH_STATUS + "\n"
+                + GatewayCommandConstants.SLASH_USAGE + "\n"
                 + GatewayCommandConstants.SLASH_STOP + "\n"
                 + GatewayCommandConstants.SLASH_PERSONALITY + " [name]\n"
                 + GatewayCommandConstants.SLASH_VERSION + " [check|update]\n"
@@ -861,5 +871,30 @@ public class DefaultCommandService implements CommandService {
                 + GatewayCommandConstants.SLASH_PAIRING + " [claim-admin|pending|approve|revoke|approved]\n"
                 + GatewayCommandConstants.SLASH_PLATFORMS + "\n"
                 + GatewayCommandConstants.SLASH_HELP;
+    }
+
+    private String formatUsage(SessionRecord session) {
+        RuntimeSettingsService.ResolvedModel resolved = runtimeSettingsService.resolveEffectiveModel(session);
+        StringBuilder buffer = new StringBuilder();
+        buffer.append("session=").append(session.getSessionId()).append('\n');
+        buffer.append("branch=").append(session.getBranchName()).append('\n');
+        buffer.append("effective_provider=").append(StrUtil.blankToDefault(resolved.getProvider(), "default")).append('\n');
+        buffer.append("effective_model=").append(StrUtil.blankToDefault(resolved.getModel(), "default")).append('\n');
+        buffer.append("last_provider=").append(StrUtil.blankToDefault(session.getLastResolvedProvider(), "")).append('\n');
+        buffer.append("last_model=").append(StrUtil.blankToDefault(session.getLastResolvedModel(), "")).append('\n');
+        buffer.append("last_input_tokens=").append(session.getLastInputTokens()).append('\n');
+        buffer.append("last_output_tokens=").append(session.getLastOutputTokens()).append('\n');
+        buffer.append("last_reasoning_tokens=").append(session.getLastReasoningTokens()).append('\n');
+        buffer.append("last_cache_read_tokens=").append(session.getLastCacheReadTokens()).append('\n');
+        buffer.append("last_total_tokens=").append(session.getLastTotalTokens()).append('\n');
+        buffer.append("cumulative_input_tokens=").append(session.getCumulativeInputTokens()).append('\n');
+        buffer.append("cumulative_output_tokens=").append(session.getCumulativeOutputTokens()).append('\n');
+        buffer.append("cumulative_reasoning_tokens=").append(session.getCumulativeReasoningTokens()).append('\n');
+        buffer.append("cumulative_cache_read_tokens=").append(session.getCumulativeCacheReadTokens()).append('\n');
+        buffer.append("cumulative_total_tokens=").append(session.getCumulativeTotalTokens()).append('\n');
+        buffer.append("last_usage_at=").append(session.getLastUsageAt() > 0
+                ? DateUtil.formatDateTime(new java.util.Date(session.getLastUsageAt()))
+                : "");
+        return buffer.toString();
     }
 }

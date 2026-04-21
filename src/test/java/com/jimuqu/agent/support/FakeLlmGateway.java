@@ -25,6 +25,11 @@ public class FakeLlmGateway implements LlmGateway {
         result.setNdjson(chatSession.toNdjson());
         result.setRawResponse("fake");
         result.setStreamed(false);
+        result.setProvider("openai-responses");
+        result.setModel("gpt-5.4");
+        result.setInputTokens(Math.max(1, userMessage == null ? 0 : userMessage.length()));
+        result.setOutputTokens(Math.max(1, ("echo:" + userMessage).length()));
+        result.setTotalTokens(result.getInputTokens() + result.getOutputTokens());
         return result;
     }
 }

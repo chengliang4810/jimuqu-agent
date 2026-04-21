@@ -260,6 +260,7 @@ export interface SessionInfo {
   id: string;
   source: string | null;
   model: string | null;
+  provider?: string | null;
   title: string | null;
   started_at: number;
   ended_at: number | null;
@@ -269,6 +270,11 @@ export interface SessionInfo {
   tool_call_count: number;
   input_tokens: number;
   output_tokens: number;
+  reasoning_tokens?: number;
+  cache_read_tokens?: number;
+  total_tokens?: number;
+  last_total_tokens?: number;
+  last_usage_at?: number | null;
   preview: string | null;
 }
 
@@ -304,6 +310,19 @@ export interface SessionMessage {
 
 export interface SessionMessagesResponse {
   session_id: string;
+  model?: string | null;
+  provider?: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  reasoning_tokens: number;
+  cache_read_tokens: number;
+  total_tokens: number;
+  last_input_tokens: number;
+  last_output_tokens: number;
+  last_reasoning_tokens: number;
+  last_cache_read_tokens: number;
+  last_total_tokens: number;
+  last_usage_at: number;
   messages: SessionMessage[];
 }
 

@@ -31,4 +31,39 @@ public class LlmResult {
      * 原始协议响应。
      */
     private String rawResponse;
+
+    /**
+     * 本轮 ReAct/模型调用累计输入 token。
+     */
+    private long inputTokens;
+
+    /**
+     * 本轮 ReAct/模型调用累计输出 token。
+     */
+    private long outputTokens;
+
+    /**
+     * 本轮累计 reasoning token。
+     */
+    private long reasoningTokens;
+
+    /**
+     * 本轮累计 cache read token。
+     */
+    private long cacheReadTokens;
+
+    /**
+     * 本轮 ReAct/模型调用累计总 token。
+     */
+    private long totalTokens;
+
+    /**
+     * 本轮最终实际使用的 provider。
+     */
+    private String provider;
+
+    /**
+     * 本轮最终实际使用的 model。
+     */
+    private String model;
 }

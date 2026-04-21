@@ -8,6 +8,7 @@ import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.storage.session.SqliteAgentSession;
 import com.jimuqu.agent.support.constants.LlmConstants;
+import org.noear.solon.ai.agent.trace.Metrics;
 import org.noear.solon.ai.agent.AgentSystemPrompt;
 import org.noear.solon.ai.agent.react.ReActAgent;
 import org.noear.solon.ai.agent.react.ReActResponse;
@@ -88,6 +89,10 @@ public class SolonAiLlmGateway implements LlmGateway {
         result.setNdjson(ChatMessage.toNdjson(agentSession.getMessages()));
         result.setStreamed(resolved.isStream());
         result.setRawResponse(response.getContent());
+        result.setProvider(resolved.getProvider());
+        result.setModel(StrUtil.blankToDefault(resolved.getModel(), ""));
+        applyMetrics(result, response.getMetrics());
+        logUsage(session, resolved, result);
         return result;
     }
 
@@ -244,6 +249,33 @@ public class SolonAiLlmGateway implements LlmGateway {
         copy.setMaxTokens(source.getMaxTokens());
         copy.setContextWindowTokens(source.getContextWindowTokens());
         return copy;
+    }
+
+    private void applyMetrics(LlmResult result, Metrics metrics) {
+        if (metrics == null) {
+            return;
+        }
+        result.setInputTokens(metrics.getPromptTokens());
+        result.setOutputTokens(metrics.getCompletionTokens());
+        result.setTotalTokens(metrics.getTotalTokens());
+    }
+
+    private void logUsage(SessionRecord session, AppConfig.LlmConfig resolved, LlmResult result) {
+        if (result.getTotalTokens() <= 0 && result.getInputTokens() <= 0 && result.getOutputTokens() <= 0) {
+            log.info("LLM usage unavailable: provider={}, model={}, sessionId={}",
+                    resolved.getProvider(),
+                    resolved.getModel(),
+                    session == null ? "" : StrUtil.nullToEmpty(session.getSessionId()));
+            return;
+        }
+
+        log.info("LLM usage: provider={}, model={}, sessionId={}, inputTokens={}, outputTokens={}, totalTokens={}",
+                resolved.getProvider(),
+                resolved.getModel(),
+                session == null ? "" : StrUtil.nullToEmpty(session.getSessionId()),
+                result.getInputTokens(),
+                result.getOutputTokens(),
+                result.getTotalTokens());
     }
 
     private boolean isDelegateSession(SqliteAgentSession agentSession) {

@@ -87,6 +87,71 @@ public class SessionRecord {
     private long lastCompressionFailedAt;
 
     /**
+     * 最近一轮输入 token。
+     */
+    private long lastInputTokens;
+
+    /**
+     * 最近一轮输出 token。
+     */
+    private long lastOutputTokens;
+
+    /**
+     * 最近一轮 reasoning token。
+     */
+    private long lastReasoningTokens;
+
+    /**
+     * 最近一轮 cache read token。
+     */
+    private long lastCacheReadTokens;
+
+    /**
+     * 最近一轮总 token。
+     */
+    private long lastTotalTokens;
+
+    /**
+     * 累计输入 token。
+     */
+    private long cumulativeInputTokens;
+
+    /**
+     * 累计输出 token。
+     */
+    private long cumulativeOutputTokens;
+
+    /**
+     * 累计 reasoning token。
+     */
+    private long cumulativeReasoningTokens;
+
+    /**
+     * 累计 cache read token。
+     */
+    private long cumulativeCacheReadTokens;
+
+    /**
+     * 累计总 token。
+     */
+    private long cumulativeTotalTokens;
+
+    /**
+     * 最近一次 usage 统计时间。
+     */
+    private long lastUsageAt;
+
+    /**
+     * 最近一次实际使用的 provider。
+     */
+    private String lastResolvedProvider;
+
+    /**
+     * 最近一次实际使用的 model。
+     */
+    private String lastResolvedModel;
+
+    /**
      * 创建时间。
      */
     private long createdAt;

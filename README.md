@@ -22,10 +22,12 @@
 - `/version` 查看当前版本、部署方式与缓存的最新发布信息
 - `/version check` 检查 GitHub 最新版本
 - `/version update` 在 `java -jar` 部署下执行在线升级；Docker 部署下返回宿主机升级指引
+- `/usage` 查看当前会话最近一轮与累计 token 用量
 - `send_message` 支持本地附件路径 `mediaPaths`
 - `send_message` 支持可选 `channelExtrasJson`，用于钉钉 AI card 等渠道扩展参数
 - Agent 主链支持附件感知：入站附件会注入统一附件清单与本地缓存路径
 - Dashboard-first 渠道接入与 doctor：`/api/status`、`/api/gateway/doctor`
+- Dashboard 会话页、状态页、分析页展示 session token usage
 - 微信 iLink QR 登录：`POST /api/gateway/setup/weixin/qr` + `GET /api/gateway/setup/weixin/qr/{ticket}`
 
 当前已补齐的 Hermes 核心 Agent 能力：
@@ -317,6 +319,13 @@ git push origin v0.0.1
 - `compression.summaryModel` 若配置，则同时用于持久化压缩和 ReAct 工作记忆摘要
 - `retryConfig` 作用于模型决策重试，不是工具重试
 - `maxSteps` 统计的是 ReAct 推理轮次（Reason 步），不是单纯工具调用次数
+
+会话 token usage 说明：
+
+- 基于 Solon AI `ReActResponse.getMetrics()` 统计单轮输入 / 输出 / 总 token
+- 每次用户消息完成后会把本轮 usage 累加到 SQLite `sessions` 记录
+- `/usage`、dashboard session API、analytics API 都基于这份持久化数据
+- 当前累计维度可靠的是 `input/output/total`；`reasoning/cache_read` 先保留字段，尚未做跨 ReAct 全链路精确累计
 
 官方 skill 接入说明：
 

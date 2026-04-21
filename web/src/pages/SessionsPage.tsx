@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
+import { formatTokenCount } from "@/lib/format";
 
 const SOURCE_CONFIG: Record<string, { icon: typeof Terminal; color: string }> = {
   local: { icon: Terminal, color: "text-primary" },
@@ -178,6 +179,50 @@ function MessageList({ messages, highlight }: { messages: SessionMessage[]; high
   );
 }
 
+function SessionUsageSummary({
+  totalTokens,
+  inputTokens,
+  outputTokens,
+  lastTotalTokens,
+  lastUsageAt,
+}: {
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  lastTotalTokens: number;
+  lastUsageAt: number;
+}) {
+  const { t } = useI18n();
+
+  if (totalTokens <= 0 && lastTotalTokens <= 0) {
+    return null;
+  }
+
+  return (
+    <div className="mb-4 grid gap-2 sm:grid-cols-4">
+      <div className="rounded-[18px] border border-border/60 bg-secondary/35 px-3 py-2">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{t.analytics.totalTokens}</div>
+        <div className="mt-1 text-sm font-semibold">{formatTokenCount(totalTokens)}</div>
+      </div>
+      <div className="rounded-[18px] border border-border/60 bg-secondary/35 px-3 py-2">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{t.analytics.input}</div>
+        <div className="mt-1 text-sm font-semibold">{formatTokenCount(inputTokens)}</div>
+      </div>
+      <div className="rounded-[18px] border border-border/60 bg-secondary/35 px-3 py-2">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{t.analytics.output}</div>
+        <div className="mt-1 text-sm font-semibold">{formatTokenCount(outputTokens)}</div>
+      </div>
+      <div className="rounded-[18px] border border-border/60 bg-secondary/35 px-3 py-2">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{t.sessions.lastTurnTokens}</div>
+        <div className="mt-1 text-sm font-semibold">{formatTokenCount(lastTotalTokens)}</div>
+        {lastUsageAt > 0 && (
+          <div className="mt-1 text-[11px] text-muted-foreground">{timeAgo(lastUsageAt)}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SessionRow({
   session,
   snippet,
@@ -194,6 +239,13 @@ function SessionRow({
   onDelete: () => void;
 }) {
   const [messages, setMessages] = useState<SessionMessage[] | null>(null);
+  const [messageMeta, setMessageMeta] = useState<{
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    last_total_tokens: number;
+    last_usage_at: number;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { t } = useI18n();
@@ -214,7 +266,16 @@ function SessionRow({
       setLoading(true);
       api
         .getSessionMessages(session.id)
-        .then((resp) => setMessages(resp.messages))
+        .then((resp) => {
+          setMessages(resp.messages);
+          setMessageMeta({
+            input_tokens: resp.input_tokens,
+            output_tokens: resp.output_tokens,
+            total_tokens: resp.total_tokens,
+            last_total_tokens: resp.last_total_tokens,
+            last_usage_at: resp.last_usage_at,
+          });
+        })
         .catch((err) => setError(String(err)))
         .finally(() => setLoading(false));
     }
@@ -260,6 +321,12 @@ function SessionRow({
                   <span>{session.tool_call_count} {t.common.tools}</span>
                 </>
               )}
+              {(session.total_tokens ?? 0) > 0 && (
+                <>
+                  <span className="text-border">&#183;</span>
+                  <span>{formatTokenCount(session.total_tokens ?? 0)} Token</span>
+                </>
+              )}
               <span className="text-border">&#183;</span>
               <span>{timeAgo(session.last_active)}</span>
             </div>
@@ -302,7 +369,16 @@ function SessionRow({
             <p className="text-sm text-muted-foreground py-4 text-center">{t.sessions.noMessages}</p>
           )}
           {messages && messages.length > 0 && (
-            <MessageList messages={messages} highlight={searchQuery} />
+            <>
+              <SessionUsageSummary
+                totalTokens={messageMeta?.total_tokens ?? 0}
+                inputTokens={messageMeta?.input_tokens ?? 0}
+                outputTokens={messageMeta?.output_tokens ?? 0}
+                lastTotalTokens={messageMeta?.last_total_tokens ?? 0}
+                lastUsageAt={messageMeta?.last_usage_at ?? 0}
+              />
+              <MessageList messages={messages} highlight={searchQuery} />
+            </>
           )}
         </div>
       )}
