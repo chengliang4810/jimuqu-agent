@@ -6,6 +6,8 @@ import com.jimuqu.agent.core.model.ChannelStatus;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.DeliveryService;
+import com.jimuqu.agent.support.update.AppUpdateService;
+import com.jimuqu.agent.support.update.AppVersionService;
 
 import java.lang.management.ManagementFactory;
 import java.text.SimpleDateFormat;
@@ -23,15 +25,21 @@ public class DashboardStatusService {
     private final SessionRepository sessionRepository;
     private final DeliveryService deliveryService;
     private final com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
+    private final AppVersionService appVersionService;
+    private final AppUpdateService appUpdateService;
 
     public DashboardStatusService(AppConfig appConfig,
                                   SessionRepository sessionRepository,
                                   DeliveryService deliveryService,
-                                  com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
+                                  com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService,
+                                  AppVersionService appVersionService,
+                                  AppUpdateService appUpdateService) {
         this.appConfig = appConfig;
         this.sessionRepository = sessionRepository;
         this.deliveryService = deliveryService;
         this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
+        this.appVersionService = appVersionService;
+        this.appUpdateService = appUpdateService;
     }
 
     public Map<String, Object> getStatus() throws Exception {
@@ -102,7 +110,14 @@ public class DashboardStatusService {
         result.put("hermes_home", appConfig.getRuntime().getHome());
         result.put("latest_config_version", configVersion());
         result.put("release_date", new SimpleDateFormat("yyyy-MM-dd").format(new Date()));
-        result.put("version", resolveVersion());
+        AppUpdateService.VersionStatus versionStatus = appUpdateService.getVersionStatus(false);
+        result.put("version", appVersionService.currentVersion());
+        result.put("version_tag", appVersionService.currentTag());
+        result.put("deployment_mode", appVersionService.deploymentMode());
+        result.put("latest_version", versionStatus.getLatestVersion());
+        result.put("latest_tag", versionStatus.getLatestTag());
+        result.put("update_available", versionStatus.isUpdateAvailable());
+        result.put("release_url", versionStatus.getReleaseUrl());
         return result;
     }
 
@@ -152,14 +167,6 @@ public class DashboardStatusService {
             return 0;
         }
         return (int) (file.lastModified() / 1000L);
-    }
-
-    private String resolveVersion() {
-        Package pkg = getClass().getPackage();
-        if (pkg != null && StrUtil.isNotBlank(pkg.getImplementationVersion())) {
-            return pkg.getImplementationVersion();
-        }
-        return "0.0.1";
     }
 
     private String isoNow() {

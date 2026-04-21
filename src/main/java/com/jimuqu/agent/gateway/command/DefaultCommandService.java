@@ -34,6 +34,7 @@ import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.SourceKeySupport;
 import com.jimuqu.agent.support.constants.AgentSettingConstants;
 import com.jimuqu.agent.support.constants.GatewayCommandConstants;
+import com.jimuqu.agent.support.update.AppUpdateService;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import lombok.RequiredArgsConstructor;
 
@@ -117,6 +118,7 @@ public class DefaultCommandService implements CommandService {
      * 运行时设置服务。
      */
     private final RuntimeSettingsService runtimeSettingsService;
+    private final AppUpdateService appUpdateService;
 
     /**
      * 判断当前命令是否由默认命令服务承接。
@@ -133,6 +135,7 @@ public class DefaultCommandService implements CommandService {
                 GatewayCommandConstants.COMMAND_STATUS,
                 GatewayCommandConstants.COMMAND_STOP,
                 GatewayCommandConstants.COMMAND_PERSONALITY,
+                GatewayCommandConstants.COMMAND_VERSION,
                 GatewayCommandConstants.COMMAND_MODEL,
                 GatewayCommandConstants.COMMAND_TOOLS,
                 GatewayCommandConstants.COMMAND_SKILLS,
@@ -243,6 +246,24 @@ public class DefaultCommandService implements CommandService {
 
         if (GatewayCommandConstants.COMMAND_PERSONALITY.equals(command)) {
             return handlePersonality(args);
+        }
+
+        if (GatewayCommandConstants.COMMAND_VERSION.equals(command)) {
+            SessionRecord session = requireSession(message.sourceKey());
+            GatewayReply reply;
+            if (StrUtil.isBlank(args)) {
+                reply = GatewayReply.ok(appUpdateService.formatVersionReport(false));
+            } else if ("check".equalsIgnoreCase(args) || "status".equalsIgnoreCase(args)) {
+                reply = GatewayReply.ok(appUpdateService.formatVersionReport(true));
+            } else if ("update".equalsIgnoreCase(args) || "upgrade".equalsIgnoreCase(args) || "run".equalsIgnoreCase(args)) {
+                AppUpdateService.UpdateResult result = appUpdateService.startUpdate();
+                reply = result.isError() ? GatewayReply.error(result.getMessage()) : GatewayReply.ok(result.getMessage());
+            } else {
+                reply = GatewayReply.error("用法：/version [check|update]");
+            }
+            reply.setSessionId(session.getSessionId());
+            reply.setBranchName(session.getBranchName());
+            return reply;
         }
 
         if (GatewayCommandConstants.COMMAND_MODEL.equals(command)) {
@@ -829,6 +850,7 @@ public class DefaultCommandService implements CommandService {
                 + GatewayCommandConstants.SLASH_STATUS + "\n"
                 + GatewayCommandConstants.SLASH_STOP + "\n"
                 + GatewayCommandConstants.SLASH_PERSONALITY + " [name]\n"
+                + GatewayCommandConstants.SLASH_VERSION + " [check|update]\n"
                 + GatewayCommandConstants.SLASH_MODEL + " <provider:model>\n"
                 + GatewayCommandConstants.SLASH_TOOLS + " [list|enable|disable] [name...]\n"
                 + GatewayCommandConstants.SLASH_SKILLS + " [list|browse|search|install|inspect|check|update|audit|uninstall|tap|enable|disable|reload]\n"

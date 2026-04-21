@@ -23,6 +23,8 @@ import com.jimuqu.agent.skillhub.model.SkillMeta;
 import com.jimuqu.agent.skillhub.model.TapRecord;
 import com.jimuqu.agent.support.TestEnvironment;
 import com.jimuqu.agent.support.RuntimeSettingsService;
+import com.jimuqu.agent.support.update.AppUpdateService;
+import com.jimuqu.agent.support.update.AppVersionService;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.agent.web.DashboardConfigService;
@@ -80,8 +82,10 @@ public class SkillsHubCommandTest {
                 env.globalSettingRepository,
                 env.deliveryService,
                 new DashboardConfigService(env.appConfig, refreshService),
-                new DashboardEnvService(env.appConfig, refreshService)
+                new DashboardEnvService(env.appConfig, refreshService),
+                new AppVersionService(env.appConfig)
         );
+        AppUpdateService appUpdateService = new AppUpdateService(env.appConfig, new AppVersionService(env.appConfig));
         return new DefaultCommandService(
                 env.sessionRepository,
                 env.toolRegistry,
@@ -112,7 +116,8 @@ public class SkillsHubCommandTest {
                 env.appConfig,
                 env.globalSettingRepository,
                 env.processRegistry,
-                runtimeSettingsService
+                runtimeSettingsService,
+                appUpdateService
         );
     }
 

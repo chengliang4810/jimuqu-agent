@@ -19,6 +19,9 @@
 - `/pairing approved [platform]`
 - `/sethome`
 - `/platforms` 展示管理员、home channel、pairing 状态
+- `/version` 查看当前版本、部署方式与缓存的最新发布信息
+- `/version check` 检查 GitHub 最新版本
+- `/version update` 在 `java -jar` 部署下执行在线升级；Docker 部署下返回宿主机升级指引
 - `send_message` 支持本地附件路径 `mediaPaths`
 - `send_message` 支持可选 `channelExtrasJson`，用于钉钉 AI card 等渠道扩展参数
 - Agent 主链支持附件感知：入站附件会注入统一附件清单与本地缓存路径
@@ -347,6 +350,14 @@ git push origin v0.0.1
   - `features`
   - `lastErrorCode`
   - `lastErrorMessage`
+- `/api/status` 额外返回：
+  - `version`
+  - `version_tag`
+  - `deployment_mode`
+  - `latest_version`
+  - `latest_tag`
+  - `update_available`
+  - `release_url`
 - 微信支持从 dashboard 发起 iLink QR 登录；成功后会写入：
   - `runtime/.env`：`JIMUQU_WEIXIN_ACCOUNT_ID`、`JIMUQU_WEIXIN_TOKEN`
   - `runtime/config.override.yml`：仅在返回非默认 `baseUrl` 时写入 `channels.weixin.baseUrl`

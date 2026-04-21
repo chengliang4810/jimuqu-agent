@@ -8,6 +8,7 @@ import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.support.constants.AgentSettingConstants;
+import com.jimuqu.agent.support.update.AppVersionService;
 import com.jimuqu.agent.web.DashboardConfigService;
 import com.jimuqu.agent.web.DashboardEnvService;
 
@@ -73,17 +74,20 @@ public class RuntimeSettingsService {
     private final DeliveryService deliveryService;
     private final DashboardConfigService dashboardConfigService;
     private final DashboardEnvService dashboardEnvService;
+    private final AppVersionService appVersionService;
 
     public RuntimeSettingsService(AppConfig appConfig,
                                   GlobalSettingRepository globalSettingRepository,
                                   DeliveryService deliveryService,
                                   DashboardConfigService dashboardConfigService,
-                                  DashboardEnvService dashboardEnvService) {
+                                  DashboardEnvService dashboardEnvService,
+                                  AppVersionService appVersionService) {
         this.appConfig = appConfig;
         this.globalSettingRepository = globalSettingRepository;
         this.deliveryService = deliveryService;
         this.dashboardConfigService = dashboardConfigService;
         this.dashboardEnvService = dashboardEnvService;
+        this.appVersionService = appVersionService;
     }
 
     public ResolvedModel resolveEffectiveModel(SessionRecord session) {
@@ -143,6 +147,8 @@ public class RuntimeSettingsService {
         buffer.append("default_model=").append(StrUtil.nullToEmpty(appConfig.getLlm().getModel())).append('\n');
         buffer.append("effective_provider=").append(StrUtil.nullToEmpty(resolved.provider)).append('\n');
         buffer.append("effective_model=").append(StrUtil.nullToEmpty(resolved.model)).append('\n');
+        buffer.append("app_version=").append(StrUtil.nullToEmpty(appVersionService.currentTag())).append('\n');
+        buffer.append("deployment_mode=").append(StrUtil.nullToEmpty(appVersionService.deploymentMode())).append('\n');
         buffer.append("has_session_model_override=").append(resolved.sessionOverride).append('\n');
         buffer.append("enabled_tools=").append(join(enabledToolNames)).append('\n');
         buffer.append("channels=").append(join(channelStates)).append('\n');

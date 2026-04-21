@@ -8,6 +8,7 @@ import com.jimuqu.agent.core.service.ChannelAdapter;
 import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.TestEnvironment;
+import com.jimuqu.agent.support.update.AppVersionService;
 import com.jimuqu.agent.web.DashboardConfigService;
 import com.jimuqu.agent.web.DashboardEnvService;
 import org.junit.jupiter.api.Test;
@@ -67,7 +68,7 @@ public class RuntimeRefreshBehaviorTest {
         GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(env.appConfig, adapters);
         DashboardConfigService configService = new DashboardConfigService(env.appConfig, refreshService);
         DashboardEnvService envService = new DashboardEnvService(env.appConfig, refreshService);
-        return new RuntimeSettingsService(env.appConfig, env.globalSettingRepository, env.deliveryService, configService, envService);
+        return new RuntimeSettingsService(env.appConfig, env.globalSettingRepository, env.deliveryService, configService, envService, new AppVersionService(env.appConfig));
     }
 
     private static class RecordingChannelAdapter implements ChannelAdapter {

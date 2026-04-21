@@ -60,6 +60,8 @@ import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.DefaultCheckpointService;
 import com.jimuqu.agent.support.AttachmentCacheService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
+import com.jimuqu.agent.support.update.AppUpdateService;
+import com.jimuqu.agent.support.update.AppVersionService;
 import com.jimuqu.agent.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import com.jimuqu.agent.web.DashboardConfigService;
@@ -150,7 +152,9 @@ public class TestEnvironment {
         GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(config, adapters);
         DashboardConfigService dashboardConfigService = new DashboardConfigService(config, refreshService);
         DashboardEnvService dashboardEnvService = new DashboardEnvService(config, refreshService);
-        RuntimeSettingsService runtimeSettingsService = new RuntimeSettingsService(config, globalSettingRepository, deliveryService, dashboardConfigService, dashboardEnvService);
+        AppVersionService appVersionService = new AppVersionService(config);
+        RuntimeSettingsService runtimeSettingsService = new RuntimeSettingsService(config, globalSettingRepository, deliveryService, dashboardConfigService, dashboardEnvService, appVersionService);
+        AppUpdateService appUpdateService = new AppUpdateService(config, appVersionService);
         DelegationService delegationService = new DefaultDelegationService(holder, preferenceStore, sessionRepository);
         SessionSearchService sessionSearchService = new DefaultSessionSearchService(sessionRepository, llmGateway);
         GitHubSkillSource gitHubSkillSource = new GitHubSkillSource(gitHubAuth, skillHubHttpClient, skillHubStateStore);
@@ -159,7 +163,7 @@ public class TestEnvironment {
         ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, runtimeSettingsService);
         holder.set(orchestrator);
         SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService);
-        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService);
+        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService, appUpdateService);
         DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService, sessionRepository, gatewayAuthorizationService, skillLearningService, memoryManager);
         return new TestEnvironment(
                 config,

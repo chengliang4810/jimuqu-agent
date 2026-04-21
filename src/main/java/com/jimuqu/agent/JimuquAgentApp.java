@@ -9,14 +9,21 @@ import org.noear.solon.annotation.SolonMain;
  */
 @SolonMain
 public class JimuquAgentApp {
+    private static volatile String[] startupArgs = new String[0];
+
     /**
      * 启动 Solon 应用。
      *
      * @param args 启动参数
      */
     public static void main(String[] args) {
+        startupArgs = args == null ? new String[0] : args.clone();
         System.setProperty("jimuqu.runtime.home", resolveRuntimeHome(args));
         Solon.start(JimuquAgentApp.class, args);
+    }
+
+    public static String[] startupArgs() {
+        return startupArgs == null ? new String[0] : startupArgs.clone();
     }
 
     private static String resolveRuntimeHome(String[] args) {

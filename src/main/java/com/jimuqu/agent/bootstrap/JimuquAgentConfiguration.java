@@ -67,6 +67,8 @@ import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.DefaultCheckpointService;
 import com.jimuqu.agent.support.AttachmentCacheService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
+import com.jimuqu.agent.support.update.AppUpdateService;
+import com.jimuqu.agent.support.update.AppVersionService;
 import com.jimuqu.agent.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import com.jimuqu.agent.web.DashboardAuthFilter;
@@ -287,6 +289,17 @@ public class JimuquAgentConfiguration {
         return new DefaultSessionSearchService(sessionRepository, llmGateway);
     }
 
+    @Bean
+    public AppVersionService appVersionService(AppConfig appConfig) {
+        return new AppVersionService(appConfig);
+    }
+
+    @Bean
+    public AppUpdateService appUpdateService(AppConfig appConfig,
+                                             AppVersionService appVersionService) {
+        return new AppUpdateService(appConfig, appVersionService);
+    }
+
     /**
      * 创建进程注册表。
      */
@@ -353,8 +366,9 @@ public class JimuquAgentConfiguration {
                                                          GlobalSettingRepository globalSettingRepository,
                                                          DeliveryService deliveryService,
                                                          DashboardConfigService dashboardConfigService,
-                                                         DashboardEnvService dashboardEnvService) {
-        return new RuntimeSettingsService(appConfig, globalSettingRepository, deliveryService, dashboardConfigService, dashboardEnvService);
+                                                         DashboardEnvService dashboardEnvService,
+                                                         AppVersionService appVersionService) {
+        return new RuntimeSettingsService(appConfig, globalSettingRepository, deliveryService, dashboardConfigService, dashboardEnvService, appVersionService);
     }
 
     @Bean
@@ -462,7 +476,8 @@ public class JimuquAgentConfiguration {
                                          AppConfig appConfig,
                                          GlobalSettingRepository globalSettingRepository,
                                          ProcessRegistry processRegistry,
-                                         RuntimeSettingsService runtimeSettingsService) {
+                                         RuntimeSettingsService runtimeSettingsService,
+                                         AppUpdateService appUpdateService) {
         return new DefaultCommandService(
                 sessionRepository,
                 toolRegistry,
@@ -478,7 +493,8 @@ public class JimuquAgentConfiguration {
                 appConfig,
                 globalSettingRepository,
                 processRegistry,
-                runtimeSettingsService
+                runtimeSettingsService,
+                appUpdateService
         );
     }
 
@@ -551,8 +567,10 @@ public class JimuquAgentConfiguration {
     public DashboardStatusService dashboardStatusService(AppConfig appConfig,
                                                          SessionRepository sessionRepository,
                                                          DeliveryService deliveryService,
-                                                         GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
-        return new DashboardStatusService(appConfig, sessionRepository, deliveryService, gatewayRuntimeRefreshService);
+                                                         GatewayRuntimeRefreshService gatewayRuntimeRefreshService,
+                                                         AppVersionService appVersionService,
+                                                         AppUpdateService appUpdateService) {
+        return new DashboardStatusService(appConfig, sessionRepository, deliveryService, gatewayRuntimeRefreshService, appVersionService, appUpdateService);
     }
 
     @Bean

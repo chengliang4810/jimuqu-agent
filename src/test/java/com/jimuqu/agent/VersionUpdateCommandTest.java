@@ -1,0 +1,108 @@
+package com.jimuqu.agent;
+
+import com.jimuqu.agent.core.model.GatewayMessage;
+import com.jimuqu.agent.core.model.GatewayReply;
+import com.jimuqu.agent.core.service.ContextService;
+import com.jimuqu.agent.core.service.ConversationOrchestrator;
+import com.jimuqu.agent.gateway.command.DefaultCommandService;
+import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
+import com.jimuqu.agent.support.RuntimeSettingsService;
+import com.jimuqu.agent.support.TestEnvironment;
+import com.jimuqu.agent.support.update.AppUpdateService;
+import com.jimuqu.agent.support.update.AppVersionService;
+import com.jimuqu.agent.web.DashboardConfigService;
+import com.jimuqu.agent.web.DashboardEnvService;
+import org.junit.jupiter.api.Test;
+
+import java.util.LinkedHashMap;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+public class VersionUpdateCommandTest {
+    @Test
+    void shouldHandleVersionSubcommandsOnly() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        CapturingAppUpdateService updateService = new CapturingAppUpdateService(env.appConfig);
+        DefaultCommandService commandService = commandService(env, updateService);
+        GatewayMessage message = env.message("room", "user", "/version");
+
+        GatewayReply versionReply = commandService.handle(message, "/version");
+        GatewayReply checkReply = commandService.handle(message, "/version check");
+        GatewayReply runReply = commandService.handle(message, "/version update");
+
+        assertThat(versionReply.getContent()).contains("应用版本");
+        assertThat(updateService.formatCalls).isEqualTo(2);
+        assertThat(updateService.startCalls).isEqualTo(1);
+        assertThat(checkReply.getContent()).contains("应用版本");
+        assertThat(runReply.getContent()).contains("started update");
+    }
+
+    private DefaultCommandService commandService(TestEnvironment env, AppUpdateService updateService) {
+        GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(
+                env.appConfig,
+                new LinkedHashMap<com.jimuqu.agent.core.enums.PlatformType, com.jimuqu.agent.core.service.ChannelAdapter>()
+        );
+        RuntimeSettingsService runtimeSettingsService = new RuntimeSettingsService(
+                env.appConfig,
+                env.globalSettingRepository,
+                env.deliveryService,
+                new DashboardConfigService(env.appConfig, refreshService),
+                new DashboardEnvService(env.appConfig, refreshService),
+                new AppVersionService(env.appConfig)
+        );
+        return new DefaultCommandService(
+                env.sessionRepository,
+                env.toolRegistry,
+                env.localSkillService,
+                env.cronJobRepository,
+                new ConversationOrchestrator() {
+                    @Override
+                    public GatewayReply handleIncoming(GatewayMessage message) {
+                        return GatewayReply.ok("noop");
+                    }
+
+                    @Override
+                    public GatewayReply runScheduled(GatewayMessage syntheticMessage) {
+                        return GatewayReply.ok("noop");
+                    }
+                },
+                new ContextService() {
+                    @Override
+                    public String buildSystemPrompt(String sourceKey) {
+                        return "";
+                    }
+                },
+                env.contextCompressionService,
+                env.deliveryService,
+                env.gatewayAuthorizationService,
+                env.checkpointService,
+                env.skillHubService,
+                env.appConfig,
+                env.globalSettingRepository,
+                env.processRegistry,
+                runtimeSettingsService,
+                updateService
+        );
+    }
+
+    private static class CapturingAppUpdateService extends AppUpdateService {
+        private int formatCalls;
+        private int startCalls;
+
+        private CapturingAppUpdateService(com.jimuqu.agent.config.AppConfig appConfig) {
+            super(appConfig, new AppVersionService(appConfig));
+        }
+
+        @Override
+        public String formatVersionReport(boolean forceRefresh) {
+            formatCalls++;
+            return "应用版本: v0.0.1";
+        }
+
+        @Override
+        public UpdateResult startUpdate() {
+            startCalls++;
+            return UpdateResult.ok("started update");
+        }
+    }
+}
