@@ -24,8 +24,12 @@ public class CoreEnvOverrideLoadTest {
                         + "JIMUQU_REACT_DELEGATE_MAX_STEPS=22\n"
                         + "JIMUQU_REACT_DELEGATE_RETRY_MAX=6\n"
                         + "JIMUQU_REACT_DELEGATE_RETRY_DELAY_MS=3500\n"
+                        + "JIMUQU_REACT_SUMMARIZATION_ENABLED=false\n"
+                        + "JIMUQU_REACT_SUMMARIZATION_MAX_MESSAGES=55\n"
+                        + "JIMUQU_REACT_SUMMARIZATION_MAX_TOKENS=45000\n"
                         + "JIMUQU_COMPRESSION_ENABLED=false\n"
                         + "JIMUQU_COMPRESSION_THRESHOLD_PERCENT=0.75\n"
+                        + "JIMUQU_COMPRESSION_SUMMARY_MODEL=gpt-5.4-mini\n"
                         + "JIMUQU_FEISHU_ENABLED=true\n"
                         + "JIMUQU_FEISHU_WEBSOCKET_URL=wss://feishu.example/ws\n"
                         + "JIMUQU_DINGTALK_STREAM_URL=wss://dingtalk.example/stream\n"
@@ -60,8 +64,12 @@ public class CoreEnvOverrideLoadTest {
         assertThat(config.getReact().getDelegateMaxSteps()).isEqualTo(22);
         assertThat(config.getReact().getDelegateRetryMax()).isEqualTo(6);
         assertThat(config.getReact().getDelegateRetryDelayMs()).isEqualTo(3500);
+        assertThat(config.getReact().isSummarizationEnabled()).isFalse();
+        assertThat(config.getReact().getSummarizationMaxMessages()).isEqualTo(55);
+        assertThat(config.getReact().getSummarizationMaxTokens()).isEqualTo(45000);
         assertThat(config.getCompression().isEnabled()).isFalse();
         assertThat(config.getCompression().getThresholdPercent()).isEqualTo(0.75D);
+        assertThat(config.getCompression().getSummaryModel()).isEqualTo("gpt-5.4-mini");
 
         assertThat(config.getChannels().getFeishu().isEnabled()).isTrue();
         assertThat(config.getChannels().getFeishu().getWebsocketUrl()).isEqualTo("wss://feishu.example/ws");

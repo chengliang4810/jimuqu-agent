@@ -12,8 +12,12 @@ import org.noear.solon.ai.agent.AgentSystemPrompt;
 import org.noear.solon.ai.agent.react.ReActAgent;
 import org.noear.solon.ai.agent.react.ReActResponse;
 import org.noear.solon.ai.agent.react.intercept.StopLoopInterceptor;
+import org.noear.solon.ai.agent.react.intercept.SummarizationInterceptor;
 import org.noear.solon.ai.agent.react.intercept.ToolRetryInterceptor;
 import org.noear.solon.ai.agent.react.intercept.ToolSanitizerInterceptor;
+import org.noear.solon.ai.agent.react.intercept.summarize.CompositeSummarizationStrategy;
+import org.noear.solon.ai.agent.react.intercept.summarize.HierarchicalSummarizationStrategy;
+import org.noear.solon.ai.agent.react.intercept.summarize.KeyInfoExtractionStrategy;
 import org.noear.solon.ai.chat.ChatModel;
 import org.noear.solon.ai.chat.message.ChatMessage;
 import org.noear.solon.ai.chat.message.AssistantMessage;
@@ -64,7 +68,7 @@ public class SolonAiLlmGateway implements LlmGateway {
                 session != null && StrUtil.isNotBlank(session.getModelOverride()));
         SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
         ChatModel chatModel = buildChatModel(resolved);
-        ReActAgent agent = buildReActAgent(chatModel, systemPrompt, toolObjects, agentSession);
+        ReActAgent agent = buildReActAgent(chatModel, resolved, systemPrompt, toolObjects, agentSession);
         ReActResponse response;
         try {
             response = agent.prompt(Prompt.of(userMessage))
@@ -159,6 +163,7 @@ public class SolonAiLlmGateway implements LlmGateway {
     }
 
     private ReActAgent buildReActAgent(ChatModel chatModel,
+                                       AppConfig.LlmConfig resolved,
                                        final String systemPrompt,
                                        List<Object> toolObjects,
                                        SqliteAgentSession agentSession) {
@@ -166,6 +171,7 @@ public class SolonAiLlmGateway implements LlmGateway {
         int maxSteps = delegateSession ? appConfig.getReact().getDelegateMaxSteps() : appConfig.getReact().getMaxSteps();
         int retryMax = delegateSession ? appConfig.getReact().getDelegateRetryMax() : appConfig.getReact().getRetryMax();
         long retryDelayMs = delegateSession ? appConfig.getReact().getDelegateRetryDelayMs() : appConfig.getReact().getRetryDelayMs();
+        SummarizationInterceptor summarizationInterceptor = buildSummarizationInterceptor(resolved, chatModel);
         ReActAgent.Builder builder = ReActAgent.of(chatModel)
                 .name("jimuqu_react")
                 .role("Jimuqu Agent")
@@ -187,11 +193,57 @@ public class SolonAiLlmGateway implements LlmGateway {
                 .defaultInterceptorAdd(new ToolSanitizerInterceptor())
                 .defaultInterceptorAdd(new StopLoopInterceptor());
 
+        if (summarizationInterceptor != null) {
+            builder.defaultInterceptorAdd(summarizationInterceptor);
+        }
+
         for (Object toolObject : toolObjects) {
             builder.defaultToolAdd(toolObject);
         }
         builder.defaultSkillAdd(pdfSkill());
         return builder.build();
+    }
+
+    private SummarizationInterceptor buildSummarizationInterceptor(AppConfig.LlmConfig resolved, ChatModel chatModel) {
+        if (!appConfig.getReact().isSummarizationEnabled()) {
+            return null;
+        }
+
+        ChatModel summaryChatModel = buildSummaryChatModel(resolved, chatModel);
+        CompositeSummarizationStrategy strategy = new CompositeSummarizationStrategy()
+                .addStrategy(new KeyInfoExtractionStrategy(summaryChatModel))
+                .addStrategy(new HierarchicalSummarizationStrategy(summaryChatModel));
+
+        return new SummarizationInterceptor(
+                Math.max(10, appConfig.getReact().getSummarizationMaxMessages()),
+                Math.max(8000, appConfig.getReact().getSummarizationMaxTokens()),
+                strategy
+        );
+    }
+
+    private ChatModel buildSummaryChatModel(AppConfig.LlmConfig resolved, ChatModel chatModel) {
+        String summaryModel = StrUtil.nullToEmpty(appConfig.getCompression().getSummaryModel()).trim();
+        if (StrUtil.isBlank(summaryModel) || StrUtil.equals(summaryModel, resolved.getModel())) {
+            return chatModel;
+        }
+
+        AppConfig.LlmConfig summaryConfig = copyLlmConfig(resolved);
+        summaryConfig.setModel(summaryModel);
+        return buildChatModel(summaryConfig);
+    }
+
+    private AppConfig.LlmConfig copyLlmConfig(AppConfig.LlmConfig source) {
+        AppConfig.LlmConfig copy = new AppConfig.LlmConfig();
+        copy.setProvider(source.getProvider());
+        copy.setApiUrl(source.getApiUrl());
+        copy.setApiKey(source.getApiKey());
+        copy.setModel(source.getModel());
+        copy.setStream(source.isStream());
+        copy.setReasoningEffort(source.getReasoningEffort());
+        copy.setTemperature(source.getTemperature());
+        copy.setMaxTokens(source.getMaxTokens());
+        copy.setContextWindowTokens(source.getContextWindowTokens());
+        return copy;
     }
 
     private boolean isDelegateSession(SqliteAgentSession agentSession) {

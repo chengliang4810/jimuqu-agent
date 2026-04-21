@@ -48,6 +48,9 @@ public class RuntimeSettingsService {
             "react.delegateMaxSteps",
             "react.delegateRetryMax",
             "react.delegateRetryDelayMs",
+            "react.summarizationEnabled",
+            "react.summarizationMaxMessages",
+            "react.summarizationMaxTokens",
             "gateway.allowedUsers",
             "gateway.allowAllUsers"
     );
@@ -153,6 +156,9 @@ public class RuntimeSettingsService {
         buffer.append("default_model=").append(StrUtil.nullToEmpty(appConfig.getLlm().getModel())).append('\n');
         buffer.append("effective_provider=").append(StrUtil.nullToEmpty(resolved.provider)).append('\n');
         buffer.append("effective_model=").append(StrUtil.nullToEmpty(resolved.model)).append('\n');
+        buffer.append("react_summarization_enabled=").append(appConfig.getReact().isSummarizationEnabled()).append('\n');
+        buffer.append("react_summarization_max_messages=").append(appConfig.getReact().getSummarizationMaxMessages()).append('\n');
+        buffer.append("react_summarization_max_tokens=").append(appConfig.getReact().getSummarizationMaxTokens()).append('\n');
         buffer.append("app_version=").append(StrUtil.nullToEmpty(appVersionService.currentTag())).append('\n');
         buffer.append("deployment_mode=").append(StrUtil.nullToEmpty(appVersionService.deploymentMode())).append('\n');
         buffer.append("has_session_model_override=").append(resolved.sessionOverride).append('\n');
@@ -236,10 +242,15 @@ public class RuntimeSettingsService {
                 || "react.delegateMaxSteps".equals(key)
                 || "react.delegateRetryMax".equals(key)
                 || "react.delegateRetryDelayMs".equals(key)
+                || "react.summarizationMaxMessages".equals(key)
+                || "react.summarizationMaxTokens".equals(key)
                 || "compression.protectHeadMessages".equals(key)
                 || "llm.maxTokens".equals(key)
                 || "llm.contextWindowTokens".equals(key)) {
             return Integer.valueOf(value);
+        }
+        if ("react.summarizationEnabled".equals(key)) {
+            return "true".equalsIgnoreCase(value) || "1".equals(value) || "yes".equalsIgnoreCase(value);
         }
         if (key.endsWith("sendChunkDelaySeconds")
                 || key.endsWith("sendChunkRetryDelaySeconds")

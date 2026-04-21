@@ -22,6 +22,7 @@ public class AgentRuntimePromptTest {
                 .contains("user_id=user-a")
                 .contains("effective_provider=openai-responses")
                 .contains("effective_model=gpt-5.4")
+                .contains("react_summarization_enabled=true")
                 .contains("enabled_tools=");
     }
 }

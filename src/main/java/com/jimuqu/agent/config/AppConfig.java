@@ -247,6 +247,9 @@ public class AppConfig {
         config.getReact().setDelegateMaxSteps(resolveInt("JIMUQU_REACT_DELEGATE_MAX_STEPS", readInt(props, overrides, "jimuqu.react.delegateMaxSteps", 18)));
         config.getReact().setDelegateRetryMax(resolveInt("JIMUQU_REACT_DELEGATE_RETRY_MAX", readInt(props, overrides, "jimuqu.react.delegateRetryMax", 4)));
         config.getReact().setDelegateRetryDelayMs(resolveInt("JIMUQU_REACT_DELEGATE_RETRY_DELAY_MS", readInt(props, overrides, "jimuqu.react.delegateRetryDelayMs", 2500)));
+        config.getReact().setSummarizationEnabled(resolveBoolean("JIMUQU_REACT_SUMMARIZATION_ENABLED", readBoolean(props, overrides, "jimuqu.react.summarizationEnabled", true)));
+        config.getReact().setSummarizationMaxMessages(resolveInt("JIMUQU_REACT_SUMMARIZATION_MAX_MESSAGES", readInt(props, overrides, "jimuqu.react.summarizationMaxMessages", 40)));
+        config.getReact().setSummarizationMaxTokens(resolveInt("JIMUQU_REACT_SUMMARIZATION_MAX_TOKENS", readInt(props, overrides, "jimuqu.react.summarizationMaxTokens", 32000)));
 
         config.normalizePaths();
         return config;
@@ -352,6 +355,9 @@ public class AppConfig {
         this.react.setDelegateMaxSteps(other.getDelegateMaxSteps());
         this.react.setDelegateRetryMax(other.getDelegateRetryMax());
         this.react.setDelegateRetryDelayMs(other.getDelegateRetryDelayMs());
+        this.react.setSummarizationEnabled(other.isSummarizationEnabled());
+        this.react.setSummarizationMaxMessages(other.getSummarizationMaxMessages());
+        this.react.setSummarizationMaxTokens(other.getSummarizationMaxTokens());
     }
 
     private void copyChannel(ChannelConfig target, ChannelConfig source) {
@@ -1068,6 +1074,21 @@ public class AppConfig {
          * 子代理决策重试基础延迟（毫秒）。
          */
         private int delegateRetryDelayMs = 2500;
+
+        /**
+         * 是否启用 ReAct 工作记忆摘要守卫。
+         */
+        private boolean summarizationEnabled = true;
+
+        /**
+         * ReAct 摘要守卫触发的消息阈值。
+         */
+        private int summarizationMaxMessages = 40;
+
+        /**
+         * ReAct 摘要守卫触发的 token 阈值。
+         */
+        private int summarizationMaxTokens = 32000;
     }
 
     /**

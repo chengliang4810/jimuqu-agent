@@ -144,6 +144,12 @@ public class DashboardConfigService {
                 .envName("JIMUQU_REACT_DELEGATE_RETRY_MAX"));
         addField(new FieldDefinition("react.delegateRetryDelayMs", "number", "agent", "子代理决策重试基础延迟（毫秒）")
                 .envName("JIMUQU_REACT_DELEGATE_RETRY_DELAY_MS"));
+        addField(new FieldDefinition("react.summarizationEnabled", "boolean", "compression", "启用 ReAct 工作记忆摘要守卫")
+                .envName("JIMUQU_REACT_SUMMARIZATION_ENABLED"));
+        addField(new FieldDefinition("react.summarizationMaxMessages", "number", "compression", "ReAct 摘要触发消息阈值")
+                .envName("JIMUQU_REACT_SUMMARIZATION_MAX_MESSAGES"));
+        addField(new FieldDefinition("react.summarizationMaxTokens", "number", "compression", "ReAct 摘要触发 token 阈值")
+                .envName("JIMUQU_REACT_SUMMARIZATION_MAX_TOKENS"));
         addField(new FieldDefinition("agent.personalities.helpful.description", "string", "agent", "helpful 人格描述"));
         addField(new FieldDefinition("agent.personalities.helpful.systemPrompt", "text", "agent", "helpful 人格系统提示词"));
         addField(new FieldDefinition("agent.personalities.concise.description", "string", "agent", "concise 人格描述"));
@@ -157,7 +163,7 @@ public class DashboardConfigService {
                 .envName("JIMUQU_COMPRESSION_ENABLED"));
         addField(new FieldDefinition("compression.thresholdPercent", "number", "compression", "触发压缩的阈值比例")
                 .envName("JIMUQU_COMPRESSION_THRESHOLD_PERCENT"));
-        addField(new FieldDefinition("compression.summaryModel", "string", "compression", "可选压缩摘要模型")
+        addField(new FieldDefinition("compression.summaryModel", "string", "compression", "可选压缩/工作记忆摘要模型")
                 .envName("JIMUQU_COMPRESSION_SUMMARY_MODEL"));
         addField(new FieldDefinition("compression.protectHeadMessages", "number", "compression", "头部保护消息数")
                 .envName("JIMUQU_COMPRESSION_PROTECT_HEAD_MESSAGES"));

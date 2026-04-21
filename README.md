@@ -30,7 +30,7 @@
 
 当前已补齐的 Hermes 核心 Agent 能力：
 
-- 自动上下文压缩与 `/compress`
+- 自动上下文压缩、ReAct 工作记忆摘要守卫与 `/compress`
 - 结构化文件快照与 `/rollback`
 - `MEMORY.md` / `USER.md` 双存储长期记忆
 - Hermes 风格技能目录与渐进披露技能索引
@@ -297,6 +297,9 @@ git push origin v0.0.1
 - `jimuqu.react.delegateMaxSteps`
 - `jimuqu.react.delegateRetryMax`
 - `jimuqu.react.delegateRetryDelayMs`
+- `jimuqu.react.summarizationEnabled`
+- `jimuqu.react.summarizationMaxMessages`
+- `jimuqu.react.summarizationMaxTokens`
 - `jimuqu.compression.enabled`
 - `jimuqu.compression.thresholdPercent`
 - `jimuqu.compression.summaryModel`
@@ -309,6 +312,9 @@ git push origin v0.0.1
 
 - 主代理：`maxSteps=12`、`retryMax=3`、`retryDelayMs=2000`
 - 子代理：`delegateMaxSteps=18`、`delegateRetryMax=4`、`delegateRetryDelayMs=2500`
+- 工作记忆摘要守卫：默认启用，`summarizationMaxMessages=40`、`summarizationMaxTokens=32000`
+- 工作记忆摘要策略：直接使用 Solon 官方 `SummarizationInterceptor + KeyInfoExtractionStrategy + HierarchicalSummarizationStrategy`
+- `compression.summaryModel` 若配置，则同时用于持久化压缩和 ReAct 工作记忆摘要
 - `retryConfig` 作用于模型决策重试，不是工具重试
 - `maxSteps` 统计的是 ReAct 推理轮次（Reason 步），不是单纯工具调用次数
 
@@ -475,6 +481,7 @@ git push origin v0.0.1
 - slash 命令语义
 - 会话、分支、重试、撤销
 - 自动上下文压缩
+- ReAct 工作记忆摘要守卫
 - `/rollback` 文件回滚
 - SQLite 持久化
 - 本地 skills

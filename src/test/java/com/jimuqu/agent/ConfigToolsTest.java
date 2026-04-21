@@ -34,5 +34,9 @@ public class ConfigToolsTest {
         String reactResponse = (String) method.invoke(configSetTool, "react.delegateMaxSteps", "24");
         assertThat(ONode.ofJson(reactResponse).get("success").getBoolean()).isTrue();
         assertThat(env.appConfig.getReact().getDelegateMaxSteps()).isEqualTo(24);
+
+        String summaryResponse = (String) method.invoke(configSetTool, "react.summarizationMaxTokens", "48000");
+        assertThat(ONode.ofJson(summaryResponse).get("success").getBoolean()).isTrue();
+        assertThat(env.appConfig.getReact().getSummarizationMaxTokens()).isEqualTo(48000);
     }
 }

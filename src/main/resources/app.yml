@@ -53,6 +53,9 @@ jimuqu.react.retryDelayMs: 2000
 jimuqu.react.delegateMaxSteps: 18
 jimuqu.react.delegateRetryMax: 4
 jimuqu.react.delegateRetryDelayMs: 2500
+jimuqu.react.summarizationEnabled: true
+jimuqu.react.summarizationMaxMessages: 40
+jimuqu.react.summarizationMaxTokens: 32000
 
 # 预定义人格
 jimuqu.agent.personalities.helpful.description: 友好、通用的默认助手
