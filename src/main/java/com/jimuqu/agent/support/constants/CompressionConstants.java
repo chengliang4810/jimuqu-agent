@@ -35,6 +35,16 @@ public interface CompressionConstants {
     int CHARS_PER_TOKEN = 4;
 
     /**
+     * 旧摘要注入到新摘要时的最大保留长度。
+     */
+    int MAX_PREVIOUS_SUMMARY_LENGTH = 400;
+
+    /**
+     * 单次结构化摘要的最大长度，避免反复压缩后摘要自身膨胀。
+     */
+    int MAX_SUMMARY_LENGTH = 2400;
+
+    /**
      * 会话标题最大长度。
      */
     int MAX_TITLE_LENGTH = 80;

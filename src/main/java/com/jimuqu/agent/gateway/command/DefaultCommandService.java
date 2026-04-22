@@ -944,30 +944,36 @@ public class DefaultCommandService implements CommandService {
      * 生成帮助文本。
      */
     private String helpText() {
-        return GatewayCommandConstants.SLASH_NEW + "\n"
-                + GatewayCommandConstants.SLASH_RESET + "\n"
-                + GatewayCommandConstants.SLASH_RETRY + "\n"
-                + GatewayCommandConstants.SLASH_UNDO + "\n"
-                + GatewayCommandConstants.SLASH_BRANCH + " [name]\n"
-                + GatewayCommandConstants.SLASH_RESUME + " <session-or-branch>\n"
-                + GatewayCommandConstants.SLASH_STATUS + "\n"
-                + GatewayCommandConstants.SLASH_USAGE + "\n"
-                + GatewayCommandConstants.SLASH_STOP + "\n"
-                + GatewayCommandConstants.SLASH_PERSONALITY + " [name]\n"
-                + GatewayCommandConstants.SLASH_VERSION + " [check|update]\n"
-                + GatewayCommandConstants.SLASH_MODEL + " <provider:model>\n"
-                + GatewayCommandConstants.SLASH_REASONING + " [show|hide]\n"
-                + GatewayCommandConstants.SLASH_TOOLS + " [list|enable|disable] [name...]\n"
-                + GatewayCommandConstants.SLASH_SKILLS + " [list|browse|search|install|inspect|check|update|audit|uninstall|tap|enable|disable|reload]\n"
-                + GatewayCommandConstants.SLASH_CRON + " [list|create|pause|resume|delete|run]\n"
-                + GatewayCommandConstants.SLASH_COMPRESS + " [focus]\n"
-                + GatewayCommandConstants.SLASH_ROLLBACK + " [latest|checkpoint-id|number]\n"
-                + GatewayCommandConstants.SLASH_SETHOME + "\n"
-                + GatewayCommandConstants.SLASH_PAIRING + " [claim-admin|pending|approve|revoke|approved]\n"
-                + GatewayCommandConstants.SLASH_APPROVE + " [session|always]\n"
-                + GatewayCommandConstants.SLASH_DENY + "\n"
-                + GatewayCommandConstants.SLASH_PLATFORMS + "\n"
-                + GatewayCommandConstants.SLASH_HELP;
+        return String.join("\n", Arrays.asList(
+                helpLine(GatewayCommandConstants.SLASH_NEW, "创建并切换到新会话"),
+                helpLine(GatewayCommandConstants.SLASH_RESET, "重置当前会话并重新开始"),
+                helpLine(GatewayCommandConstants.SLASH_RETRY, "重新执行上一条用户消息"),
+                helpLine(GatewayCommandConstants.SLASH_UNDO, "撤销上一轮对话"),
+                helpLine(GatewayCommandConstants.SLASH_BRANCH + " [name]", "从当前会话创建分支"),
+                helpLine(GatewayCommandConstants.SLASH_RESUME + " <session-or-branch>", "恢复指定会话或分支"),
+                helpLine(GatewayCommandConstants.SLASH_STATUS, "查看当前会话状态"),
+                helpLine(GatewayCommandConstants.SLASH_USAGE, "查看当前会话运行信息"),
+                helpLine(GatewayCommandConstants.SLASH_STOP, "停止后台进程"),
+                helpLine(GatewayCommandConstants.SLASH_PERSONALITY + " [name|none]", "查看或切换人格"),
+                helpLine(GatewayCommandConstants.SLASH_VERSION + " [check|update]", "查看版本或执行更新"),
+                helpLine(GatewayCommandConstants.SLASH_MODEL + " [--global] [provider:]<model>|clear", "查看或切换模型"),
+                helpLine(GatewayCommandConstants.SLASH_REASONING + " [show|hide]", "查看或切换 reasoning 展示"),
+                helpLine(GatewayCommandConstants.SLASH_TOOLS + " [list|enable|disable] [name...]", "查看或管理工具开关"),
+                helpLine(GatewayCommandConstants.SLASH_SKILLS + " [list|browse|search|install|inspect|check|update|audit|uninstall|tap|enable|disable|reload]", "管理本地技能与 Skills Hub"),
+                helpLine(GatewayCommandConstants.SLASH_CRON + " [list|create|pause|resume|delete|run]", "管理定时任务"),
+                helpLine(GatewayCommandConstants.SLASH_COMPRESS + " [focus]", "压缩当前会话上下文"),
+                helpLine(GatewayCommandConstants.SLASH_ROLLBACK + " [latest|checkpoint-id|number]", "回滚到指定 checkpoint"),
+                helpLine(GatewayCommandConstants.SLASH_SETHOME, "将当前聊天设为 home channel"),
+                helpLine(GatewayCommandConstants.SLASH_PAIRING + " [claim-admin|pending|approve|revoke|approved]", "管理渠道配对与管理员授权"),
+                helpLine(GatewayCommandConstants.SLASH_APPROVE + " [session|always]", "批准当前危险命令"),
+                helpLine(GatewayCommandConstants.SLASH_DENY, "拒绝当前危险命令"),
+                helpLine(GatewayCommandConstants.SLASH_PLATFORMS, "查看平台连接与授权状态"),
+                helpLine(GatewayCommandConstants.SLASH_HELP, "显示帮助信息")
+        ));
+    }
+
+    private String helpLine(String usage, String description) {
+        return usage + " - " + description;
     }
 
     private String formatUsage(SessionRecord session) {

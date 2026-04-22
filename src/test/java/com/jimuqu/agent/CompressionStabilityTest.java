@@ -74,6 +74,78 @@ public class CompressionStabilityTest {
         assertThat(compressed.getCompressedSummary()).contains("旧摘要内容");
     }
 
+    @Test
+    void shouldFlattenNestedPreviousSummaryAndCapSummaryLength() throws Exception {
+        DefaultContextCompressionService service = new DefaultContextCompressionService(config());
+        SessionRecord session = new SessionRecord();
+        session.setSessionId("s-4");
+        session.setCompressedSummary(CompressionConstants.SUMMARY_PREFIX
+                + "\nPrevious Summary\n更早摘要\n\nGoal\n第一次目标\n\nProgress\n"
+                + repeat("历史进展", 120));
+        session.setNdjson(MessageSupport.toNdjson(Arrays.asList(
+                ChatMessage.ofSystem("system"),
+                ChatMessage.ofUser("目标：持续跟进 code review"),
+                ChatMessage.ofAssistant(session.getCompressedSummary()),
+                ChatMessage.ofAssistant(repeat("中间分析", 1000)),
+                ChatMessage.ofUser("继续推进"),
+                ChatMessage.ofAssistant(repeat("最新进展", 800)),
+                ChatMessage.ofUser("收尾")
+        )));
+
+        SessionRecord compressed = service.compressNow(session, "system prompt");
+
+        assertThat(countOccurrences(compressed.getCompressedSummary(), "Previous Summary")).isEqualTo(1);
+        assertThat(compressed.getCompressedSummary()).contains("\nGoal\n");
+        assertThat(compressed.getCompressedSummary()).contains("\nProgress\n");
+        assertThat(compressed.getCompressedSummary().length())
+                .isLessThanOrEqualTo(CompressionConstants.SUMMARY_PREFIX.length()
+                        + 1
+                        + CompressionConstants.MAX_SUMMARY_LENGTH
+                        + 3);
+    }
+
+    @Test
+    void shouldPreferLatestGoalAndDropLegacyHeadAfterSummaryExists() throws Exception {
+        DefaultContextCompressionService service = new DefaultContextCompressionService(config());
+        SessionRecord session = new SessionRecord();
+        session.setSessionId("s-4b");
+        session.setCompressedSummary(CompressionConstants.SUMMARY_PREFIX
+                + "\nGoal\n老任务\n\nProgress\n旧进展");
+        session.setNdjson(MessageSupport.toNdjson(Arrays.asList(
+                ChatMessage.ofUser("你检测一下是否能找到git之类的工具"),
+                ChatMessage.ofAssistant("git/python/node 都在"),
+                ChatMessage.ofAssistant(session.getCompressedSummary()),
+                ChatMessage.ofAssistant("刚刚检查了 code review 目录"),
+                ChatMessage.ofUser("进度怎么样了")
+        )));
+
+        SessionRecord compressed = service.compressNow(session, "system prompt");
+
+        assertThat(compressed.getNdjson()).doesNotContain("你检测一下是否能找到git之类的工具");
+        assertThat(compressed.getCompressedSummary()).contains("进度怎么样了");
+        assertThat(compressed.getCompressedSummary()).contains("Previous Summary\nGoal\n老任务");
+    }
+
+    @Test
+    void shouldForceCompressionWhenRecentRealInputAlreadyExceededThreshold() throws Exception {
+        DefaultContextCompressionService service = new DefaultContextCompressionService(config());
+        SessionRecord session = new SessionRecord();
+        session.setSessionId("s-5");
+        session.setNdjson(MessageSupport.toNdjson(Arrays.asList(
+                ChatMessage.ofUser("先做一次检查"),
+                ChatMessage.ofAssistant(repeat("A", 200)),
+                ChatMessage.ofUser("继续")
+        )));
+        session.setLastInputTokens(1600);
+        session.setLastUsageAt(System.currentTimeMillis());
+        session.setLastCompressionAt(System.currentTimeMillis() - 120_000L);
+
+        SessionRecord compressed = service.compressIfNeeded(session, "system", "下一轮继续");
+
+        assertThat(compressed.getCompressedSummary()).contains(CompressionConstants.SUMMARY_PREFIX);
+        assertThat(compressed.getLastCompressionInputTokens()).isGreaterThanOrEqualTo(1600);
+    }
+
     private AppConfig config() {
         AppConfig config = new AppConfig();
         config.getCompression().setEnabled(true);
@@ -90,5 +162,19 @@ public class CompressionStabilityTest {
             buffer.append(value);
         }
         return buffer.toString();
+    }
+
+    private int countOccurrences(String text, String token) {
+        int count = 0;
+        int from = 0;
+        while (text != null && token != null && token.length() > 0) {
+            int idx = text.indexOf(token, from);
+            if (idx < 0) {
+                break;
+            }
+            count++;
+            from = idx + token.length();
+        }
+        return count;
     }
 }

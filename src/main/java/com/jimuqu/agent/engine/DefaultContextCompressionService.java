@@ -31,7 +31,7 @@ public class DefaultContextCompressionService implements ContextCompressionServi
 
         int contextWindow = Math.max(1024, appConfig.getLlm().getContextWindowTokens());
         int threshold = (int) (contextWindow * appConfig.getCompression().getThresholdPercent());
-        int estimatedTokens = estimateTokens(systemPrompt) + estimateTokens(userMessage) + estimateTokens(session.getNdjson());
+        int estimatedTokens = estimateRequestTokens(session, systemPrompt, userMessage);
         if (shouldSkipForFailureCooldown(session)) {
             return session;
         }
@@ -77,7 +77,7 @@ public class DefaultContextCompressionService implements ContextCompressionServi
             }
 
             List<ChatMessage> pruned = pruneOldToolResults(normalized);
-            int protectHead = Math.min(appConfig.getCompression().getProtectHeadMessages(), pruned.size());
+            int protectHead = resolveProtectHeadCount(pruned, StrUtil.isNotBlank(previousSummary));
             int protectTailStart = findTailStart(pruned);
             if (protectTailStart <= protectHead) {
                 protectTailStart = Math.max(protectHead + 1, pruned.size() - 1);
@@ -168,16 +168,17 @@ public class DefaultContextCompressionService implements ContextCompressionServi
                                           List<ChatMessage> tail,
                                           String previousSummary,
                                           String focus) {
-        String goal = extractFirstUserMessage(middle, tail);
+        String goal = extractLatestUserMessage(middle, tail);
         String progress = collectByRole(middle, ChatRole.ASSISTANT, 3);
         String decisions = collectKeywords(middle, new String[]{"决定", "改为", "使用", "切换", "采用"});
         String files = collectFileMentions(middle);
         String nextSteps = collectByRole(tail, ChatRole.USER, 1);
 
         StringBuilder buffer = new StringBuilder();
-        if (StrUtil.isNotBlank(previousSummary)) {
+        String normalizedPreviousSummary = normalizePreviousSummary(previousSummary);
+        if (StrUtil.isNotBlank(normalizedPreviousSummary)) {
             buffer.append("Previous Summary\n")
-                    .append(trimContent(previousSummary.replace(CompressionConstants.SUMMARY_PREFIX, "").trim(), 600))
+                    .append(normalizedPreviousSummary)
                     .append("\n\n");
         }
         if (StrUtil.isNotBlank(focus)) {
@@ -188,19 +189,21 @@ public class DefaultContextCompressionService implements ContextCompressionServi
         buffer.append("Decisions\n").append(StrUtil.blankToDefault(decisions, "未提取到明确决策，请结合当前工程状态判断。")).append("\n\n");
         buffer.append("Files\n").append(StrUtil.blankToDefault(files, "未提取到明确文件列表。")).append("\n\n");
         buffer.append("Next Steps\n").append(StrUtil.blankToDefault(nextSteps, "继续处理最近用户要求，并避免重复之前已完成的工作。"));
-        return buffer.toString().trim();
+        return trimMultilineContent(buffer.toString().trim(), CompressionConstants.MAX_SUMMARY_LENGTH);
     }
 
     /**
-     * 提取第一条用户目标。
+     * 提取最近一条用户目标。
      */
-    private String extractFirstUserMessage(List<ChatMessage> middle, List<ChatMessage> tail) {
-        for (ChatMessage message : middle) {
+    private String extractLatestUserMessage(List<ChatMessage> middle, List<ChatMessage> tail) {
+        for (int i = tail.size() - 1; i >= 0; i--) {
+            ChatMessage message = tail.get(i);
             if (message.getRole() == ChatRole.USER && StrUtil.isNotBlank(message.getContent())) {
                 return trimContent(message.getContent(), 240);
             }
         }
-        for (ChatMessage message : tail) {
+        for (int i = middle.size() - 1; i >= 0; i--) {
+            ChatMessage message = middle.get(i);
             if (message.getRole() == ChatRole.USER && StrUtil.isNotBlank(message.getContent())) {
                 return trimContent(message.getContent(), 240);
             }
@@ -329,7 +332,21 @@ public class DefaultContextCompressionService implements ContextCompressionServi
         if (StrUtil.isBlank(content)) {
             return 0;
         }
-        return Math.max(1, content.length() / CompressionConstants.CHARS_PER_TOKEN);
+
+        long asciiCount = 0L;
+        long nonAsciiCount = 0L;
+        for (int i = 0; i < content.length(); i++) {
+            if (content.charAt(i) <= 0x7F) {
+                asciiCount++;
+            } else {
+                nonAsciiCount++;
+            }
+        }
+
+        long asciiTokens = (asciiCount + CompressionConstants.CHARS_PER_TOKEN - 1L)
+                / CompressionConstants.CHARS_PER_TOKEN;
+        long estimated = nonAsciiCount + asciiTokens;
+        return estimated > Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.max(1, (int) estimated);
     }
 
     /**
@@ -341,5 +358,106 @@ public class DefaultContextCompressionService implements ContextCompressionServi
             return normalized;
         }
         return normalized.substring(0, maxLength) + "...";
+    }
+
+    /**
+     * 限长多行文本，同时保留结构化换行。
+     */
+    private String trimMultilineContent(String content, int maxLength) {
+        String normalized = content.replace("\r\n", "\n").replace('\r', '\n').trim();
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength) + "...";
+    }
+
+    /**
+     * 综合当前 NDJSON 与上一轮真实 usage 做更稳妥的请求量估算。
+     */
+    private int estimateRequestTokens(SessionRecord session, String systemPrompt, String userMessage) {
+        long estimated = (long) estimateTokens(systemPrompt)
+                + estimateTokens(userMessage)
+                + estimateTokens(session == null ? null : session.getNdjson());
+
+        if (session != null) {
+            long historicalFloor = session.getLastInputTokens();
+            if (session.getLastCompressionAt() > 0
+                    && session.getLastUsageAt() > 0
+                    && session.getLastUsageAt() < session.getLastCompressionAt()) {
+                historicalFloor = session.getLastCompressionInputTokens();
+            }
+            if (historicalFloor > 0) {
+                estimated = Math.max(estimated, historicalFloor + estimateTokens(userMessage));
+            }
+        }
+
+        return estimated > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) estimated;
+    }
+
+    /**
+     * 去掉旧摘要中再次嵌套的 “Previous Summary” 区块，避免摘要递归膨胀。
+     */
+    private String normalizePreviousSummary(String previousSummary) {
+        String normalized = StrUtil.nullToEmpty(previousSummary)
+                .replace(CompressionConstants.SUMMARY_PREFIX, "")
+                .trim();
+        if (StrUtil.isBlank(normalized)) {
+            return "";
+        }
+
+        if (StrUtil.startWithIgnoreCase(normalized, "Previous Summary")) {
+            int firstSectionIndex = findFirstSectionHeader(normalized);
+            if (firstSectionIndex > 0) {
+                normalized = normalized.substring(firstSectionIndex).trim();
+            }
+        }
+
+        return trimMultilineContent(normalized, CompressionConstants.MAX_PREVIOUS_SUMMARY_LENGTH);
+    }
+
+    /**
+     * 找到结构化摘要正文的首个章节标题。
+     */
+    private int findFirstSectionHeader(String content) {
+        int result = -1;
+        String[] headers = new String[]{
+                "Focus",
+                "Goal",
+                "Progress",
+                "Decisions",
+                "Files",
+                "Next Steps"
+        };
+        for (String header : headers) {
+            int newlineIdx = content.indexOf(header + "\n");
+            if (newlineIdx >= 0 && (result < 0 || newlineIdx < result)) {
+                result = newlineIdx;
+            }
+            int spaceIdx = content.indexOf(header + " ");
+            if (spaceIdx >= 0 && (result < 0 || spaceIdx < result)) {
+                result = spaceIdx;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 已有历史摘要时，不再永久保留最早的普通对话，只保留前导 system 消息。
+     */
+    private int resolveProtectHeadCount(List<ChatMessage> messages, boolean hasPreviousSummary) {
+        int configured = Math.min(appConfig.getCompression().getProtectHeadMessages(), messages.size());
+        if (!hasPreviousSummary) {
+            return configured;
+        }
+
+        int systemCount = 0;
+        for (ChatMessage message : messages) {
+            if (message.getRole() == ChatRole.SYSTEM) {
+                systemCount++;
+                continue;
+            }
+            break;
+        }
+        return Math.min(configured, systemCount);
     }
 }

@@ -7,6 +7,8 @@ import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.support.TestEnvironment;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class GatewayCommandFlowTest {
@@ -40,6 +42,23 @@ public class GatewayCommandFlowTest {
 
         SessionRecord rebound = env.sessionRepository.getBoundSession("MEMORY:room-1:user-1");
         assertThat(rebound.getSessionId()).isEqualTo(newReply.getSessionId());
+    }
+
+    @Test
+    void shouldRenderHelpWithChineseDescriptionsPerLine() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+
+        GatewayReply claimPrompt = env.send("room-help", "user-help", "hello");
+        assertThat(claimPrompt.getContent()).contains("/pairing claim-admin");
+        GatewayReply claimReply = env.send("room-help", "user-help", "/pairing claim-admin");
+        assertThat(claimReply.getContent()).contains("唯一管理员");
+
+        GatewayReply helpReply = env.send("room-help", "user-help", "/help");
+        assertThat(helpReply.getContent()).contains("/new - 创建并切换到新会话");
+        assertThat(helpReply.getContent()).contains("/help - 显示帮助信息");
+        assertThat(Arrays.asList(helpReply.getContent().split("\\R")))
+                .isNotEmpty()
+                .allMatch(line -> line.startsWith("/") && line.contains(" - "));
     }
 }
 
