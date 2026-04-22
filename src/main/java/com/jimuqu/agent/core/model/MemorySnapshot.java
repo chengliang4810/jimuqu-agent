@@ -20,4 +20,9 @@ public class MemorySnapshot {
      * USER.md 当前内容。
      */
     private String userText;
+
+    /**
+     * 当日 memory/YYYY-MM-DD.md 内容。
+     */
+    private String dailyMemoryText;
 }

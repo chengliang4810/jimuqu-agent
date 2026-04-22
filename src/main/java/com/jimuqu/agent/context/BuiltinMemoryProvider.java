@@ -32,7 +32,7 @@ public class BuiltinMemoryProvider implements MemoryProvider {
 
         MemorySnapshot snapshot = memoryService.loadSnapshot();
         appendBlock(buffer, "Memory", snapshot.getMemoryText());
-        appendBlock(buffer, "User", snapshot.getUserText());
+        appendBlock(buffer, "Today Memory", snapshot.getDailyMemoryText());
         return buffer.toString().trim();
     }
 

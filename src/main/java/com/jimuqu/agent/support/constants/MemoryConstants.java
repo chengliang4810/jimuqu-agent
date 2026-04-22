@@ -14,4 +14,5 @@ public interface MemoryConstants {
 
     String MEMORY_FILE_NAME = "MEMORY.md";
     String USER_FILE_NAME = "USER.md";
+    String DAILY_MEMORY_DIR_NAME = "memory";
 }

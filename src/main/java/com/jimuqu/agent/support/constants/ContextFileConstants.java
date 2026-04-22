@@ -2,6 +2,8 @@ package com.jimuqu.agent.support.constants;
 
 import cn.hutool.core.util.StrUtil;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -16,11 +18,15 @@ public final class ContextFileConstants {
     public static final String KEY_SOUL = "soul";
     public static final String KEY_IDENTITY = "identity";
     public static final String KEY_USER = "user";
+    public static final String KEY_MEMORY = "memory";
+    public static final String KEY_MEMORY_TODAY = "memory_today";
 
     public static final String FILE_AGENTS = "AGENTS.md";
     public static final String FILE_SOUL = "SOUL.md";
     public static final String FILE_IDENTITY = "IDENTITY.md";
     public static final String FILE_USER = "USER.md";
+    public static final String FILE_MEMORY = "MEMORY.md";
+    public static final String MEMORY_DIR = "memory";
 
     private static final Map<String, String> FILES_BY_KEY;
     private static final List<String> ORDERED_KEYS;
@@ -31,8 +37,11 @@ public final class ContextFileConstants {
         files.put(KEY_SOUL, FILE_SOUL);
         files.put(KEY_IDENTITY, FILE_IDENTITY);
         files.put(KEY_USER, FILE_USER);
+        files.put(KEY_MEMORY, FILE_MEMORY);
         FILES_BY_KEY = Collections.unmodifiableMap(files);
-        ORDERED_KEYS = Collections.unmodifiableList(new ArrayList<String>(files.keySet()));
+        ArrayList<String> ordered = new ArrayList<String>(files.keySet());
+        ordered.add(KEY_MEMORY_TODAY);
+        ORDERED_KEYS = Collections.unmodifiableList(ordered);
     }
 
     private ContextFileConstants() {
@@ -57,6 +66,9 @@ public final class ContextFileConstants {
      */
     public static String fileName(String key) {
         String normalized = normalizeKey(key);
+        if (KEY_MEMORY_TODAY.equals(normalized)) {
+            return dailyMemoryRelativePath(LocalDate.now());
+        }
         String fileName = FILES_BY_KEY.get(normalized);
         if (fileName == null) {
             throw new IllegalArgumentException("Unsupported context file key: " + key);
@@ -69,5 +81,9 @@ public final class ContextFileConstants {
      */
     public static String normalizeKey(String key) {
         return StrUtil.nullToEmpty(key).trim().toLowerCase();
+    }
+
+    public static String dailyMemoryRelativePath(LocalDate date) {
+        return MEMORY_DIR + "/" + date.format(DateTimeFormatter.ISO_LOCAL_DATE) + ".md";
     }
 }

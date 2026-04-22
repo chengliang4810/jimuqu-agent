@@ -8,19 +8,20 @@ import com.jimuqu.agent.support.constants.ContextFileConstants;
 
 import java.io.File;
 import java.io.InputStream;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
- * runtime/context 下人格工作区文件的统一访问服务。
+ * runtime/ 根目录下人格工作区文件的统一访问服务。
  */
 public class PersonaWorkspaceService {
     private static final String TEMPLATE_ROOT = "persona-templates/";
 
-    private final File contextDir;
+    private final File workspaceDir;
 
     public PersonaWorkspaceService(AppConfig appConfig) {
-        this.contextDir = FileUtil.file(appConfig.getRuntime().getContextDir());
-        FileUtil.mkdir(this.contextDir);
+        this.workspaceDir = FileUtil.file(appConfig.getRuntime().getHome());
+        FileUtil.mkdir(this.workspaceDir);
         ensureSeeded();
     }
 
@@ -42,7 +43,7 @@ public class PersonaWorkspaceService {
      * 获取 key 对应文件。
      */
     public File file(String key) {
-        return FileUtil.file(contextDir, fileName(key));
+        return FileUtil.file(workspaceDir, fileName(key));
     }
 
     /**
@@ -74,7 +75,7 @@ public class PersonaWorkspaceService {
      * 写入文件内容，不存在时自动创建。
      */
     public void write(String key, String content) {
-        FileUtil.mkdir(contextDir);
+        FileUtil.mkdir(workspaceDir);
         FileUtil.writeUtf8String(StrUtil.nullToEmpty(content), file(key));
     }
 
@@ -109,6 +110,9 @@ public class PersonaWorkspaceService {
      * 从类路径加载原始模板。
      */
     private String loadTemplate(String key) {
+        if (ContextFileConstants.KEY_MEMORY_TODAY.equals(ContextFileConstants.normalizeKey(key))) {
+            return buildTodayMemoryTemplate(LocalDate.now());
+        }
         String resource = TEMPLATE_ROOT + fileName(key);
         InputStream stream = getClass().getClassLoader().getResourceAsStream(resource);
         if (stream == null) {
@@ -119,5 +123,9 @@ public class PersonaWorkspaceService {
         } finally {
             IoUtil.close(stream);
         }
+    }
+
+    private String buildTodayMemoryTemplate(LocalDate date) {
+        return "# " + date.toString() + "\n\n";
     }
 }

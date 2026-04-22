@@ -7,6 +7,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -23,13 +24,17 @@ class PersonaWorkspaceServiceTest {
                 ContextFileConstants.KEY_AGENTS,
                 ContextFileConstants.KEY_SOUL,
                 ContextFileConstants.KEY_IDENTITY,
-                ContextFileConstants.KEY_USER
+                ContextFileConstants.KEY_USER,
+                ContextFileConstants.KEY_MEMORY,
+                ContextFileConstants.KEY_MEMORY_TODAY
         );
         assertThat(service.exists(ContextFileConstants.KEY_AGENTS)).isTrue();
         assertThat(service.read(ContextFileConstants.KEY_AGENTS)).contains("# AGENTS.md - 你的工作区");
         assertThat(service.read(ContextFileConstants.KEY_SOUL)).contains("# SOUL.md - 你是谁");
         assertThat(service.read(ContextFileConstants.KEY_IDENTITY)).contains("# IDENTITY.md - 我是谁？");
         assertThat(service.read(ContextFileConstants.KEY_USER)).contains("# USER.md - 关于你的用户");
+        assertThat(service.read(ContextFileConstants.KEY_MEMORY)).contains("# MEMORY.md - 长期记忆");
+        assertThat(service.read(ContextFileConstants.KEY_MEMORY_TODAY)).contains("# " + LocalDate.now().toString());
 
         service.write(ContextFileConstants.KEY_AGENTS, "# AGENTS\n");
 
@@ -73,7 +78,9 @@ class PersonaWorkspaceServiceTest {
 
     private AppConfig appConfig() {
         AppConfig config = new AppConfig();
-        File contextDir = new File(tempDir.toFile(), "context");
+        File runtimeDir = new File(tempDir.toFile(), "runtime");
+        File contextDir = new File(runtimeDir, "context");
+        config.getRuntime().setHome(runtimeDir.getAbsolutePath());
         config.getRuntime().setContextDir(contextDir.getAbsolutePath());
         return config;
     }

@@ -8,6 +8,8 @@ import com.jimuqu.agent.core.service.MemoryService;
 import com.jimuqu.agent.support.constants.MemoryConstants;
 
 import java.io.File;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,7 +34,9 @@ public class FileMemoryService implements MemoryService {
      */
     public FileMemoryService(AppConfig appConfig) {
         this.appConfig = appConfig;
+        FileUtil.mkdir(appConfig.getRuntime().getHome());
         FileUtil.mkdir(appConfig.getRuntime().getContextDir());
+        FileUtil.mkdir(memoryDir());
     }
 
     @Override
@@ -40,6 +44,7 @@ public class FileMemoryService implements MemoryService {
         MemorySnapshot snapshot = new MemorySnapshot();
         snapshot.setMemoryText(read(MemoryConstants.TARGET_MEMORY));
         snapshot.setUserText(read(MemoryConstants.TARGET_USER));
+        snapshot.setDailyMemoryText(readTodayMemory());
         return snapshot;
     }
 
@@ -167,9 +172,9 @@ public class FileMemoryService implements MemoryService {
      */
     private File fileForTarget(String target) {
         if (MemoryConstants.TARGET_USER.equalsIgnoreCase(target)) {
-            return FileUtil.file(appConfig.getRuntime().getContextDir(), MemoryConstants.USER_FILE_NAME);
+            return FileUtil.file(appConfig.getRuntime().getHome(), MemoryConstants.USER_FILE_NAME);
         }
-        return FileUtil.file(appConfig.getRuntime().getContextDir(), MemoryConstants.MEMORY_FILE_NAME);
+        return FileUtil.file(appConfig.getRuntime().getHome(), MemoryConstants.MEMORY_FILE_NAME);
     }
 
     /**
@@ -220,5 +225,24 @@ public class FileMemoryService implements MemoryService {
             }
         }
         return false;
+    }
+
+    private String readTodayMemory() {
+        File file = todayMemoryFile();
+        if (!file.exists()) {
+            return "";
+        }
+        return FileUtil.readUtf8String(file).trim();
+    }
+
+    private File memoryDir() {
+        return FileUtil.file(appConfig.getRuntime().getHome(), MemoryConstants.DAILY_MEMORY_DIR_NAME);
+    }
+
+    private File todayMemoryFile() {
+        return FileUtil.file(
+                memoryDir(),
+                LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE) + ".md"
+        );
     }
 }

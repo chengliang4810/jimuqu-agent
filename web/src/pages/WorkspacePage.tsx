@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Bot, FileText, RotateCcw, Save, Shield, User } from "lucide-react";
+import { AlertTriangle, Bot, FileText, NotebookPen, RotateCcw, Save, Shield, User } from "lucide-react";
 import { api, type WorkspaceFile } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 import { Toast } from "@/components/Toast";
@@ -32,6 +32,18 @@ const FILE_ORDER = [
     name: "USER.md",
     description: "用户偏好、称呼、时区、长期背景",
     icon: User,
+  },
+  {
+    key: "memory",
+    name: "MEMORY.md",
+    description: "长期记忆，记录稳定、长期有价值的信息",
+    icon: NotebookPen,
+  },
+  {
+    key: "memory_today",
+    name: "memory/YYYY-MM-DD.md",
+    description: "当天运行记忆，记录今日上下文与进展",
+    icon: NotebookPen,
   },
 ] as const;
 
@@ -207,8 +219,9 @@ export default function WorkspacePage() {
                 <span>人格工作区文件</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                这四个文件直接保存在 <code className="rounded bg-muted/60 px-1 py-0.5">runtime/context</code> 下，
-                运行时会作为 companion 工作区上下文注入。
+                这些工作区文件直接保存在 <code className="rounded bg-muted/60 px-1 py-0.5">runtime</code> 根目录及
+                <code className="rounded bg-muted/60 px-1 py-0.5">runtime/memory</code> 目录下，运行时会作为 companion
+                工作区上下文注入。
               </p>
             </div>
 
@@ -262,7 +275,7 @@ export default function WorkspacePage() {
                 <CardTitle className="text-sm">{activeMeta.name}</CardTitle>
                 <p className="text-xs text-muted-foreground">{activeMeta.description}</p>
                 <p className="text-[11px] text-muted-foreground break-all">
-                  {activeFile?.path ?? "runtime/context/" + activeMeta.name}
+                  {activeFile?.path ?? "runtime/" + activeMeta.name}
                 </p>
               </div>
             </div>
