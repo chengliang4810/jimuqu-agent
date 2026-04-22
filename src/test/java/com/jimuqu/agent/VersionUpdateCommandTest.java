@@ -6,6 +6,7 @@ import com.jimuqu.agent.core.service.ContextService;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.gateway.command.DefaultCommandService;
 import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
+import com.jimuqu.agent.support.DisplaySettingsService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.TestEnvironment;
 import com.jimuqu.agent.support.update.AppUpdateService;
@@ -50,6 +51,7 @@ public class VersionUpdateCommandTest {
                 new DashboardEnvService(env.appConfig, refreshService),
                 new AppVersionService(env.appConfig)
         );
+        DisplaySettingsService displaySettingsService = new DisplaySettingsService(env.appConfig, env.globalSettingRepository);
         return new DefaultCommandService(
                 env.sessionRepository,
                 env.toolRegistry,
@@ -86,6 +88,7 @@ public class VersionUpdateCommandTest {
                 env.globalSettingRepository,
                 env.processRegistry,
                 runtimeSettingsService,
+                displaySettingsService,
                 updateService,
                 env.dangerousCommandApprovalService
         );

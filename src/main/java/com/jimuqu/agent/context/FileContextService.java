@@ -6,9 +6,8 @@ import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.service.ContextService;
 import com.jimuqu.agent.core.service.MemoryManager;
+import com.jimuqu.agent.support.constants.ContextFileConstants;
 import com.jimuqu.agent.support.constants.AgentSettingConstants;
-
-import java.io.File;
 
 /**
  * 基于文件系统拼装系统提示词的上下文服务。
@@ -33,11 +32,7 @@ public class FileContextService implements ContextService {
      * 全局设置仓储。
      */
     private final GlobalSettingRepository globalSettingRepository;
-
-    /**
-     * 仓库根目录，用于读取项目根 AGENTS.md。
-     */
-    private final File repoRoot;
+    private final PersonaWorkspaceService personaWorkspaceService;
 
     /**
      * 构造文件上下文服务。
@@ -46,12 +41,12 @@ public class FileContextService implements ContextService {
                               LocalSkillService localSkillService,
                               MemoryManager memoryManager,
                               GlobalSettingRepository globalSettingRepository,
-                              File repoRoot) {
+                              PersonaWorkspaceService personaWorkspaceService) {
         this.appConfig = appConfig;
         this.localSkillService = localSkillService;
         this.memoryManager = memoryManager;
         this.globalSettingRepository = globalSettingRepository;
-        this.repoRoot = repoRoot;
+        this.personaWorkspaceService = personaWorkspaceService;
         FileUtil.mkdir(appConfig.getRuntime().getContextDir());
     }
 
@@ -64,7 +59,10 @@ public class FileContextService implements ContextService {
     @Override
     public String buildSystemPrompt(String sourceKey) {
         StringBuilder buffer = new StringBuilder();
-        appendFile(buffer, contextFile("AGENTS.md"), new File(repoRoot, "AGENTS.md"), "Project Rules");
+        appendWorkspaceFile(buffer, ContextFileConstants.KEY_AGENTS, "Workspace Rules");
+        appendWorkspaceFile(buffer, ContextFileConstants.KEY_SOUL, "Soul");
+        appendWorkspaceFile(buffer, ContextFileConstants.KEY_IDENTITY, "Identity");
+        appendWorkspaceFile(buffer, ContextFileConstants.KEY_USER, "User");
         appendPersonality(buffer);
         appendMemoryBlock(buffer, sourceKey);
 
@@ -83,10 +81,6 @@ public class FileContextService implements ContextService {
     /**
      * 计算运行时上下文文件路径。
      */
-    private File contextFile(String fileName) {
-        return new File(appConfig.getRuntime().getContextDir(), fileName);
-    }
-
     private void appendPersonality(StringBuilder buffer) {
         try {
             String active = globalSettingRepository == null ? null : globalSettingRepository.get(AgentSettingConstants.ACTIVE_PERSONALITY);
@@ -121,22 +115,12 @@ public class FileContextService implements ContextService {
     /**
      * 按优先级追加上下文文件内容。
      */
-    private void appendFile(StringBuilder buffer, File preferred, File fallback, String label) {
-        File chosen = preferred.exists() ? preferred : fallback;
-        if (chosen == null || !chosen.exists()) {
-            return;
-        }
-
-        String content = FileUtil.readUtf8String(chosen).trim();
+    private void appendWorkspaceFile(StringBuilder buffer, String key, String label) {
+        String content = personaWorkspaceService.read(key);
         if (StrUtil.isBlank(content)) {
             return;
         }
-
-        if (buffer.length() > 0) {
-            buffer.append("\n\n");
-        }
-
-        buffer.append("[").append(label).append("]\n").append(content);
+        appendBlock(buffer, label, content);
     }
 
     /**

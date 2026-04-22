@@ -8,6 +8,7 @@ import com.jimuqu.agent.context.DefaultMemoryManager;
 import com.jimuqu.agent.context.FileMemoryService;
 import com.jimuqu.agent.context.FileContextService;
 import com.jimuqu.agent.context.LocalSkillService;
+import com.jimuqu.agent.context.PersonaWorkspaceService;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.repository.CronJobRepository;
@@ -84,6 +85,7 @@ import com.jimuqu.agent.web.DashboardLogsService;
 import com.jimuqu.agent.web.DashboardSessionService;
 import com.jimuqu.agent.web.DashboardSkillsService;
 import com.jimuqu.agent.web.DashboardStatusService;
+import com.jimuqu.agent.web.DashboardWorkspaceService;
 import com.jimuqu.agent.web.WeixinQrSetupService;
 import org.noear.solon.Solon;
 import org.noear.solon.annotation.Bean;
@@ -162,6 +164,11 @@ public class JimuquAgentConfiguration {
         return new LocalSkillService(appConfig, preferenceStore, skillImportService, skillHubStateStore);
     }
 
+    @Bean
+    public PersonaWorkspaceService personaWorkspaceService(AppConfig appConfig) {
+        return new PersonaWorkspaceService(appConfig);
+    }
+
     /**
      * 创建全局设置仓储。
      */
@@ -177,8 +184,9 @@ public class JimuquAgentConfiguration {
     public FileContextService fileContextService(AppConfig appConfig,
                                                  LocalSkillService localSkillService,
                                                  MemoryManager memoryManager,
-                                                 GlobalSettingRepository globalSettingRepository) {
-        return new FileContextService(appConfig, localSkillService, memoryManager, globalSettingRepository, new File(System.getProperty("user.dir")));
+                                                 GlobalSettingRepository globalSettingRepository,
+                                                 PersonaWorkspaceService personaWorkspaceService) {
+        return new FileContextService(appConfig, localSkillService, memoryManager, globalSettingRepository, personaWorkspaceService);
     }
 
     /**
@@ -623,6 +631,11 @@ public class JimuquAgentConfiguration {
     public DashboardConfigService dashboardConfigService(AppConfig appConfig,
                                                          GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
         return new DashboardConfigService(appConfig, gatewayRuntimeRefreshService);
+    }
+
+    @Bean
+    public DashboardWorkspaceService dashboardWorkspaceService(PersonaWorkspaceService personaWorkspaceService) {
+        return new DashboardWorkspaceService(personaWorkspaceService);
     }
 
     @Bean

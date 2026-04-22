@@ -64,6 +64,19 @@ export const api = {
   getConfig: () => fetchJSON<Record<string, unknown>>("/api/config"),
   getDefaults: () => fetchJSON<Record<string, unknown>>("/api/config/defaults"),
   getSchema: () => fetchJSON<{ fields: Record<string, unknown>; category_order: string[] }>("/api/config/schema"),
+  getWorkspaceFiles: () => fetchJSON<WorkspaceFilesResponse>("/api/workspace/files"),
+  getWorkspaceFile: (key: string) =>
+    fetchJSON<WorkspaceFile>(`/api/workspace/files/${encodeURIComponent(key)}`),
+  saveWorkspaceFile: (key: string, content: string) =>
+    fetchJSON<{ ok: boolean; file: WorkspaceFile }>(`/api/workspace/files/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    }),
+  restoreWorkspaceFile: (key: string) =>
+    fetchJSON<{ ok: boolean; file: WorkspaceFile }>(`/api/workspace/files/${encodeURIComponent(key)}/restore`, {
+      method: "POST",
+    }),
   getModelInfo: () => fetchJSON<ModelInfoResponse>("/api/model/info"),
   saveConfig: (config: Record<string, unknown>) =>
     fetchJSON<{ ok: boolean }>("/api/config", {
@@ -294,6 +307,18 @@ export interface EnvVarInfo {
   is_password: boolean;
   tools: string[];
   advanced: boolean;
+}
+
+export interface WorkspaceFile {
+  key: string;
+  name: string;
+  path: string;
+  exists: boolean;
+  content: string;
+}
+
+export interface WorkspaceFilesResponse {
+  files: WorkspaceFile[];
 }
 
 export interface SessionMessage {

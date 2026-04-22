@@ -44,6 +44,11 @@ public class DashboardPageController {
         renderIndex(context);
     }
 
+    @Mapping("/workspace")
+    public void workspace(Context context) {
+        renderIndex(context);
+    }
+
     @Mapping("/cron")
     public void cron(Context context) {
         renderIndex(context);

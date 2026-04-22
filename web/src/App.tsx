@@ -25,12 +25,14 @@ import LogsPage from "@/pages/LogsPage";
 import SessionsPage from "@/pages/SessionsPage";
 import SkillsPage from "@/pages/SkillsPage";
 import StatusPage from "@/pages/StatusPage";
+import WorkspacePage from "@/pages/WorkspacePage";
 
 const NAV_ITEMS = [
   { label: "状态", href: "/", icon: LayoutDashboard },
   { label: "会话", href: "/sessions", icon: MessageSquare },
   { label: "分析", href: "/analytics", icon: BarChart3 },
   { label: "日志", href: "/logs", icon: FileText },
+  { label: "工作区", href: "/workspace", icon: FileText },
   { label: "定时任务", href: "/cron", icon: Clock3 },
   { label: "技能", href: "/skills", icon: Package },
   { label: "配置", href: "/config", icon: Settings },
@@ -42,6 +44,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/sessions": "会话",
   "/analytics": "分析",
   "/logs": "日志",
+  "/workspace": "工作区",
   "/cron": "定时任务",
   "/skills": "技能",
   "/config": "配置",
@@ -53,6 +56,7 @@ const PAGE_DESCRIPTIONS: Record<string, string> = {
   "/sessions": "浏览会话记录、消息详情与搜索结果。",
   "/analytics": "查看用量趋势、模型分布与统计汇总。",
   "/logs": "按文件、级别和组件筛选运行日志。",
+  "/workspace": "直接编辑 AGENTS、SOUL、IDENTITY、USER 四个工作区文件。",
   "/cron": "管理自动任务、调度表达式与投递目标。",
   "/skills": "启用技能并检查工具集可用状态。",
   "/config": "编辑运行配置和原始 YAML。",
@@ -280,6 +284,7 @@ export default function App() {
             <Route path="/sessions" element={<SessionsPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/logs" element={<LogsPage />} />
+            <Route path="/workspace" element={<WorkspacePage />} />
             <Route path="/cron" element={<CronPage />} />
             <Route path="/skills" element={<SkillsPage />} />
             <Route path="/config" element={<ConfigPage />} />

@@ -7,6 +7,7 @@ import com.jimuqu.agent.context.DefaultMemoryManager;
 import com.jimuqu.agent.context.FileMemoryService;
 import com.jimuqu.agent.context.FileContextService;
 import com.jimuqu.agent.context.LocalSkillService;
+import com.jimuqu.agent.context.PersonaWorkspaceService;
 import com.jimuqu.agent.core.service.ChannelAdapter;
 import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.CommandService;
@@ -60,6 +61,7 @@ import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.DefaultCheckpointService;
 import com.jimuqu.agent.support.AttachmentCacheService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
+import com.jimuqu.agent.support.DisplaySettingsService;
 import com.jimuqu.agent.support.update.AppUpdateService;
 import com.jimuqu.agent.support.update.AppVersionService;
 import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
@@ -140,7 +142,8 @@ public class TestEnvironment {
         MemoryService memoryService = new FileMemoryService(config);
         MemoryProvider builtinMemoryProvider = new BuiltinMemoryProvider(memoryService);
         MemoryManager memoryManager = new DefaultMemoryManager(java.util.Collections.singletonList(builtinMemoryProvider));
-        FileContextService contextService = new FileContextService(config, localSkillService, memoryManager, globalSettingRepository, new File(System.getProperty("user.dir")));
+        PersonaWorkspaceService personaWorkspaceService = new PersonaWorkspaceService(config);
+        FileContextService contextService = new FileContextService(config, localSkillService, memoryManager, globalSettingRepository, personaWorkspaceService);
         ContextCompressionService contextCompressionService = new DefaultContextCompressionService(config);
         ConversationOrchestratorHolder holder = new ConversationOrchestratorHolder();
         MemoryChannelAdapter memoryAdapter = new MemoryChannelAdapter();
@@ -157,16 +160,17 @@ public class TestEnvironment {
         DashboardEnvService dashboardEnvService = new DashboardEnvService(config, refreshService);
         AppVersionService appVersionService = new AppVersionService(config);
         RuntimeSettingsService runtimeSettingsService = new RuntimeSettingsService(config, globalSettingRepository, deliveryService, dashboardConfigService, dashboardEnvService, appVersionService);
+        DisplaySettingsService displaySettingsService = new DisplaySettingsService(config, globalSettingRepository);
         AppUpdateService appUpdateService = new AppUpdateService(config, appVersionService);
         DelegationService delegationService = new DefaultDelegationService(holder, preferenceStore, sessionRepository);
         SessionSearchService sessionSearchService = new DefaultSessionSearchService(sessionRepository, llmGateway);
         GitHubSkillSource gitHubSkillSource = new GitHubSkillSource(gitHubAuth, skillHubHttpClient, skillHubStateStore);
         SkillHubService skillHubService = new DefaultSkillHubService(new File(System.getProperty("user.dir")), new File(config.getRuntime().getSkillsDir()), skillImportService, skillGuardService, skillHubStateStore, skillHubHttpClient, gitHubAuth, gitHubSkillSource);
         ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, memoryService, sessionSearchService, localSkillService, skillHubService, checkpointService, delegationService, attachmentCacheService, runtimeSettingsService);
-        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, runtimeSettingsService, dangerousCommandApprovalService);
+        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, deliveryService, displaySettingsService, runtimeSettingsService, dangerousCommandApprovalService);
         holder.set(orchestrator);
         SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService);
-        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService, appUpdateService, dangerousCommandApprovalService);
+        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService, displaySettingsService, appUpdateService, dangerousCommandApprovalService);
         DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService, sessionRepository, gatewayAuthorizationService, skillLearningService, memoryManager);
         return new TestEnvironment(
                 config,
