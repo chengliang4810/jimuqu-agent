@@ -72,6 +72,13 @@ public class PersonaWorkspaceService {
     }
 
     /**
+     * 读取供系统提示词使用的正文内容。
+     */
+    public String readPromptBody(String key) {
+        return read(key);
+    }
+
+    /**
      * 写入文件内容，不存在时自动创建。
      */
     public void write(String key, String content) {
@@ -110,6 +117,10 @@ public class PersonaWorkspaceService {
      * 从类路径加载原始模板。
      */
     private String loadTemplate(String key) {
+        String normalized = ContextFileConstants.normalizeKey(key);
+        if (ContextFileConstants.KEY_MEMORY.equals(normalized)) {
+            return "";
+        }
         if (ContextFileConstants.KEY_MEMORY_TODAY.equals(ContextFileConstants.normalizeKey(key))) {
             return buildTodayMemoryTemplate(LocalDate.now());
         }

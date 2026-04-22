@@ -63,6 +63,8 @@ public class FileContextService implements ContextService {
         appendWorkspaceFile(buffer, ContextFileConstants.KEY_SOUL, "Soul");
         appendWorkspaceFile(buffer, ContextFileConstants.KEY_IDENTITY, "Identity");
         appendWorkspaceFile(buffer, ContextFileConstants.KEY_USER, "User");
+        appendWorkspaceFile(buffer, ContextFileConstants.KEY_TOOLS, "Tools");
+        appendWorkspaceFile(buffer, ContextFileConstants.KEY_HEARTBEAT, "Heartbeat");
         appendPersonality(buffer);
         appendMemoryBlock(buffer, sourceKey);
 
@@ -116,7 +118,7 @@ public class FileContextService implements ContextService {
      * 按优先级追加上下文文件内容。
      */
     private void appendWorkspaceFile(StringBuilder buffer, String key, String label) {
-        String content = personaWorkspaceService.read(key);
+        String content = personaWorkspaceService.readPromptBody(key);
         if (StrUtil.isBlank(content)) {
             return;
         }

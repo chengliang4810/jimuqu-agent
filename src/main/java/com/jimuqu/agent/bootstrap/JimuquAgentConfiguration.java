@@ -49,6 +49,7 @@ import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.agent.gateway.service.DefaultGatewayService;
 import com.jimuqu.agent.llm.SolonAiLlmGateway;
 import com.jimuqu.agent.scheduler.DefaultCronScheduler;
+import com.jimuqu.agent.scheduler.HeartbeatScheduler;
 import com.jimuqu.agent.skillhub.service.DefaultSkillGuardService;
 import com.jimuqu.agent.skillhub.service.DefaultSkillHubService;
 import com.jimuqu.agent.skillhub.service.DefaultSkillImportService;
@@ -588,6 +589,23 @@ public class JimuquAgentConfiguration {
                                                      ConversationOrchestrator conversationOrchestrator,
                                                      DeliveryService deliveryService) {
         DefaultCronScheduler scheduler = new DefaultCronScheduler(appConfig, cronJobRepository, conversationOrchestrator, deliveryService);
+        scheduler.start();
+        return scheduler;
+    }
+
+    @Bean
+    public HeartbeatScheduler heartbeatScheduler(AppConfig appConfig,
+                                                 GatewayPolicyRepository gatewayPolicyRepository,
+                                                 ConversationOrchestrator conversationOrchestrator,
+                                                 DeliveryService deliveryService,
+                                                 PersonaWorkspaceService personaWorkspaceService) {
+        HeartbeatScheduler scheduler = new HeartbeatScheduler(
+                appConfig,
+                gatewayPolicyRepository,
+                conversationOrchestrator,
+                deliveryService,
+                personaWorkspaceService
+        );
         scheduler.start();
         return scheduler;
     }

@@ -62,6 +62,11 @@ public class GatewayMessage {
     private String sourceKeyOverride;
 
     /**
+     * 是否为 heartbeat 触发的合成消息。
+     */
+    private boolean heartbeat;
+
+    /**
      * 入站附件列表。
      */
     private List<MessageAttachment> attachments = new ArrayList<MessageAttachment>();

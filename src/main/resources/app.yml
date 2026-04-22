@@ -42,6 +42,12 @@ jimuqu.compression.tailRatio: 0.2
 jimuqu.learning.enabled: true
 jimuqu.learning.toolCallThreshold: 5
 
+# HEARTBEAT.md 周期轮询
+jimuqu.agent.heartbeat.enabled: false
+jimuqu.agent.heartbeat.intervalMinutes: 30
+jimuqu.agent.heartbeat.deliveryMode: home
+jimuqu.agent.heartbeat.quietToken: HEARTBEAT_OK
+
 # 文件快照与回滚
 jimuqu.rollback.enabled: true
 jimuqu.rollback.maxCheckpointsPerSource: 20

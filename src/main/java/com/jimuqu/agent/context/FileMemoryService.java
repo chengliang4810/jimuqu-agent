@@ -174,6 +174,9 @@ public class FileMemoryService implements MemoryService {
         if (MemoryConstants.TARGET_USER.equalsIgnoreCase(target)) {
             return FileUtil.file(appConfig.getRuntime().getHome(), MemoryConstants.USER_FILE_NAME);
         }
+        if (MemoryConstants.TARGET_TODAY.equalsIgnoreCase(target)) {
+            return todayMemoryFile();
+        }
         return FileUtil.file(appConfig.getRuntime().getHome(), MemoryConstants.MEMORY_FILE_NAME);
     }
 

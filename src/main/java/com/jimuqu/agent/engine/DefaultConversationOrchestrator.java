@@ -137,7 +137,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     private GatewayReply runOnSession(SessionRecord session, GatewayMessage message) throws Exception {
         String effectiveUserText = MessageAttachmentSupport.composeEffectiveUserText(message);
         message.setText(effectiveUserText);
-        if (StrUtil.isBlank(session.getTitle()) && StrUtil.isNotBlank(effectiveUserText)) {
+        if (!message.isHeartbeat() && StrUtil.isBlank(session.getTitle()) && StrUtil.isNotBlank(effectiveUserText)) {
             session.setTitle(extractTitle(effectiveUserText));
         }
         List<String> enabledToolNames = toolRegistry.resolveEnabledToolNames(message.sourceKey());
@@ -189,7 +189,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     }
 
     private ConversationFeedbackSink feedbackSinkFor(GatewayMessage message) {
-        if (message == null || message.getPlatform() == null || message.getPlatform() == PlatformType.MEMORY) {
+        if (message == null || message.isHeartbeat() || message.getPlatform() == null || message.getPlatform() == PlatformType.MEMORY) {
             return ConversationFeedbackSink.noop();
         }
         return new GatewayConversationFeedbackSink(message, deliveryService, displaySettingsService);

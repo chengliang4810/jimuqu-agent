@@ -6,6 +6,7 @@ package com.jimuqu.agent.support.constants;
 public interface MemoryConstants {
     String TARGET_MEMORY = "memory";
     String TARGET_USER = "user";
+    String TARGET_TODAY = "today";
 
     String ACTION_ADD = "add";
     String ACTION_REPLACE = "replace";

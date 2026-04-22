@@ -256,6 +256,10 @@ public class AppConfig {
         config.getGateway().setAllowedUsers(resolveList("JIMUQU_GATEWAY_ALLOWED_USERS", readRaw(props, overrides, "jimuqu.gateway.allowedUsers", "")));
         config.getGateway().setAllowAllUsers(resolveBoolean("JIMUQU_GATEWAY_ALLOW_ALL_USERS", readBoolean(props, overrides, "jimuqu.gateway.allowAllUsers", false)));
         config.getAgent().setPersonalities(loadPersonalities(props, overrides));
+        config.getAgent().getHeartbeat().setEnabled(resolveBoolean("JIMUQU_AGENT_HEARTBEAT_ENABLED", readBoolean(props, overrides, "jimuqu.agent.heartbeat.enabled", false)));
+        config.getAgent().getHeartbeat().setIntervalMinutes(resolveInt("JIMUQU_AGENT_HEARTBEAT_INTERVAL_MINUTES", readInt(props, overrides, "jimuqu.agent.heartbeat.intervalMinutes", RuntimePathConstants.DEFAULT_HEARTBEAT_INTERVAL_MINUTES)));
+        config.getAgent().getHeartbeat().setDeliveryMode(resolveEnvString("JIMUQU_AGENT_HEARTBEAT_DELIVERY_MODE", readString(props, overrides, "jimuqu.agent.heartbeat.deliveryMode", RuntimePathConstants.DEFAULT_HEARTBEAT_DELIVERY_MODE)));
+        config.getAgent().getHeartbeat().setQuietToken(resolveEnvString("JIMUQU_AGENT_HEARTBEAT_QUIET_TOKEN", readString(props, overrides, "jimuqu.agent.heartbeat.quietToken", RuntimePathConstants.DEFAULT_HEARTBEAT_QUIET_TOKEN)));
         config.getReact().setMaxSteps(resolveInt("JIMUQU_REACT_MAX_STEPS", readInt(props, overrides, "jimuqu.react.maxSteps", 12)));
         config.getReact().setRetryMax(resolveInt("JIMUQU_REACT_RETRY_MAX", readInt(props, overrides, "jimuqu.react.retryMax", 3)));
         config.getReact().setRetryDelayMs(resolveInt("JIMUQU_REACT_RETRY_DELAY_MS", readInt(props, overrides, "jimuqu.react.retryDelayMs", 2000)));
@@ -1089,6 +1093,39 @@ public class AppConfig {
          * 预定义人格列表。
          */
         private Map<String, PersonalityConfig> personalities = new LinkedHashMap<String, PersonalityConfig>();
+
+        /**
+         * HEARTBEAT.md 相关调度配置。
+         */
+        private HeartbeatConfig heartbeat = new HeartbeatConfig();
+    }
+
+    /**
+     * heartbeat 调度配置。
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class HeartbeatConfig {
+        /**
+         * 是否启用 heartbeat。
+         */
+        private boolean enabled = false;
+
+        /**
+         * 固定轮询间隔（分钟）。
+         */
+        private int intervalMinutes = RuntimePathConstants.DEFAULT_HEARTBEAT_INTERVAL_MINUTES;
+
+        /**
+         * 结果投递模式。
+         */
+        private String deliveryMode = RuntimePathConstants.DEFAULT_HEARTBEAT_DELIVERY_MODE;
+
+        /**
+         * 静默返回 token。
+         */
+        private String quietToken = RuntimePathConstants.DEFAULT_HEARTBEAT_QUIET_TOKEN;
     }
 
     /**

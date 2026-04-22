@@ -45,6 +45,10 @@ public class RuntimeSettingsService {
             "compression.tailRatio",
             "learning.enabled",
             "learning.toolCallThreshold",
+            "agent.heartbeat.enabled",
+            "agent.heartbeat.intervalMinutes",
+            "agent.heartbeat.deliveryMode",
+            "agent.heartbeat.quietToken",
             "rollback.enabled",
             "rollback.maxCheckpointsPerSource",
             "react.maxSteps",
@@ -240,6 +244,7 @@ public class RuntimeSettingsService {
                 || "scheduler.enabled".equals(key)
                 || "compression.enabled".equals(key)
                 || "learning.enabled".equals(key)
+                || "agent.heartbeat.enabled".equals(key)
                 || "rollback.enabled".equals(key)
                 || "gateway.allowAllUsers".equals(key)) {
             return "true".equalsIgnoreCase(value) || "1".equals(value) || "yes".equalsIgnoreCase(value);
@@ -247,6 +252,7 @@ public class RuntimeSettingsService {
         if (key.endsWith("sendChunkRetries")
                 || "scheduler.tickSeconds".equals(key)
                 || "learning.toolCallThreshold".equals(key)
+                || "agent.heartbeat.intervalMinutes".equals(key)
                 || "rollback.maxCheckpointsPerSource".equals(key)
                 || "react.maxSteps".equals(key)
                 || "react.retryMax".equals(key)

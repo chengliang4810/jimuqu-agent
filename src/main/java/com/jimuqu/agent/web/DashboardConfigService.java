@@ -137,6 +137,15 @@ public class DashboardConfigService {
                 .envName("JIMUQU_LEARNING_ENABLED"));
         addField(new FieldDefinition("learning.toolCallThreshold", "number", "agent", "触发学习所需的最少工具调用数")
                 .envName("JIMUQU_LEARNING_TOOL_CALL_THRESHOLD"));
+        addField(new FieldDefinition("agent.heartbeat.enabled", "boolean", "agent", "启用 HEARTBEAT.md 周期轮询")
+                .envName("JIMUQU_AGENT_HEARTBEAT_ENABLED"));
+        addField(new FieldDefinition("agent.heartbeat.intervalMinutes", "number", "agent", "heartbeat 轮询间隔（分钟）")
+                .envName("JIMUQU_AGENT_HEARTBEAT_INTERVAL_MINUTES"));
+        addField(new FieldDefinition("agent.heartbeat.deliveryMode", "select", "agent", "heartbeat 结果投递模式")
+                .envName("JIMUQU_AGENT_HEARTBEAT_DELIVERY_MODE")
+                .options("home", "local"));
+        addField(new FieldDefinition("agent.heartbeat.quietToken", "string", "agent", "heartbeat 静默 token")
+                .envName("JIMUQU_AGENT_HEARTBEAT_QUIET_TOKEN"));
         addField(new FieldDefinition("rollback.enabled", "boolean", "agent", "启用 checkpoint 回滚")
                 .envName("JIMUQU_ROLLBACK_ENABLED"));
         addField(new FieldDefinition("rollback.maxCheckpointsPerSource", "number", "agent", "每个来源保留的最大 checkpoint 数")

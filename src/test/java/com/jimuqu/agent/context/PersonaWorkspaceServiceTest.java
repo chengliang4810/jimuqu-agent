@@ -25,6 +25,8 @@ class PersonaWorkspaceServiceTest {
                 ContextFileConstants.KEY_SOUL,
                 ContextFileConstants.KEY_IDENTITY,
                 ContextFileConstants.KEY_USER,
+                ContextFileConstants.KEY_TOOLS,
+                ContextFileConstants.KEY_HEARTBEAT,
                 ContextFileConstants.KEY_MEMORY,
                 ContextFileConstants.KEY_MEMORY_TODAY
         );
@@ -33,7 +35,9 @@ class PersonaWorkspaceServiceTest {
         assertThat(service.read(ContextFileConstants.KEY_SOUL)).contains("# SOUL.md - 你是谁");
         assertThat(service.read(ContextFileConstants.KEY_IDENTITY)).contains("# IDENTITY.md - 我是谁？");
         assertThat(service.read(ContextFileConstants.KEY_USER)).contains("# USER.md - 关于你的用户");
-        assertThat(service.read(ContextFileConstants.KEY_MEMORY)).contains("# MEMORY.md - 长期记忆");
+        assertThat(service.read(ContextFileConstants.KEY_TOOLS)).contains("# TOOLS.md - 本地笔记");
+        assertThat(service.read(ContextFileConstants.KEY_HEARTBEAT)).contains("跳过心跳轮询");
+        assertThat(service.read(ContextFileConstants.KEY_MEMORY)).isEmpty();
         assertThat(service.read(ContextFileConstants.KEY_MEMORY_TODAY)).contains("# " + LocalDate.now().toString());
 
         service.write(ContextFileConstants.KEY_AGENTS, "# AGENTS\n");

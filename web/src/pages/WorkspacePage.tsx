@@ -34,6 +34,18 @@ const FILE_ORDER = [
     icon: User,
   },
   {
+    key: "tools",
+    name: "TOOLS.md",
+    description: "本地工具与环境相关的说明文件",
+    icon: NotebookPen,
+  },
+  {
+    key: "heartbeat",
+    name: "HEARTBEAT.md",
+    description: "定期轮询时需要检查的事项清单",
+    icon: NotebookPen,
+  },
+  {
     key: "memory",
     name: "MEMORY.md",
     description: "长期记忆，记录稳定、长期有价值的信息",
@@ -298,7 +310,7 @@ export default function WorkspacePage() {
                   <span>恢复模板默认内容</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  会用项目内置的 OpenClaw 原始模板覆盖当前文件内容。已有修改将被替换。
+                  会用项目内置模板覆盖当前文件内容。已有修改将被替换。
                 </p>
               </div>
 
