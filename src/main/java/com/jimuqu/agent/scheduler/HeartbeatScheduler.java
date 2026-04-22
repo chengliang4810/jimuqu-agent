@@ -61,12 +61,17 @@ public class HeartbeatScheduler {
 
     public void tick() throws Exception {
         if (!appConfig.getAgent().getHeartbeat().isEnabled()) {
+            log.debug("Heartbeat skipped: disabled");
             return;
         }
         if (!hasHeartbeatTasks()) {
+            log.debug("Heartbeat skipped: HEARTBEAT.md has no runnable tasks");
             return;
         }
 
+        log.info("Heartbeat tick started: intervalMinutes={}, deliveryMode={}",
+                appConfig.getAgent().getHeartbeat().getIntervalMinutes(),
+                appConfig.getAgent().getHeartbeat().getDeliveryMode());
         tryRunForPlatform(PlatformType.FEISHU, appConfig.getChannels().getFeishu().isEnabled());
         tryRunForPlatform(PlatformType.DINGTALK, appConfig.getChannels().getDingtalk().isEnabled());
         tryRunForPlatform(PlatformType.WECOM, appConfig.getChannels().getWecom().isEnabled());
@@ -75,16 +80,22 @@ public class HeartbeatScheduler {
 
     private void tryRunForPlatform(PlatformType platform, boolean enabled) throws Exception {
         if (!enabled) {
+            log.debug("Heartbeat skipped for {}: channel disabled", platform);
             return;
         }
         HomeChannelRecord home = gatewayPolicyRepository.getHomeChannel(platform);
         if (home == null || StrUtil.isBlank(home.getChatId())) {
+            log.debug("Heartbeat skipped for {}: home channel missing", platform);
             return;
         }
         runOnce(platform, home);
     }
 
     void runOnce(PlatformType platform, HomeChannelRecord home) throws Exception {
+        log.info("Heartbeat executing: platform={}, chatId={}, chatName={}",
+                platform,
+                home.getChatId(),
+                StrUtil.blankToDefault(home.getChatName(), home.getChatId()));
         GatewayMessage message = new GatewayMessage(platform, home.getChatId(), HEARTBEAT_USER, DEFAULT_PROMPT);
         message.setHeartbeat(true);
         message.setChatName(home.getChatName());
@@ -93,10 +104,13 @@ public class HeartbeatScheduler {
 
         GatewayReply reply = conversationOrchestrator.runScheduled(message);
         if (!shouldDeliver(reply)) {
+            log.info("Heartbeat quiet: platform={}, chatId={}", platform, home.getChatId());
             return;
         }
 
         if (!"home".equalsIgnoreCase(appConfig.getAgent().getHeartbeat().getDeliveryMode())) {
+            log.info("Heartbeat produced output but skipped delivery due to deliveryMode={}",
+                    appConfig.getAgent().getHeartbeat().getDeliveryMode());
             return;
         }
 
@@ -105,6 +119,10 @@ public class HeartbeatScheduler {
         request.setChatId(home.getChatId());
         request.setText(reply.getContent());
         deliveryService.deliver(request);
+        log.info("Heartbeat delivered: platform={}, chatId={}, chars={}",
+                platform,
+                home.getChatId(),
+                reply.getContent() == null ? 0 : reply.getContent().length());
     }
 
     private boolean shouldDeliver(GatewayReply reply) {
