@@ -65,6 +65,11 @@ public class VersionUpdateCommandTest {
                     public GatewayReply runScheduled(GatewayMessage syntheticMessage) {
                         return GatewayReply.ok("noop");
                     }
+
+                    @Override
+                    public GatewayReply resumePending(String sourceKey) {
+                        return GatewayReply.ok("noop");
+                    }
                 },
                 new ContextService() {
                     @Override
@@ -81,7 +86,8 @@ public class VersionUpdateCommandTest {
                 env.globalSettingRepository,
                 env.processRegistry,
                 runtimeSettingsService,
-                updateService
+                updateService,
+                env.dangerousCommandApprovalService
         );
     }
 

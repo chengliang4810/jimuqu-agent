@@ -65,6 +65,11 @@ public class GatewayResilienceTest {
                     public GatewayReply runScheduled(GatewayMessage syntheticMessage) {
                         return handleIncoming(syntheticMessage);
                     }
+
+                    @Override
+                    public GatewayReply resumePending(String sourceKey) {
+                        return GatewayReply.ok("ok");
+                    }
                 },
                 env.deliveryService,
                 env.sessionRepository,
@@ -113,6 +118,11 @@ public class GatewayResilienceTest {
             @Override
             public GatewayReply runScheduled(GatewayMessage syntheticMessage) {
                 return handleIncoming(syntheticMessage);
+            }
+
+            @Override
+            public GatewayReply resumePending(String sourceKey) {
+                return GatewayReply.ok(content);
             }
         };
     }

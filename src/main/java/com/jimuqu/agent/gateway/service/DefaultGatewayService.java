@@ -96,7 +96,7 @@ public class DefaultGatewayService {
         try {
             GatewayReply preAuth = gatewayAuthorizationService.preAuthorize(message);
             if (preAuth != null) {
-                safeDeliver(message, preAuth.getContent());
+                safeDeliver(message, preAuth);
                 return preAuth;
             }
 
@@ -117,7 +117,7 @@ public class DefaultGatewayService {
             }
 
             if (reply != null) {
-                safeDeliver(message, reply.getContent());
+                safeDeliver(message, reply);
                 safeScheduleLearning(message, reply);
             }
             return reply;
@@ -133,7 +133,7 @@ public class DefaultGatewayService {
                     e);
             GatewayReply errorReply = GatewayReply.error("处理消息失败：" + safeMessage(e));
             if (authorized) {
-                safeDeliver(message, errorReply.getContent());
+                safeDeliver(message, errorReply);
             }
             return errorReply;
         }
@@ -142,8 +142,9 @@ public class DefaultGatewayService {
     /**
      * 安全投递当前回复，不让渠道发送失败打断主链。
      */
-    private void safeDeliver(GatewayMessage message, String content) {
-        if (content == null || content.trim().length() == 0) {
+    private void safeDeliver(GatewayMessage message, GatewayReply reply) {
+        if (reply == null || (reply.getContent() == null || reply.getContent().trim().length() == 0)
+                && (reply.getChannelExtras() == null || reply.getChannelExtras().isEmpty())) {
             return;
         }
         try {
@@ -153,7 +154,10 @@ public class DefaultGatewayService {
             request.setUserId(message.getUserId());
             request.setChatType(message.getChatType());
             request.setThreadId(message.getThreadId());
-            request.setText(content);
+            request.setText(reply.getContent());
+            if (reply.getChannelExtras() != null) {
+                request.getChannelExtras().putAll(reply.getChannelExtras());
+            }
             deliveryService.deliver(request);
         } catch (Exception e) {
             log.warn("Gateway delivery failed: platform={}, chatId={}, userId={}",

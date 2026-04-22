@@ -16,4 +16,9 @@ public interface ConversationOrchestrator {
      * 处理定时任务触发的消息。
      */
     GatewayReply runScheduled(GatewayMessage syntheticMessage) throws Exception;
+
+    /**
+     * 恢复当前来源键下因危险命令审批而挂起的会话。
+     */
+    GatewayReply resumePending(String sourceKey) throws Exception;
 }

@@ -62,6 +62,7 @@ import com.jimuqu.agent.support.AttachmentCacheService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.update.AppUpdateService;
 import com.jimuqu.agent.support.update.AppVersionService;
+import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
 import com.jimuqu.agent.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import com.jimuqu.agent.web.DashboardConfigService;
@@ -98,6 +99,7 @@ public class TestEnvironment {
     public final SessionSearchService sessionSearchService;
     public final ProcessRegistry processRegistry;
     public final SkillHubService skillHubService;
+    public final DangerousCommandApprovalService dangerousCommandApprovalService;
 
     public static TestEnvironment withFakeLlm() throws Exception {
         return create(new FakeLlmGateway());
@@ -148,6 +150,7 @@ public class TestEnvironment {
         GatewayAuthorizationService gatewayAuthorizationService = new GatewayAuthorizationService(gatewayPolicyRepository, config);
         CheckpointService checkpointService = new DefaultCheckpointService(config, database);
         ProcessRegistry processRegistry = new ProcessRegistry();
+        DangerousCommandApprovalService dangerousCommandApprovalService = new DangerousCommandApprovalService(globalSettingRepository);
         AttachmentCacheService attachmentCacheService = new AttachmentCacheService(config);
         GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(config, adapters);
         DashboardConfigService dashboardConfigService = new DashboardConfigService(config, refreshService);
@@ -160,10 +163,10 @@ public class TestEnvironment {
         GitHubSkillSource gitHubSkillSource = new GitHubSkillSource(gitHubAuth, skillHubHttpClient, skillHubStateStore);
         SkillHubService skillHubService = new DefaultSkillHubService(new File(System.getProperty("user.dir")), new File(config.getRuntime().getSkillsDir()), skillImportService, skillGuardService, skillHubStateStore, skillHubHttpClient, gitHubAuth, gitHubSkillSource);
         ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, memoryService, sessionSearchService, localSkillService, skillHubService, checkpointService, delegationService, attachmentCacheService, runtimeSettingsService);
-        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, runtimeSettingsService);
+        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, runtimeSettingsService, dangerousCommandApprovalService);
         holder.set(orchestrator);
         SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService);
-        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService, appUpdateService);
+        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService, appUpdateService, dangerousCommandApprovalService);
         DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService, sessionRepository, gatewayAuthorizationService, skillLearningService, memoryManager);
         return new TestEnvironment(
                 config,
@@ -186,7 +189,8 @@ public class TestEnvironment {
                 globalSettingRepository,
                 sessionSearchService,
                 processRegistry,
-                skillHubService
+                skillHubService,
+                dangerousCommandApprovalService
         );
     }
 

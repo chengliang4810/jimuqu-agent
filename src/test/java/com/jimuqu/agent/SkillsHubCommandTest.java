@@ -101,6 +101,11 @@ public class SkillsHubCommandTest {
                     public GatewayReply runScheduled(GatewayMessage syntheticMessage) {
                         return GatewayReply.ok("noop");
                     }
+
+                    @Override
+                    public GatewayReply resumePending(String sourceKey) {
+                        return GatewayReply.ok("noop");
+                    }
                 },
                 new ContextService() {
                     @Override
@@ -117,7 +122,8 @@ public class SkillsHubCommandTest {
                 env.globalSettingRepository,
                 env.processRegistry,
                 runtimeSettingsService,
-                appUpdateService
+                appUpdateService,
+                env.dangerousCommandApprovalService
         );
     }
 

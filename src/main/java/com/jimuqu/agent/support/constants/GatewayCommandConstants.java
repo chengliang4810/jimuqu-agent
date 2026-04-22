@@ -62,7 +62,10 @@ public interface GatewayCommandConstants {
     String COMMAND_PAIRING = "pairing";
     String COMMAND_COMPRESS = "compress";
     String COMMAND_ROLLBACK = "rollback";
+    String COMMAND_REASONING = "reasoning";
     String COMMAND_HELP = "help";
+    String COMMAND_APPROVE = "approve";
+    String COMMAND_DENY = "deny";
 
     /**
      * 完整 slash 命令文本。
@@ -87,5 +90,8 @@ public interface GatewayCommandConstants {
     String SLASH_PAIRING = COMMAND_PREFIX + COMMAND_PAIRING;
     String SLASH_COMPRESS = COMMAND_PREFIX + COMMAND_COMPRESS;
     String SLASH_ROLLBACK = COMMAND_PREFIX + COMMAND_ROLLBACK;
+    String SLASH_REASONING = COMMAND_PREFIX + COMMAND_REASONING;
     String SLASH_HELP = COMMAND_PREFIX + COMMAND_HELP;
+    String SLASH_APPROVE = COMMAND_PREFIX + COMMAND_APPROVE;
+    String SLASH_DENY = COMMAND_PREFIX + COMMAND_DENY;
 }

@@ -119,6 +119,15 @@ public class DashboardConfigService {
                 .envName("JIMUQU_LLM_MAX_TOKENS"));
         addField(new FieldDefinition("llm.contextWindowTokens", "number", "general", "上下文窗口 token")
                 .envName("JIMUQU_LLM_CONTEXT_WINDOW_TOKENS"));
+        addField(new FieldDefinition("display.toolProgress", "select", "general", "默认工具进度模式")
+                .envName("JIMUQU_DISPLAY_TOOL_PROGRESS")
+                .options("off", "new", "all", "verbose"));
+        addField(new FieldDefinition("display.showReasoning", "boolean", "general", "默认允许 reasoning 进入聊天窗口")
+                .envName("JIMUQU_DISPLAY_SHOW_REASONING"));
+        addField(new FieldDefinition("display.toolPreviewLength", "number", "general", "工具参数预览长度")
+                .envName("JIMUQU_DISPLAY_TOOL_PREVIEW_LENGTH"));
+        addField(new FieldDefinition("display.progressThrottleMs", "number", "general", "reasoning/进度消息节流毫秒")
+                .envName("JIMUQU_DISPLAY_PROGRESS_THROTTLE_MS"));
         addField(new FieldDefinition("scheduler.enabled", "boolean", "general", "启用定时调度")
                 .envName("JIMUQU_SCHEDULER_ENABLED"));
         addField(new FieldDefinition("scheduler.tickSeconds", "number", "general", "调度轮询周期（秒）")
@@ -183,12 +192,20 @@ public class DashboardConfigService {
         addField(new FieldDefinition("channels.feishu.botUserId", "string", "messaging", "飞书 bot User ID").envName("JIMUQU_FEISHU_BOT_USER_ID"));
         addField(new FieldDefinition("channels.feishu.botName", "string", "messaging", "飞书 bot 展示名")
                 .envName("JIMUQU_FEISHU_BOT_NAME"));
+        addField(new FieldDefinition("channels.feishu.toolProgress", "select", "messaging", "飞书工具进度模式")
+                .envName("JIMUQU_FEISHU_TOOL_PROGRESS")
+                .options("off", "new", "all", "verbose"));
 
         addChannelFields("dingtalk", "JIMUQU_DINGTALK_ENABLED", "JIMUQU_DINGTALK_ALLOWED_USERS", "JIMUQU_DINGTALK_ALLOW_ALL_USERS", "JIMUQU_DINGTALK_UNAUTHORIZED_DM_BEHAVIOR");
         addField(new FieldDefinition("channels.dingtalk.coolAppCode", "string", "messaging", "可选钉钉 Cool App 编码")
                 .envName("JIMUQU_DINGTALK_COOL_APP_CODE"));
         addField(new FieldDefinition("channels.dingtalk.streamUrl", "string", "messaging", "钉钉 stream 地址")
                 .envName("JIMUQU_DINGTALK_STREAM_URL"));
+        addField(new FieldDefinition("channels.dingtalk.toolProgress", "select", "messaging", "钉钉工具进度模式")
+                .envName("JIMUQU_DINGTALK_TOOL_PROGRESS")
+                .options("off", "new", "all", "verbose"));
+        addField(new FieldDefinition("channels.dingtalk.progressCardTemplateId", "string", "messaging", "钉钉长任务进度卡模板 ID")
+                .envName("JIMUQU_DINGTALK_PROGRESS_CARD_TEMPLATE_ID"));
         addField(new FieldDefinition("channels.dingtalk.dmPolicy", "select", "messaging", "钉钉私聊策略").options("open", "allowlist", "disabled", "pairing"));
         addField(new FieldDefinition("channels.dingtalk.groupPolicy", "select", "messaging", "钉钉群聊策略").options("open", "allowlist", "disabled"));
         addField(new FieldDefinition("channels.dingtalk.groupAllowedUsers", "list", "messaging", "钉钉群聊 allowlist").envName("JIMUQU_DINGTALK_GROUP_ALLOWED_USERS"));
@@ -196,6 +213,9 @@ public class DashboardConfigService {
         addChannelFields("wecom", "JIMUQU_WECOM_ENABLED", "JIMUQU_WECOM_ALLOWED_USERS", "JIMUQU_WECOM_ALLOW_ALL_USERS", "JIMUQU_WECOM_UNAUTHORIZED_DM_BEHAVIOR");
         addField(new FieldDefinition("channels.wecom.websocketUrl", "string", "messaging", "企微 websocket 地址")
                 .envName("JIMUQU_WECOM_WEBSOCKET_URL"));
+        addField(new FieldDefinition("channels.wecom.toolProgress", "select", "messaging", "企微工具进度模式")
+                .envName("JIMUQU_WECOM_TOOL_PROGRESS")
+                .options("off", "new", "all", "verbose"));
         addField(new FieldDefinition("channels.wecom.dmPolicy", "select", "messaging", "企微私聊策略").options("open", "allowlist", "disabled", "pairing"));
         addField(new FieldDefinition("channels.wecom.groupPolicy", "select", "messaging", "企微群聊策略").options("open", "allowlist", "disabled"));
         addField(new FieldDefinition("channels.wecom.groupAllowedUsers", "list", "messaging", "企微群聊 allowlist").envName("JIMUQU_WECOM_GROUP_ALLOWED_USERS"));
@@ -213,6 +233,9 @@ public class DashboardConfigService {
         addField(new FieldDefinition("channels.weixin.groupAllowedUsers", "list", "messaging", "微信群聊 allowlist").envName("JIMUQU_WEIXIN_GROUP_ALLOWED_USERS"));
         addField(new FieldDefinition("channels.weixin.splitMultilineMessages", "boolean", "messaging", "微信多行消息拆分")
                 .envName("JIMUQU_WEIXIN_SPLIT_MULTILINE_MESSAGES"));
+        addField(new FieldDefinition("channels.weixin.toolProgress", "select", "messaging", "微信工具进度模式")
+                .envName("JIMUQU_WEIXIN_TOOL_PROGRESS")
+                .options("off", "new", "all", "verbose"));
         addField(new FieldDefinition("channels.weixin.sendChunkDelaySeconds", "number", "messaging", "微信分片发送间隔（秒）")
                 .envName("JIMUQU_WEIXIN_SEND_CHUNK_DELAY_SECONDS"));
         addField(new FieldDefinition("channels.weixin.sendChunkRetries", "number", "messaging", "微信分片重试次数")

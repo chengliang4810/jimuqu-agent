@@ -23,12 +23,14 @@
 - `/version check` 检查 GitHub 最新版本
 - `/version update` 在 `java -jar` 部署下执行在线升级；Docker 部署下返回宿主机升级指引
 - `/usage` 查看当前会话最近一轮与累计 token 用量
+- `/reasoning [show|hide]` 控制当前来源键是否把 reasoning 作为中间态发回聊天窗口
 - `send_message` 支持本地附件路径 `mediaPaths`
 - `send_message` 支持可选 `channelExtrasJson`，用于钉钉 AI card 等渠道扩展参数
 - Agent 主链支持附件感知：入站附件会注入统一附件清单与本地缓存路径
 - Dashboard-first 渠道接入与 doctor：`/api/status`、`/api/gateway/doctor`
 - Dashboard 会话页、状态页、分析页展示 session token usage
 - 微信 iLink QR 登录：`POST /api/gateway/setup/weixin/qr` + `GET /api/gateway/setup/weixin/qr/{ticket}`
+- 渠道中间态显示：飞书默认 `new` 级别工具进度，钉钉可选 AI card 长任务进度，企微/微信默认静默
 
 当前已补齐的 Hermes 核心 Agent 能力：
 
@@ -318,6 +320,24 @@ git push origin v0.0.1
 - 工作记忆摘要策略：直接使用 Solon 官方 `SummarizationInterceptor + KeyInfoExtractionStrategy + HierarchicalSummarizationStrategy`
 - `compression.summaryModel` 若配置，则同时用于持久化压缩和 ReAct 工作记忆摘要
 - `retryConfig` 作用于模型决策重试，不是工具重试
+
+聊天窗口显示相关新增配置：
+
+- `jimuqu.display.toolProgress`
+- `jimuqu.display.showReasoning`
+- `jimuqu.display.toolPreviewLength`
+- `jimuqu.display.progressThrottleMs`
+- `jimuqu.channels.feishu.toolProgress`
+- `jimuqu.channels.dingtalk.toolProgress`
+- `jimuqu.channels.dingtalk.progressCardTemplateId`
+- `jimuqu.channels.wecom.toolProgress`
+- `jimuqu.channels.weixin.toolProgress`
+
+钉钉长任务进度卡说明：
+
+- 需要先配置 `jimuqu.channels.dingtalk.progressCardTemplateId`
+- 当前按固定模板参数写入：`title`、`status`、`summary`、`detail`、`updatedAt`
+- 若未配置模板 ID，钉钉中间态会退回普通文本提示
 - `maxSteps` 统计的是 ReAct 推理轮次（Reason 步），不是单纯工具调用次数
 
 会话 token usage 说明：

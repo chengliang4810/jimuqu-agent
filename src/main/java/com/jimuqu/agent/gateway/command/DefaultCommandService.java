@@ -30,11 +30,14 @@ import com.jimuqu.agent.skillhub.model.TapRecord;
 import com.jimuqu.agent.support.CronSupport;
 import com.jimuqu.agent.support.IdSupport;
 import com.jimuqu.agent.support.MessageSupport;
+import com.jimuqu.agent.support.DisplaySettingsService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.SourceKeySupport;
+import com.jimuqu.agent.storage.session.SqliteAgentSession;
 import com.jimuqu.agent.support.constants.AgentSettingConstants;
 import com.jimuqu.agent.support.constants.GatewayCommandConstants;
 import com.jimuqu.agent.support.update.AppUpdateService;
+import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import lombok.RequiredArgsConstructor;
 
@@ -118,7 +121,9 @@ public class DefaultCommandService implements CommandService {
      * 运行时设置服务。
      */
     private final RuntimeSettingsService runtimeSettingsService;
+    private final DisplaySettingsService displaySettingsService;
     private final AppUpdateService appUpdateService;
+    private final DangerousCommandApprovalService dangerousCommandApprovalService;
 
     /**
      * 判断当前命令是否由默认命令服务承接。
@@ -134,6 +139,7 @@ public class DefaultCommandService implements CommandService {
                 GatewayCommandConstants.COMMAND_RESUME,
                 GatewayCommandConstants.COMMAND_STATUS,
                 GatewayCommandConstants.COMMAND_USAGE,
+                GatewayCommandConstants.COMMAND_REASONING,
                 GatewayCommandConstants.COMMAND_STOP,
                 GatewayCommandConstants.COMMAND_PERSONALITY,
                 GatewayCommandConstants.COMMAND_VERSION,
@@ -146,6 +152,8 @@ public class DefaultCommandService implements CommandService {
                 GatewayCommandConstants.COMMAND_ROLLBACK,
                 GatewayCommandConstants.COMMAND_SETHOME,
                 GatewayCommandConstants.COMMAND_PAIRING,
+                GatewayCommandConstants.COMMAND_APPROVE,
+                GatewayCommandConstants.COMMAND_DENY,
                 GatewayCommandConstants.COMMAND_HELP
         ).contains(commandName);
     }
@@ -249,6 +257,14 @@ public class DefaultCommandService implements CommandService {
             return reply;
         }
 
+        if (GatewayCommandConstants.COMMAND_REASONING.equals(command)) {
+            SessionRecord session = requireSession(message.sourceKey());
+            GatewayReply reply = handleReasoning(message, args);
+            reply.setSessionId(session.getSessionId());
+            reply.setBranchName(session.getBranchName());
+            return reply;
+        }
+
         if (GatewayCommandConstants.COMMAND_STOP.equals(command)) {
             return GatewayReply.ok("已停止后台进程：" + processRegistry.stopAll() + " 个。");
         }
@@ -331,6 +347,14 @@ public class DefaultCommandService implements CommandService {
 
         if (GatewayCommandConstants.COMMAND_PAIRING.equals(command)) {
             return handlePairing(message, args);
+        }
+
+        if (GatewayCommandConstants.COMMAND_APPROVE.equals(command)) {
+            return handleDangerousApprove(message, args);
+        }
+
+        if (GatewayCommandConstants.COMMAND_DENY.equals(command)) {
+            return handleDangerousDeny(message);
         }
 
         if (GatewayCommandConstants.COMMAND_CRON.equals(command)) {
@@ -627,6 +651,76 @@ public class DefaultCommandService implements CommandService {
         return GatewayReply.error("用法：" + GatewayCommandConstants.SLASH_PAIRING + " [claim-admin|pending|approve|revoke|approved] ...");
     }
 
+    private GatewayReply handleDangerousApprove(GatewayMessage message, String args) throws Exception {
+        SessionRecord session = sessionRepository.getBoundSession(message.sourceKey());
+        if (session == null) {
+            return GatewayReply.error("当前没有待审批的危险命令。");
+        }
+
+        SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
+        DangerousCommandApprovalService.PendingApproval pending = dangerousCommandApprovalService.getPendingApproval(agentSession);
+        if (pending == null) {
+            return GatewayReply.error("当前没有待审批的危险命令。");
+        }
+
+        DangerousCommandApprovalService.ApprovalScope scope = parseApprovalScope(args);
+        if (!dangerousCommandApprovalService.approve(agentSession, scope, message.getUserName())) {
+            return GatewayReply.error("危险命令审批状态已失效，请重试。");
+        }
+        return conversationOrchestrator.resumePending(message.sourceKey());
+    }
+
+    private GatewayReply handleDangerousDeny(GatewayMessage message) throws Exception {
+        SessionRecord session = sessionRepository.getBoundSession(message.sourceKey());
+        if (session == null) {
+            return GatewayReply.error("当前没有待审批的危险命令。");
+        }
+
+        SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
+        DangerousCommandApprovalService.PendingApproval pending = dangerousCommandApprovalService.getPendingApproval(agentSession);
+        if (pending == null) {
+            return GatewayReply.error("当前没有待审批的危险命令。");
+        }
+
+        if (!dangerousCommandApprovalService.reject(agentSession, message.getUserName())) {
+            return GatewayReply.error("危险命令审批状态已失效，请重试。");
+        }
+        return conversationOrchestrator.resumePending(message.sourceKey());
+    }
+
+    private GatewayReply handleReasoning(GatewayMessage message, String args) throws Exception {
+        String normalized = StrUtil.nullToEmpty(args).trim().toLowerCase();
+        if (normalized.length() == 0) {
+            return GatewayReply.ok("reasoning_display="
+                    + displaySettingsService.describeReasoning(message.sourceKey(), message.getPlatform())
+                    + "\nreasoning_effort="
+                    + StrUtil.blankToDefault(appConfig.getLlm().getReasoningEffort(), "default")
+                    + "\nusage="
+                    + GatewayCommandConstants.SLASH_REASONING
+                    + " [show|hide]");
+        }
+        if ("show".equals(normalized) || "on".equals(normalized)) {
+            displaySettingsService.setReasoningVisible(message.sourceKey(), true);
+            return GatewayReply.ok("已开启当前来源键的 reasoning 展示。");
+        }
+        if ("hide".equals(normalized) || "off".equals(normalized)) {
+            displaySettingsService.setReasoningVisible(message.sourceKey(), false);
+            return GatewayReply.ok("已关闭当前来源键的 reasoning 展示。");
+        }
+        return GatewayReply.error("用法：" + GatewayCommandConstants.SLASH_REASONING + " [show|hide]");
+    }
+
+    private DangerousCommandApprovalService.ApprovalScope parseApprovalScope(String args) {
+        String normalized = StrUtil.nullToEmpty(args).trim().toLowerCase();
+        if ("always".equals(normalized) || "permanent".equals(normalized) || "permanently".equals(normalized)) {
+            return DangerousCommandApprovalService.ApprovalScope.ALWAYS;
+        }
+        if ("session".equals(normalized) || "ses".equals(normalized)) {
+            return DangerousCommandApprovalService.ApprovalScope.SESSION;
+        }
+        return DangerousCommandApprovalService.ApprovalScope.ONCE;
+    }
+
     /**
      * 获取当前来源键的会话；若不存在则立即创建。
      */
@@ -862,6 +956,7 @@ public class DefaultCommandService implements CommandService {
                 + GatewayCommandConstants.SLASH_PERSONALITY + " [name]\n"
                 + GatewayCommandConstants.SLASH_VERSION + " [check|update]\n"
                 + GatewayCommandConstants.SLASH_MODEL + " <provider:model>\n"
+                + GatewayCommandConstants.SLASH_REASONING + " [show|hide]\n"
                 + GatewayCommandConstants.SLASH_TOOLS + " [list|enable|disable] [name...]\n"
                 + GatewayCommandConstants.SLASH_SKILLS + " [list|browse|search|install|inspect|check|update|audit|uninstall|tap|enable|disable|reload]\n"
                 + GatewayCommandConstants.SLASH_CRON + " [list|create|pause|resume|delete|run]\n"
@@ -869,6 +964,8 @@ public class DefaultCommandService implements CommandService {
                 + GatewayCommandConstants.SLASH_ROLLBACK + " [latest|checkpoint-id|number]\n"
                 + GatewayCommandConstants.SLASH_SETHOME + "\n"
                 + GatewayCommandConstants.SLASH_PAIRING + " [claim-admin|pending|approve|revoke|approved]\n"
+                + GatewayCommandConstants.SLASH_APPROVE + " [session|always]\n"
+                + GatewayCommandConstants.SLASH_DENY + "\n"
                 + GatewayCommandConstants.SLASH_PLATFORMS + "\n"
                 + GatewayCommandConstants.SLASH_HELP;
     }

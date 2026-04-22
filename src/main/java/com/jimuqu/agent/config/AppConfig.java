@@ -59,6 +59,11 @@ public class AppConfig {
     private RollbackConfig rollback = new RollbackConfig();
 
     /**
+     * 聊天窗口显示配置。
+     */
+    private DisplayConfig display = new DisplayConfig();
+
+    /**
      * 各渠道接入配置。
      */
     private ChannelsConfig channels = new ChannelsConfig();
@@ -148,6 +153,11 @@ public class AppConfig {
         config.getRollback().setEnabled(resolveBoolean("JIMUQU_ROLLBACK_ENABLED", readBoolean(props, overrides, "jimuqu.rollback.enabled", true)));
         config.getRollback().setMaxCheckpointsPerSource(resolveInt("JIMUQU_ROLLBACK_MAX_CHECKPOINTS_PER_SOURCE", readInt(props, overrides, "jimuqu.rollback.maxCheckpointsPerSource", CheckpointConstants.DEFAULT_MAX_CHECKPOINTS_PER_SOURCE)));
 
+        config.getDisplay().setToolProgress(resolveEnvString("JIMUQU_DISPLAY_TOOL_PROGRESS", readString(props, overrides, "jimuqu.display.toolProgress", "off")));
+        config.getDisplay().setShowReasoning(resolveBoolean("JIMUQU_DISPLAY_SHOW_REASONING", readBoolean(props, overrides, "jimuqu.display.showReasoning", false)));
+        config.getDisplay().setToolPreviewLength(resolveInt("JIMUQU_DISPLAY_TOOL_PREVIEW_LENGTH", readInt(props, overrides, "jimuqu.display.toolPreviewLength", 80)));
+        config.getDisplay().setProgressThrottleMs(resolveInt("JIMUQU_DISPLAY_PROGRESS_THROTTLE_MS", readInt(props, overrides, "jimuqu.display.progressThrottleMs", 1500)));
+
         applyChannelConfig(
                 config.getChannels().getFeishu(),
                 props,
@@ -169,6 +179,7 @@ public class AppConfig {
         config.getChannels().getFeishu().setBotOpenId(resolveSecret("JIMUQU_FEISHU_BOT_OPEN_ID", props.get("jimuqu.channels.feishu.botOpenId", "")));
         config.getChannels().getFeishu().setBotUserId(resolveSecret("JIMUQU_FEISHU_BOT_USER_ID", props.get("jimuqu.channels.feishu.botUserId", "")));
         config.getChannels().getFeishu().setBotName(resolveEnvString("JIMUQU_FEISHU_BOT_NAME", readString(props, overrides, "jimuqu.channels.feishu.botName", "")));
+        config.getChannels().getFeishu().setToolProgress(resolveEnvString("JIMUQU_FEISHU_TOOL_PROGRESS", readString(props, overrides, "jimuqu.channels.feishu.toolProgress", "new")));
 
         applyChannelConfig(
                 config.getChannels().getDingtalk(),
@@ -190,6 +201,8 @@ public class AppConfig {
         config.getChannels().getDingtalk().setRobotCode(resolveSecret("JIMUQU_DINGTALK_ROBOT_CODE", props.get("jimuqu.channels.dingtalk.robotCode", "")));
         config.getChannels().getDingtalk().setCoolAppCode(resolveEnvString("JIMUQU_DINGTALK_COOL_APP_CODE", readString(props, overrides, "jimuqu.channels.dingtalk.coolAppCode", "")));
         config.getChannels().getDingtalk().setStreamUrl(resolveEnvString("JIMUQU_DINGTALK_STREAM_URL", readString(props, overrides, "jimuqu.channels.dingtalk.streamUrl", "")));
+        config.getChannels().getDingtalk().setToolProgress(resolveEnvString("JIMUQU_DINGTALK_TOOL_PROGRESS", readString(props, overrides, "jimuqu.channels.dingtalk.toolProgress", "new")));
+        config.getChannels().getDingtalk().setProgressCardTemplateId(resolveEnvString("JIMUQU_DINGTALK_PROGRESS_CARD_TEMPLATE_ID", readString(props, overrides, "jimuqu.channels.dingtalk.progressCardTemplateId", "")));
 
         applyChannelConfig(
                 config.getChannels().getWecom(),
@@ -209,6 +222,7 @@ public class AppConfig {
         config.getChannels().getWecom().setBotId(resolveSecret("JIMUQU_WECOM_BOT_ID", props.get("jimuqu.channels.wecom.botId", "")));
         config.getChannels().getWecom().setSecret(resolveSecret("JIMUQU_WECOM_SECRET", props.get("jimuqu.channels.wecom.secret", "")));
         config.getChannels().getWecom().setWebsocketUrl(resolveEnvString("JIMUQU_WECOM_WEBSOCKET_URL", readString(props, overrides, "jimuqu.channels.wecom.websocketUrl", "")));
+        config.getChannels().getWecom().setToolProgress(resolveEnvString("JIMUQU_WECOM_TOOL_PROGRESS", readString(props, overrides, "jimuqu.channels.wecom.toolProgress", "off")));
         config.getChannels().getWecom().setGroupMemberAllowedUsers(
                 collectGroupAllowMap(props, overrides, "jimuqu.channels.wecom.groups.", "JIMUQU_WECOM_GROUP_MEMBER_ALLOW_MAP_JSON")
         );
@@ -237,6 +251,7 @@ public class AppConfig {
         config.getChannels().getWeixin().setSendChunkDelaySeconds(resolveDouble("JIMUQU_WEIXIN_SEND_CHUNK_DELAY_SECONDS", readDouble(props, overrides, "jimuqu.channels.weixin.sendChunkDelaySeconds", 0.35D)));
         config.getChannels().getWeixin().setSendChunkRetries(resolveInt("JIMUQU_WEIXIN_SEND_CHUNK_RETRIES", readInt(props, overrides, "jimuqu.channels.weixin.sendChunkRetries", 2)));
         config.getChannels().getWeixin().setSendChunkRetryDelaySeconds(resolveDouble("JIMUQU_WEIXIN_SEND_CHUNK_RETRY_DELAY_SECONDS", readDouble(props, overrides, "jimuqu.channels.weixin.sendChunkRetryDelaySeconds", 1.0D)));
+        config.getChannels().getWeixin().setToolProgress(resolveEnvString("JIMUQU_WEIXIN_TOOL_PROGRESS", readString(props, overrides, "jimuqu.channels.weixin.toolProgress", "off")));
 
         config.getGateway().setAllowedUsers(resolveList("JIMUQU_GATEWAY_ALLOWED_USERS", readRaw(props, overrides, "jimuqu.gateway.allowedUsers", "")));
         config.getGateway().setAllowAllUsers(resolveBoolean("JIMUQU_GATEWAY_ALLOW_ALL_USERS", readBoolean(props, overrides, "jimuqu.gateway.allowAllUsers", false)));
@@ -292,6 +307,7 @@ public class AppConfig {
         copyCompression(other.getCompression());
         copyLearning(other.getLearning());
         copyRollback(other.getRollback());
+        copyDisplay(other.getDisplay());
         copyReact(other.getReact());
         copyChannel(this.channels.getFeishu(), other.getChannels().getFeishu());
         copyChannel(this.channels.getDingtalk(), other.getChannels().getDingtalk());
@@ -348,6 +364,13 @@ public class AppConfig {
         this.rollback.setMaxCheckpointsPerSource(other.getMaxCheckpointsPerSource());
     }
 
+    private void copyDisplay(DisplayConfig other) {
+        this.display.setToolProgress(other.getToolProgress());
+        this.display.setShowReasoning(other.isShowReasoning());
+        this.display.setToolPreviewLength(other.getToolPreviewLength());
+        this.display.setProgressThrottleMs(other.getProgressThrottleMs());
+    }
+
     private void copyReact(ReActConfig other) {
         this.react.setMaxSteps(other.getMaxSteps());
         this.react.setRetryMax(other.getRetryMax());
@@ -391,6 +414,8 @@ public class AppConfig {
         target.setSendChunkDelaySeconds(source.getSendChunkDelaySeconds());
         target.setSendChunkRetries(source.getSendChunkRetries());
         target.setSendChunkRetryDelaySeconds(source.getSendChunkRetryDelaySeconds());
+        target.setToolProgress(source.getToolProgress());
+        target.setProgressCardTemplateId(source.getProgressCardTemplateId());
     }
 
     private Map<String, PersonalityConfig> clonePersonalities(Map<String, PersonalityConfig> source) {
@@ -1026,6 +1051,34 @@ public class AppConfig {
     }
 
     /**
+     * 聊天窗口显示配置。
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class DisplayConfig {
+        /**
+         * 默认工具进度模式。
+         */
+        private String toolProgress = "off";
+
+        /**
+         * 是否默认展示 reasoning。
+         */
+        private boolean showReasoning;
+
+        /**
+         * 工具参数预览长度。
+         */
+        private int toolPreviewLength = 80;
+
+        /**
+         * reasoning/进度消息节流毫秒数。
+         */
+        private int progressThrottleMs = 1500;
+    }
+
+    /**
      * Agent 行为配置。
      */
     @Getter
@@ -1326,6 +1379,16 @@ public class AppConfig {
          * 微信分片重试间隔。
          */
         private double sendChunkRetryDelaySeconds = 1.0D;
+
+        /**
+         * 渠道默认工具进度模式。
+         */
+        private String toolProgress;
+
+        /**
+         * 钉钉长任务进度卡模板 ID。
+         */
+        private String progressCardTemplateId;
     }
 
     /**

@@ -46,6 +46,12 @@ jimuqu.learning.toolCallThreshold: 5
 jimuqu.rollback.enabled: true
 jimuqu.rollback.maxCheckpointsPerSource: 20
 
+# 聊天窗口显示
+jimuqu.display.toolProgress: off
+jimuqu.display.showReasoning: false
+jimuqu.display.toolPreviewLength: 80
+jimuqu.display.progressThrottleMs: 1500
+
 # ReAct 推理控制
 jimuqu.react.maxSteps: 12
 jimuqu.react.retryMax: 3
@@ -79,6 +85,7 @@ jimuqu.channels.feishu.botOpenId:
 jimuqu.channels.feishu.botUserId:
 jimuqu.channels.feishu.botName:
 jimuqu.channels.feishu.websocketUrl:
+jimuqu.channels.feishu.toolProgress: new
 
 # 钉钉渠道，仅支持 stream mode 入站与官方机器人出站
 # 建议优先使用环境变量注入敏感配置：
@@ -96,6 +103,8 @@ jimuqu.channels.dingtalk.unauthorizedDmBehavior: pair
 jimuqu.channels.dingtalk.robotCode:
 jimuqu.channels.dingtalk.coolAppCode:
 jimuqu.channels.dingtalk.streamUrl:
+jimuqu.channels.dingtalk.toolProgress: new
+jimuqu.channels.dingtalk.progressCardTemplateId:
 
 # 企微渠道
 jimuqu.channels.wecom.enabled: false
@@ -106,6 +115,7 @@ jimuqu.channels.wecom.groupAllowedUsers:
 jimuqu.channels.wecom.allowAllUsers: false
 jimuqu.channels.wecom.unauthorizedDmBehavior: pair
 jimuqu.channels.wecom.websocketUrl:
+jimuqu.channels.wecom.toolProgress: off
 
 # 微信渠道
 jimuqu.channels.weixin.enabled: false
@@ -124,6 +134,7 @@ jimuqu.channels.weixin.splitMultilineMessages: false
 jimuqu.channels.weixin.sendChunkDelaySeconds: 0.35
 jimuqu.channels.weixin.sendChunkRetries: 2
 jimuqu.channels.weixin.sendChunkRetryDelaySeconds: 1.0
+jimuqu.channels.weixin.toolProgress: off
 
 # 全局网关授权兜底配置
 jimuqu.gateway.allowedUsers:

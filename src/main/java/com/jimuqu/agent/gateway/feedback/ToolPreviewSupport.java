@@ -1,0 +1,93 @@
+package com.jimuqu.agent.gateway.feedback;
+
+import cn.hutool.core.util.StrUtil;
+import org.noear.snack4.ONode;
+
+import java.util.Map;
+
+/**
+ * 工具参数预览辅助。
+ */
+public final class ToolPreviewSupport {
+    private ToolPreviewSupport() {
+    }
+
+    public static String buildPreview(String toolName, Map<String, Object> args, int maxLen, boolean verbose) {
+        if (args == null || args.isEmpty()) {
+            return "";
+        }
+
+        String preview;
+        if (verbose) {
+            preview = ONode.serialize(args);
+        } else {
+            preview = pickPrimaryValue(toolName, args);
+        }
+
+        preview = normalize(preview);
+        if (preview.length() <= maxLen) {
+            return preview;
+        }
+        return preview.substring(0, Math.max(0, maxLen - 3)) + "...";
+    }
+
+    private static String pickPrimaryValue(String toolName, Map<String, Object> args) {
+        String[] candidates = preferredKeys(toolName);
+        for (String key : candidates) {
+            if (!args.containsKey(key)) {
+                continue;
+            }
+            Object value = args.get(key);
+            if (value == null) {
+                continue;
+            }
+            if (value instanceof Iterable) {
+                String text = normalize(ONode.serialize(value));
+                if (StrUtil.isNotBlank(text)) {
+                    return key + "=" + text;
+                }
+                continue;
+            }
+            String text = normalize(String.valueOf(value));
+            if (StrUtil.isNotBlank(text)) {
+                return key + "=" + text;
+            }
+        }
+        return normalize(ONode.serialize(args));
+    }
+
+    private static String[] preferredKeys(String toolName) {
+        if ("read_file".equals(toolName) || "write_file".equals(toolName) || "patch".equals(toolName)) {
+            return new String[]{"path", "filePath"};
+        }
+        if ("search_files".equals(toolName)) {
+            return new String[]{"pattern", "path"};
+        }
+        if ("execute_shell".equals(toolName) || "execute_python".equals(toolName) || "execute_js".equals(toolName)) {
+            return new String[]{"command", "code"};
+        }
+        if ("delegate_task".equals(toolName)) {
+            return new String[]{"prompt", "goal", "context"};
+        }
+        if ("send_message".equals(toolName)) {
+            return new String[]{"text", "chatId", "platform"};
+        }
+        if ("session_search".equals(toolName) || "websearch".equals(toolName) || "codesearch".equals(toolName)) {
+            return new String[]{"query", "q", "keyword"};
+        }
+        if ("webfetch".equals(toolName)) {
+            return new String[]{"url", "urls"};
+        }
+        if ("cronjob".equals(toolName)) {
+            return new String[]{"action", "name"};
+        }
+        if ("skill_view".equals(toolName) || "skill_manage".equals(toolName)) {
+            return new String[]{"name", "skillName"};
+        }
+        return new String[]{"path", "command", "code", "query", "text", "name"};
+    }
+
+    private static String normalize(String text) {
+        return StrUtil.nullToEmpty(text).replace('\r', ' ').replace('\n', ' ').trim();
+    }
+}

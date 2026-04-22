@@ -31,6 +31,7 @@ import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
 import com.jimuqu.agent.support.AttachmentCacheService;
 import com.jimuqu.agent.support.constants.GatewayBehaviorConstants;
+import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
 import lombok.RequiredArgsConstructor;
 import org.noear.snack4.ONode;
 
@@ -173,6 +174,10 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
         }
         try {
             refreshTenantTokenIfNecessary();
+            if (isApprovalCardRequest(request)) {
+                sendDangerousApprovalCard(request);
+                return;
+            }
             if (StrUtil.isNotBlank(request.getText())) {
                 sendText(request.getChatId(), request.getText());
             }
@@ -495,8 +500,10 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
         String userId = operator == null ? null : StrUtil.blankToDefault(operator.getOpenId(), operator.getUserId());
         String chatId = event.getContext().getOpenChatId();
         String messageId = event.getContext().getOpenMessageId();
-        String payload = ONode.serialize(event.getAction() == null ? new LinkedHashMap<String, Object>() : event.getAction().getValue());
-        GatewayMessage message = new GatewayMessage(PlatformType.FEISHU, chatId, userId, "Card action: " + payload);
+        Object actionValue = event.getAction() == null ? new LinkedHashMap<String, Object>() : event.getAction().getValue();
+        String payload = ONode.serialize(actionValue);
+        String command = DangerousCommandApprovalService.commandFromCardActionPayload(actionValue);
+        GatewayMessage message = new GatewayMessage(PlatformType.FEISHU, chatId, userId, StrUtil.blankToDefault(command, "Card action: " + payload));
         message.setChatType(GatewayBehaviorConstants.CHAT_TYPE_DM);
         message.setChatName(chatId);
         message.setUserName(userId);
@@ -682,6 +689,75 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
         ensureOk(postJson(SEND_URL, payload), "Feishu file send failed");
     }
 
+    private boolean isApprovalCardRequest(DeliveryRequest request) {
+        return DangerousCommandApprovalService.DELIVERY_MODE_APPROVAL_CARD.equalsIgnoreCase(stringValue(
+                request.getChannelExtras() == null ? null : request.getChannelExtras().get("mode")
+        ));
+    }
+
+    private void sendDangerousApprovalCard(DeliveryRequest request) {
+        Map<String, Object> extras = request.getChannelExtras() == null
+                ? new LinkedHashMap<String, Object>()
+                : request.getChannelExtras();
+        String command = stringValue(extras.get("approvalCommand"));
+        String description = stringValue(extras.get("approvalDescription"));
+        String preview = command;
+        if (preview.length() > 3000) {
+            preview = preview.substring(0, 3000) + "...";
+        }
+
+        List<Object> actions = new ArrayList<Object>();
+        actions.add(cardButton("✅ Allow Once", DangerousCommandApprovalService.CARD_ACTION_APPROVE, "once", "primary"));
+        actions.add(cardButton("✅ Session", DangerousCommandApprovalService.CARD_ACTION_APPROVE, "session", "default"));
+        actions.add(cardButton("✅ Always", DangerousCommandApprovalService.CARD_ACTION_APPROVE, "always", "default"));
+        actions.add(cardButton("❌ Deny", DangerousCommandApprovalService.CARD_ACTION_DENY, "deny", "danger"));
+
+        List<Object> elements = new ArrayList<Object>();
+        elements.add(new ONode()
+                .set("tag", "markdown")
+                .set("content", "```\n" + preview + "\n```\n**Reason:** " + StrUtil.blankToDefault(description, "dangerous command"))
+                .toData());
+        elements.add(new ONode()
+                .set("tag", "action")
+                .set("actions", actions)
+                .toData());
+
+        ONode card = new ONode()
+                .getOrNew("config")
+                .set("wide_screen_mode", true)
+                .parent()
+                .getOrNew("header")
+                .getOrNew("title")
+                .set("content", "⚠️ Dangerous Command Approval")
+                .set("tag", "plain_text")
+                .parent()
+                .set("template", "orange")
+                .parent()
+                .set("elements", elements);
+
+        String body = new ONode()
+                .set("receive_id", request.getChatId())
+                .set("msg_type", "interactive")
+                .set("content", card.toJson())
+                .toJson();
+        ensureOk(postJson(SEND_URL, body), "Feishu approval card send failed");
+    }
+
+    private Object cardButton(String label, String action, String scope, String type) {
+        return new ONode()
+                .set("tag", "button")
+                .getOrNew("text")
+                .set("tag", "plain_text")
+                .set("content", label)
+                .parent()
+                .set("type", type)
+                .getOrNew("value")
+                .set(DangerousCommandApprovalService.CARD_ACTION_KEY, action)
+                .set(DangerousCommandApprovalService.CARD_SCOPE_KEY, scope)
+                .parent()
+                .toData();
+    }
+
     private String uploadImage(File file) {
         String response = HttpRequest.post(IMAGE_UPLOAD_URL)
                 .header("Authorization", "Bearer " + tenantAccessToken)
@@ -748,6 +824,10 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
             }
         }
         return null;
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
     }
 
     private String postJson(String url, String body) {

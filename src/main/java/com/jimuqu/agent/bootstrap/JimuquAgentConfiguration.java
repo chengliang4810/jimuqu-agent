@@ -66,9 +66,11 @@ import com.jimuqu.agent.storage.repository.SqliteSessionRepository;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.DefaultCheckpointService;
 import com.jimuqu.agent.support.AttachmentCacheService;
+import com.jimuqu.agent.support.DisplaySettingsService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.update.AppUpdateService;
 import com.jimuqu.agent.support.update.AppVersionService;
+import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
 import com.jimuqu.agent.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import com.jimuqu.agent.web.DashboardAuthFilter;
@@ -276,8 +278,9 @@ public class JimuquAgentConfiguration {
      */
     @Bean
     public LlmGateway llmGateway(AppConfig appConfig,
-                                 SessionRepository sessionRepository) {
-        return new SolonAiLlmGateway(appConfig, sessionRepository);
+                                 SessionRepository sessionRepository,
+                                 DangerousCommandApprovalService dangerousCommandApprovalService) {
+        return new SolonAiLlmGateway(appConfig, sessionRepository, dangerousCommandApprovalService);
     }
 
     /**
@@ -300,12 +303,23 @@ public class JimuquAgentConfiguration {
         return new AppUpdateService(appConfig, appVersionService);
     }
 
+    @Bean
+    public DisplaySettingsService displaySettingsService(AppConfig appConfig,
+                                                         GlobalSettingRepository globalSettingRepository) {
+        return new DisplaySettingsService(appConfig, globalSettingRepository);
+    }
+
     /**
      * 创建进程注册表。
      */
     @Bean
     public ProcessRegistry processRegistry() {
         return new ProcessRegistry();
+    }
+
+    @Bean
+    public DangerousCommandApprovalService dangerousCommandApprovalService(GlobalSettingRepository globalSettingRepository) {
+        return new DangerousCommandApprovalService(globalSettingRepository);
     }
 
     @Bean
@@ -429,9 +443,22 @@ public class JimuquAgentConfiguration {
                                                              ContextCompressionService contextCompressionService,
                                                              LlmGateway llmGateway,
                                                              ToolRegistry toolRegistry,
+                                                             DeliveryService deliveryService,
+                                                             DisplaySettingsService displaySettingsService,
                                                              ConversationOrchestratorHolder holder,
-                                                             RuntimeSettingsService runtimeSettingsService) {
-        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, runtimeSettingsService);
+                                                             RuntimeSettingsService runtimeSettingsService,
+                                                             DangerousCommandApprovalService dangerousCommandApprovalService) {
+        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(
+                sessionRepository,
+                contextService,
+                contextCompressionService,
+                llmGateway,
+                toolRegistry,
+                deliveryService,
+                displaySettingsService,
+                runtimeSettingsService,
+                dangerousCommandApprovalService
+        );
         holder.set(orchestrator);
         return orchestrator;
     }
@@ -477,7 +504,9 @@ public class JimuquAgentConfiguration {
                                          GlobalSettingRepository globalSettingRepository,
                                          ProcessRegistry processRegistry,
                                          RuntimeSettingsService runtimeSettingsService,
-                                         AppUpdateService appUpdateService) {
+                                         DisplaySettingsService displaySettingsService,
+                                         AppUpdateService appUpdateService,
+                                         DangerousCommandApprovalService dangerousCommandApprovalService) {
         return new DefaultCommandService(
                 sessionRepository,
                 toolRegistry,
@@ -494,7 +523,9 @@ public class JimuquAgentConfiguration {
                 globalSettingRepository,
                 processRegistry,
                 runtimeSettingsService,
-                appUpdateService
+                displaySettingsService,
+                appUpdateService,
+                dangerousCommandApprovalService
         );
     }
 

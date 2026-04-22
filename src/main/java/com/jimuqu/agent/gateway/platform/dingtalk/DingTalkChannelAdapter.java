@@ -16,6 +16,9 @@ import com.aliyun.dingtalkconv_file_1_0.models.SendResponse;
 import com.aliyun.dingtalkim_1_0.models.SendRobotInteractiveCardHeaders;
 import com.aliyun.dingtalkim_1_0.models.SendRobotInteractiveCardRequest;
 import com.aliyun.dingtalkim_1_0.models.SendRobotInteractiveCardResponse;
+import com.aliyun.dingtalkim_1_0.models.UpdateRobotInteractiveCardHeaders;
+import com.aliyun.dingtalkim_1_0.models.UpdateRobotInteractiveCardRequest;
+import com.aliyun.dingtalkim_1_0.models.UpdateRobotInteractiveCardResponse;
 import com.aliyun.dingtalkrobot_1_0.models.BatchSendOTOHeaders;
 import com.aliyun.dingtalkrobot_1_0.models.BatchSendOTORequest;
 import com.aliyun.dingtalkrobot_1_0.models.BatchSendOTOResponse;
@@ -498,6 +501,10 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
         Map<String, Object> extras = request.getChannelExtras() == null
                 ? Collections.<String, Object>emptyMap()
                 : request.getChannelExtras();
+        if (isAiCardUpdateRequest(extras)) {
+            updateAiCard(extras);
+            return;
+        }
         String cardTemplateId = stringValue(extras.get("cardTemplateId"));
         String cardData = jsonString(extras.get("cardData"));
         if (isBlank(cardTemplateId) || isBlank(cardData)) {
@@ -559,6 +566,45 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
             cardInstanceBindings.put(response.getBody().getProcessQueryKey(), request.getThreadId().trim());
         }
         log.info("[DINGTALK:{}] ai card sent processKey={}", request.getChatId(), response.getBody().getProcessQueryKey());
+    }
+
+    private boolean isAiCardUpdateRequest(Map<String, Object> extras) {
+        if (extras == null || extras.isEmpty()) {
+            return false;
+        }
+        String mode = stringValue(extras.get("mode"));
+        if ("ai_card_update".equalsIgnoreCase(mode) || "dingtalk_ai_card_update".equalsIgnoreCase(mode)) {
+            return true;
+        }
+        return Boolean.parseBoolean(String.valueOf(extras.get("updateExisting")));
+    }
+
+    private void updateAiCard(Map<String, Object> extras) throws Exception {
+        String cardBizId = stringValue(extras.get("cardBizId"));
+        String cardData = jsonString(extras.get("cardData"));
+        if (isBlank(cardBizId) || isBlank(cardData)) {
+            throw new IllegalStateException("DingTalk AI card update requires channelExtras.cardBizId and channelExtras.cardData");
+        }
+
+        UpdateRobotInteractiveCardHeaders headers = new UpdateRobotInteractiveCardHeaders();
+        headers.setXAcsDingtalkAccessToken(accessToken);
+        UpdateRobotInteractiveCardRequest request = new UpdateRobotInteractiveCardRequest();
+        request.setCardBizId(cardBizId);
+        request.setCardData(cardData);
+        UpdateRobotInteractiveCardRequest.UpdateRobotInteractiveCardRequestUpdateOptions options =
+                new UpdateRobotInteractiveCardRequest.UpdateRobotInteractiveCardRequestUpdateOptions();
+        options.setUpdateCardDataByKey(Boolean.TRUE);
+        request.setUpdateOptions(options);
+
+        UpdateRobotInteractiveCardResponse response = imClient.updateRobotInteractiveCardWithOptions(
+                request,
+                headers,
+                new com.aliyun.teautil.models.RuntimeOptions()
+        );
+        if (response == null || response.getBody() == null) {
+            throw new IllegalStateException("DingTalk AI card update failed");
+        }
+        log.info("[DINGTALK] ai card updated cardBizId={}", cardBizId);
     }
 
     private String uploadMedia(MessageAttachment attachment) {

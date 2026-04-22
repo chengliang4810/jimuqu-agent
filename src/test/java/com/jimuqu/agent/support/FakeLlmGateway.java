@@ -11,6 +11,7 @@ import java.util.List;
 public class FakeLlmGateway implements LlmGateway {
     public String lastSystemPrompt;
 
+    @Override
     public LlmResult chat(SessionRecord session, String systemPrompt, String userMessage, List<Object> toolObjects) throws Exception {
         lastSystemPrompt = systemPrompt;
         InMemoryChatSession chatSession = new InMemoryChatSession(session.getSessionId());
@@ -29,6 +30,28 @@ public class FakeLlmGateway implements LlmGateway {
         result.setModel("gpt-5.4");
         result.setInputTokens(Math.max(1, userMessage == null ? 0 : userMessage.length()));
         result.setOutputTokens(Math.max(1, ("echo:" + userMessage).length()));
+        result.setTotalTokens(result.getInputTokens() + result.getOutputTokens());
+        return result;
+    }
+
+    @Override
+    public LlmResult resume(SessionRecord session, String systemPrompt, List<Object> toolObjects) throws Exception {
+        lastSystemPrompt = systemPrompt;
+        InMemoryChatSession chatSession = new InMemoryChatSession(session.getSessionId());
+        if (session.getNdjson() != null && session.getNdjson().trim().length() > 0) {
+            chatSession.loadNdjson(session.getNdjson());
+        }
+        chatSession.addMessage(ChatMessage.ofAssistant("echo:resume"));
+
+        LlmResult result = new LlmResult();
+        result.setAssistantMessage(ChatMessage.ofAssistant("echo:resume"));
+        result.setNdjson(chatSession.toNdjson());
+        result.setRawResponse("fake-resume");
+        result.setStreamed(false);
+        result.setProvider("openai-responses");
+        result.setModel("gpt-5.4");
+        result.setInputTokens(1L);
+        result.setOutputTokens("echo:resume".length());
         result.setTotalTokens(result.getInputTokens() + result.getOutputTokens());
         return result;
     }

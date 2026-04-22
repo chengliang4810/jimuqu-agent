@@ -4,6 +4,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
  * 统一网关回复模型。
  */
@@ -25,6 +28,11 @@ public class GatewayReply {
      * 回复文本。
      */
     private String content;
+
+    /**
+     * 渠道定制扩展参数。
+     */
+    private Map<String, Object> channelExtras = new LinkedHashMap<String, Object>();
 
     /**
      * 是否由命令处理链生成。

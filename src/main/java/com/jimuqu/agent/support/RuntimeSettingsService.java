@@ -32,6 +32,10 @@ public class RuntimeSettingsService {
             "llm.temperature",
             "llm.maxTokens",
             "llm.contextWindowTokens",
+            "display.toolProgress",
+            "display.showReasoning",
+            "display.toolPreviewLength",
+            "display.progressThrottleMs",
             "scheduler.enabled",
             "scheduler.tickSeconds",
             "compression.enabled",
@@ -74,6 +78,8 @@ public class RuntimeSettingsService {
             ".sendChunkDelaySeconds",
             ".sendChunkRetries",
             ".sendChunkRetryDelaySeconds",
+            ".toolProgress",
+            ".progressCardTemplateId",
             ".botOpenId",
             ".botUserId",
             ".botName"
@@ -230,6 +236,7 @@ public class RuntimeSettingsService {
                 || key.endsWith(".allowAllUsers")
                 || key.endsWith(".splitMultilineMessages")
                 || "llm.stream".equals(key)
+                || "display.showReasoning".equals(key)
                 || "scheduler.enabled".equals(key)
                 || "compression.enabled".equals(key)
                 || "learning.enabled".equals(key)
@@ -250,6 +257,8 @@ public class RuntimeSettingsService {
                 || "react.summarizationMaxMessages".equals(key)
                 || "react.summarizationMaxTokens".equals(key)
                 || "compression.protectHeadMessages".equals(key)
+                || "display.toolPreviewLength".equals(key)
+                || "display.progressThrottleMs".equals(key)
                 || "llm.maxTokens".equals(key)
                 || "llm.contextWindowTokens".equals(key)) {
             return Integer.valueOf(value);

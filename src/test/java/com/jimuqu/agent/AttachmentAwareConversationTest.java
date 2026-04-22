@@ -80,5 +80,10 @@ public class AttachmentAwareConversationTest {
             result.setStreamed(false);
             return result;
         }
+
+        @Override
+        public LlmResult resume(SessionRecord session, String systemPrompt, List<Object> toolObjects) throws Exception {
+            return chat(session, systemPrompt, "", toolObjects);
+        }
     }
 }

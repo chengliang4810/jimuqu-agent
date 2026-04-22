@@ -40,6 +40,11 @@ public class MaxStepsRecoveryTest {
                 result.setTotalTokens(70);
                 return result;
             }
+
+            @Override
+            public LlmResult resume(SessionRecord session, String systemPrompt, List<Object> toolObjects) {
+                return chat(session, systemPrompt, "", toolObjects);
+            }
         };
 
         TestEnvironment env = TestEnvironment.withLlm(llmGateway);

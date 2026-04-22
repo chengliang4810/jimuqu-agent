@@ -1,6 +1,7 @@
 package com.jimuqu.agent.engine;
 
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.core.model.LlmResult;
@@ -9,12 +10,18 @@ import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.ContextCompressionService;
 import com.jimuqu.agent.core.service.ContextService;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
+import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.core.service.ToolRegistry;
+import com.jimuqu.agent.gateway.feedback.ConversationFeedbackSink;
+import com.jimuqu.agent.gateway.feedback.GatewayConversationFeedbackSink;
+import com.jimuqu.agent.support.DisplaySettingsService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.MessageAttachmentSupport;
 import com.jimuqu.agent.support.MessageSupport;
+import com.jimuqu.agent.support.SourceKeySupport;
 import com.jimuqu.agent.support.constants.CompressionConstants;
+import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
 import lombok.RequiredArgsConstructor;
 import org.noear.solon.ai.chat.ChatRole;
 import org.noear.solon.ai.chat.message.AssistantMessage;
@@ -53,7 +60,10 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     private final ContextCompressionService contextCompressionService;
     private final LlmGateway llmGateway;
     private final ToolRegistry toolRegistry;
+    private final DeliveryService deliveryService;
+    private final DisplaySettingsService displaySettingsService;
     private final RuntimeSettingsService runtimeSettingsService;
+    private final DangerousCommandApprovalService dangerousCommandApprovalService;
 
     public GatewayReply handleIncoming(GatewayMessage message) throws Exception {
         SessionRecord session = sessionRepository.getBoundSession(message.sourceKey());
@@ -71,22 +81,23 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         return runOnSession(session, syntheticMessage);
     }
 
-    private GatewayReply runOnSession(SessionRecord session, GatewayMessage message) throws Exception {
-        String effectiveUserText = MessageAttachmentSupport.composeEffectiveUserText(message);
-        message.setText(effectiveUserText);
-        if (StrUtil.isBlank(session.getTitle()) && StrUtil.isNotBlank(effectiveUserText)) {
-            session.setTitle(extractTitle(effectiveUserText));
+    public GatewayReply resumePending(String sourceKey) throws Exception {
+        SessionRecord session = sessionRepository.getBoundSession(sourceKey);
+        if (session == null) {
+            return GatewayReply.error("当前来源键没有可恢复的会话。");
         }
-        List<String> enabledToolNames = toolRegistry.resolveEnabledToolNames(message.sourceKey());
-        List<Object> enabledTools = toolRegistry.resolveEnabledTools(message.sourceKey());
-        String systemPrompt = contextService.buildSystemPrompt(message.sourceKey())
+
+        List<String> enabledToolNames = toolRegistry.resolveEnabledToolNames(sourceKey);
+        List<Object> enabledTools = toolRegistry.resolveEnabledTools(sourceKey);
+        String systemPrompt = contextService.buildSystemPrompt(sourceKey)
                 + "\n\n"
-                + runtimeSettingsService.buildAgentRuntimePrompt(message.sourceKey(), session, enabledToolNames);
+                + runtimeSettingsService.buildAgentRuntimePrompt(sourceKey, session, enabledToolNames);
         session.setSystemPromptSnapshot(systemPrompt);
 
-        session = contextCompressionService.compressIfNeeded(session, systemPrompt, effectiveUserText);
         String previousNdjson = session.getNdjson();
-        LlmResult result = llmGateway.chat(session, systemPrompt, effectiveUserText, enabledTools);
+        GatewayMessage feedbackTarget = messageFromSourceKey(sourceKey);
+        ConversationFeedbackSink feedbackSink = feedbackSinkFor(feedbackTarget);
+        LlmResult result = llmGateway.resume(session, systemPrompt, enabledTools, feedbackSink);
         String replyText = extractText(result.getAssistantMessage());
         if (StrUtil.isBlank(replyText) && hasRecentToolActivity(previousNdjson, result.getNdjson())) {
             session.setNdjson(result.getNdjson());
@@ -115,10 +126,94 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         session.setUpdatedAt(System.currentTimeMillis());
         sessionRepository.save(session);
 
-        GatewayReply reply = GatewayReply.ok(StrUtil.blankToDefault(replyText, EMPTY_REPLY_FALLBACK));
+        String finalReply = StrUtil.blankToDefault(replyText, EMPTY_REPLY_FALLBACK);
+        feedbackSink.onFinalReply(finalReply);
+        GatewayReply reply = GatewayReply.ok(finalReply);
         reply.setSessionId(session.getSessionId());
         reply.setBranchName(session.getBranchName());
         return reply;
+    }
+
+    private GatewayReply runOnSession(SessionRecord session, GatewayMessage message) throws Exception {
+        String effectiveUserText = MessageAttachmentSupport.composeEffectiveUserText(message);
+        message.setText(effectiveUserText);
+        if (StrUtil.isBlank(session.getTitle()) && StrUtil.isNotBlank(effectiveUserText)) {
+            session.setTitle(extractTitle(effectiveUserText));
+        }
+        List<String> enabledToolNames = toolRegistry.resolveEnabledToolNames(message.sourceKey());
+        List<Object> enabledTools = toolRegistry.resolveEnabledTools(message.sourceKey());
+        String systemPrompt = contextService.buildSystemPrompt(message.sourceKey())
+                + "\n\n"
+                + runtimeSettingsService.buildAgentRuntimePrompt(message.sourceKey(), session, enabledToolNames);
+        session.setSystemPromptSnapshot(systemPrompt);
+
+        session = contextCompressionService.compressIfNeeded(session, systemPrompt, effectiveUserText);
+        String previousNdjson = session.getNdjson();
+        ConversationFeedbackSink feedbackSink = feedbackSinkFor(message);
+        LlmResult result = llmGateway.chat(session, systemPrompt, effectiveUserText, enabledTools, feedbackSink);
+        String replyText = extractText(result.getAssistantMessage());
+        if (StrUtil.isBlank(replyText) && hasRecentToolActivity(previousNdjson, result.getNdjson())) {
+            session.setNdjson(result.getNdjson());
+            LlmResult recovered = tryRecoverEmptyReply(session, systemPrompt);
+            if (recovered != null) {
+                mergeUsage(result, recovered);
+                result = recovered;
+                replyText = extractText(recovered.getAssistantMessage());
+            }
+        }
+
+        if (isMaxStepsReply(replyText)) {
+            session.setNdjson(result.getNdjson());
+            LlmResult recovered = tryRecoverMaxStepsReply(session, systemPrompt);
+            if (hasUsableRecoveryReply(recovered)) {
+                mergeUsage(result, recovered);
+                result = recovered;
+                replyText = extractText(recovered.getAssistantMessage());
+            } else {
+                replyText = MAX_STEPS_RECOVERY_FALLBACK;
+            }
+        }
+
+        session.setNdjson(result.getNdjson());
+        applyUsage(session, result);
+        session.setUpdatedAt(System.currentTimeMillis());
+        sessionRepository.save(session);
+
+        String finalReply = StrUtil.blankToDefault(replyText, EMPTY_REPLY_FALLBACK);
+        feedbackSink.onFinalReply(finalReply);
+        GatewayReply reply = GatewayReply.ok(finalReply);
+        reply.setSessionId(session.getSessionId());
+        reply.setBranchName(session.getBranchName());
+        applyApprovalCardIfNeeded(reply, message.getPlatform(), session);
+        return reply;
+    }
+
+    private ConversationFeedbackSink feedbackSinkFor(GatewayMessage message) {
+        if (message == null || message.getPlatform() == null || message.getPlatform() == PlatformType.MEMORY) {
+            return ConversationFeedbackSink.noop();
+        }
+        return new GatewayConversationFeedbackSink(message, deliveryService, displaySettingsService);
+    }
+
+    private GatewayMessage messageFromSourceKey(String sourceKey) {
+        String[] parts = SourceKeySupport.split(sourceKey);
+        PlatformType platform = PlatformType.fromName(parts[0]);
+        GatewayMessage message = new GatewayMessage(platform, parts[1], parts[2], "");
+        message.setSourceKeyOverride(sourceKey);
+        return message;
+    }
+
+    private void applyApprovalCardIfNeeded(GatewayReply reply, PlatformType platform, SessionRecord session) {
+        if (reply == null || platform == null || session == null || dangerousCommandApprovalService == null) {
+            return;
+        }
+
+        DangerousCommandApprovalService.PendingApproval pending = dangerousCommandApprovalService.getPendingApproval(session);
+        if (pending == null) {
+            return;
+        }
+
+        reply.getChannelExtras().putAll(dangerousCommandApprovalService.buildDeliveryExtras(platform, pending));
     }
 
     private String extractText(AssistantMessage assistantMessage) {

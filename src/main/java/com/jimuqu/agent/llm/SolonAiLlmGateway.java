@@ -6,12 +6,16 @@ import com.jimuqu.agent.core.model.LlmResult;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.LlmGateway;
+import com.jimuqu.agent.gateway.feedback.ConversationFeedbackSink;
 import com.jimuqu.agent.storage.session.SqliteAgentSession;
 import com.jimuqu.agent.support.constants.LlmConstants;
+import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
 import org.noear.solon.ai.agent.trace.Metrics;
 import org.noear.solon.ai.agent.AgentSystemPrompt;
 import org.noear.solon.ai.agent.react.ReActAgent;
+import org.noear.solon.ai.agent.react.ReActInterceptor;
 import org.noear.solon.ai.agent.react.ReActResponse;
+import org.noear.solon.ai.agent.react.ReActTrace;
 import org.noear.solon.ai.agent.react.intercept.StopLoopInterceptor;
 import org.noear.solon.ai.agent.react.intercept.SummarizationInterceptor;
 import org.noear.solon.ai.agent.react.intercept.ToolRetryInterceptor;
@@ -34,6 +38,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.function.Supplier;
 
 /**
@@ -47,18 +52,36 @@ public class SolonAiLlmGateway implements LlmGateway {
 
     private final AppConfig appConfig;
     private final SessionRepository sessionRepository;
+    private final DangerousCommandApprovalService dangerousCommandApprovalService;
     private volatile PdfSkill pdfSkill;
 
     public SolonAiLlmGateway(AppConfig appConfig) {
-        this(appConfig, null);
+        this(appConfig, null, null);
     }
 
     public SolonAiLlmGateway(AppConfig appConfig, SessionRepository sessionRepository) {
-        this.appConfig = appConfig;
-        this.sessionRepository = sessionRepository;
+        this(appConfig, sessionRepository, null);
     }
 
+    public SolonAiLlmGateway(AppConfig appConfig,
+                             SessionRepository sessionRepository,
+                             DangerousCommandApprovalService dangerousCommandApprovalService) {
+        this.appConfig = appConfig;
+        this.sessionRepository = sessionRepository;
+        this.dangerousCommandApprovalService = dangerousCommandApprovalService;
+    }
+
+    @Override
     public LlmResult chat(SessionRecord session, String systemPrompt, String userMessage, List<Object> toolObjects) throws Exception {
+        return chat(session, systemPrompt, userMessage, toolObjects, ConversationFeedbackSink.noop());
+    }
+
+    @Override
+    public LlmResult chat(SessionRecord session,
+                          String systemPrompt,
+                          String userMessage,
+                          List<Object> toolObjects,
+                          ConversationFeedbackSink feedbackSink) throws Exception {
         AppConfig.LlmConfig resolved = resolve(session);
         validate(resolved);
         log.info("LLM request: provider={}, model={}, sessionId={}, stream={}, sessionOverride={}",
@@ -69,18 +92,8 @@ public class SolonAiLlmGateway implements LlmGateway {
                 session != null && StrUtil.isNotBlank(session.getModelOverride()));
         SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
         ChatModel chatModel = buildChatModel(resolved);
-        ReActAgent agent = buildReActAgent(chatModel, resolved, systemPrompt, toolObjects, agentSession);
-        ReActResponse response;
-        try {
-            response = agent.prompt(Prompt.of(userMessage))
-                    .session(agentSession)
-                    .options(options -> options.toolContextPut("user_message", userMessage))
-                    .call();
-        } catch (Exception e) {
-            throw e;
-        } catch (Throwable e) {
-            throw new IllegalStateException("ReActAgent call failed", e);
-        }
+        ReActAgent agent = buildReActAgent(chatModel, resolved, systemPrompt, toolObjects, agentSession, feedbackSink);
+        ReActResponse response = callAgent(agent, agentSession, userMessage, false);
 
         AssistantMessage assistantMessage = response.getMessage();
 
@@ -94,6 +107,63 @@ public class SolonAiLlmGateway implements LlmGateway {
         applyMetrics(result, response.getMetrics());
         logUsage(session, resolved, result);
         return result;
+    }
+
+    @Override
+    public LlmResult resume(SessionRecord session, String systemPrompt, List<Object> toolObjects) throws Exception {
+        return resume(session, systemPrompt, toolObjects, ConversationFeedbackSink.noop());
+    }
+
+    @Override
+    public LlmResult resume(SessionRecord session,
+                            String systemPrompt,
+                            List<Object> toolObjects,
+                            ConversationFeedbackSink feedbackSink) throws Exception {
+        AppConfig.LlmConfig resolved = resolve(session);
+        validate(resolved);
+        log.info("LLM resume: provider={}, model={}, sessionId={}, stream={}, sessionOverride={}",
+                resolved.getProvider(),
+                resolved.getModel(),
+                session == null ? "" : StrUtil.nullToEmpty(session.getSessionId()),
+                resolved.isStream(),
+                session != null && StrUtil.isNotBlank(session.getModelOverride()));
+        SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
+        ChatModel chatModel = buildChatModel(resolved);
+        ReActAgent agent = buildReActAgent(chatModel, resolved, systemPrompt, toolObjects, agentSession, feedbackSink);
+        ReActResponse response = callAgent(agent, agentSession, null, true);
+
+        AssistantMessage assistantMessage = response.getMessage();
+        LlmResult result = new LlmResult();
+        result.setAssistantMessage(assistantMessage);
+        result.setNdjson(ChatMessage.toNdjson(agentSession.getMessages()));
+        result.setStreamed(resolved.isStream());
+        result.setRawResponse(response.getContent());
+        result.setProvider(resolved.getProvider());
+        result.setModel(StrUtil.blankToDefault(resolved.getModel(), ""));
+        applyMetrics(result, response.getMetrics());
+        logUsage(session, resolved, result);
+        return result;
+    }
+
+    private ReActResponse callAgent(ReActAgent agent,
+                                    SqliteAgentSession agentSession,
+                                    String userMessage,
+                                    boolean resume) throws Exception {
+        try {
+            if (resume) {
+                return agent.prompt()
+                        .session(agentSession)
+                        .call();
+            }
+            return agent.prompt(Prompt.of(userMessage))
+                    .session(agentSession)
+                    .options(options -> options.toolContextPut("user_message", userMessage))
+                    .call();
+        } catch (Exception e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new IllegalStateException("ReActAgent call failed", e);
+        }
     }
 
     private AppConfig.LlmConfig resolve(SessionRecord session) {
@@ -171,7 +241,8 @@ public class SolonAiLlmGateway implements LlmGateway {
                                        AppConfig.LlmConfig resolved,
                                        final String systemPrompt,
                                        List<Object> toolObjects,
-                                       SqliteAgentSession agentSession) {
+                                       SqliteAgentSession agentSession,
+                                       ConversationFeedbackSink feedbackSink) {
         boolean delegateSession = isDelegateSession(agentSession);
         int maxSteps = delegateSession ? appConfig.getReact().getDelegateMaxSteps() : appConfig.getReact().getMaxSteps();
         int retryMax = delegateSession ? appConfig.getReact().getDelegateRetryMax() : appConfig.getReact().getRetryMax();
@@ -200,6 +271,12 @@ public class SolonAiLlmGateway implements LlmGateway {
 
         if (summarizationInterceptor != null) {
             builder.defaultInterceptorAdd(summarizationInterceptor);
+        }
+        if (dangerousCommandApprovalService != null) {
+            builder.defaultInterceptorAdd(dangerousCommandApprovalService.buildInterceptor());
+        }
+        if (feedbackSink != null && feedbackSink != ConversationFeedbackSink.noop()) {
+            builder.defaultInterceptorAdd(new FeedbackInterceptor(feedbackSink, dangerousCommandApprovalService));
         }
 
         for (Object toolObject : toolObjects) {
@@ -359,5 +436,43 @@ public class SolonAiLlmGateway implements LlmGateway {
         }
 
         return null;
+    }
+
+    /**
+     * 将 ReAct 生命周期事件桥接到网关反馈 sink。
+     */
+    private static class FeedbackInterceptor implements ReActInterceptor {
+        private final ConversationFeedbackSink feedbackSink;
+        private final DangerousCommandApprovalService dangerousCommandApprovalService;
+
+        private FeedbackInterceptor(ConversationFeedbackSink feedbackSink,
+                                    DangerousCommandApprovalService dangerousCommandApprovalService) {
+            this.feedbackSink = feedbackSink;
+            this.dangerousCommandApprovalService = dangerousCommandApprovalService;
+        }
+
+        @Override
+        public void onThought(ReActTrace trace, String thought) {
+            feedbackSink.onReasoning(thought);
+        }
+
+        @Override
+        public void onAction(ReActTrace trace, String toolName, Map<String, Object> args) {
+            if (trace != null && trace.getSession() != null && trace.getSession().isPending()) {
+                return;
+            }
+            if (dangerousCommandApprovalService != null
+                    && trace != null
+                    && trace.getSession() != null
+                    && dangerousCommandApprovalService.getPendingApproval(trace.getSession()) != null) {
+                return;
+            }
+            feedbackSink.onToolStarted(toolName, args);
+        }
+
+        @Override
+        public void onObservation(ReActTrace trace, String toolName, String result, long durationMs) {
+            feedbackSink.onToolFinished(toolName, result, durationMs);
+        }
     }
 }

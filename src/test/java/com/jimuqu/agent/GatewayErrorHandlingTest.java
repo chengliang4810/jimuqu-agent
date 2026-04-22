@@ -61,6 +61,11 @@ public class GatewayErrorHandlingTest {
         public GatewayReply runScheduled(GatewayMessage syntheticMessage) throws Exception {
             throw new InterruptedException();
         }
+
+        @Override
+        public GatewayReply resumePending(String sourceKey) throws Exception {
+            throw new InterruptedException();
+        }
     }
 
     private static class NoopSkillLearningService implements SkillLearningService {
