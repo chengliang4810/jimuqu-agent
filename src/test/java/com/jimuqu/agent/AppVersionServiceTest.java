@@ -19,15 +19,19 @@ public class AppVersionServiceTest {
         AppConfig config = new AppConfig();
         AppVersionService service = new AppVersionService(config);
         String oldApi = System.getProperty("jimuqu.update.releaseApiUrl");
+        String oldTagsApi = System.getProperty("jimuqu.update.tagsApiUrl");
         String oldProxy = System.getProperty("jimuqu.update.httpProxy");
         try {
             System.setProperty("jimuqu.update.releaseApiUrl", "https://mirror.example/releases/latest");
+            System.setProperty("jimuqu.update.tagsApiUrl", "https://mirror.example/tags?per_page=5");
             System.setProperty("jimuqu.update.httpProxy", "http://127.0.0.1:7890");
 
             assertThat(service.releaseApiUrl()).isEqualTo("https://mirror.example/releases/latest");
+            assertThat(service.tagsApiUrl()).isEqualTo("https://mirror.example/tags?per_page=5");
             assertThat(service.updateProxyUrl()).isEqualTo("http://127.0.0.1:7890");
         } finally {
             restore("jimuqu.update.releaseApiUrl", oldApi);
+            restore("jimuqu.update.tagsApiUrl", oldTagsApi);
             restore("jimuqu.update.httpProxy", oldProxy);
         }
     }

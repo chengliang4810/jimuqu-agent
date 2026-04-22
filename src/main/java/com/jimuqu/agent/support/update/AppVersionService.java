@@ -63,6 +63,17 @@ public class AppVersionService {
         return "https://api.github.com/repos/" + releaseRepo() + "/releases/latest";
     }
 
+    public String tagsApiUrl() {
+        String override = firstNonBlank(
+                System.getenv("JIMUQU_UPDATE_TAGS_API_URL"),
+                System.getProperty("jimuqu.update.tagsApiUrl")
+        );
+        if (StrUtil.isNotBlank(override)) {
+            return override.trim();
+        }
+        return "https://api.github.com/repos/" + releaseRepo() + "/tags?per_page=5";
+    }
+
     public String updateProxyUrl() {
         String override = firstNonBlank(
                 System.getenv("JIMUQU_UPDATE_HTTP_PROXY"),

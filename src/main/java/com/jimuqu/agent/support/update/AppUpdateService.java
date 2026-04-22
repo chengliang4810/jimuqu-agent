@@ -40,6 +40,7 @@ public class AppUpdateService {
         status.setDeploymentMode(versionService.deploymentMode());
         status.setRepo(versionService.releaseRepo());
         status.setReleaseApiUrl(versionService.releaseApiUrl());
+        status.setTagsApiUrl(versionService.tagsApiUrl());
         status.setUpdateErrorMessage(lastErrorMessage);
         status.setUpdateErrorAt(lastErrorAt);
         if (latest != null) {
@@ -49,6 +50,7 @@ public class AppUpdateService {
             status.setPublishedAt(latest.getPublishedAt());
             status.setJarAssetUrl(latest.getJarAssetUrl());
             status.setJarAssetName(latest.getJarAssetName());
+            status.setVersionSource(latest.getSource());
             status.setUpdateAvailable(AppVersionService.compareVersions(current, latest.getVersion()) < 0);
         }
         return status;
@@ -57,36 +59,39 @@ public class AppUpdateService {
     public String formatVersionReport(boolean forceRefresh) {
         VersionStatus status = getVersionStatus(forceRefresh);
         StringBuilder buffer = new StringBuilder();
-        buffer.append("应用版本: ").append(status.getCurrentTag()).append('\n');
-        buffer.append("部署方式: ").append(status.getDeploymentMode()).append('\n');
-        buffer.append("发布仓库: ").append(status.getRepo()).append('\n');
-        buffer.append("Release API: ").append(status.getReleaseApiUrl()).append('\n');
+        appendLine(buffer, "当前版本", status.getCurrentTag());
+        appendLine(buffer, "部署方式", status.getDeploymentMode());
+        appendLine(buffer, "发布仓库", status.getRepo());
+        appendLine(buffer, "Release API", status.getReleaseApiUrl());
+        appendLine(buffer, "Tags API", status.getTagsApiUrl());
         if (StrUtil.isBlank(status.getLatestTag())) {
             if (StrUtil.isNotBlank(status.getUpdateErrorMessage())) {
-                buffer.append("最新版本: 检查失败\n");
-                buffer.append("失败原因: ").append(status.getUpdateErrorMessage());
+                appendLine(buffer, "最新版本", "检查失败");
+                appendLine(buffer, "失败原因", status.getUpdateErrorMessage());
             } else {
-                buffer.append("最新版本: 尚未检查或暂不可用");
+                appendLine(buffer, "最新版本", "尚未检查或暂不可用");
             }
-            return buffer.toString();
+            return buffer.toString().trim();
         }
-        buffer.append("最新版本: ").append(status.getLatestTag());
+        appendLine(buffer, "最新版本", status.getLatestTag());
+        if (StrUtil.isNotBlank(status.getVersionSource())) {
+            appendLine(buffer, "版本来源", status.getVersionSource());
+        }
         if (StrUtil.isNotBlank(status.getPublishedAt())) {
-            buffer.append(" (").append(status.getPublishedAt()).append(")");
+            appendLine(buffer, "发布时间", status.getPublishedAt());
         }
-        buffer.append('\n');
-        buffer.append("更新状态: ").append(status.isUpdateAvailable() ? "可升级" : "已是最新").append('\n');
+        appendLine(buffer, "更新状态", status.isUpdateAvailable() ? "可升级" : "已是最新");
         if (StrUtil.isNotBlank(status.getReleaseUrl())) {
-            buffer.append("发布页: ").append(status.getReleaseUrl()).append('\n');
+            appendLine(buffer, "发布页", status.getReleaseUrl());
         }
         if ("docker".equals(status.getDeploymentMode())) {
-            buffer.append("在线升级: Docker 部署不支持进程内自更新，请在宿主机拉取新镜像并重建容器。");
+            appendLine(buffer, "在线升级", "Docker 部署不支持进程内自更新，请在宿主机拉取新镜像并重建容器。");
         } else if ("jar".equals(status.getDeploymentMode()) && status.isUpdateAvailable()) {
-            buffer.append("在线升级: 可执行 `/version update` 自动下载并重启到最新 jar。");
+            appendLine(buffer, "在线升级", "可执行 `/version update` 自动下载并重启到最新 jar。");
         } else if ("jar".equals(status.getDeploymentMode())) {
-            buffer.append("在线升级: 当前 jar 已是最新，无需升级。");
+            appendLine(buffer, "在线升级", "当前 jar 已是最新，无需升级。");
         } else {
-            buffer.append("在线升级: 当前为开发态运行，建议通过 Git/IDE 更新代码。");
+            appendLine(buffer, "在线升级", "当前为开发态运行，建议通过 Git/IDE 更新代码。");
         }
         return buffer.toString().trim();
     }
@@ -118,7 +123,7 @@ public class AppUpdateService {
                     + "请下载最新 jar 后手动替换。");
         }
         if (StrUtil.isBlank(status.getJarAssetUrl())) {
-            return UpdateResult.error("GitHub Release 中未找到可下载的 jar 资产。");
+            return UpdateResult.error("未找到可下载的 jar 资产。当前仅检测到版本标签，尚无对应 Release 附件。");
         }
 
         try {
@@ -219,10 +224,63 @@ public class AppUpdateService {
     }
 
     protected ReleaseInfo fetchLatestReleaseFromRemote() {
-        String apiUrl = versionService.releaseApiUrl();
+        ApiFetchResult releaseResult = executeGithubJson(versionService.releaseApiUrl());
+        if (releaseResult.getStatusCode() >= 200 && releaseResult.getStatusCode() < 300) {
+            ReleaseInfo releaseInfo = parseReleaseInfo(releaseResult.getBody());
+            if (releaseInfo != null) {
+                return releaseInfo;
+            }
+        }
+
+        if (releaseResult.getStatusCode() == 404) {
+            ApiFetchResult tagsResult = executeGithubJson(versionService.tagsApiUrl());
+            if (tagsResult.getStatusCode() >= 200 && tagsResult.getStatusCode() < 300) {
+                ReleaseInfo tagInfo = parseTagInfo(tagsResult.getBody());
+                if (tagInfo != null) {
+                    clearLastError();
+                    return tagInfo;
+                }
+            }
+            setLastError(buildGithubError("GitHub Tags API 请求失败", tagsResult));
+            return null;
+        }
+
+        setLastError(buildGithubError("GitHub Release API 请求失败", releaseResult));
+        return null;
+    }
+
+    protected void downloadAsset(String assetUrl, File target) {
+        HttpResponse response = HttpRequest.get(assetUrl)
+                .timeout(60000)
+                .executeAsync();
+        if (response.getStatus() >= 400) {
+            throw new IllegalStateException("下载更新包失败，HTTP " + response.getStatus());
+        }
+        FileUtil.mkParentDirs(target);
+        response.writeBody(target);
+    }
+
+    private File cacheFile() {
+        return new File(versionService.runtimeHome(), ".update_check.json");
+    }
+
+    private void appendLine(StringBuilder buffer, String label, String value) {
+        if (StrUtil.isBlank(label) || StrUtil.isBlank(value)) {
+            return;
+        }
+        if (buffer.length() > 0) {
+            buffer.append('\n');
+        }
+        buffer.append(label).append(": ").append(value);
+    }
+
+    protected ApiFetchResult executeGithubJson(String url) {
+        ApiFetchResult result = new ApiFetchResult();
+        result.setUrl(url);
         try {
-            HttpRequest request = HttpRequest.get(apiUrl)
+            HttpRequest request = HttpRequest.get(url)
                     .header(Header.ACCEPT, "application/vnd.github+json")
+                    .header(Header.USER_AGENT, "jimuqu-agent")
                     .timeout(5000);
             Proxy proxy = resolveProxy();
             if (proxy != null) {
@@ -233,11 +291,18 @@ public class AppUpdateService {
                 request.header(Header.AUTHORIZATION, "Bearer " + token.trim());
             }
             HttpResponse response = request.execute();
-            if (response.getStatus() >= 400) {
-                setLastError("GitHub API 请求失败，HTTP " + response.getStatus());
-                return null;
-            }
-            ONode node = ONode.ofJson(response.body());
+            result.setStatusCode(response.getStatus());
+            result.setBody(response.body());
+        } catch (Exception e) {
+            result.setStatusCode(-1);
+            result.setErrorMessage(e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+        return result;
+    }
+
+    protected ReleaseInfo parseReleaseInfo(String body) {
+        try {
+            ONode node = ONode.ofJson(body);
             ReleaseInfo releaseInfo = new ReleaseInfo();
             releaseInfo.setTag(node.get("tag_name").getString());
             if (StrUtil.isBlank(releaseInfo.getTag())) {
@@ -247,6 +312,7 @@ public class AppUpdateService {
             releaseInfo.setVersion(AppVersionService.stripLeadingV(releaseInfo.getTag()));
             releaseInfo.setHtmlUrl(node.get("html_url").getString());
             releaseInfo.setPublishedAt(node.get("published_at").getString());
+            releaseInfo.setSource("release");
             ONode assets = node.get("assets");
             for (int i = 0; i < assets.size(); i++) {
                 ONode asset = assets.get(i);
@@ -267,19 +333,43 @@ public class AppUpdateService {
         }
     }
 
-    protected void downloadAsset(String assetUrl, File target) {
-        HttpResponse response = HttpRequest.get(assetUrl)
-                .timeout(60000)
-                .executeAsync();
-        if (response.getStatus() >= 400) {
-            throw new IllegalStateException("下载更新包失败，HTTP " + response.getStatus());
+    protected ReleaseInfo parseTagInfo(String body) {
+        try {
+            ONode node = ONode.ofJson(body);
+            if (!node.isArray() || node.size() == 0) {
+                setLastError("Tags API 响应为空");
+                return null;
+            }
+            ONode first = node.get(0);
+            String tag = first.get("name").getString();
+            if (StrUtil.isBlank(tag)) {
+                setLastError("Tags API 响应缺少 name");
+                return null;
+            }
+            ReleaseInfo releaseInfo = new ReleaseInfo();
+            releaseInfo.setTag(tag);
+            releaseInfo.setVersion(AppVersionService.stripLeadingV(tag));
+            releaseInfo.setHtmlUrl("https://github.com/" + versionService.releaseRepo() + "/tags");
+            releaseInfo.setPublishedAt(null);
+            releaseInfo.setSource("tag");
+            return releaseInfo;
+        } catch (Exception e) {
+            setLastError(e.getClass().getSimpleName() + ": " + e.getMessage());
+            return null;
         }
-        FileUtil.mkParentDirs(target);
-        response.writeBody(target);
     }
 
-    private File cacheFile() {
-        return new File(versionService.runtimeHome(), ".update_check.json");
+    private String buildGithubError(String prefix, ApiFetchResult result) {
+        if (result == null) {
+            return prefix + "，未知错误";
+        }
+        if (StrUtil.isNotBlank(result.getErrorMessage())) {
+            return prefix + "，" + result.getErrorMessage();
+        }
+        if (result.getStatusCode() > 0) {
+            return prefix + "，HTTP " + result.getStatusCode();
+        }
+        return prefix + "，未知错误";
     }
 
     private Proxy resolveProxy() {
@@ -359,12 +449,14 @@ public class AppUpdateService {
         private String repo;
         private String releaseUrl;
         private String releaseApiUrl;
+        private String tagsApiUrl;
         private String publishedAt;
         private String jarAssetUrl;
         private String jarAssetName;
         private boolean updateAvailable;
         private String updateErrorMessage;
         private long updateErrorAt;
+        private String versionSource;
 
         public String getCurrentVersion() { return currentVersion; }
         public void setCurrentVersion(String currentVersion) { this.currentVersion = currentVersion; }
@@ -382,6 +474,8 @@ public class AppUpdateService {
         public void setReleaseUrl(String releaseUrl) { this.releaseUrl = releaseUrl; }
         public String getReleaseApiUrl() { return releaseApiUrl; }
         public void setReleaseApiUrl(String releaseApiUrl) { this.releaseApiUrl = releaseApiUrl; }
+        public String getTagsApiUrl() { return tagsApiUrl; }
+        public void setTagsApiUrl(String tagsApiUrl) { this.tagsApiUrl = tagsApiUrl; }
         public String getPublishedAt() { return publishedAt; }
         public void setPublishedAt(String publishedAt) { this.publishedAt = publishedAt; }
         public String getJarAssetUrl() { return jarAssetUrl; }
@@ -394,6 +488,8 @@ public class AppUpdateService {
         public void setUpdateErrorMessage(String updateErrorMessage) { this.updateErrorMessage = updateErrorMessage; }
         public long getUpdateErrorAt() { return updateErrorAt; }
         public void setUpdateErrorAt(long updateErrorAt) { this.updateErrorAt = updateErrorAt; }
+        public String getVersionSource() { return versionSource; }
+        public void setVersionSource(String versionSource) { this.versionSource = versionSource; }
     }
 
     protected static class ReleaseInfo {
@@ -403,6 +499,7 @@ public class AppUpdateService {
         private String publishedAt;
         private String jarAssetUrl;
         private String jarAssetName;
+        private String source;
 
         public String getTag() { return tag; }
         public void setTag(String tag) { this.tag = tag; }
@@ -416,6 +513,8 @@ public class AppUpdateService {
         public void setJarAssetUrl(String jarAssetUrl) { this.jarAssetUrl = jarAssetUrl; }
         public String getJarAssetName() { return jarAssetName; }
         public void setJarAssetName(String jarAssetName) { this.jarAssetName = jarAssetName; }
+        public String getSource() { return source; }
+        public void setSource(String source) { this.source = source; }
 
         public ONode toNode() {
             return new ONode()
@@ -424,7 +523,8 @@ public class AppUpdateService {
                     .set("htmlUrl", htmlUrl)
                     .set("publishedAt", publishedAt)
                     .set("jarAssetUrl", jarAssetUrl)
-                    .set("jarAssetName", jarAssetName);
+                    .set("jarAssetName", jarAssetName)
+                    .set("source", source);
         }
 
         public static ReleaseInfo fromNode(ONode node) {
@@ -438,7 +538,27 @@ public class AppUpdateService {
             releaseInfo.setPublishedAt(node.get("publishedAt").getString());
             releaseInfo.setJarAssetUrl(node.get("jarAssetUrl").getString());
             releaseInfo.setJarAssetName(node.get("jarAssetName").getString());
+            releaseInfo.setSource(node.get("source").getString());
             return releaseInfo;
         }
+    }
+
+    protected static class ApiFetchResult {
+        private int statusCode;
+        private String body;
+        private String errorMessage;
+        private String url;
+
+        public ApiFetchResult() {
+        }
+
+        public int getStatusCode() { return statusCode; }
+        public void setStatusCode(int statusCode) { this.statusCode = statusCode; }
+        public String getBody() { return body; }
+        public void setBody(String body) { this.body = body; }
+        public String getErrorMessage() { return errorMessage; }
+        public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+        public String getUrl() { return url; }
+        public void setUrl(String url) { this.url = url; }
     }
 }
