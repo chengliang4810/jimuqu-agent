@@ -22,6 +22,7 @@ import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.SourceKeySupport;
 import com.jimuqu.agent.support.constants.CompressionConstants;
 import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
+import com.jimuqu.agent.tool.runtime.MessageDeliveryTracker;
 import lombok.RequiredArgsConstructor;
 import org.noear.solon.ai.chat.ChatRole;
 import org.noear.solon.ai.chat.message.AssistantMessage;
@@ -180,6 +181,9 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         sessionRepository.save(session);
 
         String finalReply = StrUtil.blankToDefault(replyText, EMPTY_REPLY_FALLBACK);
+        if (MessageDeliveryTracker.consumeDuplicateFinalReply(message.sourceKey(), finalReply)) {
+            finalReply = "";
+        }
         feedbackSink.onFinalReply(finalReply);
         GatewayReply reply = GatewayReply.ok(finalReply);
         reply.setSessionId(session.getSessionId());

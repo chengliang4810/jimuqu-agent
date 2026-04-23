@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Bot, FileText, NotebookPen, RotateCcw, Save, Shield, User } from "lucide-react";
+import { AlertTriangle, FileText, NotebookPen, RotateCcw, Save, Shield, User } from "lucide-react";
 import { api, type WorkspaceFile } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 import { Toast } from "@/components/Toast";
@@ -20,12 +20,6 @@ const FILE_ORDER = [
     name: "SOUL.md",
     description: "身份、边界、风格、对外操作原则",
     icon: Shield,
-  },
-  {
-    key: "identity",
-    name: "IDENTITY.md",
-    description: "名称、emoji、avatar、vibe、creature",
-    icon: Bot,
   },
   {
     key: "user",
@@ -49,12 +43,6 @@ const FILE_ORDER = [
     key: "memory",
     name: "MEMORY.md",
     description: "长期记忆，记录稳定、长期有价值的信息",
-    icon: NotebookPen,
-  },
-  {
-    key: "memory_today",
-    name: "memory/YYYY-MM-DD.md",
-    description: "当天运行记忆，记录今日上下文与进展",
     icon: NotebookPen,
   },
 ] as const;

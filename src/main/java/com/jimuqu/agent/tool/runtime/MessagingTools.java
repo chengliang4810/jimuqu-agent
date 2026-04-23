@@ -35,17 +35,29 @@ public class MessagingTools {
                               @Param(name = "mediaPaths", description = "可选本地附件路径数组", required = false) List<String> mediaPaths,
                               @Param(name = "channelExtrasJson", description = "可选渠道扩展 JSON；例如钉钉 AI card 所需参数", required = false) String channelExtrasJson) throws Exception {
         String[] parts = sourceKey.split(":", 3);
+        PlatformType sourcePlatform = PlatformType.fromName(parts[0]);
+        String sourceChatId = parts[1];
         PlatformType targetPlatform = PlatformType.fromName(platform == null || platform.trim().length() == 0 ? parts[0] : platform);
         String targetChatId = chatId == null || chatId.trim().length() == 0 ? parts[1] : chatId;
         String targetUserId = parts.length > 2 ? parts[2] : null;
+        List<MessageAttachment> attachments = resolveAttachments(targetPlatform, mediaPaths);
         DeliveryRequest request = new DeliveryRequest();
         request.setPlatform(targetPlatform);
         request.setChatId(targetChatId);
         request.setUserId(targetUserId);
         request.setText(text);
-        request.setAttachments(resolveAttachments(targetPlatform, mediaPaths));
+        request.setAttachments(attachments);
         request.setChannelExtras(parseChannelExtras(channelExtrasJson));
         deliveryService.deliver(request);
+        MessageDeliveryTracker.recordEcho(
+                sourceKey,
+                sourcePlatform,
+                sourceChatId,
+                targetPlatform,
+                targetChatId,
+                text,
+                attachments != null && !attachments.isEmpty()
+        );
         return "Message delivered";
     }
 
