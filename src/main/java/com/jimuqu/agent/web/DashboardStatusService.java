@@ -6,6 +6,7 @@ import com.jimuqu.agent.core.model.ChannelStatus;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.DeliveryService;
+import com.jimuqu.agent.support.LlmProviderService;
 import com.jimuqu.agent.support.update.AppUpdateService;
 import com.jimuqu.agent.support.update.AppVersionService;
 
@@ -27,19 +28,22 @@ public class DashboardStatusService {
     private final com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
     private final AppVersionService appVersionService;
     private final AppUpdateService appUpdateService;
+    private final LlmProviderService llmProviderService;
 
     public DashboardStatusService(AppConfig appConfig,
                                   SessionRepository sessionRepository,
                                   DeliveryService deliveryService,
                                   com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService,
                                   AppVersionService appVersionService,
-                                  AppUpdateService appUpdateService) {
+                                  AppUpdateService appUpdateService,
+                                  LlmProviderService llmProviderService) {
         this.appConfig = appConfig;
         this.sessionRepository = sessionRepository;
         this.deliveryService = deliveryService;
         this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
         this.appVersionService = appVersionService;
         this.appUpdateService = appUpdateService;
+        this.llmProviderService = llmProviderService;
     }
 
     public Map<String, Object> getStatus() throws Exception {
@@ -124,9 +128,15 @@ public class DashboardStatusService {
     }
 
     public Map<String, Object> getModelInfo() {
+        LlmProviderService.ResolvedProvider resolved = llmProviderService.resolveEffectiveProvider(null);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
-        result.put("model", appConfig.getLlm().getModel());
-        result.put("provider", appConfig.getLlm().getProvider());
+        result.put("model", resolved.getModel());
+        result.put("provider", resolved.getProviderKey());
+        result.put("providerKey", resolved.getProviderKey());
+        result.put("providerLabel", resolved.getLabel());
+        result.put("dialect", resolved.getDialect());
+        result.put("baseUrl", resolved.getBaseUrl());
+        result.put("fallbackProviders", appConfig.getFallbackProviders());
         result.put("auto_context_length", appConfig.getLlm().getContextWindowTokens());
         result.put("config_context_length", appConfig.getLlm().getContextWindowTokens());
         result.put("effective_context_length", appConfig.getLlm().getContextWindowTokens());
@@ -137,7 +147,7 @@ public class DashboardStatusService {
         capabilities.put("supports_reasoning", true);
         capabilities.put("context_window", appConfig.getLlm().getContextWindowTokens());
         capabilities.put("max_output_tokens", appConfig.getLlm().getMaxTokens());
-        capabilities.put("model_family", appConfig.getLlm().getProvider());
+        capabilities.put("model_family", resolved.getDialect());
         result.put("capabilities", capabilities);
         return result;
     }

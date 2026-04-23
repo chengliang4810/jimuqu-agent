@@ -24,12 +24,30 @@ export interface ConfigModelsResponse {
   groups: ModelGroup[]
 }
 
+export interface ProviderRecord {
+  providerKey: string
+  name: string
+  baseUrl: string
+  defaultModel: string
+  dialect: string
+  hasApiKey: boolean
+  isDefault: boolean
+}
+
+export interface FallbackProvider {
+  provider: string
+  model: string
+}
+
 export interface AvailableModelGroup {
   provider: string
+  providerKey: string
   label: string
   base_url: string
   models: string[]
-  api_key: string
+  dialect: string
+  has_api_key: boolean
+  isDefault: boolean
 }
 
 export interface AvailableModelsResponse {
@@ -37,14 +55,16 @@ export interface AvailableModelsResponse {
   default_provider: string
   groups: AvailableModelGroup[]
   allProviders: AvailableModelGroup[]
+  fallbackProviders: FallbackProvider[]
 }
 
 export interface CustomProvider {
+  providerKey: string
   name: string
-  base_url: string
-  api_key: string
-  model: string
-  providerKey?: string | null
+  baseUrl: string
+  apiKey?: string
+  defaultModel: string
+  dialect: string
 }
 
 interface DashboardStatus {
@@ -52,9 +72,24 @@ interface DashboardStatus {
   update_available?: boolean
 }
 
-interface DashboardModelInfo {
+interface ProvidersPayload {
+  providers: ProviderRecord[]
+  defaultProviderKey: string
+  defaultModel: string
+  fallbackProviders: FallbackProvider[]
+}
+
+export interface DashboardModelInfo {
   model: string
   provider: string
+  providerKey: string
+  providerLabel: string
+  dialect: string
+  baseUrl: string
+  fallbackProviders: FallbackProvider[]
+  auto_context_length?: number
+  config_context_length?: number
+  effective_context_length?: number
 }
 
 export async function checkHealth(): Promise<HealthResponse> {
@@ -80,84 +115,89 @@ export async function triggerUpdate(): Promise<{ success: boolean; message: stri
   }
 }
 
-export async function fetchConfigModels(): Promise<ConfigModelsResponse> {
-  const info = await request<DashboardModelInfo>('/api/model/info')
+function toGroup(provider: ProviderRecord, defaultModel: string): AvailableModelGroup {
+  const model = provider.defaultModel || defaultModel || ''
   return {
-    default: info.model,
-    groups: [
-      {
-        provider: info.provider,
-        models: [{ id: info.model, label: info.model }],
-      },
-    ],
+    provider: provider.providerKey,
+    providerKey: provider.providerKey,
+    label: provider.name || provider.providerKey,
+    base_url: provider.baseUrl,
+    models: model ? [model] : [],
+    dialect: provider.dialect,
+    has_api_key: provider.hasApiKey,
+    isDefault: provider.isDefault,
+  }
+}
+
+export async function fetchConfigModels(): Promise<ConfigModelsResponse> {
+  const payload = await request<ProvidersPayload>('/api/providers')
+  return {
+    default: payload.defaultModel || '',
+    groups: payload.providers.map(p => ({
+      provider: p.providerKey,
+      models: (p.defaultModel ? [p.defaultModel] : []).map(model => ({ id: model, label: model })),
+    })),
   }
 }
 
 export async function fetchAvailableModels(): Promise<AvailableModelsResponse> {
-  const info = await request<DashboardModelInfo & { auto_context_length?: number }>('/api/model/info')
-  const group: AvailableModelGroup = {
-    provider: info.provider,
-    label: info.provider,
-    base_url: '',
-    models: [info.model],
-    api_key: '',
-  }
-
+  const payload = await request<ProvidersPayload>('/api/providers')
+  const groups = payload.providers.map(p => toGroup(p, payload.defaultModel))
   return {
-    default: info.model,
-    default_provider: info.provider,
-    groups: [group],
-    allProviders: [group],
+    default: payload.defaultModel || '',
+    default_provider: payload.defaultProviderKey || '',
+    groups,
+    allProviders: groups,
+    fallbackProviders: payload.fallbackProviders || [],
   }
+}
+
+export async function fetchModelInfo(): Promise<DashboardModelInfo> {
+  return request<DashboardModelInfo>('/api/model/info')
 }
 
 export async function updateDefaultModel(data: {
   default: string
   provider?: string
-  base_url?: string
-  api_key?: string
 }): Promise<void> {
-  const current = await request<Record<string, any>>('/api/config')
-  const next = {
-    ...current,
-    llm: {
-      ...(current.llm || {}),
-      model: data.default,
-      provider: data.provider || current.llm?.provider,
-      apiUrl: data.base_url || current.llm?.apiUrl,
-    },
-  }
-
-  await request('/api/config', {
+  await request('/api/model/default', {
     method: 'PUT',
-    body: JSON.stringify({ config: next }),
+    body: JSON.stringify({
+      providerKey: data.provider || '',
+      model: data.default,
+    }),
   })
 }
 
-function unsupported(): never {
-  throw new Error('当前后端未开放自定义 provider 管理')
+export async function addCustomProvider(data: CustomProvider): Promise<void> {
+  await request('/api/providers', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
 }
 
-export async function addCustomProvider(_data: CustomProvider): Promise<void> {
-  unsupported()
+export async function removeCustomProvider(name: string): Promise<void> {
+  await request(`/api/providers/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+  })
 }
 
-export async function removeCustomProvider(_name: string): Promise<void> {
-  unsupported()
-}
-
-export async function updateProvider(_poolKey: string, data: {
+export async function updateProvider(poolKey: string, data: {
   name?: string
-  base_url?: string
-  api_key?: string
-  model?: string
+  baseUrl?: string
+  apiKey?: string
+  defaultModel?: string
+  dialect?: string
 }): Promise<void> {
-  if (!data.model) {
-    throw new Error('当前只支持切换默认模型')
-  }
-  await updateDefaultModel({
-    default: data.model,
-    base_url: data.base_url,
-    api_key: data.api_key,
+  await request(`/api/providers/${encodeURIComponent(poolKey)}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateFallbackProviders(fallbackProviders: FallbackProvider[]): Promise<void> {
+  await request('/api/model/fallbacks', {
+    method: 'PUT',
+    body: JSON.stringify({ fallbackProviders }),
   })
 }

@@ -6,11 +6,13 @@ import com.jimuqu.agent.core.model.ChannelStatus;
 import com.jimuqu.agent.core.model.DeliveryRequest;
 import com.jimuqu.agent.core.service.ChannelAdapter;
 import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
+import com.jimuqu.agent.support.LlmProviderService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.TestEnvironment;
 import com.jimuqu.agent.support.update.AppVersionService;
 import com.jimuqu.agent.web.DashboardConfigService;
 import com.jimuqu.agent.web.DashboardEnvService;
+import com.jimuqu.agent.web.DashboardProviderService;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -26,7 +28,7 @@ public class RuntimeRefreshBehaviorTest {
         RecordingChannelAdapter adapter = new RecordingChannelAdapter(PlatformType.WEIXIN);
         RuntimeSettingsService runtimeSettingsService = runtimeSettingsService(env, adapter);
 
-        runtimeSettingsService.setConfigValue("llm.model", "gpt-5.2");
+        runtimeSettingsService.setGlobalModel("default", "gpt-5.2");
 
         assertThat(env.appConfig.getLlm().getModel()).isEqualTo("gpt-5.2");
         assertThat(adapter.disconnectCount).isZero();
@@ -37,14 +39,14 @@ public class RuntimeRefreshBehaviorTest {
     void shouldUpdateConfigBackedLlmModelEffectively() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         RecordingChannelAdapter adapter = new RecordingChannelAdapter(PlatformType.WEIXIN);
-        FileUtil.writeUtf8String("jimuqu:\n  llm:\n    model: gpt-5.4\n", env.appConfig.getRuntime().getConfigFile());
+        FileUtil.writeUtf8String("model:\n  providerKey: default\n  default: gpt-5.4\n", env.appConfig.getRuntime().getConfigFile());
         RuntimeSettingsService runtimeSettingsService = runtimeSettingsService(env, adapter);
 
-        runtimeSettingsService.setConfigValue("llm.model", "gpt-5.2");
+        runtimeSettingsService.setGlobalModel("default", "gpt-5.2");
 
         assertThat(env.appConfig.getLlm().getModel()).isEqualTo("gpt-5.2");
-        assertThat(runtimeSettingsService.getConfigValue("llm.model")).isEqualTo("gpt-5.2");
-        assertThat(FileUtil.readUtf8String(env.appConfig.getRuntime().getConfigFile())).contains("model: gpt-5.2");
+        assertThat(env.appConfig.getModel().getDefault()).isEqualTo("gpt-5.2");
+        assertThat(FileUtil.readUtf8String(env.appConfig.getRuntime().getConfigFile())).contains("default: gpt-5.2");
         assertThat(adapter.disconnectCount).isZero();
         assertThat(adapter.connectCount).isZero();
     }
@@ -68,7 +70,9 @@ public class RuntimeRefreshBehaviorTest {
         GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(env.appConfig, adapters);
         DashboardConfigService configService = new DashboardConfigService(env.appConfig, refreshService);
         DashboardEnvService envService = new DashboardEnvService(env.appConfig, refreshService);
-        return new RuntimeSettingsService(env.appConfig, env.globalSettingRepository, env.deliveryService, configService, envService, new AppVersionService(env.appConfig));
+        LlmProviderService llmProviderService = new LlmProviderService(env.appConfig);
+        DashboardProviderService providerService = new DashboardProviderService(env.appConfig, refreshService, llmProviderService);
+        return new RuntimeSettingsService(env.appConfig, env.globalSettingRepository, env.deliveryService, configService, envService, new AppVersionService(env.appConfig), llmProviderService, providerService);
     }
 
     private static class RecordingChannelAdapter implements ChannelAdapter {

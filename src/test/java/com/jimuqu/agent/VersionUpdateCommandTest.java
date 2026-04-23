@@ -7,12 +7,14 @@ import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.gateway.command.DefaultCommandService;
 import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.agent.support.DisplaySettingsService;
+import com.jimuqu.agent.support.LlmProviderService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.TestEnvironment;
 import com.jimuqu.agent.support.update.AppUpdateService;
 import com.jimuqu.agent.support.update.AppVersionService;
 import com.jimuqu.agent.web.DashboardConfigService;
 import com.jimuqu.agent.web.DashboardEnvService;
+import com.jimuqu.agent.web.DashboardProviderService;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -43,13 +45,16 @@ public class VersionUpdateCommandTest {
                 env.appConfig,
                 new LinkedHashMap<com.jimuqu.agent.core.enums.PlatformType, com.jimuqu.agent.core.service.ChannelAdapter>()
         );
+        LlmProviderService llmProviderService = new LlmProviderService(env.appConfig);
         RuntimeSettingsService runtimeSettingsService = new RuntimeSettingsService(
                 env.appConfig,
                 env.globalSettingRepository,
                 env.deliveryService,
                 new DashboardConfigService(env.appConfig, refreshService),
                 new DashboardEnvService(env.appConfig, refreshService),
-                new AppVersionService(env.appConfig)
+                new AppVersionService(env.appConfig),
+                llmProviderService,
+                new DashboardProviderService(env.appConfig, refreshService, llmProviderService)
         );
         DisplaySettingsService displaySettingsService = new DisplaySettingsService(env.appConfig, env.globalSettingRepository);
         return new DefaultCommandService(

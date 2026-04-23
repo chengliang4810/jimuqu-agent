@@ -9,6 +9,7 @@ import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.ContextCompressionService;
 import com.jimuqu.agent.core.service.ContextService;
+import com.jimuqu.agent.core.service.ConversationEventSink;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.service.LlmGateway;
@@ -67,22 +68,34 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     private final DangerousCommandApprovalService dangerousCommandApprovalService;
 
     public GatewayReply handleIncoming(GatewayMessage message) throws Exception {
+        return handleIncoming(message, ConversationEventSink.noop());
+    }
+
+    public GatewayReply handleIncoming(GatewayMessage message, ConversationEventSink eventSink) throws Exception {
         SessionRecord session = sessionRepository.getBoundSession(message.sourceKey());
         if (session == null) {
             session = sessionRepository.bindNewSession(message.sourceKey());
         }
-        return runOnSession(session, message);
+        return runOnSession(session, message, eventSink);
     }
 
     public GatewayReply runScheduled(GatewayMessage syntheticMessage) throws Exception {
+        return runScheduled(syntheticMessage, ConversationEventSink.noop());
+    }
+
+    public GatewayReply runScheduled(GatewayMessage syntheticMessage, ConversationEventSink eventSink) throws Exception {
         SessionRecord session = sessionRepository.getBoundSession(syntheticMessage.sourceKey());
         if (session == null) {
             session = sessionRepository.bindNewSession(syntheticMessage.sourceKey());
         }
-        return runOnSession(session, syntheticMessage);
+        return runOnSession(session, syntheticMessage, eventSink);
     }
 
     public GatewayReply resumePending(String sourceKey) throws Exception {
+        return resumePending(sourceKey, ConversationEventSink.noop());
+    }
+
+    public GatewayReply resumePending(String sourceKey, ConversationEventSink eventSink) throws Exception {
         SessionRecord session = sessionRepository.getBoundSession(sourceKey);
         if (session == null) {
             return GatewayReply.error("当前来源键没有可恢复的会话。");
@@ -98,7 +111,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         String previousNdjson = session.getNdjson();
         GatewayMessage feedbackTarget = messageFromSourceKey(sourceKey);
         ConversationFeedbackSink feedbackSink = feedbackSinkFor(feedbackTarget);
-        LlmResult result = llmGateway.resume(session, systemPrompt, enabledTools, feedbackSink);
+        LlmResult result = llmGateway.resume(session, systemPrompt, enabledTools, feedbackSink, eventSink);
         String replyText = extractText(result.getAssistantMessage());
         if (StrUtil.isBlank(replyText) && hasRecentToolActivity(previousNdjson, result.getNdjson())) {
             session.setNdjson(result.getNdjson());
@@ -129,13 +142,14 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
 
         String finalReply = StrUtil.blankToDefault(replyText, EMPTY_REPLY_FALLBACK);
         feedbackSink.onFinalReply(finalReply);
+        eventSink.onRunCompleted(session.getSessionId(), finalReply, result);
         GatewayReply reply = GatewayReply.ok(finalReply);
         reply.setSessionId(session.getSessionId());
         reply.setBranchName(session.getBranchName());
         return reply;
     }
 
-    private GatewayReply runOnSession(SessionRecord session, GatewayMessage message) throws Exception {
+    private GatewayReply runOnSession(SessionRecord session, GatewayMessage message, ConversationEventSink eventSink) throws Exception {
         String effectiveUserText = MessageAttachmentSupport.composeEffectiveUserText(message);
         message.setText(effectiveUserText);
         if (!message.isHeartbeat() && StrUtil.isBlank(session.getTitle()) && StrUtil.isNotBlank(effectiveUserText)) {
@@ -151,7 +165,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         session = contextCompressionService.compressIfNeeded(session, systemPrompt, effectiveUserText);
         String previousNdjson = session.getNdjson();
         ConversationFeedbackSink feedbackSink = feedbackSinkFor(message);
-        LlmResult result = llmGateway.chat(session, systemPrompt, effectiveUserText, enabledTools, feedbackSink);
+        LlmResult result = llmGateway.chat(session, systemPrompt, effectiveUserText, enabledTools, feedbackSink, eventSink);
         String replyText = extractText(result.getAssistantMessage());
         if (StrUtil.isBlank(replyText) && hasRecentToolActivity(previousNdjson, result.getNdjson())) {
             session.setNdjson(result.getNdjson());
@@ -185,6 +199,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             finalReply = "";
         }
         feedbackSink.onFinalReply(finalReply);
+        eventSink.onRunCompleted(session.getSessionId(), finalReply, result);
         GatewayReply reply = GatewayReply.ok(finalReply);
         reply.setSessionId(session.getSessionId());
         reply.setBranchName(session.getBranchName());

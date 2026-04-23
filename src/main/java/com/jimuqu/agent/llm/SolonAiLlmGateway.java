@@ -6,10 +6,13 @@ import com.jimuqu.agent.config.RuntimeEnvResolver;
 import com.jimuqu.agent.core.model.LlmResult;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.service.ConversationEventSink;
 import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.gateway.feedback.ConversationFeedbackSink;
+import com.jimuqu.agent.gateway.feedback.ToolPreviewSupport;
 import com.jimuqu.agent.llm.dialect.LoggingOpenaiResponsesDialect;
 import com.jimuqu.agent.storage.session.SqliteAgentSession;
+import com.jimuqu.agent.support.LlmProviderService;
 import com.jimuqu.agent.support.constants.LlmConstants;
 import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
 import org.noear.solon.ai.agent.trace.Metrics;
@@ -26,6 +29,7 @@ import org.noear.solon.ai.agent.react.intercept.summarize.CompositeSummarization
 import org.noear.solon.ai.agent.react.intercept.summarize.HierarchicalSummarizationStrategy;
 import org.noear.solon.ai.agent.react.intercept.summarize.KeyInfoExtractionStrategy;
 import org.noear.solon.ai.chat.ChatModel;
+import org.noear.solon.ai.chat.ChatResponse;
 import org.noear.solon.ai.chat.dialect.ChatDialectManager;
 import org.noear.solon.ai.chat.message.ChatMessage;
 import org.noear.solon.ai.chat.message.AssistantMessage;
@@ -58,22 +62,31 @@ public class SolonAiLlmGateway implements LlmGateway {
     private final AppConfig appConfig;
     private final SessionRepository sessionRepository;
     private final DangerousCommandApprovalService dangerousCommandApprovalService;
+    private final LlmProviderService llmProviderService;
     private volatile PdfSkill pdfSkill;
 
     public SolonAiLlmGateway(AppConfig appConfig) {
-        this(appConfig, null, null);
+        this(appConfig, null, null, null);
     }
 
     public SolonAiLlmGateway(AppConfig appConfig, SessionRepository sessionRepository) {
-        this(appConfig, sessionRepository, null);
+        this(appConfig, sessionRepository, null, null);
     }
 
     public SolonAiLlmGateway(AppConfig appConfig,
                              SessionRepository sessionRepository,
                              DangerousCommandApprovalService dangerousCommandApprovalService) {
+        this(appConfig, sessionRepository, dangerousCommandApprovalService, null);
+    }
+
+    public SolonAiLlmGateway(AppConfig appConfig,
+                             SessionRepository sessionRepository,
+                             DangerousCommandApprovalService dangerousCommandApprovalService,
+                             LlmProviderService llmProviderService) {
         this.appConfig = appConfig;
         this.sessionRepository = sessionRepository;
         this.dangerousCommandApprovalService = dangerousCommandApprovalService;
+        this.llmProviderService = llmProviderService == null ? new LlmProviderService(appConfig) : llmProviderService;
     }
 
     @Override
@@ -87,31 +100,17 @@ public class SolonAiLlmGateway implements LlmGateway {
                           String userMessage,
                           List<Object> toolObjects,
                           ConversationFeedbackSink feedbackSink) throws Exception {
-        AppConfig.LlmConfig resolved = resolve(session);
-        validate(resolved);
-        log.info("LLM request: provider={}, model={}, sessionId={}, stream={}, sessionOverride={}",
-                resolved.getProvider(),
-                resolved.getModel(),
-                session == null ? "" : StrUtil.nullToEmpty(session.getSessionId()),
-                resolved.isStream(),
-                session != null && StrUtil.isNotBlank(session.getModelOverride()));
-        SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
-        ChatModel chatModel = buildChatModel(resolved);
-        ReActAgent agent = buildReActAgent(chatModel, resolved, systemPrompt, toolObjects, agentSession, feedbackSink);
-        ReActResponse response = callAgent(agent, agentSession, userMessage, false);
+        return chat(session, systemPrompt, userMessage, toolObjects, feedbackSink, ConversationEventSink.noop());
+    }
 
-        AssistantMessage assistantMessage = response.getMessage();
-
-        LlmResult result = new LlmResult();
-        result.setAssistantMessage(assistantMessage);
-        result.setNdjson(ChatMessage.toNdjson(agentSession.getMessages()));
-        result.setStreamed(resolved.isStream());
-        result.setRawResponse(response.getContent());
-        result.setProvider(resolved.getProvider());
-        result.setModel(StrUtil.blankToDefault(resolved.getModel(), ""));
-        applyMetrics(result, response.getMetrics());
-        logUsage(session, resolved, result);
-        return result;
+    @Override
+    public LlmResult chat(SessionRecord session,
+                          String systemPrompt,
+                          String userMessage,
+                          List<Object> toolObjects,
+                          ConversationFeedbackSink feedbackSink,
+                          ConversationEventSink eventSink) throws Exception {
+        return executeWithFailover(session, systemPrompt, userMessage, toolObjects, feedbackSink, eventSink, false);
     }
 
     @Override
@@ -124,10 +123,86 @@ public class SolonAiLlmGateway implements LlmGateway {
                             String systemPrompt,
                             List<Object> toolObjects,
                             ConversationFeedbackSink feedbackSink) throws Exception {
-        AppConfig.LlmConfig resolved = resolve(session);
+        return resume(session, systemPrompt, toolObjects, feedbackSink, ConversationEventSink.noop());
+    }
+
+    @Override
+    public LlmResult resume(SessionRecord session,
+                            String systemPrompt,
+                            List<Object> toolObjects,
+                            ConversationFeedbackSink feedbackSink,
+                            ConversationEventSink eventSink) throws Exception {
+        return executeWithFailover(session, systemPrompt, null, toolObjects, feedbackSink, eventSink, true);
+    }
+
+    private LlmResult executeWithFailover(SessionRecord session,
+                                          String systemPrompt,
+                                          String userMessage,
+                                          List<Object> toolObjects,
+                                          ConversationFeedbackSink feedbackSink,
+                                          ConversationEventSink eventSink,
+                                          boolean resume) throws Exception {
+        List<AppConfig.LlmConfig> candidates = buildCandidateConfigs(session);
+        Throwable lastError = null;
+        boolean primary = true;
+
+        for (AppConfig.LlmConfig resolved : candidates) {
+            int maxAttempts = 2;
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    LlmResult result = executeSingle(session, systemPrompt, userMessage, toolObjects, feedbackSink, eventSink, resume, resolved);
+                    if (hasVisibleContent(result.getAssistantMessage(), result.getRawResponse())) {
+                        return result;
+                    }
+                    if (attempt < maxAttempts) {
+                        log.warn("LLM empty response, retrying same provider: provider={}, dialect={}, model={}, attempt={}",
+                                resolved.getProvider(), resolved.getDialect(), resolved.getModel(), attempt);
+                        continue;
+                    }
+                    lastError = new IllegalStateException("LLM returned empty assistant content");
+                } catch (Exception e) {
+                    lastError = e;
+                    FailureMode failureMode = classifyFailure(e);
+                    if (failureMode.retryable && attempt < maxAttempts) {
+                        log.warn("LLM request failed, retrying same provider: provider={}, dialect={}, model={}, attempt={}, message={}",
+                                resolved.getProvider(), resolved.getDialect(), resolved.getModel(), attempt, e.getMessage());
+                        continue;
+                    }
+                }
+
+                if (!primary) {
+                    log.warn("Fallback provider failed, trying next candidate: provider={}, dialect={}, model={}, message={}",
+                            resolved.getProvider(), resolved.getDialect(), resolved.getModel(),
+                            lastError == null ? "" : lastError.getMessage());
+                } else {
+                    log.warn("Primary provider failed, switching to fallback candidate: provider={}, dialect={}, model={}, message={}",
+                            resolved.getProvider(), resolved.getDialect(), resolved.getModel(),
+                            lastError == null ? "" : lastError.getMessage());
+                }
+                break;
+            }
+            primary = false;
+        }
+
+        if (lastError instanceof Exception) {
+            throw (Exception) lastError;
+        }
+        throw new IllegalStateException(lastError == null ? "LLM execution failed" : lastError.getMessage(), lastError);
+    }
+
+    protected LlmResult executeSingle(SessionRecord session,
+                                      String systemPrompt,
+                                      String userMessage,
+                                      List<Object> toolObjects,
+                                      ConversationFeedbackSink feedbackSink,
+                                      ConversationEventSink eventSink,
+                                      boolean resume,
+                                      AppConfig.LlmConfig resolved) throws Exception {
         validate(resolved);
-        log.info("LLM resume: provider={}, model={}, sessionId={}, stream={}, sessionOverride={}",
+        log.info("LLM {}: provider={}, dialect={}, model={}, sessionId={}, stream={}, sessionOverride={}",
+                resume ? "resume" : "request",
                 resolved.getProvider(),
+                resolved.getDialect(),
                 resolved.getModel(),
                 session == null ? "" : StrUtil.nullToEmpty(session.getSessionId()),
                 resolved.isStream(),
@@ -135,7 +210,10 @@ public class SolonAiLlmGateway implements LlmGateway {
         SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
         ChatModel chatModel = buildChatModel(resolved);
         ReActAgent agent = buildReActAgent(chatModel, resolved, systemPrompt, toolObjects, agentSession, feedbackSink);
-        ReActResponse response = callAgent(agent, agentSession, null, true);
+        if (eventSink != null && eventSink != ConversationEventSink.noop()) {
+            return callAgentStream(agent, agentSession, session, userMessage, resume, resolved, eventSink);
+        }
+        ReActResponse response = callAgent(agent, agentSession, userMessage, resume);
 
         AssistantMessage assistantMessage = response.getMessage();
         LlmResult result = new LlmResult();
@@ -171,32 +249,200 @@ public class SolonAiLlmGateway implements LlmGateway {
         }
     }
 
-    private AppConfig.LlmConfig resolve(SessionRecord session) {
-        AppConfig.LlmConfig current = new AppConfig.LlmConfig();
-        current.setProvider(StrUtil.nullToEmpty(appConfig.getLlm().getProvider()).trim().toLowerCase());
-        current.setApiUrl(StrUtil.nullToEmpty(appConfig.getLlm().getApiUrl()).trim());
-        current.setApiKey(appConfig.getLlm().getApiKey());
-        current.setModel(StrUtil.nullToEmpty(appConfig.getLlm().getModel()).trim());
-        current.setStream(appConfig.getLlm().isStream());
-        current.setReasoningEffort(StrUtil.nullToEmpty(appConfig.getLlm().getReasoningEffort()).trim());
-        current.setTemperature(appConfig.getLlm().getTemperature());
-        current.setMaxTokens(appConfig.getLlm().getMaxTokens());
-        current.setContextWindowTokens(appConfig.getLlm().getContextWindowTokens());
+    private LlmResult callAgentStream(ReActAgent agent,
+                                      SqliteAgentSession agentSession,
+                                      SessionRecord session,
+                                      String userMessage,
+                                      boolean resume,
+                                      AppConfig.LlmConfig resolved,
+                                      ConversationEventSink eventSink) throws Exception {
+        final StringBuilder emittedText = new StringBuilder();
+        final ReActResponse[] finalResponse = new ReActResponse[1];
 
-        if (session == null || session.getModelOverride() == null || session.getModelOverride().trim().length() == 0) {
-            return current;
+        try {
+            if (resume) {
+                agent.prompt()
+                        .session(agentSession)
+                        .stream()
+                        .doOnNext(chunk -> handleStreamChunk(chunk, emittedText, eventSink, finalResponse))
+                        .blockLast();
+            } else {
+                agent.prompt(Prompt.of(userMessage))
+                        .session(agentSession)
+                        .options(options -> options.toolContextPut("user_message", userMessage))
+                        .stream()
+                        .doOnNext(chunk -> handleStreamChunk(chunk, emittedText, eventSink, finalResponse))
+                        .blockLast();
+            }
+        } catch (Throwable e) {
+            if (e instanceof Exception) {
+                throw (Exception) e;
+            }
+            throw new IllegalStateException("ReActAgent stream failed", e);
         }
 
-        String override = session.getModelOverride().trim();
-        if (override.contains(":")) {
-            String[] parts = override.split(":", 2);
-            current.setProvider(StrUtil.nullToEmpty(parts[0]).trim().toLowerCase());
-            current.setModel(StrUtil.nullToEmpty(parts[1]).trim());
-        } else {
-            current.setModel(override.trim());
+        AssistantMessage assistantMessage = finalResponse[0] == null ? ChatMessage.ofAssistant(emittedText.toString()) : finalResponse[0].getMessage();
+        String finalText = extractText(assistantMessage);
+        String emitted = emittedText.toString();
+        if (StrUtil.isNotBlank(finalText) && finalText.startsWith(emitted)) {
+            String tail = finalText.substring(emitted.length());
+            if (StrUtil.isNotBlank(tail)) {
+                eventSink.onAssistantDelta(tail);
+            }
+        } else if (StrUtil.isNotBlank(finalText) && !StrUtil.equals(finalText, emitted)) {
+            eventSink.onAssistantDelta(finalText);
         }
 
-        return current;
+        LlmResult result = new LlmResult();
+        result.setAssistantMessage(assistantMessage);
+        result.setNdjson(ChatMessage.toNdjson(agentSession.getMessages()));
+        result.setStreamed(true);
+        result.setRawResponse(finalText);
+        result.setProvider(resolved.getProvider());
+        result.setModel(StrUtil.blankToDefault(resolved.getModel(), ""));
+        if (finalResponse[0] != null) {
+            applyMetrics(result, finalResponse[0].getMetrics());
+        }
+        logUsage(session, resolved, result);
+        return result;
+    }
+
+    private void handleStreamChunk(org.noear.solon.ai.agent.AgentChunk chunk,
+                                   StringBuilder emittedText,
+                                   ConversationEventSink eventSink,
+                                   ReActResponse[] finalResponse) {
+        if (chunk instanceof org.noear.solon.ai.agent.react.task.ReasonChunk) {
+            org.noear.solon.ai.agent.react.task.ReasonChunk reasonChunk = (org.noear.solon.ai.agent.react.task.ReasonChunk) chunk;
+            if (reasonChunk.isToolCalls()) {
+                return;
+            }
+
+            ChatMessage message = reasonChunk.getMessage();
+            String delta = message == null ? null : message.getContent();
+            if (StrUtil.isBlank(delta)) {
+                return;
+            }
+
+            emittedText.append(delta);
+            eventSink.onAssistantDelta(delta);
+            return;
+        }
+
+        if (chunk instanceof org.noear.solon.ai.agent.react.task.ActionStartChunk) {
+            org.noear.solon.ai.agent.react.task.ActionStartChunk actionChunk = (org.noear.solon.ai.agent.react.task.ActionStartChunk) chunk;
+            eventSink.onToolStarted(actionChunk.getToolName(), actionChunk.getArgs());
+            return;
+        }
+
+        if (chunk instanceof org.noear.solon.ai.agent.react.task.ActionEndChunk) {
+            org.noear.solon.ai.agent.react.task.ActionEndChunk actionChunk = (org.noear.solon.ai.agent.react.task.ActionEndChunk) chunk;
+            String preview = ToolPreviewSupport.buildPreview(actionChunk.getToolName(), actionChunk.getArgs(), 80, false);
+            eventSink.onToolCompleted(actionChunk.getToolName(), preview, 0L);
+            return;
+        }
+
+        if (chunk instanceof org.noear.solon.ai.agent.react.ReActChunk) {
+            finalResponse[0] = ((org.noear.solon.ai.agent.react.ReActChunk) chunk).getResponse();
+        }
+    }
+
+    private List<AppConfig.LlmConfig> buildCandidateConfigs(SessionRecord session) {
+        List<AppConfig.LlmConfig> candidates = new java.util.ArrayList<AppConfig.LlmConfig>();
+        java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<String>();
+
+        AppConfig.LlmConfig primary = toLlmConfig(llmProviderService.resolveEffectiveProvider(session));
+        candidates.add(primary);
+        seen.add(primary.getProvider() + "|" + primary.getModel());
+
+        for (LlmProviderService.ResolvedProvider fallback : llmProviderService.resolveFallbackProviders()) {
+            AppConfig.LlmConfig candidate = toLlmConfig(fallback);
+            String signature = candidate.getProvider() + "|" + candidate.getModel();
+            if (seen.add(signature)) {
+                candidates.add(candidate);
+            }
+        }
+
+        return candidates;
+    }
+
+    private AppConfig.LlmConfig toLlmConfig(LlmProviderService.ResolvedProvider resolved) {
+        AppConfig.LlmConfig config = copyLlmConfig(appConfig.getLlm());
+        config.setProvider(StrUtil.nullToEmpty(resolved.getProviderKey()).trim());
+        config.setDialect(StrUtil.nullToEmpty(resolved.getDialect()).trim());
+        config.setApiUrl(StrUtil.nullToEmpty(resolved.getApiUrl()).trim());
+        config.setApiKey(resolved.getApiKey());
+        config.setModel(StrUtil.nullToEmpty(resolved.getModel()).trim());
+        return config;
+    }
+
+    private boolean hasVisibleContent(AssistantMessage assistantMessage, String rawResponse) {
+        return StrUtil.isNotBlank(extractText(assistantMessage)) || StrUtil.isNotBlank(rawResponse);
+    }
+
+    private String extractText(AssistantMessage assistantMessage) {
+        if (assistantMessage == null) {
+            return "";
+        }
+        if (StrUtil.isNotBlank(assistantMessage.getResultContent())) {
+            return assistantMessage.getResultContent().trim();
+        }
+        if (StrUtil.isNotBlank(assistantMessage.getContent())) {
+            return assistantMessage.getContent().trim();
+        }
+        return String.valueOf(assistantMessage).trim();
+    }
+
+    private FailureMode classifyFailure(Throwable error) {
+        String message = collectErrorText(error).toLowerCase(Locale.ROOT);
+        int status = extractStatusCode(message);
+        if (status == 401 || status == 403 || status == 404) {
+            return FailureMode.FALLBACK_NOW;
+        }
+        if (status == 429 || status == 500 || status == 502 || status == 503) {
+            return FailureMode.RETRY_THEN_FALLBACK;
+        }
+        if (message.contains("timeout")
+                || message.contains("timed out")
+                || message.contains("connection reset")
+                || message.contains("connection refused")
+                || message.contains("connection aborted")
+                || message.contains("broken pipe")
+                || message.contains("eof")
+                || message.contains("unreachable")
+                || message.contains("network")) {
+            return FailureMode.RETRY_THEN_FALLBACK;
+        }
+        return FailureMode.FALLBACK_NOW;
+    }
+
+    private String collectErrorText(Throwable error) {
+        StringBuilder buffer = new StringBuilder();
+        Throwable current = error;
+        while (current != null) {
+            if (current.getMessage() != null && current.getMessage().trim().length() > 0) {
+                if (buffer.length() > 0) {
+                    buffer.append(" | ");
+                }
+                buffer.append(current.getMessage());
+            }
+            current = current.getCause();
+        }
+        return buffer.toString();
+    }
+
+    private int extractStatusCode(String message) {
+        String[] candidates = {"401", "403", "404", "429", "500", "502", "503"};
+        for (String candidate : candidates) {
+            if (message.contains(" " + candidate + " ")
+                    || message.contains("http " + candidate)
+                    || message.contains("status=" + candidate)
+                    || message.contains("code=" + candidate)
+                    || message.contains("[" + candidate + "]")
+                    || message.endsWith(candidate)) {
+                return Integer.parseInt(candidate);
+            }
+        }
+        return 0;
     }
 
     /**
@@ -206,8 +452,9 @@ public class SolonAiLlmGateway implements LlmGateway {
         if (StrUtil.isBlank(resolved.getProvider())) {
             throw new IllegalStateException("LLM provider 不能为空。");
         }
-        if (!LlmConstants.SUPPORTED_PROVIDERS.contains(resolved.getProvider())) {
-            throw new IllegalStateException("不支持的 provider：" + resolved.getProvider());
+        String dialect = StrUtil.isNotBlank(resolved.getDialect()) ? resolved.getDialect() : resolved.getProvider();
+        if (!LlmConstants.SUPPORTED_PROVIDERS.contains(dialect)) {
+            throw new IllegalStateException("不支持的 provider dialect：" + dialect);
         }
         if (StrUtil.isBlank(resolved.getApiUrl())) {
             throw new IllegalStateException("LLM apiUrl 不能为空。");
@@ -215,7 +462,7 @@ public class SolonAiLlmGateway implements LlmGateway {
         if (StrUtil.isBlank(resolved.getModel())) {
             throw new IllegalStateException("LLM model 不能为空。");
         }
-        if (LlmConstants.PROVIDER_OPENAI_RESPONSES.equals(resolved.getProvider())
+        if (LlmConstants.PROVIDER_OPENAI_RESPONSES.equals(dialect)
                 && !StrUtil.containsIgnoreCase(resolved.getApiUrl(), "/responses")) {
             throw new IllegalStateException("openai-responses 的 apiUrl 必须直接指向 /responses 接口。");
         }
@@ -223,9 +470,10 @@ public class SolonAiLlmGateway implements LlmGateway {
 
     private ChatModel buildChatModel(AppConfig.LlmConfig resolved) {
         ensureCustomDialectsRegistered();
+        String dialect = StrUtil.isNotBlank(resolved.getDialect()) ? resolved.getDialect() : resolved.getProvider();
 
         ChatModel.Builder builder = ChatModel.of(resolved.getApiUrl())
-                .provider(resolved.getProvider())
+                .provider(dialect)
                 .model(resolved.getModel())
                 .timeout(Duration.ofMinutes(5));
 
@@ -330,6 +578,7 @@ public class SolonAiLlmGateway implements LlmGateway {
     private AppConfig.LlmConfig copyLlmConfig(AppConfig.LlmConfig source) {
         AppConfig.LlmConfig copy = new AppConfig.LlmConfig();
         copy.setProvider(source.getProvider());
+        copy.setDialect(source.getDialect());
         copy.setApiUrl(source.getApiUrl());
         copy.setApiKey(source.getApiKey());
         copy.setModel(source.getModel());
@@ -352,20 +601,33 @@ public class SolonAiLlmGateway implements LlmGateway {
 
     private void logUsage(SessionRecord session, AppConfig.LlmConfig resolved, LlmResult result) {
         if (result.getTotalTokens() <= 0 && result.getInputTokens() <= 0 && result.getOutputTokens() <= 0) {
-            log.info("LLM usage unavailable: provider={}, model={}, sessionId={}",
+            log.info("LLM usage unavailable: provider={}, dialect={}, model={}, sessionId={}",
                     resolved.getProvider(),
+                    resolved.getDialect(),
                     resolved.getModel(),
                     session == null ? "" : StrUtil.nullToEmpty(session.getSessionId()));
             return;
         }
 
-        log.info("LLM usage: provider={}, model={}, sessionId={}, inputTokens={}, outputTokens={}, totalTokens={}",
+        log.info("LLM usage: provider={}, dialect={}, model={}, sessionId={}, inputTokens={}, outputTokens={}, totalTokens={}",
                 resolved.getProvider(),
+                resolved.getDialect(),
                 resolved.getModel(),
                 session == null ? "" : StrUtil.nullToEmpty(session.getSessionId()),
                 result.getInputTokens(),
                 result.getOutputTokens(),
                 result.getTotalTokens());
+    }
+
+    private enum FailureMode {
+        RETRY_THEN_FALLBACK(true),
+        FALLBACK_NOW(false);
+
+        private final boolean retryable;
+
+        FailureMode(boolean retryable) {
+            this.retryable = retryable;
+        }
     }
 
     private boolean isDelegateSession(SqliteAgentSession agentSession) {

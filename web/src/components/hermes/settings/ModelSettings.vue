@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { NInput, NButton, NSpin, NEmpty, useMessage } from 'naive-ui'
+import { computed, onMounted, ref, watch } from 'vue'
+import { NInput, NButton, NSpin, NEmpty, NSelect, useMessage } from 'naive-ui'
 import { useModelsStore } from '@/stores/hermes/models'
-import { updateProvider } from '@/api/hermes/system'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -10,35 +9,98 @@ const modelsStore = useModelsStore()
 const message = useMessage()
 
 const savingKey = ref<string | null>(null)
-const editKeys = ref<Record<string, string>>({})
+const defaultProvider = ref('')
+const defaultModel = ref('')
+const fallbackRows = ref<Array<{ provider: string; model: string }>>([])
+const providerForms = ref<Record<string, {
+  name: string
+  baseUrl: string
+  apiKey: string
+  defaultModel: string
+  dialect: string
+}>>({})
 
-onMounted(() => {
-  if (modelsStore.providers.length === 0) {
-    modelsStore.fetchProviders()
+const providerOptions = computed(() =>
+  modelsStore.providers.map(provider => ({
+    label: provider.label,
+    value: provider.provider,
+  })),
+)
+
+function dialectLabel(value: string): string {
+  switch (value) {
+    case 'openai':
+      return t('models.dialectOpenai')
+    case 'openai-responses':
+      return t('models.dialectOpenaiResponses')
+    case 'ollama':
+      return t('models.dialectOllama')
+    case 'gemini':
+      return t('models.dialectGemini')
+    case 'anthropic':
+      return t('models.dialectAnthropic')
+    default:
+      return value
   }
-})
-
-const isCustom = (provider: string) => provider.startsWith('custom:')
-
-function getEditKey(provider: string): string {
-  if (!(provider in editKeys.value)) {
-    const g = modelsStore.providers.find(p => p.provider === provider)
-    editKeys.value[provider] = g?.api_key || ''
-  }
-  return editKeys.value[provider]
 }
 
-async function handleSaveApiKey(providerKey: string) {
-  const key = getEditKey(providerKey)
-  if (!key.trim()) {
-    message.warning(t('settings.models.apiKeyPlaceholder'))
+const dialectOptions = [
+  { label: dialectLabel('openai'), value: 'openai' },
+  { label: dialectLabel('openai-responses'), value: 'openai-responses' },
+  { label: dialectLabel('ollama'), value: 'ollama' },
+  { label: dialectLabel('gemini'), value: 'gemini' },
+  { label: dialectLabel('anthropic'), value: 'anthropic' },
+]
+
+function syncForms() {
+  defaultProvider.value = modelsStore.defaultProvider
+  defaultModel.value = modelsStore.defaultModel
+  fallbackRows.value = modelsStore.fallbackProviders.map(item => ({
+    provider: item.provider,
+    model: item.model,
+  }))
+
+  const next: Record<string, {
+    name: string
+    baseUrl: string
+    apiKey: string
+    defaultModel: string
+    dialect: string
+  }> = {}
+  for (const provider of modelsStore.providers) {
+    next[provider.provider] = {
+      name: provider.label,
+      baseUrl: provider.base_url,
+      apiKey: '',
+      defaultModel: provider.models[0] || '',
+      dialect: provider.dialect,
+    }
+  }
+  providerForms.value = next
+}
+
+onMounted(async () => {
+  if (modelsStore.providers.length === 0) {
+    await modelsStore.fetchProviders()
+  }
+  syncForms()
+})
+
+watch(
+  () => [modelsStore.providers, modelsStore.defaultProvider, modelsStore.defaultModel, modelsStore.fallbackProviders],
+  () => syncForms(),
+  { deep: true },
+)
+
+async function handleSaveDefault() {
+  if (!defaultProvider.value) {
+    message.warning(t('models.selectProviderRequired'))
     return
   }
-  savingKey.value = providerKey
+  savingKey.value = 'default'
   try {
-    await updateProvider(providerKey, { api_key: key.trim() })
+    await modelsStore.setDefaultModel(defaultModel.value.trim(), defaultProvider.value)
     message.success(t('settings.models.saved'))
-    await modelsStore.fetchProviders()
   } catch (e: any) {
     message.error(e.message || t('settings.models.saveFailed'))
   } finally {
@@ -46,13 +108,45 @@ async function handleSaveApiKey(providerKey: string) {
   }
 }
 
-async function handleSaveCustom(providerKey: string) {
-  const key = getEditKey(providerKey)
+async function handleSaveProvider(providerKey: string) {
+  const form = providerForms.value[providerKey]
   savingKey.value = providerKey
   try {
-    await updateProvider(providerKey, { api_key: key.trim() })
+    await modelsStore.updateProvider(providerKey, {
+      name: form.name.trim(),
+      baseUrl: form.baseUrl.trim(),
+      apiKey: form.apiKey,
+      defaultModel: form.defaultModel.trim(),
+      dialect: form.dialect,
+    })
     message.success(t('settings.models.saved'))
-    await modelsStore.fetchProviders()
+  } catch (e: any) {
+    message.error(e.message || t('settings.models.saveFailed'))
+  } finally {
+    savingKey.value = null
+  }
+}
+
+function addFallbackRow() {
+  fallbackRows.value.push({ provider: '', model: '' })
+}
+
+function removeFallbackRow(index: number) {
+  fallbackRows.value.splice(index, 1)
+}
+
+async function handleSaveFallbacks() {
+  const cleaned = fallbackRows.value
+    .filter(item => item.provider)
+    .map(item => ({
+      provider: item.provider,
+      model: item.model.trim(),
+    }))
+
+  savingKey.value = 'fallbacks'
+  try {
+    await modelsStore.saveFallbackProviders(cleaned)
+    message.success(t('settings.models.saved'))
   } catch (e: any) {
     message.error(e.message || t('settings.models.saveFailed'))
   } finally {
@@ -68,58 +162,103 @@ async function handleSaveCustom(providerKey: string) {
         <NEmpty :description="t('settings.models.noProviders')" />
       </div>
 
-      <div v-for="g in modelsStore.providers" :key="g.provider" class="provider-section">
-        <div class="provider-header">
-          <h4 class="provider-name">{{ g.label }}</h4>
-          <span class="type-badge" :class="isCustom(g.provider) ? 'custom' : 'builtin'">
-            {{ isCustom(g.provider) ? t('models.customType') : t('models.builtIn') }}
-          </span>
-        </div>
-
-        <!-- Built-in provider: only API key -->
-        <div v-if="!isCustom(g.provider)" class="provider-fields">
-          <div class="field-row">
+      <template v-else>
+        <div class="panel">
+          <div class="panel-header">
+            <h4>{{ t('models.defaultBadge') }}</h4>
+          </div>
+          <div class="field-grid">
+            <NSelect
+              v-model:value="defaultProvider"
+              :options="providerOptions"
+              :placeholder="t('models.chooseProvider')"
+            />
             <NInput
-              :value="getEditKey(g.provider)"
-              type="password"
-              show-password-on="click"
-              :placeholder="t('settings.models.apiKeyPlaceholder')"
-              autocomplete="off"
-              @update:value="v => editKeys[g.provider] = v"
+              v-model:value="defaultModel"
+              :placeholder="t('models.defaultModel')"
             />
             <NButton
               type="primary"
-              size="small"
-              :loading="savingKey === g.provider"
-              @click="handleSaveApiKey(g.provider)"
+              :loading="savingKey === 'default'"
+              @click="handleSaveDefault"
             >
               {{ t('settings.models.save') }}
             </NButton>
           </div>
         </div>
 
-        <!-- Custom provider: API key -->
-        <div v-else class="provider-fields">
-          <div class="field-row">
-            <NInput
-              :value="getEditKey(g.provider)"
-              type="password"
-              show-password-on="click"
-              :placeholder="t('settings.models.apiKeyPlaceholder')"
-              autocomplete="off"
-              @update:value="v => editKeys[g.provider] = v"
+        <div class="panel">
+          <div class="panel-header">
+            <h4>{{ t('models.fallbackProviders') }}</h4>
+            <NButton size="small" secondary @click="addFallbackRow">{{ t('common.add') }}</NButton>
+          </div>
+          <div v-if="fallbackRows.length === 0" class="empty-inline">
+            {{ t('models.noFallbackProviders') }}
+          </div>
+          <div v-for="(row, index) in fallbackRows" :key="index" class="fallback-row">
+            <NSelect
+              v-model:value="row.provider"
+              :options="providerOptions"
+              :placeholder="t('models.chooseProvider')"
             />
+            <NInput
+              v-model:value="row.model"
+              :placeholder="t('models.optionalModelOverride')"
+            />
+            <NButton quaternary type="error" @click="removeFallbackRow(index)">
+              {{ t('common.delete') }}
+            </NButton>
+          </div>
+          <div class="actions">
             <NButton
               type="primary"
-              size="small"
-              :loading="savingKey === g.provider"
-              @click="handleSaveCustom(g.provider)"
+              :loading="savingKey === 'fallbacks'"
+              @click="handleSaveFallbacks"
             >
               {{ t('settings.models.save') }}
             </NButton>
           </div>
         </div>
-      </div>
+
+        <div v-for="provider in modelsStore.providers" :key="provider.provider" class="panel">
+          <div class="panel-header">
+            <h4>{{ provider.label }}</h4>
+            <span class="dialect-tag">{{ dialectLabel(provider.dialect) }}</span>
+          </div>
+          <div class="provider-grid">
+            <NInput
+              v-model:value="providerForms[provider.provider].name"
+              :placeholder="t('models.name')"
+            />
+            <NInput
+              v-model:value="providerForms[provider.provider].baseUrl"
+              :placeholder="t('models.baseUrl')"
+            />
+            <NInput
+              v-model:value="providerForms[provider.provider].defaultModel"
+              :placeholder="t('models.defaultModel')"
+            />
+            <NSelect
+              v-model:value="providerForms[provider.provider].dialect"
+              :options="dialectOptions"
+            />
+            <NInput
+              v-model:value="providerForms[provider.provider].apiKey"
+              type="password"
+              show-password-on="click"
+              :placeholder="provider.has_api_key ? t('models.apiKeyConfigured') : t('settings.models.apiKeyPlaceholder')"
+              autocomplete="off"
+            />
+            <NButton
+              type="primary"
+              :loading="savingKey === provider.provider"
+              @click="handleSaveProvider(provider.provider)"
+            >
+              {{ t('settings.models.save') }}
+            </NButton>
+          </div>
+        </div>
+      </template>
     </NSpin>
   </section>
 </template>
@@ -135,58 +274,57 @@ async function handleSaveCustom(providerKey: string) {
   padding: 40px 0;
 }
 
-.provider-section {
+.panel {
   border: 1px solid $border-color;
   border-radius: $radius-md;
   padding: 16px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   background: $bg-card;
 }
 
-.provider-header {
+.panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 12px;
-}
 
-.provider-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: $text-primary;
-  margin: 0;
-}
-
-.type-badge {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-weight: 500;
-
-  &.builtin {
-    background: rgba(var(--accent-primary-rgb), 0.12);
-    color: $accent-primary;
-  }
-
-  &.custom {
-    background: rgba(var(--success-rgb), 0.12);
-    color: $success;
+  h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
   }
 }
 
-.provider-fields {
-  display: flex;
-  flex-direction: column;
+.field-grid,
+.provider-grid,
+.fallback-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
-.field-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.provider-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 
-  .n-input {
-    flex: 1;
-  }
+.fallback-row + .fallback-row {
+  margin-top: 10px;
+}
+
+.dialect-tag {
+  font-size: 12px;
+  color: $text-muted;
+}
+
+.empty-inline {
+  font-size: 13px;
+  color: $text-muted;
+}
+
+.actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

@@ -23,6 +23,7 @@ import com.jimuqu.agent.skillhub.model.SkillMeta;
 import com.jimuqu.agent.skillhub.model.TapRecord;
 import com.jimuqu.agent.support.TestEnvironment;
 import com.jimuqu.agent.support.DisplaySettingsService;
+import com.jimuqu.agent.support.LlmProviderService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.update.AppUpdateService;
 import com.jimuqu.agent.support.update.AppVersionService;
@@ -30,6 +31,7 @@ import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.agent.web.DashboardConfigService;
 import com.jimuqu.agent.web.DashboardEnvService;
+import com.jimuqu.agent.web.DashboardProviderService;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -78,13 +80,16 @@ public class SkillsHubCommandTest {
 
     private DefaultCommandService commandService(TestEnvironment env, SkillHubService skillHubService) {
         GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(env.appConfig, new java.util.LinkedHashMap<com.jimuqu.agent.core.enums.PlatformType, com.jimuqu.agent.core.service.ChannelAdapter>());
+        LlmProviderService llmProviderService = new LlmProviderService(env.appConfig);
         RuntimeSettingsService runtimeSettingsService = new RuntimeSettingsService(
                 env.appConfig,
                 env.globalSettingRepository,
                 env.deliveryService,
                 new DashboardConfigService(env.appConfig, refreshService),
                 new DashboardEnvService(env.appConfig, refreshService),
-                new AppVersionService(env.appConfig)
+                new AppVersionService(env.appConfig),
+                llmProviderService,
+                new DashboardProviderService(env.appConfig, refreshService, llmProviderService)
         );
         DisplaySettingsService displaySettingsService = new DisplaySettingsService(env.appConfig, env.globalSettingRepository);
         AppUpdateService appUpdateService = new AppUpdateService(env.appConfig, new AppVersionService(env.appConfig));

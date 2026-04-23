@@ -15,6 +15,7 @@ import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.CommandService;
+import com.jimuqu.agent.core.service.ConversationEventSink;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.core.service.ContextCompressionService;
 import com.jimuqu.agent.core.service.ContextService;
@@ -401,6 +402,44 @@ public class DefaultCommandService implements CommandService {
         return GatewayReply.ok(helpText());
     }
 
+    @Override
+    public GatewayReply handle(GatewayMessage message, String commandLine, ConversationEventSink eventSink) throws Exception {
+        if (eventSink == null) {
+            eventSink = ConversationEventSink.noop();
+        }
+
+        String withoutSlash = commandLine.substring(1).trim();
+        String[] parts = withoutSlash.split("\\s+", 2);
+        String command = parts[0].toLowerCase();
+
+        if (GatewayCommandConstants.COMMAND_RETRY.equals(command)) {
+            SessionRecord session = requireSession(message.sourceKey());
+            String lastUser = MessageSupport.getLastUserMessage(session.getNdjson());
+            if (StrUtil.isBlank(lastUser)) {
+                GatewayReply reply = GatewayReply.error("没有可重试的上一条用户消息。");
+                emitDirectReply(reply, eventSink, session.getSessionId());
+                return reply;
+            }
+
+            session.setNdjson(MessageSupport.removeLastTurn(session.getNdjson()));
+            session.setUpdatedAt(System.currentTimeMillis());
+            sessionRepository.save(session);
+
+            GatewayMessage retryMessage = new GatewayMessage(message.getPlatform(), message.getChatId(), message.getUserId(), lastUser);
+            retryMessage.setThreadId(message.getThreadId());
+            retryMessage.setChatType(message.getChatType());
+            retryMessage.setChatName(message.getChatName());
+            retryMessage.setUserName(message.getUserName());
+            retryMessage.setSourceKeyOverride(message.sourceKey());
+            return conversationOrchestrator.handleIncoming(retryMessage, eventSink);
+        }
+
+        GatewayReply reply = handle(message, commandLine);
+        SessionRecord session = sessionRepository.getBoundSession(message.sourceKey());
+        emitDirectReply(reply, eventSink, session == null ? null : session.getSessionId());
+        return reply;
+    }
+
     /**
      * 处理工具开关命令。
      */
@@ -730,6 +769,23 @@ public class DefaultCommandService implements CommandService {
             session = sessionRepository.bindNewSession(sourceKey);
         }
         return session;
+    }
+
+    private void emitDirectReply(GatewayReply reply, ConversationEventSink eventSink, String fallbackSessionId) {
+        if (eventSink == null || eventSink == ConversationEventSink.noop() || reply == null) {
+            return;
+        }
+
+        String sessionId = StrUtil.blankToDefault(reply.getSessionId(), fallbackSessionId);
+        if (reply.isError()) {
+            eventSink.onRunFailed(sessionId, new IllegalStateException(reply.getContent()));
+            return;
+        }
+
+        if (StrUtil.isNotBlank(reply.getContent())) {
+            eventSink.onAssistantDelta(reply.getContent());
+        }
+        eventSink.onRunCompleted(sessionId, "", null);
     }
 
     private String formatCheckpointList(String sourceKey) throws Exception {

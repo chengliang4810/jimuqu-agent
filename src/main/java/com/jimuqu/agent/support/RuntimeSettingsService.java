@@ -95,33 +95,31 @@ public class RuntimeSettingsService {
     private final DashboardConfigService dashboardConfigService;
     private final DashboardEnvService dashboardEnvService;
     private final AppVersionService appVersionService;
+    private final LlmProviderService llmProviderService;
+    private final com.jimuqu.agent.web.DashboardProviderService dashboardProviderService;
 
     public RuntimeSettingsService(AppConfig appConfig,
                                   GlobalSettingRepository globalSettingRepository,
                                   DeliveryService deliveryService,
                                   DashboardConfigService dashboardConfigService,
                                   DashboardEnvService dashboardEnvService,
-                                  AppVersionService appVersionService) {
+                                  AppVersionService appVersionService,
+                                  LlmProviderService llmProviderService,
+                                  com.jimuqu.agent.web.DashboardProviderService dashboardProviderService) {
         this.appConfig = appConfig;
         this.globalSettingRepository = globalSettingRepository;
         this.deliveryService = deliveryService;
         this.dashboardConfigService = dashboardConfigService;
         this.dashboardEnvService = dashboardEnvService;
         this.appVersionService = appVersionService;
+        this.llmProviderService = llmProviderService;
+        this.dashboardProviderService = dashboardProviderService;
     }
 
     public ResolvedModel resolveEffectiveModel(SessionRecord session) {
-        String provider = StrUtil.nullToEmpty(appConfig.getLlm().getProvider()).trim();
-        String model = StrUtil.nullToEmpty(appConfig.getLlm().getModel()).trim();
         String override = session == null ? "" : StrUtil.nullToEmpty(session.getModelOverride()).trim();
-        if (override.length() == 0) {
-            return new ResolvedModel(provider, model, false);
-        }
-        if (override.contains(":")) {
-            String[] parts = override.split(":", 2);
-            return new ResolvedModel(StrUtil.nullToEmpty(parts[0]).trim(), StrUtil.nullToEmpty(parts[1]).trim(), true);
-        }
-        return new ResolvedModel(provider, override, true);
+        LlmProviderService.ResolvedProvider resolved = llmProviderService.resolveEffectiveProvider(session);
+        return new ResolvedModel(resolved.getProviderKey(), resolved.getDialect(), resolved.getModel(), override.length() > 0);
     }
 
     public String buildAgentRuntimePrompt(String sourceKey,
@@ -154,6 +152,7 @@ public class RuntimeSettingsService {
         }
 
         StringBuilder buffer = new StringBuilder();
+        LlmProviderService.ResolvedProvider globalResolved = llmProviderService.resolveEffectiveProvider(null);
         buffer.append("[Agent Runtime]\n");
         buffer.append("agent_name=Jimuqu Agent\n");
         buffer.append("source_key=").append(StrUtil.nullToEmpty(sourceKey)).append('\n');
@@ -163,9 +162,10 @@ public class RuntimeSettingsService {
         buffer.append("session_id=").append(session == null ? "" : StrUtil.nullToEmpty(session.getSessionId())).append('\n');
         buffer.append("branch=").append(session == null ? "" : StrUtil.nullToEmpty(session.getBranchName())).append('\n');
         buffer.append("active_personality=").append(activePersonality).append('\n');
-        buffer.append("default_provider=").append(StrUtil.nullToEmpty(appConfig.getLlm().getProvider())).append('\n');
-        buffer.append("default_model=").append(StrUtil.nullToEmpty(appConfig.getLlm().getModel())).append('\n');
+        buffer.append("default_provider=").append(StrUtil.nullToEmpty(appConfig.getModel().getProviderKey())).append('\n');
+        buffer.append("default_model=").append(StrUtil.nullToEmpty(globalResolved.getModel())).append('\n');
         buffer.append("effective_provider=").append(StrUtil.nullToEmpty(resolved.provider)).append('\n');
+        buffer.append("effective_dialect=").append(StrUtil.nullToEmpty(resolved.dialect)).append('\n');
         buffer.append("effective_model=").append(StrUtil.nullToEmpty(resolved.model)).append('\n');
         buffer.append("session_input_tokens=").append(session == null ? 0 : session.getCumulativeInputTokens()).append('\n');
         buffer.append("session_output_tokens=").append(session == null ? 0 : session.getCumulativeOutputTokens()).append('\n');
@@ -188,21 +188,17 @@ public class RuntimeSettingsService {
         ResolvedModel resolved = resolveEffectiveModel(session);
         StringBuilder buffer = new StringBuilder();
         buffer.append("current.provider=").append(StrUtil.nullToDefault(resolved.provider, "default")).append('\n');
+        buffer.append("current.dialect=").append(StrUtil.nullToDefault(resolved.dialect, "")).append('\n');
         buffer.append("current.model=").append(StrUtil.nullToDefault(resolved.model, "default")).append('\n');
-        buffer.append("current.apiUrl=").append(StrUtil.nullToDefault(appConfig.getLlm().getApiUrl(), "")).append('\n');
+        buffer.append("current.apiUrl=").append(StrUtil.nullToDefault(llmProviderService.resolveEffectiveProvider(session).getApiUrl(), "")).append('\n');
         buffer.append("session.override=").append(session == null ? "" : StrUtil.nullToDefault(session.getModelOverride(), "")).append('\n');
-        buffer.append("global.provider=").append(StrUtil.nullToDefault(appConfig.getLlm().getProvider(), "")).append('\n');
-        buffer.append("global.model=").append(StrUtil.nullToDefault(appConfig.getLlm().getModel(), "")).append('\n');
+        buffer.append("global.provider=").append(StrUtil.nullToDefault(appConfig.getModel().getProviderKey(), "")).append('\n');
+        buffer.append("global.model=").append(StrUtil.nullToDefault(llmProviderService.resolveEffectiveProvider(null).getModel(), "")).append('\n');
         return buffer.toString().trim();
     }
 
     public void setGlobalModel(String provider, String model) {
-        if (StrUtil.isNotBlank(provider)) {
-            persistConfigValue("llm.provider", provider.trim(), false);
-        }
-        if (StrUtil.isNotBlank(model)) {
-            persistConfigValue("llm.model", model.trim(), false);
-        }
+        dashboardProviderService.updateDefaultModel(provider, model);
     }
 
     public Object getConfigValue(String key) {
@@ -351,11 +347,13 @@ public class RuntimeSettingsService {
 
     public static class ResolvedModel {
         private final String provider;
+        private final String dialect;
         private final String model;
         private final boolean sessionOverride;
 
-        public ResolvedModel(String provider, String model, boolean sessionOverride) {
+        public ResolvedModel(String provider, String dialect, String model, boolean sessionOverride) {
             this.provider = provider;
+            this.dialect = dialect;
             this.model = model;
             this.sessionOverride = sessionOverride;
         }
@@ -366,6 +364,10 @@ public class RuntimeSettingsService {
 
         public String getModel() {
             return model;
+        }
+
+        public String getDialect() {
+            return dialect;
         }
 
         public boolean isSessionOverride() {

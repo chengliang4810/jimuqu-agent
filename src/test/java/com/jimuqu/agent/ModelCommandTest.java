@@ -16,13 +16,13 @@ public class ModelCommandTest {
         GatewayReply showReply = env.send("admin-chat", "admin-user", "/model");
         assertThat(showReply.getContent()).contains("current.provider=").contains("global.model=");
 
-        GatewayReply sessionReply = env.send("admin-chat", "admin-user", "/model openai:gpt-5.2");
-        assertThat(sessionReply.getContent()).contains("openai:gpt-5.2");
-        assertThat(env.sessionRepository.getBoundSession("MEMORY:admin-chat:admin-user").getModelOverride()).isEqualTo("openai:gpt-5.2");
+        GatewayReply sessionReply = env.send("admin-chat", "admin-user", "/model default:gpt-5.2");
+        assertThat(sessionReply.getContent()).contains("default:gpt-5.2");
+        assertThat(env.sessionRepository.getBoundSession("MEMORY:admin-chat:admin-user").getModelOverride()).isEqualTo("default:gpt-5.2");
 
-        GatewayReply globalReply = env.send("admin-chat", "admin-user", "/model --global anthropic:claude-sonnet-4");
-        assertThat(globalReply.getContent()).contains("anthropic:claude-sonnet-4");
-        assertThat(env.appConfig.getLlm().getProvider()).isEqualTo("anthropic");
+        GatewayReply globalReply = env.send("admin-chat", "admin-user", "/model --global default:claude-sonnet-4");
+        assertThat(globalReply.getContent()).contains("default:claude-sonnet-4");
+        assertThat(env.appConfig.getLlm().getProvider()).isEqualTo("default");
         assertThat(env.appConfig.getLlm().getModel()).isEqualTo("claude-sonnet-4");
     }
 }

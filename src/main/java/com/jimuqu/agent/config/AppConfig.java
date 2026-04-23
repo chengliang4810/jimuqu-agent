@@ -2,9 +2,11 @@ package com.jimuqu.agent.config;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.core.io.FileUtil;
+import com.jimuqu.agent.llm.LlmProviderSupport;
 import com.jimuqu.agent.support.constants.CheckpointConstants;
 import com.jimuqu.agent.support.constants.CompressionConstants;
 import com.jimuqu.agent.support.constants.GatewayBehaviorConstants;
+import com.jimuqu.agent.support.constants.LlmConstants;
 import com.jimuqu.agent.support.constants.RuntimePathConstants;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -37,6 +39,21 @@ public class AppConfig {
      * 大模型接入配置。
      */
     private LlmConfig llm = new LlmConfig();
+
+    /**
+     * 多 provider 原始配置。
+     */
+    private Map<String, ProviderConfig> providers = new LinkedHashMap<String, ProviderConfig>();
+
+    /**
+     * 当前主模型选择。
+     */
+    private ModelConfig model = new ModelConfig();
+
+    /**
+     * 主模型故障切换链。
+     */
+    private List<FallbackProviderConfig> fallbackProviders = new ArrayList<FallbackProviderConfig>();
 
     /**
      * 定时任务调度配置。
@@ -97,6 +114,7 @@ public class AppConfig {
                 userDir
         );
         Map<String, Object> overrides = loadFlatOverrides(runtimeHome);
+        Map<String, Object> structuredOverrides = loadStructuredOverrides(runtimeHome);
         RuntimeEnvResolver envResolver = RuntimeEnvResolver.initialize(runtimeHome.getAbsolutePath());
 
         config.getRuntime().setHome(resolveEnvString("JIMUQU_RUNTIME_HOME", readString(props, overrides, "jimuqu.runtime.home", RuntimePathConstants.RUNTIME_HOME)));
@@ -127,15 +145,12 @@ public class AppConfig {
         config.getRuntime().setConfigFile(envResolver.configFile().getPath());
         config.getRuntime().setLogsDir(new File(runtimeHome, "logs").getPath());
 
-        config.getLlm().setProvider(resolveEnvString("JIMUQU_LLM_PROVIDER", readString(props, overrides, "jimuqu.llm.provider", RuntimePathConstants.DEFAULT_LLM_PROVIDER)));
-        config.getLlm().setApiUrl(resolveEnvString("JIMUQU_LLM_API_URL", readString(props, overrides, "jimuqu.llm.apiUrl", RuntimePathConstants.DEFAULT_LLM_API_URL)));
-        config.getLlm().setApiKey(resolveSecret("JIMUQU_LLM_API_KEY", props.get("jimuqu.llm.apiKey", "")));
-        config.getLlm().setModel(resolveEnvString("JIMUQU_LLM_MODEL", readString(props, overrides, "jimuqu.llm.model", RuntimePathConstants.DEFAULT_LLM_MODEL)));
         config.getLlm().setStream(resolveBoolean("JIMUQU_LLM_STREAM", readBoolean(props, overrides, "jimuqu.llm.stream", false)));
         config.getLlm().setReasoningEffort(resolveEnvString("JIMUQU_LLM_REASONING_EFFORT", readString(props, overrides, "jimuqu.llm.reasoningEffort", RuntimePathConstants.DEFAULT_REASONING_EFFORT)));
         config.getLlm().setTemperature(resolveDouble("JIMUQU_LLM_TEMPERATURE", readDouble(props, overrides, "jimuqu.llm.temperature", RuntimePathConstants.DEFAULT_TEMPERATURE)));
         config.getLlm().setMaxTokens(resolveInt("JIMUQU_LLM_MAX_TOKENS", readInt(props, overrides, "jimuqu.llm.maxTokens", RuntimePathConstants.DEFAULT_MAX_TOKENS)));
         config.getLlm().setContextWindowTokens(resolveInt("JIMUQU_LLM_CONTEXT_WINDOW_TOKENS", readInt(props, overrides, "jimuqu.llm.contextWindowTokens", RuntimePathConstants.DEFAULT_CONTEXT_WINDOW_TOKENS)));
+        applyProviderConfiguration(config, props, structuredOverrides);
 
         config.getScheduler().setEnabled(resolveBoolean("JIMUQU_SCHEDULER_ENABLED", readBoolean(props, overrides, "jimuqu.scheduler.enabled", true)));
         config.getScheduler().setTickSeconds(resolveInt("JIMUQU_SCHEDULER_TICK_SECONDS", readInt(props, overrides, "jimuqu.scheduler.tickSeconds", RuntimePathConstants.DEFAULT_SCHEDULER_TICK_SECONDS)));
@@ -302,6 +317,9 @@ public class AppConfig {
         }
         copyRuntime(other.getRuntime());
         copyLlm(other.getLlm());
+        copyProviders(other.getProviders());
+        copyModel(other.getModel());
+        copyFallbackProviders(other.getFallbackProviders());
         copyScheduler(other.getScheduler());
         copyCompression(other.getCompression());
         copyLearning(other.getLearning());
@@ -329,6 +347,7 @@ public class AppConfig {
 
     private void copyLlm(LlmConfig other) {
         this.llm.setProvider(other.getProvider());
+        this.llm.setDialect(other.getDialect());
         this.llm.setApiUrl(other.getApiUrl());
         this.llm.setApiKey(other.getApiKey());
         this.llm.setModel(other.getModel());
@@ -337,6 +356,51 @@ public class AppConfig {
         this.llm.setTemperature(other.getTemperature());
         this.llm.setMaxTokens(other.getMaxTokens());
         this.llm.setContextWindowTokens(other.getContextWindowTokens());
+    }
+
+    private void copyProviders(Map<String, ProviderConfig> other) {
+        this.providers = new LinkedHashMap<String, ProviderConfig>();
+        if (other == null) {
+            return;
+        }
+        for (Map.Entry<String, ProviderConfig> entry : other.entrySet()) {
+            ProviderConfig source = entry.getValue();
+            if (source == null) {
+                continue;
+            }
+            ProviderConfig copy = new ProviderConfig();
+            copy.setName(source.getName());
+            copy.setBaseUrl(source.getBaseUrl());
+            copy.setApiKey(source.getApiKey());
+            copy.setDefaultModel(source.getDefaultModel());
+            copy.setDialect(source.getDialect());
+            this.providers.put(entry.getKey(), copy);
+        }
+    }
+
+    private void copyModel(ModelConfig other) {
+        this.model = new ModelConfig();
+        if (other == null) {
+            return;
+        }
+        this.model.setProviderKey(other.getProviderKey());
+        this.model.setDefault(other.getDefault());
+    }
+
+    private void copyFallbackProviders(List<FallbackProviderConfig> other) {
+        this.fallbackProviders = new ArrayList<FallbackProviderConfig>();
+        if (other == null) {
+            return;
+        }
+        for (FallbackProviderConfig source : other) {
+            if (source == null) {
+                continue;
+            }
+            FallbackProviderConfig copy = new FallbackProviderConfig();
+            copy.setProvider(source.getProvider());
+            copy.setModel(source.getModel());
+            this.fallbackProviders.add(copy);
+        }
     }
 
     private void copyScheduler(SchedulerConfig other) {
@@ -809,6 +873,227 @@ public class AppConfig {
         return props.getBool(key, defaultValue);
     }
 
+    private static void applyProviderConfiguration(AppConfig config, Props props, Map<String, Object> structuredOverrides) {
+        Map<String, ProviderConfig> providers = parseProviders(structuredOverrides.get("providers"));
+        ModelConfig modelConfig = parseModelConfig(structuredOverrides.get("model"));
+        List<FallbackProviderConfig> fallbackChain = parseFallbackProviders(structuredOverrides.get("fallbackProviders"));
+
+        if (providers.isEmpty()) {
+            ProviderConfig defaultProvider = synthesizeDefaultProvider(props);
+            providers.put(RuntimePathConstants.DEFAULT_PROVIDER_KEY, defaultProvider);
+            modelConfig.setProviderKey(RuntimePathConstants.DEFAULT_PROVIDER_KEY);
+            modelConfig.setDefault("");
+        }
+
+        validateProviderConfiguration(providers, modelConfig, fallbackChain);
+
+        config.setProviders(providers);
+        config.setModel(modelConfig);
+        config.setFallbackProviders(fallbackChain);
+
+        ProviderConfig activeProvider = providers.get(modelConfig.getProviderKey());
+        String effectiveModel = StrUtil.isNotBlank(modelConfig.getDefault())
+                ? modelConfig.getDefault().trim()
+                : StrUtil.nullToEmpty(activeProvider.getDefaultModel()).trim();
+
+        config.getLlm().setProvider(modelConfig.getProviderKey());
+        config.getLlm().setDialect(LlmProviderSupport.normalizeDialect(activeProvider.getDialect()));
+        config.getLlm().setApiUrl(LlmProviderSupport.buildApiUrl(activeProvider.getBaseUrl(), activeProvider.getDialect()));
+        config.getLlm().setApiKey(StrUtil.nullToEmpty(activeProvider.getApiKey()).trim());
+        config.getLlm().setModel(effectiveModel);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, ProviderConfig> parseProviders(Object rawProviders) {
+        Map<String, ProviderConfig> providers = new LinkedHashMap<String, ProviderConfig>();
+        if (!(rawProviders instanceof Map)) {
+            return providers;
+        }
+
+        Map<Object, Object> rawMap = (Map<Object, Object>) rawProviders;
+        for (Map.Entry<Object, Object> entry : rawMap.entrySet()) {
+            String key = entry.getKey() == null ? "" : String.valueOf(entry.getKey()).trim();
+            if (!(entry.getValue() instanceof Map)) {
+                continue;
+            }
+
+            Map<Object, Object> rawProvider = (Map<Object, Object>) entry.getValue();
+            ProviderConfig provider = new ProviderConfig();
+            provider.setName(readNestedString(rawProvider, "name"));
+            provider.setBaseUrl(readNestedString(rawProvider, "baseUrl"));
+            provider.setApiKey(readNestedString(rawProvider, "apiKey"));
+            provider.setDefaultModel(readNestedString(rawProvider, "defaultModel"));
+            provider.setDialect(readNestedString(rawProvider, "dialect"));
+            providers.put(key, provider);
+        }
+
+        return providers;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ModelConfig parseModelConfig(Object rawModel) {
+        ModelConfig modelConfig = new ModelConfig();
+        if (!(rawModel instanceof Map)) {
+            return modelConfig;
+        }
+
+        Map<Object, Object> rawMap = (Map<Object, Object>) rawModel;
+        modelConfig.setProviderKey(readNestedString(rawMap, "providerKey"));
+        modelConfig.setDefault(readNestedString(rawMap, "default"));
+        return modelConfig;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<FallbackProviderConfig> parseFallbackProviders(Object rawFallbackProviders) {
+        List<FallbackProviderConfig> result = new ArrayList<FallbackProviderConfig>();
+        if (!(rawFallbackProviders instanceof List)) {
+            return result;
+        }
+
+        List<Object> rawList = (List<Object>) rawFallbackProviders;
+        for (Object raw : rawList) {
+            if (!(raw instanceof Map)) {
+                continue;
+            }
+
+            Map<Object, Object> rawMap = (Map<Object, Object>) raw;
+            FallbackProviderConfig config = new FallbackProviderConfig();
+            config.setProvider(readNestedString(rawMap, "provider"));
+            config.setModel(readNestedString(rawMap, "model"));
+            result.add(config);
+        }
+
+        return result;
+    }
+
+    private static ProviderConfig synthesizeDefaultProvider(Props props) {
+        String dialect = readString(props, Collections.<String, Object>emptyMap(), "jimuqu.llm.provider", RuntimePathConstants.DEFAULT_LLM_PROVIDER);
+        String apiUrl = readString(props, Collections.<String, Object>emptyMap(), "jimuqu.llm.apiUrl", RuntimePathConstants.DEFAULT_LLM_API_URL);
+        String defaultModel = readString(props, Collections.<String, Object>emptyMap(), "jimuqu.llm.model", RuntimePathConstants.DEFAULT_LLM_MODEL);
+
+        ProviderConfig provider = new ProviderConfig();
+        provider.setName("Default Provider");
+        provider.setBaseUrl(LlmProviderSupport.deriveBaseUrl(apiUrl, dialect));
+        provider.setApiKey(resolveSecret("JIMUQU_LLM_API_KEY", props.get("jimuqu.llm.apiKey", "")));
+        provider.setDefaultModel(defaultModel);
+        provider.setDialect(LlmProviderSupport.normalizeDialect(dialect));
+        return provider;
+    }
+
+    private static void validateProviderConfiguration(Map<String, ProviderConfig> providers,
+                                                      ModelConfig modelConfig,
+                                                      List<FallbackProviderConfig> fallbackChain) {
+        if (providers == null || providers.isEmpty()) {
+            throw new IllegalStateException("至少需要配置一个 provider。");
+        }
+        if (modelConfig == null || StrUtil.isBlank(modelConfig.getProviderKey())) {
+            throw new IllegalStateException("model.providerKey 不能为空。");
+        }
+        if (!providers.containsKey(modelConfig.getProviderKey())) {
+            throw new IllegalStateException("model.providerKey 未命中 providers：" + modelConfig.getProviderKey());
+        }
+
+        String globalDefaultModel = StrUtil.nullToEmpty(modelConfig.getDefault()).trim();
+        for (Map.Entry<String, ProviderConfig> entry : providers.entrySet()) {
+            String providerKey = StrUtil.nullToEmpty(entry.getKey()).trim();
+            ProviderConfig provider = entry.getValue();
+            if (provider == null) {
+                throw new IllegalStateException("provider 配置不能为空：" + providerKey);
+            }
+            if (StrUtil.isBlank(providerKey)) {
+                throw new IllegalStateException("provider key 不能为空。");
+            }
+            if (StrUtil.isBlank(provider.getBaseUrl())) {
+                throw new IllegalStateException("provider.baseUrl 不能为空：" + providerKey);
+            }
+            if (StrUtil.isBlank(provider.getDialect())) {
+                throw new IllegalStateException("provider.dialect 不能为空：" + providerKey);
+            }
+            if (!LlmProviderSupport.isSupportedDialect(provider.getDialect())) {
+                throw new IllegalStateException("不支持的 provider dialect：" + provider.getDialect());
+            }
+            if (StrUtil.isBlank(provider.getDefaultModel()) && StrUtil.isBlank(globalDefaultModel)) {
+                throw new IllegalStateException("provider.defaultModel 不能为空：" + providerKey);
+            }
+        }
+
+        if (fallbackChain == null) {
+            return;
+        }
+        for (FallbackProviderConfig fallback : fallbackChain) {
+            if (fallback == null || StrUtil.isBlank(fallback.getProvider())) {
+                throw new IllegalStateException("fallbackProviders.provider 不能为空。");
+            }
+            ProviderConfig provider = providers.get(fallback.getProvider().trim());
+            if (provider == null) {
+                throw new IllegalStateException("fallbackProviders 引用了不存在的 provider：" + fallback.getProvider());
+            }
+            if (StrUtil.isBlank(fallback.getModel())
+                    && StrUtil.isBlank(provider.getDefaultModel())
+                    && StrUtil.isBlank(globalDefaultModel)) {
+                throw new IllegalStateException("fallback provider 缺少可用模型：" + fallback.getProvider());
+            }
+        }
+    }
+
+    private static String readNestedString(Map<Object, Object> map, String key) {
+        if (map == null || key == null) {
+            return "";
+        }
+        Object value = map.get(key);
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private static Map<String, Object> loadStructuredOverrides(File runtimeHome) {
+        File configFile = new File(runtimeHome, "config.yml");
+        if (!configFile.exists()) {
+            return Collections.emptyMap();
+        }
+
+        try {
+            Object parsed = new Yaml().load(FileUtil.readUtf8String(configFile));
+            if (!(parsed instanceof Map)) {
+                return Collections.emptyMap();
+            }
+            return sanitizeStructuredMap((Map<?, ?>) parsed);
+        } catch (Exception ignored) {
+            return Collections.emptyMap();
+        }
+    }
+
+    private static Map<String, Object> sanitizeStructuredMap(Map<?, ?> raw) {
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        for (Map.Entry<?, ?> entry : raw.entrySet()) {
+            if (entry.getKey() == null) {
+                continue;
+            }
+            String key = String.valueOf(entry.getKey());
+            Object value = entry.getValue();
+            if (value instanceof Map) {
+                result.put(key, sanitizeStructuredMap((Map<?, ?>) value));
+            } else if (value instanceof List) {
+                result.put(key, sanitizeStructuredList((List<?>) value));
+            } else {
+                result.put(key, value);
+            }
+        }
+        return result;
+    }
+
+    private static List<Object> sanitizeStructuredList(List<?> raw) {
+        List<Object> result = new ArrayList<Object>();
+        for (Object item : raw) {
+            if (item instanceof Map) {
+                result.add(sanitizeStructuredMap((Map<?, ?>) item));
+            } else if (item instanceof List) {
+                result.add(sanitizeStructuredList((List<?>) item));
+            } else {
+                result.add(item);
+            }
+        }
+        return result;
+    }
+
     private static Map<String, Object> loadFlatOverrides(File runtimeHome) {
         File configFile = new File(runtimeHome, "config.yml");
         if (!configFile.exists()) {
@@ -911,9 +1196,14 @@ public class AppConfig {
     @NoArgsConstructor
     public static class LlmConfig {
         /**
-         * 协议提供方。
+         * 运行时 provider key。
          */
         private String provider;
+
+        /**
+         * 协议方言。
+         */
+        private String dialect;
 
         /**
          * 请求地址。
@@ -954,6 +1244,50 @@ public class AppConfig {
          * 模型上下文窗口大小，用于自动压缩阈值计算。
          */
         private int contextWindowTokens;
+    }
+
+    /**
+     * 命名 provider 配置。
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class ProviderConfig {
+        private String name;
+        private String baseUrl;
+        private String apiKey;
+        private String defaultModel;
+        private String dialect;
+    }
+
+    /**
+     * 当前主模型选择配置。
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class ModelConfig {
+        private String providerKey;
+        private String defaultModel;
+
+        public String getDefault() {
+            return defaultModel;
+        }
+
+        public void setDefault(String defaultModel) {
+            this.defaultModel = defaultModel;
+        }
+    }
+
+    /**
+     * 主模型故障切换项。
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class FallbackProviderConfig {
+        private String provider;
+        private String model;
     }
 
     /**

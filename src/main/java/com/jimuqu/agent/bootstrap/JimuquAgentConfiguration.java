@@ -69,6 +69,7 @@ import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.DefaultCheckpointService;
 import com.jimuqu.agent.support.AttachmentCacheService;
 import com.jimuqu.agent.support.DisplaySettingsService;
+import com.jimuqu.agent.support.LlmProviderService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.update.AppUpdateService;
 import com.jimuqu.agent.support.update.AppVersionService;
@@ -83,6 +84,7 @@ import com.jimuqu.agent.web.DashboardCronService;
 import com.jimuqu.agent.web.DashboardEnvService;
 import com.jimuqu.agent.web.DashboardGatewayDoctorService;
 import com.jimuqu.agent.web.DashboardLogsService;
+import com.jimuqu.agent.web.DashboardProviderService;
 import com.jimuqu.agent.web.DashboardSessionService;
 import com.jimuqu.agent.web.DashboardSkillsService;
 import com.jimuqu.agent.web.DashboardStatusService;
@@ -288,8 +290,9 @@ public class JimuquAgentConfiguration {
     @Bean
     public LlmGateway llmGateway(AppConfig appConfig,
                                  SessionRepository sessionRepository,
-                                 DangerousCommandApprovalService dangerousCommandApprovalService) {
-        return new SolonAiLlmGateway(appConfig, sessionRepository, dangerousCommandApprovalService);
+                                 DangerousCommandApprovalService dangerousCommandApprovalService,
+                                 LlmProviderService llmProviderService) {
+        return new SolonAiLlmGateway(appConfig, sessionRepository, dangerousCommandApprovalService, llmProviderService);
     }
 
     /**
@@ -390,8 +393,10 @@ public class JimuquAgentConfiguration {
                                                          DeliveryService deliveryService,
                                                          DashboardConfigService dashboardConfigService,
                                                          DashboardEnvService dashboardEnvService,
-                                                         AppVersionService appVersionService) {
-        return new RuntimeSettingsService(appConfig, globalSettingRepository, deliveryService, dashboardConfigService, dashboardEnvService, appVersionService);
+                                                         AppVersionService appVersionService,
+                                                         LlmProviderService llmProviderService,
+                                                         DashboardProviderService dashboardProviderService) {
+        return new RuntimeSettingsService(appConfig, globalSettingRepository, deliveryService, dashboardConfigService, dashboardEnvService, appVersionService, llmProviderService, dashboardProviderService);
     }
 
     @Bean
@@ -626,8 +631,9 @@ public class JimuquAgentConfiguration {
                                                          DeliveryService deliveryService,
                                                          GatewayRuntimeRefreshService gatewayRuntimeRefreshService,
                                                          AppVersionService appVersionService,
-                                                         AppUpdateService appUpdateService) {
-        return new DashboardStatusService(appConfig, sessionRepository, deliveryService, gatewayRuntimeRefreshService, appVersionService, appUpdateService);
+                                                         AppUpdateService appUpdateService,
+                                                         LlmProviderService llmProviderService) {
+        return new DashboardStatusService(appConfig, sessionRepository, deliveryService, gatewayRuntimeRefreshService, appVersionService, appUpdateService, llmProviderService);
     }
 
     @Bean
@@ -649,6 +655,18 @@ public class JimuquAgentConfiguration {
     public DashboardConfigService dashboardConfigService(AppConfig appConfig,
                                                          GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
         return new DashboardConfigService(appConfig, gatewayRuntimeRefreshService);
+    }
+
+    @Bean
+    public LlmProviderService llmProviderService(AppConfig appConfig) {
+        return new LlmProviderService(appConfig);
+    }
+
+    @Bean
+    public DashboardProviderService dashboardProviderService(AppConfig appConfig,
+                                                             GatewayRuntimeRefreshService gatewayRuntimeRefreshService,
+                                                             LlmProviderService llmProviderService) {
+        return new DashboardProviderService(appConfig, gatewayRuntimeRefreshService, llmProviderService);
     }
 
     @Bean

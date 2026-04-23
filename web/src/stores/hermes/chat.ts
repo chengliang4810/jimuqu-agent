@@ -1,4 +1,4 @@
-import { startRun, streamRunEvents, type ChatMessage, type RunEvent } from '@/api/hermes/chat'
+import { cancelRun, startRun, streamRunEvents, uploadChatFiles, type ChatMessage, type RunEvent } from '@/api/hermes/chat'
 import { deleteSession as deleteSessionApi, fetchSession, fetchSessions, fetchSessionUsageSingle, type HermesMessage, type SessionSummary } from '@/api/hermes/sessions'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
@@ -46,23 +46,6 @@ export interface Session {
 
 function uid(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
-}
-
-async function uploadFiles(attachments: Attachment[]): Promise<{ name: string; path: string }[]> {
-  if (attachments.length === 0) return []
-  const formData = new FormData()
-  for (const att of attachments) {
-    if (att.file) formData.append('file', att.file, att.name)
-  }
-  const token = localStorage.getItem('hermes_api_key') || ''
-  const res = await fetch('/upload', {
-    method: 'POST',
-    body: formData,
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
-  const data = await res.json() as { files: { name: string; path: string }[] }
-  return data.files
 }
 
 function mapHermesMessages(msgs: HermesMessage[]): Message[] {
@@ -310,6 +293,7 @@ export const useChatStore = defineStore('chat', () => {
   const activeSessionId = ref<string | null>(null)
   const focusMessageId = ref<string | null>(null)
   const streamStates = ref<Map<string, AbortController>>(new Map())
+  const runIds = ref<Map<string, string>>(new Map())
   const isStreaming = computed(() => activeSessionId.value != null && streamStates.value.has(activeSessionId.value))
   const isLoadingSessions = ref(false)
   const sessionsLoaded = ref(false)
@@ -713,6 +697,42 @@ export const useChatStore = defineStore('chat', () => {
     target.updatedAt = Date.now()
   }
 
+  function adoptServerSessionId(localSessionId: string, serverSessionId: string): string {
+    if (!serverSessionId || serverSessionId === localSessionId) return localSessionId
+
+    const local = sessions.value.find(s => s.id === localSessionId)
+    if (!local) return serverSessionId
+
+    const existing = sessions.value.find(s => s.id === serverSessionId)
+    if (existing && existing !== local) {
+      if (existing.messages.length === 0 && local.messages.length > 0) {
+        existing.messages = local.messages
+      }
+      if (!existing.title && local.title) {
+        existing.title = local.title
+      }
+      sessions.value = sessions.value.filter(s => s.id !== localSessionId)
+      if (activeSessionId.value === localSessionId) {
+        activeSessionId.value = serverSessionId
+        activeSession.value = existing
+      }
+    } else {
+      local.id = serverSessionId
+      if (activeSessionId.value === localSessionId) {
+        activeSessionId.value = serverSessionId
+        activeSession.value = local
+      }
+    }
+
+    setItemBestEffort(storageKey(), serverSessionId)
+    removeItemWithLegacy(msgsCacheKey(localSessionId), legacyMsgsCacheKey(localSessionId))
+    persistSessionsList()
+    if (activeSessionId.value === serverSessionId) {
+      persistActiveMessages()
+    }
+    return serverSessionId
+  }
+
   async function sendMessage(content: string, attachments?: Attachment[]) {
     if ((!content.trim() && !(attachments && attachments.length > 0)) || isStreaming.value) return
 
@@ -722,7 +742,8 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     // Capture session ID at send time — all callbacks use this, not activeSessionId
-    const sid = activeSessionId.value!
+    const localSid = activeSessionId.value!
+    const isSlashCommand = content.trim().startsWith('/')
 
     const userMsg: Message = {
       id: uid(),
@@ -731,43 +752,40 @@ export const useChatStore = defineStore('chat', () => {
       timestamp: Date.now(),
       attachments: attachments && attachments.length > 0 ? attachments : undefined,
     }
-    addMessage(sid, userMsg)
-    updateSessionTitle(sid)
+    addMessage(localSid, userMsg)
+    updateSessionTitle(localSid)
     // Persist immediately so a refresh before the first SSE event (e.g. the
     // user closes the tab right after sending) still has the user's message
     // and session title in the cache.
-    if (sid === activeSessionId.value) {
+    if (localSid === activeSessionId.value) {
       persistActiveMessages()
       persistSessionsList()
     }
 
     try {
       // Build conversation history from past messages
-      const sessionMsgs = getSessionMsgs(sid)
+      const sessionMsgs = getSessionMsgs(localSid)
       const history: ChatMessage[] = sessionMsgs
         .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content.trim())
         .map(m => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content }))
 
-      // Upload attachments and build input with file paths
-      let inputText = content.trim()
-      if (attachments && attachments.length > 0) {
-        const uploaded = await uploadFiles(attachments)
-        const pathParts = uploaded.map(f => `[File: ${f.name}](${f.path})`)
-        inputText = inputText ? inputText + '\n\n' + pathParts.join('\n') : pathParts.join('\n')
-      }
+      const uploadedAttachments = attachments && attachments.length > 0
+        ? await uploadChatFiles(attachments.map(att => att.file).filter((file): file is File => !!file))
+        : []
 
       const appStore = useAppStore()
       const sessionModel = activeSession.value?.model || appStore.selectedModel
       const run = await startRun({
-        input: inputText,
+        input: content.trim(),
         conversation_history: history,
-        session_id: sid,
+        session_id: localSid,
         model: sessionModel || undefined,
+        attachments: uploadedAttachments,
       })
 
       const runId = (run as any).run_id || (run as any).id
       if (!runId) {
-        addMessage(sid, {
+        addMessage(localSid, {
           id: uid(),
           role: 'system',
           content: `Error: startRun returned no run ID. Response: ${JSON.stringify(run)}`,
@@ -776,9 +794,12 @@ export const useChatStore = defineStore('chat', () => {
         return
       }
 
+      const sid = adoptServerSessionId(localSid, run.session_id || localSid)
+
       // tmux-like resume: persist run_id so refresh/reopen can pick up the
       // working indicator and poll for progress.
       markInFlight(sid, runId)
+      runIds.value.set(sid, runId)
       // If we were already polling (e.g. user re-sent while resume was still
       // polling an earlier run), cancel that polling — the new SSE stream is
       // the authoritative live source.
@@ -787,6 +808,7 @@ export const useChatStore = defineStore('chat', () => {
       // Helper to clean up this session's stream state
       const cleanup = () => {
         streamStates.value.delete(sid)
+        runIds.value.delete(sid)
         if (persistTimer) {
           clearTimeout(persistTimer)
           persistTimer = null
@@ -865,13 +887,14 @@ export const useChatStore = defineStore('chat', () => {
             }
 
             case 'run.completed': {
+              const completedSessionId = evt.session_id || sid
               const msgs = getSessionMsgs(sid)
               const lastMsg = msgs[msgs.length - 1]
               if (lastMsg?.isStreaming) {
                 updateMessage(sid, lastMsg.id, { isStreaming: false })
               }
               if (evt.usage) {
-                const target = sessions.value.find(s => s.id === sid)
+                const target = sessions.value.find(s => s.id === completedSessionId)
                 if (target) {
                   target.inputTokens = evt.usage.input_tokens
                   target.outputTokens = evt.usage.output_tokens
@@ -887,6 +910,23 @@ export const useChatStore = defineStore('chat', () => {
               if (sid === activeSessionId.value) persistActiveMessages()
               clearInFlight(sid)
               stopPolling(sid)
+              if (completedSessionId !== sid) {
+                const exists = sessions.value.some(session => session.id === completedSessionId)
+                if (!exists) {
+                  sessions.value.unshift({
+                    id: completedSessionId,
+                    title: '',
+                    source: 'api_server',
+                    messages: [],
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                  })
+                  persistSessionsList()
+                }
+                void switchSession(completedSessionId)
+              } else if (isSlashCommand) {
+                void refreshActiveSession()
+              }
               break
             }
 
@@ -916,6 +956,9 @@ export const useChatStore = defineStore('chat', () => {
               if (sid === activeSessionId.value) persistActiveMessages()
               clearInFlight(sid)
               stopPolling(sid)
+              if (isSlashCommand) {
+                void refreshActiveSession()
+              }
               break
             }
           }
@@ -966,7 +1009,7 @@ export const useChatStore = defineStore('chat', () => {
 
       streamStates.value.set(sid, ctrl)
     } catch (err: any) {
-      addMessage(sid, {
+      addMessage(localSid, {
         id: uid(),
         role: 'system',
         content: `Error: ${err.message}`,
@@ -975,9 +1018,17 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  function stopStreaming() {
+  async function stopStreaming() {
     const sid = activeSessionId.value
     if (!sid) return
+    const runId = runIds.value.get(sid)
+    if (runId) {
+      try {
+        await cancelRun(runId)
+      } catch {
+        // ignore best-effort cancel failure
+      }
+    }
     const ctrl = streamStates.value.get(sid)
     if (ctrl) {
       ctrl.abort()
@@ -987,6 +1038,7 @@ export const useChatStore = defineStore('chat', () => {
         updateMessage(sid, lastMsg.id, { isStreaming: false })
       }
       streamStates.value.delete(sid)
+      runIds.value.delete(sid)
       clearInFlight(sid)
       stopPolling(sid)
     }

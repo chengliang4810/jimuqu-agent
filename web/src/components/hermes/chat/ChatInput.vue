@@ -17,9 +17,8 @@ const attachments = ref<Attachment[]>([])
 const isDragging = ref(false)
 const dragCounter = ref(0)
 const isComposing = ref(false)
-const dashboardRunUnsupported = true
 
-const canSend = computed(() => !dashboardRunUnsupported && (inputText.value.trim() || attachments.value.length > 0))
+const canSend = computed(() => !!(inputText.value.trim() || attachments.value.length > 0))
 
 // --- Context info ---
 
@@ -74,7 +73,6 @@ function addFile(file: File) {
 }
 
 function handleAttachClick() {
-  if (dashboardRunUnsupported) return
   fileInputRef.value?.click()
 }
 
@@ -136,7 +134,6 @@ function handleDrop(e: DragEvent) {
 // --- Send ---
 
 function handleSend() {
-  if (dashboardRunUnsupported) return
   const text = inputText.value.trim()
   if (!text && attachments.value.length === 0) return
 
@@ -202,7 +199,7 @@ function isImage(type: string): boolean {
     <div class="input-top-bar">
       <NTooltip trigger="hover">
         <template #trigger>
-          <NButton quaternary size="tiny" @click="handleAttachClick" circle :disabled="dashboardRunUnsupported">
+          <NButton quaternary size="tiny" @click="handleAttachClick" circle>
             <template #icon>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
             </template>
@@ -268,8 +265,7 @@ function isImage(type: string): boolean {
         ref="textareaRef"
         v-model="inputText"
         class="input-textarea"
-        :placeholder="dashboardRunUnsupported ? '当前后端未开放 dashboard chat run' : t('chat.inputPlaceholder')"
-        :disabled="dashboardRunUnsupported"
+        :placeholder="t('chat.inputPlaceholder')"
         rows="1"
         @keydown="handleKeydown"
         @compositionstart="handleCompositionStart"

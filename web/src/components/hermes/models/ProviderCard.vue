@@ -12,9 +12,25 @@ const modelsStore = useModelsStore()
 const message = useMessage()
 const dialog = useDialog()
 
-const isCustom = computed(() => props.provider.provider.startsWith('custom:'))
 const displayName = computed(() => props.provider.label)
 const deleting = ref(false)
+
+function dialectLabel(value: string): string {
+  switch (value) {
+    case 'openai':
+      return t('models.dialectOpenai')
+    case 'openai-responses':
+      return t('models.dialectOpenaiResponses')
+    case 'ollama':
+      return t('models.dialectOllama')
+    case 'gemini':
+      return t('models.dialectGemini')
+    case 'anthropic':
+      return t('models.dialectAnthropic')
+    default:
+      return value
+  }
+}
 
 async function handleDelete() {
   dialog.warning({
@@ -41,19 +57,27 @@ async function handleDelete() {
   <div class="provider-card">
     <div class="card-header">
       <h3 class="provider-name">{{ displayName }}</h3>
-      <span class="type-badge" :class="isCustom ? 'custom' : 'builtin'">
-        {{ isCustom ? t('models.customType') : t('models.builtIn') }}
+      <span class="type-badge" :class="provider.isDefault ? 'default' : 'normal'">
+        {{ provider.isDefault ? t('models.defaultBadge') : dialectLabel(provider.dialect) }}
       </span>
     </div>
 
     <div class="card-body">
       <div class="info-row">
-        <span class="info-label">{{ t('models.provider') }}</span>
+        <span class="info-label">{{ t('models.providerKey') }}</span>
         <code class="info-value mono">{{ provider.provider }}</code>
       </div>
       <div class="info-row">
         <span class="info-label">{{ t('models.baseUrl') }}</span>
         <code class="info-value mono">{{ provider.base_url }}</code>
+      </div>
+      <div class="info-row">
+        <span class="info-label">{{ t('models.defaultModel') }}</span>
+        <code class="info-value mono">{{ provider.models[0] || '—' }}</code>
+      </div>
+      <div class="info-row">
+        <span class="info-label">{{ t('models.apiKey') }}</span>
+        <span class="info-value">{{ provider.has_api_key ? t('models.apiKeyConfigured') : t('models.apiKeyMissing') }}</span>
       </div>
     </div>
 
@@ -101,14 +125,14 @@ async function handleDelete() {
   border-radius: 10px;
   font-weight: 500;
 
-  &.builtin {
+  &.default {
     background: rgba(var(--accent-primary-rgb), 0.12);
     color: $accent-primary;
   }
 
-  &.custom {
-    background: rgba(var(--success-rgb), 0.12);
-    color: $success;
+  &.normal {
+    background: rgba(148, 163, 184, 0.12);
+    color: $text-secondary;
   }
 }
 

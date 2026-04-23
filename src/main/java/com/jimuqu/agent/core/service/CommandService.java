@@ -16,4 +16,11 @@ public interface CommandService {
      * 处理命令文本。
      */
     GatewayReply handle(GatewayMessage message, String commandLine) throws Exception;
+
+    /**
+     * 处理命令文本，并向事件接收器输出运行过程。
+     */
+    default GatewayReply handle(GatewayMessage message, String commandLine, ConversationEventSink eventSink) throws Exception {
+        return handle(message, commandLine);
+    }
 }

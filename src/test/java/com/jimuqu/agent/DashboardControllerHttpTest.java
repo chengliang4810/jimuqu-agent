@@ -101,6 +101,27 @@ public class DashboardControllerHttpTest {
     void shouldPersistConfigEnvAndExposeDashboardResources() throws Exception {
         String token = extractToken(request("GET", "/", null, null).body);
 
+        HttpResult createProvider = request("POST", "/api/providers",
+                "{\"providerKey\":\"openai-direct\",\"name\":\"OpenAI渠道\",\"baseUrl\":\"https://api.openai.com\",\"apiKey\":\"test-key\",\"defaultModel\":\"gpt-5-mini\",\"dialect\":\"openai-responses\"}",
+                token);
+        assertThat(createProvider.status).isEqualTo(200);
+
+        HttpResult updateDefaultModel = request("PUT", "/api/model/default",
+                "{\"providerKey\":\"openai-direct\",\"model\":\"gpt-5.4\"}",
+                token);
+        assertThat(updateDefaultModel.status).isEqualTo(200);
+
+        HttpResult updateFallbacks = request("PUT", "/api/model/fallbacks",
+                "{\"fallbackProviders\":[{\"provider\":\"openai-direct\",\"model\":\"gpt-5-mini\"}]}",
+                token);
+        assertThat(updateFallbacks.status).isEqualTo(200);
+
+        HttpResult providers = request("GET", "/api/providers", null, token);
+        assertThat(providers.status).isEqualTo(200);
+        assertThat(providers.body).contains("openai-direct");
+        assertThat(providers.body).contains("\"hasApiKey\":true");
+        assertThat(providers.body).doesNotContain("test-key");
+
         HttpResult saveConfig = request("PUT", "/api/config",
                 "{\"config\":{\"llm\":{\"model\":\"dashboard-model\"},\"scheduler\":{\"tickSeconds\":45}}}",
                 token);
@@ -153,6 +174,57 @@ public class DashboardControllerHttpTest {
         assertThat(logs.body).contains("\"lines\"");
     }
 
+    @Test
+    void shouldSupportDashboardChatRunsAndUploads() throws Exception {
+        String token = extractToken(request("GET", "/", null, null).body);
+
+        HttpResult upload = requestMultipart("/api/chat/uploads", token, "hello.txt", "hello world");
+        assertThat(upload.status).isEqualTo(200);
+        assertThat(upload.body).contains("\"local_path\"");
+        assertThat(upload.body).contains("\"mime_type\"");
+
+        ONode startStatus = ONode.ofJson(request("POST", "/api/chat/runs",
+                "{\"input\":\"/status\",\"session_id\":\"dashboard-chat-status\"}",
+                token).body);
+        String statusRunId = startStatus.get("run_id").getString();
+        assertThat(statusRunId).isNotBlank();
+        assertThat(startStatus.get("session_id").getString()).isEqualTo("dashboard-chat-status");
+
+        String statusEvents = request("GET", "/api/chat/runs/" + statusRunId + "/events", null, token).body;
+        assertThat(statusEvents).contains("event: run.started");
+        assertThat(statusEvents).contains("event: message.delta");
+        assertThat(statusEvents).contains("event: run.completed");
+
+        ONode branchStart = ONode.ofJson(request("POST", "/api/chat/runs",
+                "{\"input\":\"/branch feature-a\",\"session_id\":\"dashboard-chat-status\"}",
+                token).body);
+        String branchEvents = request("GET", "/api/chat/runs/" + branchStart.get("run_id").getString() + "/events", null, token).body;
+        ONode branchCompleted = extractSseEvent(branchEvents, "run.completed");
+        String branchSessionId = branchCompleted.get("session_id").getString();
+        assertThat(branchSessionId).isNotBlank().isNotEqualTo("dashboard-chat-status");
+
+        ONode resumeStart = ONode.ofJson(request("POST", "/api/chat/runs",
+                "{\"input\":\"/resume dashboard-chat-status\",\"session_id\":\"" + branchSessionId + "\"}",
+                token).body);
+        String resumeEvents = request("GET", "/api/chat/runs/" + resumeStart.get("run_id").getString() + "/events", null, token).body;
+        ONode resumeCompleted = extractSseEvent(resumeEvents, "run.completed");
+        assertThat(resumeCompleted.get("session_id").getString()).isEqualTo("dashboard-chat-status");
+
+        ONode newStart = ONode.ofJson(request("POST", "/api/chat/runs",
+                "{\"input\":\"/new\",\"session_id\":\"dashboard-chat-status\"}",
+                token).body);
+        String newEvents = request("GET", "/api/chat/runs/" + newStart.get("run_id").getString() + "/events", null, token).body;
+        ONode newCompleted = extractSseEvent(newEvents, "run.completed");
+        String newSessionId = newCompleted.get("session_id").getString();
+        assertThat(newSessionId).isNotBlank().isNotEqualTo("dashboard-chat-status");
+
+        ONode undoStart = ONode.ofJson(request("POST", "/api/chat/runs",
+                "{\"input\":\"/undo\",\"session_id\":\"" + newSessionId + "\"}",
+                token).body);
+        String undoEvents = request("GET", "/api/chat/runs/" + undoStart.get("run_id").getString() + "/events", null, token).body;
+        assertThat(undoEvents).contains("event: run.completed");
+    }
+
     private static void createSampleSkill() {
         File skillFile = FileUtil.file(runtimeHome, "skills", "sample-skill", "SKILL.md");
         String content = "---\nname: sample-skill\ndescription: Sample skill for dashboard tests\n---\n\n# Sample\n";
@@ -196,13 +268,71 @@ public class DashboardControllerHttpTest {
             StringBuilder buffer = new StringBuilder();
             String line;
             while ((line = reader.readLine()) != null) {
-                buffer.append(line);
+                buffer.append(line).append('\n');
             }
             return new HttpResult(status, buffer.toString());
         } finally {
             reader.close();
             connection.disconnect();
         }
+    }
+
+    private static HttpResult requestMultipart(String path, String token, String fileName, String content) throws Exception {
+        String boundary = "----CodexBoundary" + System.currentTimeMillis();
+        HttpURLConnection connection = (HttpURLConnection) new URL("http://127.0.0.1:" + port + path).openConnection();
+        connection.setRequestMethod("POST");
+        connection.setConnectTimeout(3000);
+        connection.setReadTimeout(3000);
+        connection.setDoOutput(true);
+        connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+        if (token != null) {
+            connection.setRequestProperty("Authorization", "Bearer " + token);
+        }
+
+        byte[] fileBytes = content.getBytes(StandardCharsets.UTF_8);
+        OutputStream outputStream = connection.getOutputStream();
+        try {
+            outputStream.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+            outputStream.write(("Content-Disposition: form-data; name=\"file\"; filename=\"" + fileName + "\"\r\n").getBytes(StandardCharsets.UTF_8));
+            outputStream.write("Content-Type: text/plain\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+            outputStream.write(fileBytes);
+            outputStream.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        } finally {
+            outputStream.close();
+        }
+
+        int status = connection.getResponseCode();
+        java.io.InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+        if (stream == null) {
+            return new HttpResult(status, "");
+        }
+        BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
+        try {
+            StringBuilder buffer = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                buffer.append(line).append('\n');
+            }
+            return new HttpResult(status, buffer.toString());
+        } finally {
+            reader.close();
+            connection.disconnect();
+        }
+    }
+
+    private static ONode extractSseEvent(String sseBody, String eventName) {
+        String[] lines = sseBody.split("\\r?\\n");
+        String currentEvent = null;
+        for (String line : lines) {
+            if (line.startsWith("event:")) {
+                currentEvent = line.substring(6).trim();
+                continue;
+            }
+            if (line.startsWith("data:") && eventName.equals(currentEvent)) {
+                return ONode.ofJson(line.substring(5).trim());
+            }
+        }
+        throw new IllegalStateException("Missing SSE event: " + eventName + " in body: " + sseBody);
     }
 
     private static void waitForHealth() throws Exception {
