@@ -5,7 +5,6 @@ import { useI18n } from "vue-i18n";
 import { NButton, useMessage } from "naive-ui";
 import { useAppStore } from "@/stores/hermes/app";
 import ThemeSwitch from "./ThemeSwitch.vue";
-import { useSessionSearch } from '@/composables/useSessionSearch'
 import danceVideoLight from "@/assets/dance-light.mp4";
 import danceVideoDark from "@/assets/dance-dark.mp4";
 
@@ -18,7 +17,6 @@ const message = useMessage();
 const route = useRoute();
 const router = useRouter();
 const appStore = useAppStore();
-const { openSessionSearch } = useSessionSearch();
 const selectedKey = computed(() => route.name as string);
 const logoPath = '/logo.png';
 const personaItems = [
@@ -105,62 +103,46 @@ function handleLogout() {
         <span>{{ t("sidebar.chat") }}</span>
       </button>
 
-      <button class="nav-item" @click="openSessionSearch">
+      <button class="nav-item" :class="{ active: selectedKey === 'hermes.jobs' }" @click="handleNav('hermes.jobs')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m20 20-3.5-3.5" />
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
         </svg>
-        <span>{{ t("sidebar.search") }}</span>
+        <span>{{ t("sidebar.jobs") }}</span>
       </button>
 
-      <!-- Agent -->
-      <div class="nav-group">
-        <div class="nav-group-label" @click="toggleGroup('agent')">
-          <span>{{ t("sidebar.groupAgent") }}</span>
-          <svg class="nav-group-arrow" :class="{ collapsed: isGroupCollapsed('agent') }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </div>
-        <div v-show="!isGroupCollapsed('agent')">
-          <button class="nav-item" :class="{ active: selectedKey === 'hermes.jobs' }" @click="handleNav('hermes.jobs')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            <span>{{ t("sidebar.jobs") }}</span>
-          </button>
-          <button class="nav-item" :class="{ active: selectedKey === 'hermes.channels' }" @click="handleNav('hermes.channels')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-            </svg>
-            <span>{{ t("sidebar.channels") }}</span>
-          </button>
-          <button class="nav-item" :class="{ active: selectedKey === 'hermes.skills' }" @click="handleNav('hermes.skills')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="12 2 2 7 12 12 22 7 12 2" />
-              <polyline points="2 17 12 22 22 17" />
-              <polyline points="2 12 12 17 22 12" />
-            </svg>
-            <span>{{ t("sidebar.skills") }}</span>
-          </button>
-          <button class="nav-item" :class="{ active: selectedKey === 'hermes.models' }" @click="handleNav('hermes.models')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v4" />
-              <path d="M12 19v4" />
-              <path d="M1 12h4" />
-              <path d="M19 12h4" />
-              <path d="M4.22 4.22l2.83 2.83" />
-              <path d="M16.95 16.95l2.83 2.83" />
-              <path d="M4.22 19.78l2.83-2.83" />
-              <path d="M16.95 7.05l2.83-2.83" />
-            </svg>
-            <span>{{ t("sidebar.models") }}</span>
-          </button>
-        </div>
-      </div>
+      <button class="nav-item" :class="{ active: selectedKey === 'hermes.channels' }" @click="handleNav('hermes.channels')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+        <span>{{ t("sidebar.channels") }}</span>
+      </button>
+
+      <button class="nav-item" :class="{ active: selectedKey === 'hermes.skills' }" @click="handleNav('hermes.skills')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 2 7 12 12 22 7 12 2" />
+          <polyline points="2 17 12 22 22 17" />
+          <polyline points="2 12 12 17 22 12" />
+        </svg>
+        <span>{{ t("sidebar.skills") }}</span>
+      </button>
+
+      <button class="nav-item" :class="{ active: selectedKey === 'hermes.models' }" @click="handleNav('hermes.models')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 1v4" />
+          <path d="M12 19v4" />
+          <path d="M1 12h4" />
+          <path d="M19 12h4" />
+          <path d="M4.22 4.22l2.83 2.83" />
+          <path d="M16.95 16.95l2.83 2.83" />
+          <path d="M4.22 19.78l2.83-2.83" />
+          <path d="M16.95 7.05l2.83-2.83" />
+        </svg>
+        <span>{{ t("sidebar.models") }}</span>
+      </button>
 
       <!-- Persona -->
       <div class="nav-group">
