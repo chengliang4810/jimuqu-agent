@@ -7,6 +7,7 @@ import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.gateway.feedback.ConversationFeedbackSink;
+import com.jimuqu.agent.llm.dialect.LoggingOpenaiResponsesDialect;
 import com.jimuqu.agent.storage.session.SqliteAgentSession;
 import com.jimuqu.agent.support.constants.LlmConstants;
 import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
@@ -24,6 +25,7 @@ import org.noear.solon.ai.agent.react.intercept.summarize.CompositeSummarization
 import org.noear.solon.ai.agent.react.intercept.summarize.HierarchicalSummarizationStrategy;
 import org.noear.solon.ai.agent.react.intercept.summarize.KeyInfoExtractionStrategy;
 import org.noear.solon.ai.chat.ChatModel;
+import org.noear.solon.ai.chat.dialect.ChatDialectManager;
 import org.noear.solon.ai.chat.message.ChatMessage;
 import org.noear.solon.ai.chat.message.AssistantMessage;
 import org.noear.solon.ai.chat.prompt.Prompt;
@@ -39,6 +41,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 /**
@@ -49,6 +52,7 @@ public class SolonAiLlmGateway implements LlmGateway {
      * LLM 网关日志器。
      */
     private static final Logger log = LoggerFactory.getLogger(SolonAiLlmGateway.class);
+    private static final AtomicBoolean OPENAI_RESPONSES_DIALECT_REGISTERED = new AtomicBoolean(false);
 
     private final AppConfig appConfig;
     private final SessionRepository sessionRepository;
@@ -217,6 +221,8 @@ public class SolonAiLlmGateway implements LlmGateway {
     }
 
     private ChatModel buildChatModel(AppConfig.LlmConfig resolved) {
+        ensureCustomDialectsRegistered();
+
         ChatModel.Builder builder = ChatModel.of(resolved.getApiUrl())
                 .provider(resolved.getProvider())
                 .model(resolved.getModel())
@@ -235,6 +241,12 @@ public class SolonAiLlmGateway implements LlmGateway {
         });
 
         return builder.build();
+    }
+
+    private void ensureCustomDialectsRegistered() {
+        if (OPENAI_RESPONSES_DIALECT_REGISTERED.compareAndSet(false, true)) {
+            ChatDialectManager.register(new LoggingOpenaiResponsesDialect(), -100);
+        }
     }
 
     private ReActAgent buildReActAgent(ChatModel chatModel,
