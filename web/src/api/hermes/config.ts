@@ -1,0 +1,256 @@
+import { request } from '../client'
+
+export interface DisplayConfig {
+  compact?: boolean
+  personality?: string
+  resume_display?: string
+  busy_input_mode?: string
+  bell_on_complete?: boolean
+  show_reasoning?: boolean
+  streaming?: boolean
+  inline_diffs?: boolean
+  show_cost?: boolean
+  skin?: string
+}
+
+export interface AgentConfig {
+  max_turns?: number
+  gateway_timeout?: number
+  restart_drain_timeout?: number
+  service_tier?: string
+  tool_use_enforcement?: string
+}
+
+export interface MemoryConfig {
+  memory_enabled?: boolean
+  user_profile_enabled?: boolean
+  memory_char_limit?: number
+  user_char_limit?: number
+}
+
+export interface SessionResetConfig {
+  mode?: string
+  idle_minutes?: number
+  at_hour?: number
+}
+
+export interface PrivacyConfig {
+  redact_pii?: boolean
+}
+
+export interface AppConfig {
+  display?: DisplayConfig
+  agent?: AgentConfig
+  memory?: MemoryConfig
+  session_reset?: SessionResetConfig
+  privacy?: PrivacyConfig
+  wecom?: Record<string, any>
+  feishu?: Record<string, any>
+  dingtalk?: Record<string, any>
+  weixin?: Record<string, any>
+  platforms?: Record<string, any>
+  [key: string]: any
+}
+
+interface EnvVarInfo {
+  is_set: boolean
+  redacted_value?: string | null
+}
+
+function envPreview(env: Record<string, EnvVarInfo>, key: string): string {
+  const item = env[key]
+  if (!item || !item.is_set) return ''
+  return item.redacted_value || '已设置'
+}
+
+export async function fetchConfig(_sections?: string[]): Promise<AppConfig> {
+  const [data, env] = await Promise.all([
+    request<Record<string, any>>('/api/config'),
+    request<Record<string, EnvVarInfo>>('/api/env'),
+  ])
+  return {
+    display: {
+      show_reasoning: !!data.display?.showReasoning,
+      streaming: !!data.llm?.stream,
+    },
+    agent: {
+      max_turns: data.react?.maxSteps,
+    },
+    memory: {
+      memory_enabled: true,
+      user_profile_enabled: true,
+    },
+    session_reset: {
+      mode: data.scheduler?.enabled ? 'manual' : 'off',
+    },
+    privacy: {
+      redact_pii: false,
+    },
+    wecom: data.channels?.wecom || {},
+    feishu: data.channels?.feishu || {},
+    dingtalk: data.channels?.dingtalk || {},
+    weixin: data.channels?.weixin || {},
+    platforms: {
+      feishu: {
+        enabled: !!env.JIMUQU_FEISHU_ENABLED?.is_set,
+        extra: {
+          app_id: envPreview(env, 'JIMUQU_FEISHU_APP_ID'),
+          app_secret: envPreview(env, 'JIMUQU_FEISHU_APP_SECRET'),
+        },
+      },
+      dingtalk: {
+        enabled: !!env.JIMUQU_DINGTALK_ENABLED?.is_set,
+        extra: {
+          client_id: envPreview(env, 'JIMUQU_DINGTALK_CLIENT_ID'),
+          client_secret: envPreview(env, 'JIMUQU_DINGTALK_CLIENT_SECRET'),
+          robot_code: envPreview(env, 'JIMUQU_DINGTALK_ROBOT_CODE'),
+        },
+      },
+      wecom: {
+        enabled: !!env.JIMUQU_WECOM_ENABLED?.is_set,
+        extra: {
+          bot_id: envPreview(env, 'JIMUQU_WECOM_BOT_ID'),
+          secret: envPreview(env, 'JIMUQU_WECOM_SECRET'),
+        },
+      },
+      weixin: {
+        enabled: !!env.JIMUQU_WEIXIN_ENABLED?.is_set,
+        token: envPreview(env, 'JIMUQU_WEIXIN_TOKEN'),
+        extra: {
+          account_id: envPreview(env, 'JIMUQU_WEIXIN_ACCOUNT_ID'),
+        },
+      },
+    },
+  }
+}
+
+export async function updateConfigSection(
+  section: string,
+  values: Record<string, any>,
+): Promise<void> {
+  const current = await request<Record<string, any>>('/api/config')
+  const next = { ...current }
+
+  if (section === 'display') {
+    next.display = {
+      ...(next.display || {}),
+      showReasoning: values.show_reasoning ?? next.display?.showReasoning,
+    }
+    next.llm = {
+      ...(next.llm || {}),
+      stream: values.streaming ?? next.llm?.stream,
+    }
+  } else if (section === 'agent') {
+    next.react = {
+      ...(next.react || {}),
+      maxSteps: values.max_turns ?? next.react?.maxSteps,
+    }
+  } else if (section === 'wecom' || section === 'feishu' || section === 'dingtalk' || section === 'weixin') {
+    next.channels = {
+      ...(next.channels || {}),
+      [section]: {
+        ...(next.channels?.[section] || {}),
+        ...values,
+      },
+    }
+  } else {
+    return
+  }
+
+  await request('/api/config', {
+    method: 'PUT',
+    body: JSON.stringify({ config: next }),
+  })
+}
+
+export async function saveCredentials(
+  platform: string,
+  values: Record<string, any>,
+): Promise<void> {
+  const entries: Array<{ key: string; value: string | boolean | null | undefined }> = []
+
+  if (platform === 'feishu') {
+    if ('enabled' in values) entries.push({ key: 'JIMUQU_FEISHU_ENABLED', value: values.enabled })
+    if (values.extra?.app_id !== undefined) entries.push({ key: 'JIMUQU_FEISHU_APP_ID', value: values.extra.app_id })
+    if (values.extra?.app_secret !== undefined) entries.push({ key: 'JIMUQU_FEISHU_APP_SECRET', value: values.extra.app_secret })
+  }
+
+  if (platform === 'dingtalk') {
+    if ('enabled' in values) entries.push({ key: 'JIMUQU_DINGTALK_ENABLED', value: values.enabled })
+    if (values.extra?.client_id !== undefined) entries.push({ key: 'JIMUQU_DINGTALK_CLIENT_ID', value: values.extra.client_id })
+    if (values.extra?.client_secret !== undefined) entries.push({ key: 'JIMUQU_DINGTALK_CLIENT_SECRET', value: values.extra.client_secret })
+    if (values.extra?.robot_code !== undefined) entries.push({ key: 'JIMUQU_DINGTALK_ROBOT_CODE', value: values.extra.robot_code })
+  }
+
+  if (platform === 'wecom') {
+    if ('enabled' in values) entries.push({ key: 'JIMUQU_WECOM_ENABLED', value: values.enabled })
+    if (values.extra?.bot_id !== undefined) entries.push({ key: 'JIMUQU_WECOM_BOT_ID', value: values.extra.bot_id })
+    if (values.extra?.secret !== undefined) entries.push({ key: 'JIMUQU_WECOM_SECRET', value: values.extra.secret })
+  }
+
+  if (platform === 'weixin') {
+    if ('enabled' in values) entries.push({ key: 'JIMUQU_WEIXIN_ENABLED', value: values.enabled })
+    if (values.token !== undefined) entries.push({ key: 'JIMUQU_WEIXIN_TOKEN', value: values.token })
+    if (values.extra?.account_id !== undefined) entries.push({ key: 'JIMUQU_WEIXIN_ACCOUNT_ID', value: values.extra.account_id })
+  }
+
+  for (const entry of entries) {
+    const raw = entry.value
+    const text = typeof raw === 'boolean' ? String(raw) : (raw ?? '').toString().trim()
+    if (!text) {
+      await request('/api/env', {
+        method: 'DELETE',
+        body: JSON.stringify({ key: entry.key }),
+      })
+    } else {
+      await request('/api/env', {
+        method: 'PUT',
+        body: JSON.stringify({ key: entry.key, value: text }),
+      })
+    }
+  }
+}
+
+export interface WeixinQrCode {
+  qrcode: string
+  qrcode_url: string
+}
+
+export interface WeixinQrStatus {
+  status: 'wait' | 'scaned' | 'scaned_but_redirect' | 'expired' | 'confirmed'
+  account_id?: string
+  token?: string
+  base_url?: string
+}
+
+export async function fetchWeixinQrCode(): Promise<WeixinQrCode> {
+  const res = await request<any>('/api/gateway/setup/weixin/qr', { method: 'POST' })
+  return {
+    qrcode: res.ticket || '',
+    qrcode_url: res.qr_image_url || res.qr_code || '',
+  }
+}
+
+export async function pollWeixinQrStatus(qrcode: string): Promise<WeixinQrStatus> {
+  const res = await request<any>(`/api/gateway/setup/weixin/qr/${encodeURIComponent(qrcode)}`)
+  const statusMap: Record<string, WeixinQrStatus['status']> = {
+    pending: 'wait',
+    scanned: 'scaned',
+    confirmed: 'confirmed',
+    failed: 'expired',
+  }
+  return {
+    status: statusMap[res.status] || 'wait',
+    account_id: res.account_id,
+    token: res.ticket,
+    base_url: res.base_url,
+  }
+}
+
+export async function saveWeixinCredentials(_data: {
+  account_id: string
+  token: string
+  base_url?: string
+}): Promise<void> {
+  throw new Error('当前后端未开放微信凭证保存接口')
+}

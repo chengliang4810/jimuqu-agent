@@ -4,7 +4,6 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.config.AppConfig;
-import com.jimuqu.agent.config.RuntimeEnvResolver;
 import org.noear.solon.core.util.Assert;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -26,7 +25,6 @@ public class DashboardConfigService {
     private static final List<String> PASSTHROUGH_PREFIXES = Arrays.asList("channels.wecom.groups.");
 
     private final AppConfig appConfig;
-    private final RuntimeEnvResolver envResolver;
     private final com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
     private final Map<String, FieldDefinition> fields = new LinkedHashMap<String, FieldDefinition>();
     private final List<String> categoryOrder = Arrays.asList("general", "agent", "compression", "security", "messaging");
@@ -34,7 +32,6 @@ public class DashboardConfigService {
     public DashboardConfigService(AppConfig appConfig,
                                   com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
         this.appConfig = appConfig;
-        this.envResolver = RuntimeEnvResolver.getInstance();
         this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
         registerFields();
     }
@@ -63,8 +60,7 @@ public class DashboardConfigService {
     }
 
     public String envNameFor(String key) {
-        FieldDefinition definition = fields.get(key);
-        return definition == null ? null : definition.envName;
+        return null;
     }
 
     public Map<String, Object> saveConfig(Map<String, Object> nestedConfig) {
@@ -292,12 +288,6 @@ public class DashboardConfigService {
         Map<String, Object> current = new LinkedHashMap<String, Object>();
         for (FieldDefinition field : fields.values()) {
             Object value = overrides.containsKey(field.key) ? overrides.get(field.key) : defaults.get(field.key);
-            if (field.envName != null) {
-                String envValue = envResolver.get(field.envName);
-                if (StrUtil.isNotBlank(envValue)) {
-                    value = parseTypedValue(field.type, envValue);
-                }
-            }
             current.put(field.key, value);
         }
         for (Map.Entry<String, Object> entry : overrides.entrySet()) {
@@ -326,11 +316,11 @@ public class DashboardConfigService {
     }
 
     private Map<String, Object> loadOverrideFields() {
-        File overrideFile = new File(appConfig.getRuntime().getConfigOverrideFile());
-        if (!overrideFile.exists()) {
+        File configFile = new File(appConfig.getRuntime().getConfigFile());
+        if (!configFile.exists()) {
             return Collections.emptyMap();
         }
-        return loadFieldMap(FileUtil.readUtf8String(overrideFile));
+        return loadFieldMap(FileUtil.readUtf8String(configFile));
     }
 
     private Map<String, Object> loadFieldMap(String yamlText) {
@@ -449,15 +439,15 @@ public class DashboardConfigService {
     }
 
     private void writeOverrideFile(Map<String, Object> fieldValues) {
-        Map<String, Object> root = new LinkedHashMap<String, Object>();
-        Map<String, Object> jimuqu = new LinkedHashMap<String, Object>();
-        root.put("jimuqu", jimuqu);
+        Map<String, Object> root = loadRawConfigRoot();
+        Map<String, Object> jimuqu = ensureJimuquRoot(root);
+        clearManagedFields(jimuqu);
         for (Map.Entry<String, Object> entry : fieldValues.entrySet()) {
             setNestedValue(jimuqu, entry.getKey(), entry.getValue());
         }
 
-        FileUtil.mkParentDirs(appConfig.getRuntime().getConfigOverrideFile());
-        FileUtil.writeUtf8String(dump(root), new File(appConfig.getRuntime().getConfigOverrideFile()));
+        FileUtil.mkParentDirs(appConfig.getRuntime().getConfigFile());
+        FileUtil.writeUtf8String(dump(root), new File(appConfig.getRuntime().getConfigFile()));
     }
 
     private String dumpYaml(Map<String, Object> fieldValues) {
@@ -477,6 +467,39 @@ public class DashboardConfigService {
         options.setIndent(2);
         options.setIndicatorIndent(1);
         return new Yaml(options).dump(root);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> loadRawConfigRoot() {
+        File configFile = new File(appConfig.getRuntime().getConfigFile());
+        if (!configFile.exists()) {
+            return new LinkedHashMap<String, Object>();
+        }
+        Object parsed = new Yaml().load(FileUtil.readUtf8String(configFile));
+        if (!(parsed instanceof Map)) {
+            return new LinkedHashMap<String, Object>();
+        }
+        return sanitizeMap((Map<?, ?>) parsed);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> ensureJimuquRoot(Map<String, Object> root) {
+        Object current = root.get("jimuqu");
+        if (current instanceof Map) {
+            return (Map<String, Object>) current;
+        }
+        Map<String, Object> jimuqu = new LinkedHashMap<String, Object>();
+        root.put("jimuqu", jimuqu);
+        return jimuqu;
+    }
+
+    private void clearManagedFields(Map<String, Object> jimuqu) {
+        for (String key : fields.keySet()) {
+            removeNestedValue(jimuqu, key);
+        }
+        for (String prefix : PASSTHROUGH_PREFIXES) {
+            removeNestedPrefix(jimuqu, prefix);
+        }
     }
 
     private Object parseTypedValue(String type, String raw) {
@@ -500,6 +523,90 @@ public class DashboardConfigService {
             return values;
         }
         return raw;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> sanitizeMap(Map<?, ?> input) {
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        for (Map.Entry<?, ?> entry : input.entrySet()) {
+            if (entry.getKey() == null) {
+                continue;
+            }
+            Object value = entry.getValue();
+            if (value instanceof Map) {
+                value = sanitizeMap((Map<?, ?>) value);
+            } else if (value instanceof List) {
+                value = sanitizeList((List<?>) value);
+            }
+            result.put(String.valueOf(entry.getKey()), value);
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object> sanitizeList(List<?> input) {
+        List<Object> result = new ArrayList<Object>();
+        for (Object item : input) {
+            if (item instanceof Map) {
+                result.add(sanitizeMap((Map<?, ?>) item));
+            } else if (item instanceof List) {
+                result.add(sanitizeList((List<?>) item));
+            } else {
+                result.add(item);
+            }
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean removeNestedValue(Map<String, Object> root, String key) {
+        String[] parts = key.split("\\.");
+        List<Map<String, Object>> parents = new ArrayList<Map<String, Object>>();
+        List<String> keys = new ArrayList<String>();
+        Map<String, Object> cursor = root;
+        for (int i = 0; i < parts.length - 1; i++) {
+            Object current = cursor.get(parts[i]);
+            if (!(current instanceof Map)) {
+                return false;
+            }
+            parents.add(cursor);
+            keys.add(parts[i]);
+            cursor = (Map<String, Object>) current;
+        }
+        Object removed = cursor.remove(parts[parts.length - 1]);
+        if (removed == null) {
+            return false;
+        }
+        for (int i = parents.size() - 1; i >= 0; i--) {
+            Object current = parents.get(i).get(keys.get(i));
+            if (current instanceof Map && ((Map<?, ?>) current).isEmpty()) {
+                parents.get(i).remove(keys.get(i));
+            } else {
+                break;
+            }
+        }
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void removeNestedPrefix(Map<String, Object> root, String prefix) {
+        String normalized = prefix;
+        while (normalized.endsWith(".")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        if (normalized.length() == 0) {
+            return;
+        }
+        String[] parts = normalized.split("\\.");
+        Map<String, Object> cursor = root;
+        for (int i = 0; i < parts.length - 1; i++) {
+            Object current = cursor.get(parts[i]);
+            if (!(current instanceof Map)) {
+                return;
+            }
+            cursor = (Map<String, Object>) current;
+        }
+        cursor.remove(parts[parts.length - 1]);
     }
 
     private static class FieldDefinition {

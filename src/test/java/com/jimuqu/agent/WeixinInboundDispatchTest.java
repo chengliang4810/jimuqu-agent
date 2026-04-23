@@ -69,8 +69,7 @@ public class WeixinInboundDispatchTest {
         config.getRuntime().setSkillsDir(new File(runtimeHome, "skills").getAbsolutePath());
         config.getRuntime().setCacheDir(new File(runtimeHome, "cache").getAbsolutePath());
         config.getRuntime().setStateDb(new File(runtimeHome, "state.db").getAbsolutePath());
-        config.getRuntime().setConfigOverrideFile(new File(runtimeHome, "config.override.yml").getAbsolutePath());
-        config.getRuntime().setEnvFile(new File(runtimeHome, ".env").getAbsolutePath());
+        config.getRuntime().setConfigFile(new File(runtimeHome, "config.yml").getAbsolutePath());
         config.getRuntime().setLogsDir(new File(runtimeHome, "logs").getAbsolutePath());
         return config;
     }

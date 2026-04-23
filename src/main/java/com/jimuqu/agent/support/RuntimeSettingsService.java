@@ -338,37 +338,7 @@ public class RuntimeSettingsService {
     private void persistConfigValue(String key, Object value, boolean reconnectChannels) {
         Map<String, Object> updates = new LinkedHashMap<String, Object>();
         updates.put(key, value);
-        String envKey = dashboardConfigService.envNameFor(key);
-        if (StrUtil.isNotBlank(envKey)) {
-            dashboardConfigService.savePartialFlat(updates, false);
-            dashboardEnvService.set(envKey, serializeValue(value), reconnectChannels);
-        } else {
-            dashboardConfigService.savePartialFlat(updates, reconnectChannels);
-        }
-    }
-
-    private String serializeValue(Object value) {
-        if (value == null) {
-            return "";
-        }
-        if (value instanceof List) {
-            StringBuilder buffer = new StringBuilder();
-            for (Object item : (List<?>) value) {
-                if (item == null) {
-                    continue;
-                }
-                String text = String.valueOf(item).trim();
-                if (text.length() == 0) {
-                    continue;
-                }
-                if (buffer.length() > 0) {
-                    buffer.append(',');
-                }
-                buffer.append(text);
-            }
-            return buffer.toString();
-        }
-        return String.valueOf(value);
+        dashboardConfigService.savePartialFlat(updates, reconnectChannels);
     }
 
     private boolean shouldReconnectChannelsForConfigKey(String key) {

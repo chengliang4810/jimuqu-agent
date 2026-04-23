@@ -83,6 +83,18 @@ public class DashboardControllerHttpTest {
         HttpResult authorizedDoctor = request("GET", "/api/gateway/doctor", null, token);
         assertThat(authorizedDoctor.status).isEqualTo(200);
         assertThat(authorizedDoctor.body).contains("\"platforms\"");
+
+        HttpResult login = request("GET", "/login", null, null);
+        assertThat(login.status).isEqualTo(200);
+        assertThat(login.body).contains("__JIMUQU_SESSION_TOKEN__");
+
+        HttpResult chat = request("GET", "/chat", null, null);
+        assertThat(chat.status).isEqualTo(200);
+        assertThat(chat.body).contains("__JIMUQU_SESSION_TOKEN__");
+
+        HttpResult files = request("GET", "/files", null, null);
+        assertThat(files.status).isEqualTo(200);
+        assertThat(files.body).contains("__JIMUQU_SESSION_TOKEN__");
     }
 
     @Test
@@ -93,7 +105,7 @@ public class DashboardControllerHttpTest {
                 "{\"config\":{\"llm\":{\"model\":\"dashboard-model\"},\"scheduler\":{\"tickSeconds\":45}}}",
                 token);
         assertThat(saveConfig.status).isEqualTo(200);
-        File overrideFile = new File(runtimeHome, "config.override.yml");
+        File overrideFile = new File(runtimeHome, "config.yml");
         assertThat(overrideFile).exists();
         assertThat(FileUtil.readUtf8String(overrideFile)).contains("dashboard-model");
 
@@ -101,9 +113,8 @@ public class DashboardControllerHttpTest {
                 "{\"key\":\"JIMUQU_LLM_API_KEY\",\"value\":\"secret12345678\"}",
                 token);
         assertThat(saveEnv.status).isEqualTo(200);
-        File envFile = new File(runtimeHome, ".env");
-        assertThat(envFile).exists();
-        assertThat(FileUtil.readUtf8String(envFile)).contains("JIMUQU_LLM_API_KEY");
+        assertThat(overrideFile).exists();
+        assertThat(FileUtil.readUtf8String(overrideFile)).contains("apiKey: secret12345678");
 
         HttpResult revealEnv = request("POST", "/api/env/reveal",
                 "{\"key\":\"JIMUQU_LLM_API_KEY\"}",

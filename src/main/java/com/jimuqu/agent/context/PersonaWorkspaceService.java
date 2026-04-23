@@ -9,6 +9,8 @@ import com.jimuqu.agent.support.constants.ContextFileConstants;
 import java.io.File;
 import java.io.InputStream;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -18,10 +20,13 @@ public class PersonaWorkspaceService {
     private static final String TEMPLATE_ROOT = "persona-templates/";
 
     private final File workspaceDir;
+    private final File memoryDir;
 
     public PersonaWorkspaceService(AppConfig appConfig) {
         this.workspaceDir = FileUtil.file(appConfig.getRuntime().getHome());
+        this.memoryDir = FileUtil.file(this.workspaceDir, ContextFileConstants.MEMORY_DIR);
         FileUtil.mkdir(this.workspaceDir);
+        FileUtil.mkdir(this.memoryDir);
         ensureSeeded();
     }
 
@@ -98,6 +103,36 @@ public class PersonaWorkspaceService {
      */
     public void restoreTemplate(String key) {
         write(key, readTemplate(key));
+    }
+
+    /**
+     * 返回所有日记文件，相对路径按日期倒序排列。
+     */
+    public List<String> listDiaryRelativePaths() {
+        if (!memoryDir.exists()) {
+            return Collections.emptyList();
+        }
+
+        List<File> files = FileUtil.loopFiles(memoryDir, file -> file.isFile() && file.getName().endsWith(".md"));
+        Collections.sort(files, (left, right) -> right.getName().compareTo(left.getName()));
+
+        List<String> result = new ArrayList<String>();
+        for (File file : files) {
+            result.add(ContextFileConstants.MEMORY_DIR + "/" + file.getName());
+        }
+        return result;
+    }
+
+    public String readDiary(String relativePath) {
+        File target = FileUtil.file(workspaceDir, relativePath);
+        if (!target.exists()) {
+            return "";
+        }
+        return FileUtil.readUtf8String(target);
+    }
+
+    public String absoluteDiaryPath(String relativePath) {
+        return FileUtil.file(workspaceDir, relativePath).getAbsolutePath();
     }
 
     /**

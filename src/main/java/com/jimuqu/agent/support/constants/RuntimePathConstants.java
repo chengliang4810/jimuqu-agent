@@ -9,8 +9,7 @@ public interface RuntimePathConstants {
     String SKILLS_DIR = "runtime/skills";
     String CACHE_DIR = "runtime/cache";
     String STATE_DB = "runtime/state.db";
-    String CONFIG_OVERRIDE_FILE = "runtime/config.override.yml";
-    String ENV_FILE = "runtime/.env";
+    String CONFIG_FILE = "runtime/config.yml";
     String LOGS_DIR = "runtime/logs";
 
     String DEFAULT_LLM_PROVIDER = "openai-responses";

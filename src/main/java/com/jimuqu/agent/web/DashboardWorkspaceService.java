@@ -1,5 +1,6 @@
 package com.jimuqu.agent.web;
 
+import cn.hutool.core.io.FileUtil;
 import com.jimuqu.agent.context.PersonaWorkspaceService;
 
 import java.util.ArrayList;
@@ -44,6 +45,30 @@ public class DashboardWorkspaceService {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("ok", true);
         result.put("file", describeFile(key));
+        return result;
+    }
+
+    public Map<String, Object> listDiaryFiles() {
+        List<Map<String, Object>> files = new ArrayList<Map<String, Object>>();
+        for (String relativePath : personaWorkspaceService.listDiaryRelativePaths()) {
+            Map<String, Object> item = new LinkedHashMap<String, Object>();
+            item.put("name", FileUtil.file(relativePath).getName());
+            item.put("relativePath", relativePath);
+            item.put("path", personaWorkspaceService.absoluteDiaryPath(relativePath));
+            files.add(item);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("files", files);
+        return result;
+    }
+
+    public Map<String, Object> getDiaryFile(String relativePath) {
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("name", FileUtil.file(relativePath).getName());
+        result.put("relativePath", relativePath);
+        result.put("path", personaWorkspaceService.absoluteDiaryPath(relativePath));
+        result.put("content", personaWorkspaceService.readDiary(relativePath));
         return result;
     }
 

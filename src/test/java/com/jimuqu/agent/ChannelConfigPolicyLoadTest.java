@@ -15,7 +15,7 @@ public class ChannelConfigPolicyLoadTest {
     @Test
     void shouldLoadChannelPoliciesAndWecomGroupAllowMap() throws Exception {
         File runtimeHome = Files.createTempDirectory("jimuqu-agent-config-policies").toFile();
-        File overrideFile = new File(runtimeHome, "config.override.yml");
+        File overrideFile = new File(runtimeHome, "config.yml");
         FileUtil.writeUtf8String(
                 "jimuqu:\n"
                         + "  channels:\n"

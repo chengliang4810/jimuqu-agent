@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 应用级配置对象，负责承接 Solon 配置并做环境变量覆盖与路径标准化。
+ * 应用级配置对象，负责承接 Solon 配置并做外部 config.yml 覆盖与路径标准化。
  */
 @Getter
 @Setter
@@ -124,8 +124,7 @@ public class AppConfig {
                 RuntimePathConstants.STATE_DB,
                 "state.db"
         ));
-        config.getRuntime().setConfigOverrideFile(new File(runtimeHome, "config.override.yml").getPath());
-        config.getRuntime().setEnvFile(envResolver.envFile().getPath());
+        config.getRuntime().setConfigFile(envResolver.configFile().getPath());
         config.getRuntime().setLogsDir(new File(runtimeHome, "logs").getPath());
 
         config.getLlm().setProvider(resolveEnvString("JIMUQU_LLM_PROVIDER", readString(props, overrides, "jimuqu.llm.provider", RuntimePathConstants.DEFAULT_LLM_PROVIDER)));
@@ -284,17 +283,13 @@ public class AppConfig {
         runtime.setSkillsDir(asAbsolute(new File(runtime.getSkillsDir()), userDir).getAbsolutePath());
         runtime.setCacheDir(asAbsolute(new File(runtime.getCacheDir()), userDir).getAbsolutePath());
         runtime.setStateDb(asAbsolute(new File(runtime.getStateDb()), userDir).getAbsolutePath());
-        if (StrUtil.isBlank(runtime.getConfigOverrideFile())) {
-            runtime.setConfigOverrideFile(new File(runtime.getHome(), "config.override.yml").getPath());
-        }
-        if (StrUtil.isBlank(runtime.getEnvFile())) {
-            runtime.setEnvFile(new File(runtime.getHome(), ".env").getPath());
+        if (StrUtil.isBlank(runtime.getConfigFile())) {
+            runtime.setConfigFile(new File(runtime.getHome(), "config.yml").getPath());
         }
         if (StrUtil.isBlank(runtime.getLogsDir())) {
             runtime.setLogsDir(new File(runtime.getHome(), "logs").getPath());
         }
-        runtime.setConfigOverrideFile(asAbsolute(new File(runtime.getConfigOverrideFile()), userDir).getAbsolutePath());
-        runtime.setEnvFile(asAbsolute(new File(runtime.getEnvFile()), userDir).getAbsolutePath());
+        runtime.setConfigFile(asAbsolute(new File(runtime.getConfigFile()), userDir).getAbsolutePath());
         runtime.setLogsDir(asAbsolute(new File(runtime.getLogsDir()), userDir).getAbsolutePath());
     }
 
@@ -328,8 +323,7 @@ public class AppConfig {
         this.runtime.setSkillsDir(other.getSkillsDir());
         this.runtime.setCacheDir(other.getCacheDir());
         this.runtime.setStateDb(other.getStateDb());
-        this.runtime.setConfigOverrideFile(other.getConfigOverrideFile());
-        this.runtime.setEnvFile(other.getEnvFile());
+        this.runtime.setConfigFile(other.getConfigFile());
         this.runtime.setLogsDir(other.getLogsDir());
     }
 
@@ -816,13 +810,13 @@ public class AppConfig {
     }
 
     private static Map<String, Object> loadFlatOverrides(File runtimeHome) {
-        File overrideFile = new File(runtimeHome, "config.override.yml");
-        if (!overrideFile.exists()) {
+        File configFile = new File(runtimeHome, "config.yml");
+        if (!configFile.exists()) {
             return Collections.emptyMap();
         }
 
         try {
-            Object parsed = new Yaml().load(FileUtil.readUtf8String(overrideFile));
+            Object parsed = new Yaml().load(FileUtil.readUtf8String(configFile));
             if (!(parsed instanceof Map)) {
                 return Collections.emptyMap();
             }
@@ -899,14 +893,9 @@ public class AppConfig {
         private String stateDb;
 
         /**
-         * runtime/config.override.yml 路径。
+         * runtime/config.yml 路径。
          */
-        private String configOverrideFile;
-
-        /**
-         * runtime/.env 路径。
-         */
-        private String envFile;
+        private String configFile;
 
         /**
          * runtime/logs 目录。

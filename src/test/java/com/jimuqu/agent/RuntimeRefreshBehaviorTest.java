@@ -34,17 +34,17 @@ public class RuntimeRefreshBehaviorTest {
     }
 
     @Test
-    void shouldUpdateEnvBackedLlmModelEffectively() throws Exception {
+    void shouldUpdateConfigBackedLlmModelEffectively() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         RecordingChannelAdapter adapter = new RecordingChannelAdapter(PlatformType.WEIXIN);
-        FileUtil.writeUtf8String("JIMUQU_LLM_MODEL=gpt-5.4\n", env.appConfig.getRuntime().getEnvFile());
+        FileUtil.writeUtf8String("jimuqu:\n  llm:\n    model: gpt-5.4\n", env.appConfig.getRuntime().getConfigFile());
         RuntimeSettingsService runtimeSettingsService = runtimeSettingsService(env, adapter);
 
         runtimeSettingsService.setConfigValue("llm.model", "gpt-5.2");
 
         assertThat(env.appConfig.getLlm().getModel()).isEqualTo("gpt-5.2");
         assertThat(runtimeSettingsService.getConfigValue("llm.model")).isEqualTo("gpt-5.2");
-        assertThat(FileUtil.readUtf8String(env.appConfig.getRuntime().getEnvFile())).contains("JIMUQU_LLM_MODEL=gpt-5.2");
+        assertThat(FileUtil.readUtf8String(env.appConfig.getRuntime().getConfigFile())).contains("model: gpt-5.2");
         assertThat(adapter.disconnectCount).isZero();
         assertThat(adapter.connectCount).isZero();
     }

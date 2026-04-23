@@ -2,6 +2,7 @@ package com.jimuqu.agent.llm;
 
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.config.RuntimeEnvResolver;
 import com.jimuqu.agent.core.model.LlmResult;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
@@ -420,7 +421,7 @@ public class SolonAiLlmGateway implements LlmGateway {
     }
 
     private File resolvePdfFontFile() {
-        String override = System.getenv("JIMUQU_PDF_FONT_PATH");
+        String override = RuntimeEnvResolver.getenv("JIMUQU_PDF_FONT_PATH");
         if (StrUtil.isNotBlank(override)) {
             File file = new File(override.trim());
             if (file.isFile()) {

@@ -12,35 +12,51 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class CoreEnvOverrideLoadTest {
     @Test
-    void shouldLoadCoreAndChannelConfigFromRuntimeEnv() throws Exception {
+    void shouldLoadCoreAndChannelConfigFromRuntimeConfig() throws Exception {
         File runtimeHome = Files.createTempDirectory("jimuqu-agent-core-env").toFile();
-        File envFile = new File(runtimeHome, ".env");
+        File envFile = new File(runtimeHome, "config.yml");
         FileUtil.writeUtf8String(
-                "JIMUQU_SCHEDULER_ENABLED=false\n"
-                        + "JIMUQU_SCHEDULER_TICK_SECONDS=15\n"
-                        + "JIMUQU_REACT_MAX_STEPS=14\n"
-                        + "JIMUQU_REACT_RETRY_MAX=5\n"
-                        + "JIMUQU_REACT_RETRY_DELAY_MS=3000\n"
-                        + "JIMUQU_REACT_DELEGATE_MAX_STEPS=22\n"
-                        + "JIMUQU_REACT_DELEGATE_RETRY_MAX=6\n"
-                        + "JIMUQU_REACT_DELEGATE_RETRY_DELAY_MS=3500\n"
-                        + "JIMUQU_REACT_SUMMARIZATION_ENABLED=false\n"
-                        + "JIMUQU_REACT_SUMMARIZATION_MAX_MESSAGES=55\n"
-                        + "JIMUQU_REACT_SUMMARIZATION_MAX_TOKENS=45000\n"
-                        + "JIMUQU_COMPRESSION_ENABLED=false\n"
-                        + "JIMUQU_COMPRESSION_THRESHOLD_PERCENT=0.75\n"
-                        + "JIMUQU_COMPRESSION_SUMMARY_MODEL=gpt-5.4-mini\n"
-                        + "JIMUQU_FEISHU_ENABLED=true\n"
-                        + "JIMUQU_FEISHU_WEBSOCKET_URL=wss://feishu.example/ws\n"
-                        + "JIMUQU_DINGTALK_STREAM_URL=wss://dingtalk.example/stream\n"
-                        + "JIMUQU_WECOM_WEBSOCKET_URL=wss://wecom.example/ws\n"
-                        + "JIMUQU_WECOM_GROUP_MEMBER_ALLOW_MAP_JSON={\"room-a\":[\"alice\",\"bob\"],\"*\":[\"admin\"]}\n"
-                        + "JIMUQU_WEIXIN_ENABLED=true\n"
-                        + "JIMUQU_WEIXIN_BASE_URL=https://weixin.example\n"
-                        + "JIMUQU_WEIXIN_CDN_BASE_URL=https://cdn.example\n"
-                        + "JIMUQU_WEIXIN_LONG_POLL_URL=https://poll.example/ilink/bot/getupdates\n"
-                        + "JIMUQU_WEIXIN_SPLIT_MULTILINE_MESSAGES=true\n"
-                        + "JIMUQU_WEIXIN_SEND_CHUNK_RETRIES=9\n",
+                "jimuqu:\n"
+                        + "  scheduler:\n"
+                        + "    enabled: false\n"
+                        + "    tickSeconds: 15\n"
+                        + "  react:\n"
+                        + "    maxSteps: 14\n"
+                        + "    retryMax: 5\n"
+                        + "    retryDelayMs: 3000\n"
+                        + "    delegateMaxSteps: 22\n"
+                        + "    delegateRetryMax: 6\n"
+                        + "    delegateRetryDelayMs: 3500\n"
+                        + "    summarizationEnabled: false\n"
+                        + "    summarizationMaxMessages: 55\n"
+                        + "    summarizationMaxTokens: 45000\n"
+                        + "  compression:\n"
+                        + "    enabled: false\n"
+                        + "    thresholdPercent: 0.75\n"
+                        + "    summaryModel: gpt-5.4-mini\n"
+                        + "  channels:\n"
+                        + "    feishu:\n"
+                        + "      enabled: true\n"
+                        + "      websocketUrl: wss://feishu.example/ws\n"
+                        + "    dingtalk:\n"
+                        + "      streamUrl: wss://dingtalk.example/stream\n"
+                        + "    wecom:\n"
+                        + "      websocketUrl: wss://wecom.example/ws\n"
+                        + "      groups:\n"
+                        + "        room-a:\n"
+                        + "          allowFrom:\n"
+                        + "            - alice\n"
+                        + "            - bob\n"
+                        + "        '*':\n"
+                        + "          allowFrom:\n"
+                        + "            - admin\n"
+                        + "    weixin:\n"
+                        + "      enabled: true\n"
+                        + "      baseUrl: https://weixin.example\n"
+                        + "      cdnBaseUrl: https://cdn.example\n"
+                        + "      longPollUrl: https://poll.example/ilink/bot/getupdates\n"
+                        + "      splitMultilineMessages: true\n"
+                        + "      sendChunkRetries: 9\n",
                 envFile
         );
 

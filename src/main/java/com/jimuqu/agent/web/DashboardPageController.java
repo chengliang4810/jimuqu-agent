@@ -1,10 +1,13 @@
 package com.jimuqu.agent.web;
 
 import cn.hutool.core.io.IoUtil;
+import cn.hutool.core.io.FileUtil;
 import org.noear.solon.annotation.Controller;
 import org.noear.solon.annotation.Mapping;
+import org.noear.solon.core.handle.DownloadedFile;
 import org.noear.solon.core.handle.Context;
 
+import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
@@ -20,65 +23,130 @@ public class DashboardPageController {
     }
 
     @Mapping("/")
-    public void index(Context context) {
-        renderIndex(context);
+    public DownloadedFile index(Context context) {
+        return renderIndex(context);
+    }
+
+    @Mapping("/index.html")
+    public DownloadedFile indexHtml(Context context) {
+        return renderIndex(context);
     }
 
     @Mapping("/status")
-    public void status(Context context) {
-        renderIndex(context);
+    public DownloadedFile status(Context context) {
+        return renderIndex(context);
+    }
+
+    @Mapping("/login")
+    public DownloadedFile login(Context context) {
+        return renderIndex(context);
+    }
+
+    @Mapping("/chat")
+    public DownloadedFile chat(Context context) {
+        return renderIndex(context);
     }
 
     @Mapping("/sessions")
-    public void sessions(Context context) {
-        renderIndex(context);
+    public DownloadedFile sessions(Context context) {
+        return renderIndex(context);
     }
 
     @Mapping("/analytics")
-    public void analytics(Context context) {
-        renderIndex(context);
+    public DownloadedFile analytics(Context context) {
+        return renderIndex(context);
+    }
+
+    @Mapping("/models")
+    public DownloadedFile models(Context context) {
+        return renderIndex(context);
+    }
+
+    @Mapping("/memory")
+    public DownloadedFile memory(Context context) {
+        return renderIndex(context);
     }
 
     @Mapping("/logs")
-    public void logs(Context context) {
-        renderIndex(context);
+    public DownloadedFile logs(Context context) {
+        return renderIndex(context);
+    }
+
+    @Mapping("/gateways")
+    public DownloadedFile gateways(Context context) {
+        return renderIndex(context);
+    }
+
+    @Mapping("/channels")
+    public DownloadedFile channels(Context context) {
+        return renderIndex(context);
+    }
+
+    @Mapping("/profiles")
+    public DownloadedFile profiles(Context context) {
+        return renderIndex(context);
+    }
+
+    @Mapping("/terminal")
+    public DownloadedFile terminal(Context context) {
+        return renderIndex(context);
+    }
+
+    @Mapping("/files")
+    public DownloadedFile files(Context context) {
+        return renderIndex(context);
     }
 
     @Mapping("/workspace")
-    public void workspace(Context context) {
-        renderIndex(context);
+    public DownloadedFile workspace(Context context) {
+        return renderIndex(context);
     }
 
     @Mapping("/cron")
-    public void cron(Context context) {
-        renderIndex(context);
+    public DownloadedFile cron(Context context) {
+        return renderIndex(context);
     }
 
     @Mapping("/skills")
-    public void skills(Context context) {
-        renderIndex(context);
+    public DownloadedFile skills(Context context) {
+        return renderIndex(context);
     }
 
     @Mapping("/config")
-    public void config(Context context) {
-        renderIndex(context);
+    public DownloadedFile config(Context context) {
+        return renderIndex(context);
     }
 
     @Mapping("/env")
-    public void env(Context context) {
-        renderIndex(context);
+    public DownloadedFile env(Context context) {
+        return renderIndex(context);
     }
 
-    private void renderIndex(Context context) {
-        InputStream stream = getClass().getClassLoader().getResourceAsStream("static/index.html");
-        if (stream == null) {
+    private DownloadedFile renderIndex(Context context) {
+        String html = loadIndexHtml();
+        if (html == null) {
             context.status(503);
-            context.output("Dashboard frontend not built");
-            return;
+            return new DownloadedFile("text/plain;charset=UTF-8",
+                    "Dashboard frontend not built".getBytes(StandardCharsets.UTF_8),
+                    "error.txt").asAttachment(false);
         }
 
-        String html = IoUtil.read(stream, StandardCharsets.UTF_8);
-        context.contentType("text/html;charset=UTF-8");
-        context.output(authService.injectToken(html));
+        return new DownloadedFile("text/html;charset=UTF-8",
+                authService.injectToken(html).getBytes(StandardCharsets.UTF_8),
+                "index.html").asAttachment(false);
+    }
+
+    private String loadIndexHtml() {
+        File devFile = new File(System.getProperty("user.dir"), "web/dist/index.html");
+        if (devFile.exists()) {
+            return FileUtil.readUtf8String(devFile);
+        }
+
+        InputStream stream = getClass().getClassLoader().getResourceAsStream("static/index.html");
+        if (stream == null) {
+            return null;
+        }
+
+        return IoUtil.read(stream, StandardCharsets.UTF_8);
     }
 }

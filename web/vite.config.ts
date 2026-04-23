@@ -1,22 +1,29 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
-import path from "path";
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import { resolve } from 'path'
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [vue()],
+  define: {
+    __APP_VERSION__: JSON.stringify('0.0.0'),
+  },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      '@': resolve(__dirname, 'src'),
     },
   },
   build: {
-    outDir: "dist",
+    outDir: 'dist',
     emptyOutDir: true,
+  },
+  optimizeDeps: {
+    include: ['monaco-editor'],
   },
   server: {
     proxy: {
-      "/api": "http://127.0.0.1:8080",
+      '/api': 'http://127.0.0.1:8080',
+      '/health': 'http://127.0.0.1:8080',
+      '/upload': 'http://127.0.0.1:8080',
     },
   },
-});
+})

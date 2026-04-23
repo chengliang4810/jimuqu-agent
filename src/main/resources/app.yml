@@ -20,6 +20,7 @@ jimuqu.logging.dir: runtime/logs
 # 默认大模型配置
 jimuqu.llm.provider: openai-responses
 jimuqu.llm.apiUrl: https://subapi.jimuqu.com/v1/responses
+jimuqu.llm.apiKey:
 jimuqu.llm.model: gpt-5.4
 jimuqu.llm.stream: false
 jimuqu.llm.reasoningEffort: medium
@@ -94,11 +95,6 @@ jimuqu.channels.feishu.websocketUrl:
 jimuqu.channels.feishu.toolProgress: new
 
 # 钉钉渠道，仅支持 stream mode 入站与官方机器人出站
-# 建议优先使用环境变量注入敏感配置：
-# JIMUQU_DINGTALK_ENABLED
-# JIMUQU_DINGTALK_CLIENT_ID
-# JIMUQU_DINGTALK_CLIENT_SECRET
-# JIMUQU_DINGTALK_ROBOT_CODE
 jimuqu.channels.dingtalk.enabled: false
 jimuqu.channels.dingtalk.allowedUsers:
 jimuqu.channels.dingtalk.dmPolicy: open
@@ -145,3 +141,19 @@ jimuqu.channels.weixin.toolProgress: off
 # 全局网关授权兜底配置
 jimuqu.gateway.allowedUsers:
 jimuqu.gateway.allowAllUsers: false
+
+# 版本检查与更新
+jimuqu.update.repo:
+jimuqu.update.releaseApiUrl:
+jimuqu.update.tagsApiUrl:
+jimuqu.update.httpProxy:
+
+# GitHub / Skills Hub 认证
+jimuqu.integrations.github.token:
+jimuqu.integrations.github.cliToken:
+jimuqu.integrations.github.appId:
+jimuqu.integrations.github.privateKeyPath:
+jimuqu.integrations.github.installationId:
+
+# PDF 渲染
+jimuqu.pdf.fontPath:

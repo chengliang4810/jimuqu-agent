@@ -57,8 +57,7 @@ public class WeixinQrSetupServiceTest {
         config.getRuntime().setSkillsDir(new File(runtimeHome, "skills").getAbsolutePath());
         config.getRuntime().setCacheDir(new File(runtimeHome, "cache").getAbsolutePath());
         config.getRuntime().setStateDb(new File(runtimeHome, "state.db").getAbsolutePath());
-        config.getRuntime().setConfigOverrideFile(new File(runtimeHome, "config.override.yml").getAbsolutePath());
-        config.getRuntime().setEnvFile(new File(runtimeHome, ".env").getAbsolutePath());
+        config.getRuntime().setConfigFile(new File(runtimeHome, "config.yml").getAbsolutePath());
         config.getRuntime().setLogsDir(new File(runtimeHome, "logs").getAbsolutePath());
         config.getChannels().getWeixin().setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
 
@@ -81,10 +80,9 @@ public class WeixinQrSetupServiceTest {
 
         assertThat(current.get("status")).isEqualTo("confirmed");
         assertThat(current.get("account_id")).isEqualTo("wx-bot");
-        assertThat(FileUtil.readUtf8String(new File(runtimeHome, ".env")))
-                .contains("JIMUQU_WEIXIN_ACCOUNT_ID=wx-bot")
-                .contains("JIMUQU_WEIXIN_TOKEN=wx-token");
-        assertThat(FileUtil.readUtf8String(new File(runtimeHome, "config.override.yml")))
+        assertThat(FileUtil.readUtf8String(new File(runtimeHome, "config.yml")))
+                .contains("accountId: wx-bot")
+                .contains("token: wx-token")
                 .contains("http://127.0.0.1:" + server.getAddress().getPort());
     }
 

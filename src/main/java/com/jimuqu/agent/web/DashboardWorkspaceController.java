@@ -61,6 +61,27 @@ public class DashboardWorkspaceController {
         });
     }
 
+    @Mapping(value = "/api/workspace/diaries", method = MethodType.GET)
+    public Map<String, Object> diaries(Context context) {
+        return execute(context, new Callback() {
+            @Override
+            public Map<String, Object> run() {
+                return workspaceService.listDiaryFiles();
+            }
+        });
+    }
+
+    @Mapping(value = "/api/workspace/diaries/read", method = MethodType.GET)
+    public Map<String, Object> diary(Context context) {
+        final String relativePath = context.param("path");
+        return execute(context, new Callback() {
+            @Override
+            public Map<String, Object> run() {
+                return workspaceService.getDiaryFile(relativePath);
+            }
+        });
+    }
+
     private Map<String, Object> execute(Context context, Callback callback) {
         try {
             return callback.run();

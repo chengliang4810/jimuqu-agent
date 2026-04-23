@@ -98,9 +98,8 @@ public class DashboardStatusService {
         }
 
         result.put("active_sessions", activeSessions);
-        result.put("config_path", appConfig.getRuntime().getConfigOverrideFile());
+        result.put("config_path", appConfig.getRuntime().getConfigFile());
         result.put("config_version", configVersion());
-        result.put("env_path", appConfig.getRuntime().getEnvFile());
         result.put("gateway_exit_reason", anyFatal ? firstFatalDetail(statuses) : null);
         result.put("gateway_pid", parsePid());
         result.put("gateway_platforms", platformStates);
@@ -165,7 +164,7 @@ public class DashboardStatusService {
     }
 
     private int configVersion() {
-        java.io.File file = new java.io.File(appConfig.getRuntime().getConfigOverrideFile());
+        java.io.File file = new java.io.File(appConfig.getRuntime().getConfigFile());
         if (!file.exists()) {
             return 0;
         }

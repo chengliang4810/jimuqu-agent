@@ -42,8 +42,8 @@ public class ConfigTools {
         }
     }
 
-    @ToolMapping(name = "config_set_secret", description = "Update a whitelisted runtime secret env var, such as JIMUQU_LLM_API_KEY.")
-    public String configSetSecret(@Param(name = "envKey", description = "环境变量名，例如 JIMUQU_LLM_API_KEY") String envKey,
+    @ToolMapping(name = "config_set_secret", description = "Update a whitelisted runtime secret key, such as JIMUQU_LLM_API_KEY.")
+    public String configSetSecret(@Param(name = "envKey", description = "配置别名，例如 JIMUQU_LLM_API_KEY") String envKey,
                                   @Param(name = "value", description = "新的密钥值") String value) {
         try {
             runtimeSettingsService.setSecretValue(envKey, value);

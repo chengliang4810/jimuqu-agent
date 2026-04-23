@@ -12,14 +12,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class LlmEnvOverrideLoadTest {
     @Test
-    void shouldLoadProviderApiUrlModelAndApiKeyFromRuntimeEnv() throws Exception {
+    void shouldLoadProviderApiUrlModelAndApiKeyFromRuntimeConfig() throws Exception {
         File runtimeHome = Files.createTempDirectory("jimuqu-agent-llm-env").toFile();
-        File envFile = new File(runtimeHome, ".env");
+        File envFile = new File(runtimeHome, "config.yml");
         FileUtil.writeUtf8String(
-                "JIMUQU_LLM_PROVIDER=openai-responses\n"
-                        + "JIMUQU_LLM_API_URL=https://api.jimuqu.com/v1/responses\n"
-                        + "JIMUQU_LLM_MODEL=gpt-5.4\n"
-                        + "JIMUQU_LLM_API_KEY=test-key\n",
+                "jimuqu:\n"
+                        + "  llm:\n"
+                        + "    provider: openai-responses\n"
+                        + "    apiUrl: https://api.jimuqu.com/v1/responses\n"
+                        + "    model: gpt-5.4\n"
+                        + "    apiKey: test-key\n",
                 envFile
         );
 
