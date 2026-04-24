@@ -4,7 +4,7 @@ import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.JimuquAgentApp;
 import com.jimuqu.agent.config.AppConfig;
-import com.jimuqu.agent.config.RuntimeEnvResolver;
+import com.jimuqu.agent.config.RuntimeConfigResolver;
 
 import java.io.File;
 import java.io.InputStream;
@@ -47,7 +47,7 @@ public class AppVersionService {
 
     public String releaseRepo() {
         String override = firstNonBlank(
-                RuntimeEnvResolver.getenv("JIMUQU_UPDATE_REPO"),
+                RuntimeConfigResolver.getValue("JIMUQU_UPDATE_REPO"),
                 System.getProperty("jimuqu.update.repo")
         );
         return StrUtil.blankToDefault(override, DEFAULT_REPO).trim();
@@ -55,7 +55,7 @@ public class AppVersionService {
 
     public String releaseApiUrl() {
         String override = firstNonBlank(
-                RuntimeEnvResolver.getenv("JIMUQU_UPDATE_RELEASE_API_URL"),
+                RuntimeConfigResolver.getValue("JIMUQU_UPDATE_RELEASE_API_URL"),
                 System.getProperty("jimuqu.update.releaseApiUrl")
         );
         if (StrUtil.isNotBlank(override)) {
@@ -66,7 +66,7 @@ public class AppVersionService {
 
     public String tagsApiUrl() {
         String override = firstNonBlank(
-                RuntimeEnvResolver.getenv("JIMUQU_UPDATE_TAGS_API_URL"),
+                RuntimeConfigResolver.getValue("JIMUQU_UPDATE_TAGS_API_URL"),
                 System.getProperty("jimuqu.update.tagsApiUrl")
         );
         if (StrUtil.isNotBlank(override)) {
@@ -77,7 +77,7 @@ public class AppVersionService {
 
     public String updateProxyUrl() {
         String override = firstNonBlank(
-                RuntimeEnvResolver.getenv("JIMUQU_UPDATE_HTTP_PROXY"),
+                RuntimeConfigResolver.getValue("JIMUQU_UPDATE_HTTP_PROXY"),
                 System.getProperty("jimuqu.update.httpProxy")
         );
         return StrUtil.nullToEmpty(override).trim();

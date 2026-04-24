@@ -307,7 +307,7 @@ export default {
     provider: 'Provider',
     path: '경로',
     skills: '스킬',
-    hasEnv: '.env 있음',
+    hasConfig: 'config.yml ??',
     hasSoulMd: 'soul.md 있음',
     noProfiles: '프로필이 없습니다. 새로 만들어 시작하세요.',
   },

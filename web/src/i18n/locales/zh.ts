@@ -351,7 +351,7 @@ export default {
     provider: '渠道',
     path: '路径',
     skills: '技能',
-    hasEnv: '有 .env',
+    hasConfig: '? config.yml',
     hasSoulMd: '有 soul.md',
     noProfiles: '暂无配置，创建一个开始吧。',
   },

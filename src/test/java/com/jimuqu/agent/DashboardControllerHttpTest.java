@@ -70,12 +70,12 @@ public class DashboardControllerHttpTest {
         assertThat(status.body).contains("\"version\"");
         assertThat(status.body).contains("\"setup_state\"");
 
-        HttpResult unauthorizedEnv = request("GET", "/api/env", null, null);
-        assertThat(unauthorizedEnv.status).isEqualTo(401);
+        HttpResult unauthorizedRuntimeConfig = request("GET", "/api/runtime-config", null, null);
+        assertThat(unauthorizedRuntimeConfig.status).isEqualTo(401);
 
-        HttpResult authorizedEnv = request("GET", "/api/env", null, token);
-        assertThat(authorizedEnv.status).isEqualTo(200);
-        assertThat(authorizedEnv.body).contains("JIMUQU_LLM_API_KEY");
+        HttpResult authorizedRuntimeConfig = request("GET", "/api/runtime-config", null, token);
+        assertThat(authorizedRuntimeConfig.status).isEqualTo(200);
+        assertThat(authorizedRuntimeConfig.body).contains("JIMUQU_LLM_API_KEY");
 
         HttpResult unauthorizedDoctor = request("GET", "/api/gateway/doctor", null, null);
         assertThat(unauthorizedDoctor.status).isEqualTo(401);
@@ -130,18 +130,18 @@ public class DashboardControllerHttpTest {
         assertThat(overrideFile).exists();
         assertThat(FileUtil.readUtf8String(overrideFile)).contains("dashboard-model");
 
-        HttpResult saveEnv = request("PUT", "/api/env",
+        HttpResult saveRuntimeConfig = request("PUT", "/api/runtime-config",
                 "{\"key\":\"JIMUQU_LLM_API_KEY\",\"value\":\"secret12345678\"}",
                 token);
-        assertThat(saveEnv.status).isEqualTo(200);
+        assertThat(saveRuntimeConfig.status).isEqualTo(200);
         assertThat(overrideFile).exists();
         assertThat(FileUtil.readUtf8String(overrideFile)).contains("apiKey: secret12345678");
 
-        HttpResult revealEnv = request("POST", "/api/env/reveal",
+        HttpResult revealRuntimeConfig = request("POST", "/api/runtime-config/reveal",
                 "{\"key\":\"JIMUQU_LLM_API_KEY\"}",
                 token);
-        assertThat(revealEnv.status).isEqualTo(200);
-        assertThat(revealEnv.body).contains("secret12345678");
+        assertThat(revealRuntimeConfig.status).isEqualTo(200);
+        assertThat(revealRuntimeConfig.body).contains("secret12345678");
 
         request("POST", "/api/gateway/message",
                 "{\"platform\":\"MEMORY\",\"chatId\":\"dashboard-chat\",\"userId\":\"dashboard-user\",\"chatType\":\"dm\",\"chatName\":\"dashboard-chat\",\"userName\":\"dashboard-user\",\"text\":\"hello\"}",

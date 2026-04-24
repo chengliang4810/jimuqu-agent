@@ -307,7 +307,7 @@ export default {
     provider: 'Fournisseur',
     path: 'Chemin',
     skills: 'Competences',
-    hasEnv: 'A un .env',
+    hasConfig: 'Has config.yml',
     hasSoulMd: 'A un soul.md',
     noProfiles: 'Aucun profil trouve. Creez-en un pour commencer.',
   },

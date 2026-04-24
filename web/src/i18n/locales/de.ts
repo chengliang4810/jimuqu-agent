@@ -307,7 +307,7 @@ export default {
     provider: 'Anbieter',
     path: 'Pfad',
     skills: 'Fahigkeiten',
-    hasEnv: 'Hat .env',
+    hasConfig: 'Has config.yml',
     hasSoulMd: 'Hat soul.md',
     noProfiles: 'Keine Profile gefunden. Erstellen Sie eines, um zu beginnen.',
   },

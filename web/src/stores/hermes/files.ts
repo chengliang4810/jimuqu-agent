@@ -22,7 +22,6 @@ const EXT_LANG_MAP: Record<string, string> = {
   '.cpp': 'cpp', '.hpp': 'cpp',
   '.toml': 'ini',
   '.ini': 'ini',
-  '.env': 'ini',
   '.vue': 'html',
   '.dockerfile': 'dockerfile',
   '.graphql': 'graphql',

@@ -172,13 +172,7 @@ Invoke-WebRequest http://127.0.0.1:8080/health
 
 ## Docker 部署
 
-建议先复制环境变量样例文件：
-
-```bash
-cp .env.example .env
-```
-
-然后修改 `.env` 中的必填项；如果使用微信且没有现成 `accountId/token`，可以先留空，启动后在 dashboard 中扫码登录。
+All runtime configuration is now stored in `runtime/config.yml`. Create it before first start, or fill it in from the dashboard after startup. For Weixin, `accountId/token` may be left empty and written by dashboard QR login later.
 
 当前推荐直接使用 GitHub Packages 镜像：
 
@@ -191,7 +185,6 @@ docker run -d \
   --name jimuqu-agent \
   --restart unless-stopped \
   -p 8080:8080 \
-  --env-file .env \
   -v ./runtime:/app/runtime \
   ghcr.io/chengliang4810/jimuqu-agent:latest
 ```
@@ -205,7 +198,7 @@ docker run -d \
 - 运行镜像已补成更接近真机的完整环境，内置 `apt-get`、`bash`、`git`、`curl`、`wget`、`jq`
 - 同时内置 `python3/pip`、`nodejs/npm`，可直接支撑官方 `solon-ai-skill-sys`
 - 镜像内已安装 `fonts-arphic-gbsn00lp` 和 `fonts-noto-cjk`
-- 默认已设置 `JIMUQU_PDF_FONT_PATH=/usr/share/fonts/truetype/arphic-gbsn00lp/gbsn00lp.ttf`，容器内生成中文 PDF 时开箱即用
+- The image includes `fonts-arphic-gbsn00lp`; PDF font autodetection works by default. Override with `jimuqu.pdf.fontPath` in `runtime/config.yml` if needed.
 
 健康检查：
 
@@ -227,8 +220,6 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-    env_file:
-      - .env
     volumes:
       - ./runtime:/app/runtime
 ```
@@ -353,17 +344,17 @@ git push origin v0.0.1
 - PDF 生成与解析能力改为直接使用官方 `solon-ai-skill-pdf`
 - PDF 默认输出目录为 `runtime/cache/pdf/`
 - Docker 镜像内已默认配置中文 TrueType 字体，无需额外设置即可处理中文 PDF
-- 非 Docker 或自定义环境下，仍可通过 `JIMUQU_PDF_FONT_PATH` 覆盖成可用的 `ttf/otf` 字体文件
+- For non-Docker or custom environments, set `jimuqu.pdf.fontPath` in `runtime/config.yml` to a usable `ttf/otf` font file.
 
-版本检查与在线升级相关环境变量：
+Version check and online update settings in `runtime/config.yml`:
 
-- `JIMUQU_UPDATE_REPO`
+- `jimuqu.update.repo`
   覆盖 GitHub 仓库，格式 `owner/repo`
-- `JIMUQU_UPDATE_RELEASE_API_URL`
+- `jimuqu.update.releaseApiUrl`
   直接覆盖“最新版本”检查 API 地址
-- `JIMUQU_UPDATE_HTTP_PROXY`
+- `jimuqu.update.httpProxy`
   为版本检查请求设置 HTTP 代理，例如 `http://proxy.example:7890`
-- `GITHUB_TOKEN` / `GH_TOKEN`
+- `jimuqu.integrations.github.token` / `jimuqu.integrations.github.cliToken`
   可选，用于提高 GitHub API 速率限制
 
 附件与媒体说明：
@@ -419,9 +410,9 @@ git push origin v0.0.1
   - `release_url`
   - `release_api_url`
   - `update_error_message`
-- 微信支持从 dashboard 发起 iLink QR 登录；成功后会写入：
-  - `runtime/.env`：`JIMUQU_WEIXIN_ACCOUNT_ID`、`JIMUQU_WEIXIN_TOKEN`
-  - `runtime/config.override.yml`：仅在返回非默认 `baseUrl` 时写入 `channels.weixin.baseUrl`
+- Weixin dashboard iLink QR login writes to `runtime/config.yml`:
+  - `jimuqu.channels.weixin.accountId`, `jimuqu.channels.weixin.token`
+  - `jimuqu.channels.weixin.baseUrl` only when a non-default `baseUrl` is returned
 
 ## 飞书 / 企微 / 微信 / 钉钉渠道能力
 

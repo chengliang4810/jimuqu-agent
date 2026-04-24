@@ -307,7 +307,7 @@ export default {
     provider: 'Provedor',
     path: 'Caminho',
     skills: 'Habilidades',
-    hasEnv: 'Tem .env',
+    hasConfig: 'Has config.yml',
     hasSoulMd: 'Tem soul.md',
     noProfiles: 'Nenhum perfil encontrado. Crie um para comecar.',
   },

@@ -81,7 +81,7 @@ import com.jimuqu.agent.web.DashboardAuthService;
 import com.jimuqu.agent.web.DashboardAnalyticsService;
 import com.jimuqu.agent.web.DashboardConfigService;
 import com.jimuqu.agent.web.DashboardCronService;
-import com.jimuqu.agent.web.DashboardEnvService;
+import com.jimuqu.agent.web.DashboardRuntimeConfigService;
 import com.jimuqu.agent.web.DashboardGatewayDoctorService;
 import com.jimuqu.agent.web.DashboardLogsService;
 import com.jimuqu.agent.web.DashboardProviderService;
@@ -392,11 +392,11 @@ public class JimuquAgentConfiguration {
                                                          GlobalSettingRepository globalSettingRepository,
                                                          DeliveryService deliveryService,
                                                          DashboardConfigService dashboardConfigService,
-                                                         DashboardEnvService dashboardEnvService,
+                                                         DashboardRuntimeConfigService dashboardRuntimeConfigService,
                                                          AppVersionService appVersionService,
                                                          LlmProviderService llmProviderService,
                                                          DashboardProviderService dashboardProviderService) {
-        return new RuntimeSettingsService(appConfig, globalSettingRepository, deliveryService, dashboardConfigService, dashboardEnvService, appVersionService, llmProviderService, dashboardProviderService);
+        return new RuntimeSettingsService(appConfig, globalSettingRepository, deliveryService, dashboardConfigService, dashboardRuntimeConfigService, appVersionService, llmProviderService, dashboardProviderService);
     }
 
     @Bean
@@ -675,9 +675,9 @@ public class JimuquAgentConfiguration {
     }
 
     @Bean
-    public DashboardEnvService dashboardEnvService(AppConfig appConfig,
+    public DashboardRuntimeConfigService dashboardRuntimeConfigService(AppConfig appConfig,
                                                    GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
-        return new DashboardEnvService(appConfig, gatewayRuntimeRefreshService);
+        return new DashboardRuntimeConfigService(appConfig, gatewayRuntimeRefreshService);
     }
 
     @Bean

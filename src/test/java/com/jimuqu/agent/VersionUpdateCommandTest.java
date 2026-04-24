@@ -13,7 +13,7 @@ import com.jimuqu.agent.support.TestEnvironment;
 import com.jimuqu.agent.support.update.AppUpdateService;
 import com.jimuqu.agent.support.update.AppVersionService;
 import com.jimuqu.agent.web.DashboardConfigService;
-import com.jimuqu.agent.web.DashboardEnvService;
+import com.jimuqu.agent.web.DashboardRuntimeConfigService;
 import com.jimuqu.agent.web.DashboardProviderService;
 import org.junit.jupiter.api.Test;
 
@@ -51,7 +51,7 @@ public class VersionUpdateCommandTest {
                 env.globalSettingRepository,
                 env.deliveryService,
                 new DashboardConfigService(env.appConfig, refreshService),
-                new DashboardEnvService(env.appConfig, refreshService),
+                new DashboardRuntimeConfigService(env.appConfig, refreshService),
                 new AppVersionService(env.appConfig),
                 llmProviderService,
                 new DashboardProviderService(env.appConfig, refreshService, llmProviderService)

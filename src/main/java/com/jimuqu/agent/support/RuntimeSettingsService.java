@@ -11,7 +11,7 @@ import com.jimuqu.agent.support.constants.AgentSettingConstants;
 import com.jimuqu.agent.support.constants.ToolNameConstants;
 import com.jimuqu.agent.support.update.AppVersionService;
 import com.jimuqu.agent.web.DashboardConfigService;
-import com.jimuqu.agent.web.DashboardEnvService;
+import com.jimuqu.agent.web.DashboardRuntimeConfigService;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -93,7 +93,7 @@ public class RuntimeSettingsService {
     private final GlobalSettingRepository globalSettingRepository;
     private final DeliveryService deliveryService;
     private final DashboardConfigService dashboardConfigService;
-    private final DashboardEnvService dashboardEnvService;
+    private final DashboardRuntimeConfigService dashboardRuntimeConfigService;
     private final AppVersionService appVersionService;
     private final LlmProviderService llmProviderService;
     private final com.jimuqu.agent.web.DashboardProviderService dashboardProviderService;
@@ -102,7 +102,7 @@ public class RuntimeSettingsService {
                                   GlobalSettingRepository globalSettingRepository,
                                   DeliveryService deliveryService,
                                   DashboardConfigService dashboardConfigService,
-                                  DashboardEnvService dashboardEnvService,
+                                  DashboardRuntimeConfigService dashboardRuntimeConfigService,
                                   AppVersionService appVersionService,
                                   LlmProviderService llmProviderService,
                                   com.jimuqu.agent.web.DashboardProviderService dashboardProviderService) {
@@ -110,7 +110,7 @@ public class RuntimeSettingsService {
         this.globalSettingRepository = globalSettingRepository;
         this.deliveryService = deliveryService;
         this.dashboardConfigService = dashboardConfigService;
-        this.dashboardEnvService = dashboardEnvService;
+        this.dashboardRuntimeConfigService = dashboardRuntimeConfigService;
         this.appVersionService = appVersionService;
         this.llmProviderService = llmProviderService;
         this.dashboardProviderService = dashboardProviderService;
@@ -212,7 +212,7 @@ public class RuntimeSettingsService {
     }
 
     public void setSecretValue(String envKey, String value) {
-        dashboardEnvService.set(envKey, value, shouldReconnectChannelsForEnvKey(envKey));
+        dashboardRuntimeConfigService.set(envKey, value, shouldReconnectChannelsForEnvKey(envKey));
     }
 
     private void ensureConfigKeyAllowed(String key) {

@@ -307,7 +307,7 @@ export default {
     provider: 'Proveedor',
     path: 'Ruta',
     skills: 'Habilidades',
-    hasEnv: 'Tiene .env',
+    hasConfig: 'Has config.yml',
     hasSoulMd: 'Tiene soul.md',
     noProfiles: 'No se encontraron perfiles. Crea uno para comenzar.',
   },

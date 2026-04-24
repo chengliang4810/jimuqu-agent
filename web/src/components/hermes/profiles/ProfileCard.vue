@@ -129,8 +129,8 @@ async function handleExport() {
             <span class="info-value">{{ detail.skills }}</span>
           </div>
           <div class="info-row">
-            <span class="info-label">{{ t('profiles.hasEnv') }}</span>
-            <span class="info-value">{{ detail.hasEnv ? 'Yes' : 'No' }}</span>
+            <span class="info-label">{{ t('profiles.hasConfig') }}</span>
+            <span class="info-value">{{ detail.hasConfig ? 'Yes' : 'No' }}</span>
           </div>
           <div class="info-row">
             <span class="info-label">{{ t('profiles.hasSoulMd') }}</span>

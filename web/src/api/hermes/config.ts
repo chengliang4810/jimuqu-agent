@@ -52,12 +52,12 @@ export interface AppConfig {
   [key: string]: any
 }
 
-interface EnvVarInfo {
+interface RuntimeConfigInfo {
   is_set: boolean
   redacted_value?: string | null
 }
 
-function envPreview(env: Record<string, EnvVarInfo>, key: string): string {
+function envPreview(env: Record<string, RuntimeConfigInfo>, key: string): string {
   const item = env[key]
   if (!item || !item.is_set) return ''
   return item.redacted_value || '已设置'
@@ -66,7 +66,7 @@ function envPreview(env: Record<string, EnvVarInfo>, key: string): string {
 export async function fetchConfig(_sections?: string[]): Promise<AppConfig> {
   const [data, env] = await Promise.all([
     request<Record<string, any>>('/api/config'),
-    request<Record<string, EnvVarInfo>>('/api/env'),
+    request<Record<string, RuntimeConfigInfo>>('/api/runtime-config'),
   ])
   return {
     display: {
@@ -198,12 +198,12 @@ export async function saveCredentials(
     const raw = entry.value
     const text = typeof raw === 'boolean' ? String(raw) : (raw ?? '').toString().trim()
     if (!text) {
-      await request('/api/env', {
+      await request('/api/runtime-config', {
         method: 'DELETE',
         body: JSON.stringify({ key: entry.key }),
       })
     } else {
-      await request('/api/env', {
+      await request('/api/runtime-config', {
         method: 'PUT',
         body: JSON.stringify({ key: entry.key, value: text }),
       })

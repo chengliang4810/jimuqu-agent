@@ -28,8 +28,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LC_ALL=C.UTF-8 \
     TZ=Asia/Shanghai \
     PYTHONIOENCODING=UTF-8 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    JIMUQU_PDF_FONT_PATH=/usr/share/fonts/truetype/arphic-gbsn00lp/gbsn00lp.ttf
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \

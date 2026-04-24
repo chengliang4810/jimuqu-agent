@@ -6,7 +6,7 @@ import cn.hutool.http.Header;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
 import com.jimuqu.agent.config.AppConfig;
-import com.jimuqu.agent.config.RuntimeEnvResolver;
+import com.jimuqu.agent.config.RuntimeConfigResolver;
 import org.noear.snack4.ONode;
 
 import java.io.File;
@@ -287,7 +287,7 @@ public class AppUpdateService {
             if (proxy != null) {
                 request.setProxy(proxy);
             }
-            String token = firstNonBlank(RuntimeEnvResolver.getenv("GITHUB_TOKEN"), RuntimeEnvResolver.getenv("GH_TOKEN"));
+            String token = firstNonBlank(RuntimeConfigResolver.getValue("GITHUB_TOKEN"), RuntimeConfigResolver.getValue("GH_TOKEN"));
             if (StrUtil.isNotBlank(token)) {
                 request.header(Header.AUTHORIZATION, "Bearer " + token.trim());
             }

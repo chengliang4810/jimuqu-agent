@@ -18,16 +18,16 @@ import java.util.Map;
 /**
  * 运行时配置解析器，统一处理 runtime/config.yml 中的敏感值与兼容别名。
  */
-public class RuntimeEnvResolver {
+public class RuntimeConfigResolver {
     private static final Object LOCK = new Object();
-    private static volatile RuntimeEnvResolver current;
+    private static volatile RuntimeConfigResolver current;
     private static final Map<String, String> KEY_PATHS = buildKeyPaths();
 
     private final File configFile;
     private volatile long lastLoadedAt;
     private volatile Map<String, Object> fileValues = Collections.emptyMap();
 
-    private RuntimeEnvResolver(File configFile) {
+    private RuntimeConfigResolver(File configFile) {
         this.configFile = configFile;
         reload();
     }
@@ -35,12 +35,12 @@ public class RuntimeEnvResolver {
     /**
      * 基于 runtime.home 初始化全局解析器。
      */
-    public static RuntimeEnvResolver initialize(String runtimeHome) {
+    public static RuntimeConfigResolver initialize(String runtimeHome) {
         File homeDir = resolveRuntimeHome(runtimeHome);
         File configFile = FileUtil.file(homeDir, "config.yml");
         synchronized (LOCK) {
             if (current == null || !current.configFile.equals(configFile)) {
-                current = new RuntimeEnvResolver(configFile);
+                current = new RuntimeConfigResolver(configFile);
             } else {
                 current.reloadIfNeeded();
             }
@@ -51,8 +51,8 @@ public class RuntimeEnvResolver {
     /**
      * 返回当前解析器；若尚未初始化，则使用默认 runtime 目录。
      */
-    public static RuntimeEnvResolver getInstance() {
-        RuntimeEnvResolver instance = current;
+    public static RuntimeConfigResolver getInstance() {
+        RuntimeConfigResolver instance = current;
         if (instance == null) {
             instance = initialize(RuntimePathConstants.RUNTIME_HOME);
         } else {
@@ -64,7 +64,7 @@ public class RuntimeEnvResolver {
     /**
      * 读取生效配置值。
      */
-    public static String getenv(String key) {
+    public static String getValue(String key) {
         return getInstance().get(key);
     }
 
@@ -74,14 +74,6 @@ public class RuntimeEnvResolver {
     public File configFile() {
         return configFile;
     }
-
-    /**
-     * 兼容旧调用点。
-     */
-    public File envFile() {
-        return configFile;
-    }
-
     /**
      * 读取指定键的生效值。
      */
@@ -416,7 +408,6 @@ public class RuntimeEnvResolver {
         add(mappings, "JIMUQU_UPDATE_RELEASE_API_URL", "jimuqu.update.releaseApiUrl");
         add(mappings, "JIMUQU_UPDATE_TAGS_API_URL", "jimuqu.update.tagsApiUrl");
         add(mappings, "JIMUQU_UPDATE_HTTP_PROXY", "jimuqu.update.httpProxy");
-        add(mappings, "JIMUQU_PDF_FONT_PATH", "jimuqu.pdf.fontPath");
 
         add(mappings, "GITHUB_TOKEN", "jimuqu.integrations.github.token");
         add(mappings, "GH_TOKEN", "jimuqu.integrations.github.cliToken");

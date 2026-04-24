@@ -307,7 +307,7 @@ export default {
     provider: 'プロバイダー',
     path: 'パス',
     skills: 'スキル',
-    hasEnv: '.env あり',
+    hasConfig: 'config.yml ??',
     hasSoulMd: 'soul.md あり',
     noProfiles: 'プロファイルがありません。作成して始めましょう。',
   },

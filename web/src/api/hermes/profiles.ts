@@ -13,7 +13,7 @@ export interface HermesProfileDetail {
   provider: string
   gateway: string
   skills: number
-  hasEnv: boolean
+  hasConfig: boolean
   hasSoulMd: boolean
 }
 
@@ -37,7 +37,7 @@ export async function fetchProfileDetail(name: string): Promise<HermesProfileDet
     provider: 'openai-responses',
     gateway: 'local',
     skills: 0,
-    hasEnv: true,
+    hasConfig: true,
     hasSoulMd: true,
   }
 }

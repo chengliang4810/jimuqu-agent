@@ -352,7 +352,7 @@ export default {
     provider: 'Provider',
     path: 'Path',
     skills: 'Skills',
-    hasEnv: 'Has .env',
+    hasConfig: 'Has config.yml',
     hasSoulMd: 'Has soul.md',
     noProfiles: 'No profiles found. Create one to get started.',
   },

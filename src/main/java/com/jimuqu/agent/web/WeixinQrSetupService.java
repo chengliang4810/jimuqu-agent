@@ -5,7 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.ContentType;
 import cn.hutool.http.HttpRequest;
 import com.jimuqu.agent.config.AppConfig;
-import com.jimuqu.agent.config.RuntimeEnvResolver;
+import com.jimuqu.agent.config.RuntimeConfigResolver;
 import org.noear.snack4.ONode;
 
 import java.text.SimpleDateFormat;
@@ -31,7 +31,7 @@ public class WeixinQrSetupService {
     private final AppConfig appConfig;
     private final DashboardConfigService configService;
     private final com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
-    private final RuntimeEnvResolver envResolver;
+    private final RuntimeConfigResolver configResolver;
     private final ExecutorService executor = Executors.newCachedThreadPool();
     private final ConcurrentMap<String, TicketState> tickets = new ConcurrentHashMap<String, TicketState>();
 
@@ -41,7 +41,7 @@ public class WeixinQrSetupService {
         this.appConfig = appConfig;
         this.configService = configService;
         this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
-        this.envResolver = RuntimeEnvResolver.initialize(appConfig.getRuntime().getHome());
+        this.configResolver = RuntimeConfigResolver.initialize(appConfig.getRuntime().getHome());
     }
 
     public Map<String, Object> start() {
@@ -161,8 +161,8 @@ public class WeixinQrSetupService {
         if (StrUtil.isBlank(accountId) || StrUtil.isBlank(token)) {
             throw new IllegalStateException("微信扫码成功，但返回的账号信息不完整。");
         }
-        envResolver.setFileValue("JIMUQU_WEIXIN_ACCOUNT_ID", accountId);
-        envResolver.setFileValue("JIMUQU_WEIXIN_TOKEN", token);
+        configResolver.setFileValue("JIMUQU_WEIXIN_ACCOUNT_ID", accountId);
+        configResolver.setFileValue("JIMUQU_WEIXIN_TOKEN", token);
 
         if (!DEFAULT_BASE_URL.equals(baseUrl)) {
             Map<String, Object> updates = new LinkedHashMap<String, Object>();
