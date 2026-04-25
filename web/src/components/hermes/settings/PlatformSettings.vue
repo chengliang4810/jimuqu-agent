@@ -55,76 +55,32 @@ function getCreds(key: string) {
 
 // Weixin QR code login state
 const wxQrUrl = ref('')
+const wxQrImageUrl = ref('')
 const wxQrMessage = ref('')
 const wxQrId = ref('')
 const wxQrStatus = ref<'idle' | 'loading' | 'waiting' | 'scaned' | 'confirmed' | 'error' | 'expired'>('idle')
 let wxPollTimer: ReturnType<typeof setTimeout> | null = null
-let wxQrWindow: Window | null = null
-
-function openWeixinQrWindow() {
-  wxQrWindow = window.open('', '_blank')
-  if (!wxQrWindow) return
-  wxQrWindow.document.title = '微信扫码登录'
-  wxQrWindow.document.body.innerHTML = '<div style="font-family: system-ui, sans-serif; padding: 24px;">正在获取微信二维码...</div>'
-}
-
-function escapeHtmlAttribute(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
-function renderWeixinQrImage(imageUrl: string) {
-  const html = [
-    '<!doctype html><html><head><meta charset="utf-8"><title>微信扫码登录</title></head>',
-    '<body style="font-family: system-ui, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f7f7f8;">',
-    '<main style="text-align: center; background: white; padding: 28px; border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.08);">',
-    '<img alt="微信扫码登录" src="',
-    escapeHtmlAttribute(imageUrl),
-    '" style="width: 240px; height: 240px; display: block;" />',
-    '<p style="margin: 16px 0 0; color: #555; font-size: 14px;">请使用微信扫码登录</p>',
-    '</main></body></html>',
-  ].join('')
-  if (wxQrWindow && !wxQrWindow.closed) {
-    wxQrWindow.document.open()
-    wxQrWindow.document.write(html)
-    wxQrWindow.document.close()
-  } else {
-    window.open(imageUrl, '_blank')
-  }
-}
 
 async function updateWeixinQrSource(raw: string) {
   const value = (raw || '').trim()
   if (!value || value === wxQrUrl.value) return
   wxQrUrl.value = value
-  if (/^https?:\/\//i.test(value)) {
-    if (wxQrWindow && !wxQrWindow.closed) {
-      wxQrWindow.location.href = value
-    } else {
-      window.open(value, '_blank')
-    }
-    return
-  }
-  const imageUrl = /^data:image\//i.test(value)
+  wxQrImageUrl.value = /^data:image\//i.test(value)
     ? value
     : await QRCode.toDataURL(value, {
       width: 240,
       margin: 2,
       errorCorrectionLevel: 'M',
     })
-  renderWeixinQrImage(imageUrl)
 }
 
 async function startWeixinQrLogin() {
   wxQrStatus.value = 'loading'
   wxQrUrl.value = ''
+  wxQrImageUrl.value = ''
   wxQrMessage.value = ''
   wxQrId.value = ''
   stopWeixinPoll()
-  openWeixinQrWindow()
 
   try {
     const data = await fetchWeixinQrCode()
@@ -271,7 +227,22 @@ const platforms = [
             <NSpin size="small" />
             <span>{{ t('platform.qrFetching') }}</span>
           </div>
-          <div v-if="wxQrStatus === 'waiting' || wxQrStatus === 'scaned'" class="weixin-qr-hint">
+          <div v-if="wxQrImageUrl" class="weixin-qr-panel">
+            <img class="weixin-qr-image" :src="wxQrImageUrl" :alt="t('platform.qrLogin')" />
+            <div class="weixin-qr-caption">
+              {{ wxQrStatus === 'scaned' ? t('platform.qrScanedHint') : t('platform.qrScanHint') }}
+            </div>
+            <a
+              v-if="/^https?:\/\//i.test(wxQrUrl)"
+              class="weixin-qr-link"
+              :href="wxQrUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {{ wxQrUrl }}
+            </a>
+          </div>
+          <div v-if="!wxQrImageUrl && (wxQrStatus === 'waiting' || wxQrStatus === 'scaned')" class="weixin-qr-hint">
             {{ wxQrStatus === 'scaned' ? t('platform.qrScanedHint') : t('platform.qrScanHint') }}
           </div>
           <div v-if="wxQrStatus === 'error' || wxQrStatus === 'expired'" class="weixin-qr-error">
@@ -320,6 +291,37 @@ const platforms = [
   gap: 8px;
   color: $text-muted;
   font-size: 13px;
+}
+
+.weixin-qr-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.weixin-qr-image {
+  width: 192px;
+  height: 192px;
+  border: 1px solid $border-color;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+}
+
+.weixin-qr-caption {
+  font-size: 13px;
+  color: $text-secondary;
+}
+
+.weixin-qr-link {
+  max-width: 100%;
+  color: $accent-primary;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }
 
 .weixin-qr-hint {
