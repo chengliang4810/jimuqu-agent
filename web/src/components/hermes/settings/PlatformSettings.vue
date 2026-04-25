@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, reactive, onUnmounted } from 'vue'
+import * as QRCode from 'qrcode'
 import { NSwitch, NInput, NButton, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '@/stores/hermes/settings'
-import { saveCredentials as saveCredsApi, fetchWeixinQrCode, pollWeixinQrStatus, saveWeixinCredentials } from '@/api/hermes/config'
+import { saveCredentials as saveCredsApi, fetchWeixinQrCode, pollWeixinQrStatus } from '@/api/hermes/config'
 import PlatformCard from './PlatformCard.vue'
 import SettingRow from './SettingRow.vue'
 
@@ -54,25 +55,63 @@ function getCreds(key: string) {
 
 // Weixin QR code login state
 const wxQrUrl = ref('')
+const wxQrImageUrl = ref('')
+const wxQrFrameUrl = ref('')
+const wxQrMessage = ref('')
 const wxQrId = ref('')
 const wxQrStatus = ref<'idle' | 'loading' | 'waiting' | 'scaned' | 'confirmed' | 'error' | 'expired'>('idle')
 let wxPollTimer: ReturnType<typeof setTimeout> | null = null
 
+function isHttpUrl(value: string) {
+  return /^https?:\/\//i.test(value)
+}
+
+function isImageSource(value: string) {
+  if (/^data:image\//i.test(value)) return true
+  if (!isHttpUrl(value)) return false
+  try {
+    const url = new URL(value)
+    return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(url.pathname)
+  } catch {
+    return false
+  }
+}
+
+async function updateWeixinQrSource(raw: string) {
+  const value = (raw || '').trim()
+  if (!value || value === wxQrUrl.value) return
+  wxQrUrl.value = value
+  if (isImageSource(value)) {
+    wxQrImageUrl.value = value
+    wxQrFrameUrl.value = ''
+    return
+  }
+  wxQrImageUrl.value = await QRCode.toDataURL(value, {
+    width: 240,
+    margin: 2,
+    errorCorrectionLevel: 'M',
+  })
+  wxQrFrameUrl.value = isHttpUrl(value) ? value : ''
+}
+
 async function startWeixinQrLogin() {
   wxQrStatus.value = 'loading'
   wxQrUrl.value = ''
+  wxQrImageUrl.value = ''
+  wxQrFrameUrl.value = ''
+  wxQrMessage.value = ''
   wxQrId.value = ''
   stopWeixinPoll()
 
   try {
     const data = await fetchWeixinQrCode()
     wxQrId.value = data.qrcode
-    wxQrUrl.value = data.qrcode_url
-    window.open(data.qrcode_url, '_blank')
-    wxQrStatus.value = 'waiting'
+    await updateWeixinQrSource(data.qrcode_url)
+    wxQrStatus.value = wxQrImageUrl.value ? 'waiting' : 'loading'
     pollWeixinStatus()
   } catch (err: any) {
     wxQrStatus.value = 'error'
+    wxQrMessage.value = err.message || t('platform.qrFetching')
     message.error(err.message || t('platform.qrFetching'))
   }
 }
@@ -82,20 +121,20 @@ function pollWeixinStatus() {
   wxPollTimer = setTimeout(async () => {
     try {
       const data = await pollWeixinQrStatus(wxQrId.value)
+      wxQrMessage.value = data.error_message || data.message || ''
+      await updateWeixinQrSource(data.qrcode_url || '')
       if (data.status === 'wait') {
+        wxQrStatus.value = wxQrImageUrl.value ? 'waiting' : 'loading'
         pollWeixinStatus()
       } else if (data.status === 'scaned') {
         wxQrStatus.value = 'scaned'
         pollWeixinStatus()
       } else if (data.status === 'expired') {
         wxQrStatus.value = 'expired'
+      } else if (data.status === 'error') {
+        wxQrStatus.value = 'error'
       } else if (data.status === 'confirmed') {
         wxQrStatus.value = 'confirmed'
-        await saveWeixinCredentials({
-          account_id: data.account_id!,
-          token: data.token!,
-          base_url: data.base_url,
-        })
         await settingsStore.fetchSettings()
         message.success(t('settings.saved'))
       }
@@ -203,8 +242,24 @@ const platforms = [
             <NSpin size="small" />
             <span>{{ t('platform.qrFetching') }}</span>
           </div>
-          <div v-if="wxQrStatus === 'waiting' || wxQrStatus === 'scaned'" class="weixin-qr-hint">
+          <div v-if="wxQrImageUrl" class="weixin-qr-panel">
+            <img class="weixin-qr-image" :src="wxQrImageUrl" :alt="t('platform.qrLogin')" />
+            <div class="weixin-qr-caption">
+              {{ wxQrStatus === 'scaned' ? t('platform.qrScanedHint') : t('platform.qrScanHint') }}
+            </div>
+          </div>
+          <iframe
+            v-if="wxQrFrameUrl"
+            class="weixin-qr-frame"
+            :src="wxQrFrameUrl"
+            title="微信扫码登录"
+            referrerpolicy="no-referrer"
+          />
+          <div v-if="!wxQrImageUrl && (wxQrStatus === 'waiting' || wxQrStatus === 'scaned')" class="weixin-qr-hint">
             {{ wxQrStatus === 'scaned' ? t('platform.qrScanedHint') : t('platform.qrScanHint') }}
+          </div>
+          <div v-if="wxQrStatus === 'error' || wxQrStatus === 'expired'" class="weixin-qr-error">
+            {{ wxQrMessage || (wxQrStatus === 'expired' ? t('platform.qrExpired') : t('platform.qrFailed')) }}
           </div>
         </div>
         <SettingRow :label="t('platform.weixinToken')" :hint="t('platform.weixinTokenHint')">
@@ -248,8 +303,45 @@ const platforms = [
   font-size: 13px;
 }
 
+.weixin-qr-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.weixin-qr-image {
+  width: 192px;
+  height: 192px;
+  border: 1px solid $border-color;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+}
+
+.weixin-qr-caption {
+  font-size: 13px;
+  color: $text-secondary;
+}
+
+.weixin-qr-frame {
+  width: 100%;
+  min-height: 320px;
+  margin-top: 12px;
+  border: 1px solid $border-color;
+  border-radius: 8px;
+  background: #fff;
+}
+
 .weixin-qr-hint {
   font-size: 13px;
   color: $text-secondary;
+}
+
+.weixin-qr-error {
+  margin-top: 8px;
+  font-size: 13px;
+  color: $error;
 }
 </style>

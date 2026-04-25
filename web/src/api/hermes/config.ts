@@ -241,9 +241,12 @@ export interface WeixinQrCode {
 }
 
 export interface WeixinQrStatus {
-  status: 'wait' | 'scaned' | 'scaned_but_redirect' | 'expired' | 'confirmed'
+  status: 'wait' | 'scaned' | 'scaned_but_redirect' | 'expired' | 'confirmed' | 'error'
+  qrcode?: string
+  qrcode_url?: string
+  message?: string
+  error_message?: string
   account_id?: string
-  token?: string
   base_url?: string
 }
 
@@ -261,12 +264,15 @@ export async function pollWeixinQrStatus(qrcode: string): Promise<WeixinQrStatus
     pending: 'wait',
     scanned: 'scaned',
     confirmed: 'confirmed',
-    failed: 'expired',
+    failed: res.error_code === 'qr_expired' || res.error_code === 'qr_timeout' ? 'expired' : 'error',
   }
   return {
     status: statusMap[res.status] || 'wait',
+    qrcode: res.ticket || '',
+    qrcode_url: res.qr_image_url || res.qr_code || '',
+    message: res.message || '',
+    error_message: res.error_message || '',
     account_id: res.account_id,
-    token: res.ticket,
     base_url: res.base_url,
   }
 }
