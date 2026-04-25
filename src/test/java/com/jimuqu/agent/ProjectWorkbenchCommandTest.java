@@ -19,28 +19,31 @@ public class ProjectWorkbenchCommandTest {
         GatewayReply agentReply = env.send("admin-chat", "admin-user", "/agent create builder implementation worker");
         assertThat(agentReply.getContent()).contains("builder");
 
-        GatewayReply initReply = env.send("admin-chat", "admin-user", "/project init demo Demo Project");
-        assertThat(initReply.getContent()).contains("demo");
+        GatewayReply initReply = env.send("admin-chat", "admin-user", "/project init Demo Project");
+        assertThat(initReply.getContent()).contains("Project init draft").contains("demo-project");
+
+        GatewayReply confirmReply = env.send("admin-chat", "admin-user", "/project confirm");
+        assertThat(confirmReply.getContent()).contains("Confirmed project").contains("demo-project");
 
         GatewayReply todoReply = env.send("admin-chat", "admin-user", "/project todo add Build local project board");
-        assertThat(todoReply.getContent()).contains("TODO-001");
+        assertThat(todoReply.getContent()).contains("TODO-004").contains("Build local project board");
 
-        GatewayReply splitReply = env.send("admin-chat", "admin-user", "/project split TODO-001 backend repository; frontend board");
+        GatewayReply splitReply = env.send("admin-chat", "admin-user", "/project split TODO-004 backend repository; frontend board");
         assertThat(splitReply.getContent()).contains("2");
 
-        GatewayReply assignReply = env.send("admin-chat", "admin-user", "/project assign TODO-001 builder");
+        GatewayReply assignReply = env.send("admin-chat", "admin-user", "/project assign TODO-004 builder");
         assertThat(assignReply.getContent()).contains("builder");
 
-        GatewayReply runReply = env.send("admin-chat", "admin-user", "/project run TODO-001.1");
+        GatewayReply runReply = env.send("admin-chat", "admin-user", "/project run TODO-004.1");
         assertThat(runReply.getContent()).contains("review");
 
-        GatewayReply doneReply = env.send("admin-chat", "admin-user", "/project review TODO-001.1 pass");
+        GatewayReply doneReply = env.send("admin-chat", "admin-user", "/project review TODO-004.1 pass");
         assertThat(doneReply.getContent()).contains("done");
 
         GatewayReply boardReply = env.send("admin-chat", "admin-user", "/project board");
         assertThat(boardReply.getContent()).contains("todo").contains("review").contains("done");
 
-        File projectMd = FileUtil.file(env.appConfig.getRuntime().getHome(), "projects", "demo", "PROJECT.md");
+        File projectMd = FileUtil.file(env.appConfig.getRuntime().getHome(), "projects", "demo-project", "PROJECT.md");
         assertThat(projectMd).exists();
         assertThat(FileUtil.readUtf8String(projectMd)).contains("Demo Project");
     }
@@ -68,10 +71,11 @@ public class ProjectWorkbenchCommandTest {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         bootstrapAdmin(env);
 
-        env.send("admin-chat", "admin-user", "/project init secret-demo Secret Demo");
+        env.send("admin-chat", "admin-user", "/project init Secret Demo");
+        env.send("admin-chat", "admin-user", "/project confirm");
         env.send("admin-chat", "admin-user", "/project todo add Configure API key");
 
-        GatewayReply runReply = env.send("admin-chat", "admin-user", "/project run TODO-001");
+        GatewayReply runReply = env.send("admin-chat", "admin-user", "/project run TODO-004");
         assertThat(runReply.getContent()).contains("waiting_user").contains("User:");
 
         GatewayReply questionsReply = env.send("admin-chat", "admin-user", "/project questions");

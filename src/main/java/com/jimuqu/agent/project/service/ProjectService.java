@@ -104,13 +104,9 @@ public class ProjectService {
     }
 
     private String commandInit(String sourceKey, String rest) throws Exception {
-        if (!isExplicitSlugInit(rest)) {
-            ProjectInitDraft draft = analyzeInitDraft(rest);
-            saveInitDraft(sourceKey, draft);
-            return formatInitDraft(draft);
-        }
-        ProjectRecord project = initProject(rest, sourceKey);
-        return "Created project: " + project.getSlug() + "\nDir: " + projectDir(project).getAbsolutePath();
+        ProjectInitDraft draft = analyzeInitDraft(rest);
+        saveInitDraft(sourceKey, draft);
+        return formatInitDraft(draft);
     }
 
     private String confirmInit(String sourceKey, String rest) throws Exception {
@@ -449,14 +445,6 @@ public class ProjectService {
         todo.setUpdatedAt(System.currentTimeMillis());
         repository.saveTodo(todo);
         event(project.getProjectId(), todo.getTodoId(), "todo.assign", actor, agentName, null);
-    }
-
-    private boolean isExplicitSlugInit(String rest) {
-        String text = StrUtil.nullToEmpty(rest).trim();
-        String[] parts = text.split("\\s+", 2);
-        return parts.length > 1
-                && parts[0].matches("[a-z0-9][a-z0-9_-]{1,60}")
-                && parts[0].equals(sanitizeSlug(parts[0]));
     }
 
     private ProjectInitDraft analyzeInitDraft(String requirement) {
