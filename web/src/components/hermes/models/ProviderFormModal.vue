@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { NModal, NForm, NFormItem, NInput, NButton, NSelect, useMessage } from 'naive-ui'
 import { useModelsStore } from '@/stores/hermes/models'
+import type { AvailableModelGroup } from '@/api/hermes/system'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
+
+const props = defineProps<{
+  provider?: AvailableModelGroup | null
+}>()
 
 const emit = defineEmits<{
   close: []
@@ -16,14 +21,30 @@ const message = useMessage()
 
 const showModal = ref(true)
 const loading = ref(false)
+const modelsLoading = ref(false)
+const modelOptions = ref<Array<{ label: string; value: string }>>([])
+const isEdit = computed(() => !!props.provider)
 const formData = ref({
-  providerKey: '',
-  name: '',
-  baseUrl: '',
+  providerKey: props.provider?.provider || '',
+  name: props.provider?.label || '',
+  baseUrl: props.provider?.base_url || '',
   apiKey: '',
-  defaultModel: '',
-  dialect: 'openai-responses',
+  defaultModel: props.provider?.models?.[0] || '',
+  dialect: props.provider?.dialect || 'openai-responses',
 })
+
+function baseUrlPlaceholder(): string {
+  switch (formData.value.dialect) {
+    case 'ollama':
+      return 'http://127.0.0.1:11434'
+    case 'gemini':
+      return 'https://generativelanguage.googleapis.com'
+    case 'anthropic':
+      return 'https://api.anthropic.com'
+    default:
+      return 'https://api.example.com'
+  }
+}
 
 function dialectLabel(value: string): string {
   switch (value) {
@@ -70,20 +91,59 @@ async function handleSave() {
 
   loading.value = true
   try {
-    await modelsStore.addProvider({
-      providerKey: formData.value.providerKey.trim(),
-      name: formData.value.name.trim(),
-      baseUrl: formData.value.baseUrl.trim(),
-      apiKey: formData.value.apiKey.trim(),
-      defaultModel: formData.value.defaultModel.trim(),
-      dialect: formData.value.dialect,
-    })
-    message.success(t('models.providerAdded'))
+    if (isEdit.value) {
+      await modelsStore.updateProvider(formData.value.providerKey.trim(), {
+        name: formData.value.name.trim(),
+        baseUrl: formData.value.baseUrl.trim(),
+        apiKey: formData.value.apiKey.trim(),
+        defaultModel: formData.value.defaultModel.trim(),
+        dialect: formData.value.dialect,
+      })
+      message.success(t('models.providerUpdated'))
+    } else {
+      await modelsStore.addProvider({
+        providerKey: formData.value.providerKey.trim(),
+        name: formData.value.name.trim(),
+        baseUrl: formData.value.baseUrl.trim(),
+        apiKey: formData.value.apiKey.trim(),
+        defaultModel: formData.value.defaultModel.trim(),
+        dialect: formData.value.dialect,
+      })
+      message.success(t('models.providerAdded'))
+    }
     emit('saved')
   } catch (e: any) {
     message.error(e.message)
   } finally {
     loading.value = false
+  }
+}
+
+async function fetchModelList() {
+  if (!formData.value.baseUrl.trim()) {
+    message.warning(t('models.baseUrlRequired'))
+    return
+  }
+  modelsLoading.value = true
+  try {
+    const res = await modelsStore.fetchProviderModels({
+      baseUrl: formData.value.baseUrl.trim(),
+      apiKey: formData.value.apiKey.trim(),
+      dialect: formData.value.dialect,
+    })
+    modelOptions.value = (res.models || []).map(model => ({ label: model, value: model }))
+    if (!modelOptions.value.length) {
+      message.warning(t('models.noRemoteModels'))
+      return
+    }
+    if (!formData.value.defaultModel.trim()) {
+      formData.value.defaultModel = modelOptions.value[0].value
+    }
+    message.success(t('models.modelsFetched'))
+  } catch (e: any) {
+    message.error(e.message || t('models.fetchModelsFailed'))
+  } finally {
+    modelsLoading.value = false
   }
 }
 
@@ -97,7 +157,7 @@ function handleClose() {
   <NModal
     v-model:show="showModal"
     preset="card"
-    :title="t('models.addProvider')"
+    :title="isEdit ? t('models.editProvider') : t('models.addProvider')"
     :style="{ width: 'min(560px, calc(100vw - 32px))' }"
     :mask-closable="!loading"
     @after-leave="emit('close')"
@@ -107,6 +167,7 @@ function handleClose() {
         <NInput
           v-model:value="formData.providerKey"
           :placeholder="t('models.providerKeyPlaceholder')"
+          :disabled="isEdit"
         />
       </NFormItem>
 
@@ -120,7 +181,7 @@ function handleClose() {
       <NFormItem :label="t('models.baseUrl')" required>
         <NInput
           v-model:value="formData.baseUrl"
-          :placeholder="t('models.baseUrlPlaceholder')"
+          :placeholder="baseUrlPlaceholder()"
         />
       </NFormItem>
 
@@ -129,16 +190,24 @@ function handleClose() {
           v-model:value="formData.apiKey"
           type="password"
           show-password-on="click"
-          :placeholder="t('models.apiKeyPlaceholder')"
+          :placeholder="isEdit && provider?.has_api_key ? t('models.apiKeyConfigured') : t('models.apiKeyPlaceholder')"
           autocomplete="off"
         />
       </NFormItem>
 
       <NFormItem :label="t('models.defaultModel')" required>
-        <NInput
-          v-model:value="formData.defaultModel"
-          :placeholder="t('models.selectOrInput')"
-        />
+        <div class="model-select-row">
+          <NSelect
+            v-model:value="formData.defaultModel"
+            filterable
+            tag
+            :options="modelOptions"
+            :placeholder="t('models.selectOrInput')"
+          />
+          <NButton :loading="modelsLoading" @click="fetchModelList">
+            {{ t('models.fetchModelList') }}
+          </NButton>
+        </div>
       </NFormItem>
 
       <NFormItem :label="t('models.dialect')" required>
@@ -153,7 +222,7 @@ function handleClose() {
       <div class="modal-footer">
         <NButton @click="handleClose">{{ t('common.cancel') }}</NButton>
         <NButton type="primary" :loading="loading" @click="handleSave">
-          {{ t('common.add') }}
+          {{ isEdit ? t('common.save') : t('common.add') }}
         </NButton>
       </div>
     </template>
@@ -164,6 +233,12 @@ function handleClose() {
 .modal-footer {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+}
+
+.model-select-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
   gap: 8px;
 }
 </style>

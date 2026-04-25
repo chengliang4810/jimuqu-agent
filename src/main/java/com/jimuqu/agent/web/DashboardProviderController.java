@@ -31,6 +31,11 @@ public class DashboardProviderController {
         return providerService.createProvider(ONode.deserialize(ONode.ofJson(context.body()).toJson(), LinkedHashMap.class));
     }
 
+    @Mapping(value = "/api/providers/models", method = MethodType.POST)
+    public Map<String, Object> listModels(Context context) throws Exception {
+        return DashboardResponse.ok(providerService.listRemoteModels(ONode.deserialize(ONode.ofJson(context.body()).toJson(), LinkedHashMap.class)));
+    }
+
     @Mapping(value = "/api/providers/{providerKey}", method = MethodType.PUT)
     public Map<String, Object> update(String providerKey, Context context) throws Exception {
         return providerService.updateProvider(providerKey, ONode.deserialize(ONode.ofJson(context.body()).toJson(), LinkedHashMap.class));

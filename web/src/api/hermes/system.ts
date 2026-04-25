@@ -176,6 +176,17 @@ export async function addCustomProvider(data: CustomProvider): Promise<void> {
   })
 }
 
+export async function fetchProviderModels(data: {
+  baseUrl: string
+  apiKey?: string
+  dialect: string
+}): Promise<{ url: string; models: string[] }> {
+  return request<{ url: string; models: string[] }>('/api/providers/models', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
 export async function removeCustomProvider(name: string): Promise<void> {
   await request(`/api/providers/${encodeURIComponent(name)}`, {
     method: 'DELETE',

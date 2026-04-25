@@ -6,22 +6,31 @@ import ProvidersPanel from '@/components/hermes/models/ProvidersPanel.vue'
 import ProviderFormModal from '@/components/hermes/models/ProviderFormModal.vue'
 import { useModelsStore } from '@/stores/hermes/models'
 import { useAppStore } from '@/stores/hermes/app'
+import type { AvailableModelGroup } from '@/api/hermes/system'
 
 const { t } = useI18n()
 const modelsStore = useModelsStore()
 const appStore = useAppStore()
 const showModal = ref(false)
+const editingProvider = ref<AvailableModelGroup | null>(null)
 
 onMounted(() => {
   modelsStore.fetchProviders()
 })
 
 function openCreateModal() {
+  editingProvider.value = null
+  showModal.value = true
+}
+
+function openEditModal(provider: AvailableModelGroup) {
+  editingProvider.value = provider
   showModal.value = true
 }
 
 function handleModalClose() {
   showModal.value = false
+  editingProvider.value = null
 }
 
 async function handleSaved() {
@@ -45,12 +54,13 @@ async function handleSaved() {
 
     <div class="models-content">
       <NSpin :show="modelsStore.loading && modelsStore.providers.length === 0">
-        <ProvidersPanel />
+        <ProvidersPanel @edit="openEditModal" />
       </NSpin>
     </div>
 
     <ProviderFormModal
       v-if="showModal"
+      :provider="editingProvider"
       @close="handleModalClose"
       @saved="handleSaved"
     />

@@ -65,6 +65,51 @@ public final class LlmProviderSupport {
         return normalized;
     }
 
+    public static String buildModelListUrl(String baseUrl, String dialect) {
+        String raw = StrUtil.nullToEmpty(baseUrl).trim();
+        if (raw.length() == 0) {
+            return "";
+        }
+        if (raw.endsWith("#")) {
+            return stripTrailingSlash(raw.substring(0, raw.length() - 1));
+        }
+
+        String normalized = stripTrailingSlash(raw);
+        String normalizedDialect = normalizeDialect(dialect);
+        if (LlmConstants.PROVIDER_OPENAI.equals(normalizedDialect)
+                || LlmConstants.PROVIDER_OPENAI_RESPONSES.equals(normalizedDialect)) {
+            if (StrUtil.endWithIgnoreCase(normalized, "/v1/chat/completions")) {
+                return normalized.substring(0, normalized.length() - "/chat/completions".length()) + "/models";
+            }
+            if (StrUtil.endWithIgnoreCase(normalized, "/v1/responses")) {
+                return normalized.substring(0, normalized.length() - "/responses".length()) + "/models";
+            }
+            return StrUtil.endWithIgnoreCase(normalized, "/v1") ? normalized + "/models" : normalized + "/v1/models";
+        }
+        if (LlmConstants.PROVIDER_OLLAMA.equals(normalizedDialect)) {
+            if (StrUtil.endWithIgnoreCase(normalized, "/api/chat")) {
+                return normalized.substring(0, normalized.length() - "/chat".length()) + "/tags";
+            }
+            return StrUtil.endWithIgnoreCase(normalized, "/api") ? normalized + "/tags" : normalized + "/api/tags";
+        }
+        if (LlmConstants.PROVIDER_GEMINI.equals(normalizedDialect)) {
+            if (StrUtil.endWithIgnoreCase(normalized, "/v1beta")) {
+                return normalized + "/models";
+            }
+            if (StrUtil.endWithIgnoreCase(normalized, "/v1")) {
+                return normalized + "/models";
+            }
+            return normalized + "/v1beta/models";
+        }
+        if (LlmConstants.PROVIDER_ANTHROPIC.equals(normalizedDialect)) {
+            if (StrUtil.endWithIgnoreCase(normalized, "/v1/messages")) {
+                return normalized.substring(0, normalized.length() - "/messages".length()) + "/models";
+            }
+            return StrUtil.endWithIgnoreCase(normalized, "/v1") ? normalized + "/models" : normalized + "/v1/models";
+        }
+        return normalized;
+    }
+
     public static String deriveBaseUrl(String apiUrl, String dialect) {
         String raw = StrUtil.nullToEmpty(apiUrl).trim();
         String normalizedDialect = normalizeDialect(dialect);

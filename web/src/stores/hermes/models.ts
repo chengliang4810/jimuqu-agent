@@ -55,6 +55,10 @@ export const useModelsStore = defineStore('models', () => {
     appStore.loadModels()
   }
 
+  async function fetchProviderModels(data: { baseUrl: string; apiKey?: string; dialect: string }) {
+    return systemApi.fetchProviderModels(data)
+  }
+
   async function updateProvider(providerKey: string, data: {
     name?: string
     baseUrl?: string
@@ -92,6 +96,7 @@ export const useModelsStore = defineStore('models', () => {
     fetchProviders,
     setDefaultModel,
     addProvider,
+    fetchProviderModels,
     updateProvider,
     saveFallbackProviders,
     removeProvider,

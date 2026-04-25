@@ -6,6 +6,9 @@ import { useModelsStore } from '@/stores/hermes/models'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{ provider: AvailableModelGroup }>()
+const emit = defineEmits<{
+  edit: [provider: AvailableModelGroup]
+}>()
 
 const { t } = useI18n()
 const modelsStore = useModelsStore()
@@ -82,6 +85,7 @@ async function handleDelete() {
     </div>
 
     <div class="card-actions">
+      <NButton size="tiny" quaternary @click="emit('edit', provider)">{{ t('common.edit') }}</NButton>
       <NButton size="tiny" quaternary type="error" :loading="deleting" @click="handleDelete">{{ t('common.delete') }}</NButton>
     </div>
   </div>

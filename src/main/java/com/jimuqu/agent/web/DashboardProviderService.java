@@ -1,9 +1,13 @@
 package com.jimuqu.agent.web;
 
 import cn.hutool.core.io.FileUtil;
+import cn.hutool.http.HttpRequest;
+import cn.hutool.http.HttpResponse;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.llm.LlmProviderSupport;
+import com.jimuqu.agent.support.constants.LlmConstants;
+import org.noear.snack4.ONode;
 import com.jimuqu.agent.support.LlmProviderService;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -139,6 +143,44 @@ public class DashboardProviderService {
         return Collections.<String, Object>singletonMap("ok", true);
     }
 
+    public Map<String, Object> listRemoteModels(Map<String, Object> data) {
+        String baseUrl = readString(data, "baseUrl");
+        String apiKey = readString(data, "apiKey");
+        String dialect = LlmProviderSupport.normalizeDialect(readString(data, "dialect"));
+        if (StrUtil.isBlank(baseUrl)) {
+            throw new IllegalArgumentException("baseUrl 不能为空。");
+        }
+        if (StrUtil.isBlank(dialect) || !LlmProviderSupport.isSupportedDialect(dialect)) {
+            throw new IllegalArgumentException("不支持的 dialect：" + dialect);
+        }
+
+        String url = LlmProviderSupport.buildModelListUrl(baseUrl, dialect);
+        HttpRequest request = HttpRequest.get(url).timeout(15000);
+        if (StrUtil.isNotBlank(apiKey)) {
+            request.header("Authorization", "Bearer " + apiKey);
+            if (LlmConstants.PROVIDER_GEMINI.equals(dialect)) {
+                request.form("key", apiKey);
+            }
+            if (LlmConstants.PROVIDER_ANTHROPIC.equals(dialect)) {
+                request.header("x-api-key", apiKey);
+                request.header("anthropic-version", "2023-06-01");
+            }
+        }
+
+        HttpResponse response = request.execute();
+        int status = response.getStatus();
+        String body = response.body();
+        if (status < 200 || status >= 300) {
+            throw new IllegalStateException("获取模型列表失败：HTTP " + status + " " + trimForError(body));
+        }
+
+        List<String> models = parseModels(body, dialect);
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("url", url);
+        result.put("models", models);
+        return result;
+    }
+
     private Map<String, Object> toProviderMap(String providerKey, AppConfig.ProviderConfig provider) {
         Map<String, Object> item = new LinkedHashMap<String, Object>();
         item.put("providerKey", providerKey);
@@ -270,6 +312,66 @@ public class DashboardProviderService {
         }
         Object value = source.get(key);
         return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> parseModels(String body, String dialect) {
+        List<String> models = new ArrayList<String>();
+        Object parsed = ONode.deserialize(StrUtil.nullToEmpty(body), Object.class);
+        if (!(parsed instanceof Map)) {
+            return models;
+        }
+        Map<String, Object> root = (Map<String, Object>) parsed;
+        if (LlmConstants.PROVIDER_OLLAMA.equals(dialect)) {
+            Object items = root.get("models");
+            if (items instanceof List) {
+                for (Object item : (List<?>) items) {
+                    if (item instanceof Map) {
+                        Map<String, Object> row = (Map<String, Object>) item;
+                        addModel(models, row.get("name"));
+                        addModel(models, row.get("model"));
+                    }
+                }
+            }
+            return models;
+        }
+        if (LlmConstants.PROVIDER_GEMINI.equals(dialect)) {
+            Object items = root.get("models");
+            if (items instanceof List) {
+                for (Object item : (List<?>) items) {
+                    if (item instanceof Map) {
+                        Map<String, Object> row = (Map<String, Object>) item;
+                        String name = StrUtil.nullToEmpty(String.valueOf(row.get("name"))).trim();
+                        if (StrUtil.startWith(name, "models/")) {
+                            name = name.substring("models/".length());
+                        }
+                        addModel(models, name);
+                    }
+                }
+            }
+            return models;
+        }
+        Object items = root.get("data");
+        if (items instanceof List) {
+            for (Object item : (List<?>) items) {
+                if (item instanceof Map) {
+                    addModel(models, ((Map<String, Object>) item).get("id"));
+                }
+            }
+        }
+        return models;
+    }
+
+    private void addModel(List<String> models, Object model) {
+        String normalized = model == null ? "" : String.valueOf(model).trim();
+        if (StrUtil.isNotBlank(normalized) && !models.contains(normalized)) {
+            models.add(normalized);
+        }
+    }
+
+    private String trimForError(String body) {
+        String text = StrUtil.nullToEmpty(body).replace('\n', ' ').replace('\r', ' ').trim();
+        return text.length() > 240 ? text.substring(0, 240) + "..." : text;
     }
 
     private Map<String, Object> sanitizeMap(Map<?, ?> raw) {
