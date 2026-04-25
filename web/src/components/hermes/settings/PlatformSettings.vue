@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, onUnmounted } from 'vue'
 import * as QRCode from 'qrcode'
-import { NSwitch, NInput, NButton, useMessage } from 'naive-ui'
+import { NSwitch, NInput, NButton, NSpin, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '@/stores/hermes/settings'
 import { saveCredentials as saveCredsApi, fetchWeixinQrCode, pollWeixinQrStatus } from '@/api/hermes/config'
@@ -191,6 +191,9 @@ const platforms = [
     >
       <!-- 飞书 -->
       <template v-if="p.key === 'feishu'">
+        <SettingRow :label="t('platform.channelEnabled')" :hint="t('platform.channelEnabledHint')">
+          <NSwitch :value="getCreds('feishu').enabled" :loading="isSaving('feishu', 'enabled')" @update:value="v => saveCredentials('feishu', 'enabled', { enabled: v })" />
+        </SettingRow>
         <SettingRow :label="t('platform.appId')" :hint="t('platform.appIdHint')">
           <NInput :default-value="getCreds('feishu').extra?.app_id || ''" :loading="isSaving('feishu', 'app_id')" clearable size="small" class="input-lg" placeholder="请输入飞书应用 ID" @change="v => saveCredentials('feishu', 'app_id', { extra: { ...getCreds('feishu').extra, app_id: v } })" />
         </SettingRow>
@@ -207,7 +210,7 @@ const platforms = [
 
       <!-- 钉钉 -->
       <template v-if="p.key === 'dingtalk'">
-        <SettingRow :label="t('common.enabled')" :hint="t('platform.clientIdHint')">
+        <SettingRow :label="t('platform.channelEnabled')" :hint="t('platform.channelEnabledHint')">
           <NSwitch :value="getCreds('dingtalk').enabled" :loading="isSaving('dingtalk', 'enabled')" @update:value="v => saveCredentials('dingtalk', 'enabled', { enabled: v })" />
         </SettingRow>
         <SettingRow :label="t('platform.clientId')" :hint="t('platform.clientIdHint')">
@@ -229,6 +232,9 @@ const platforms = [
 
       <!-- 微信 -->
       <template v-if="p.key === 'weixin'">
+        <SettingRow :label="t('platform.channelEnabled')" :hint="t('platform.channelEnabledHint')">
+          <NSwitch :value="getCreds('weixin').enabled" :loading="isSaving('weixin', 'enabled')" @update:value="v => saveCredentials('weixin', 'enabled', { enabled: v })" />
+        </SettingRow>
         <div class="weixin-qr-section">
           <NButton
             v-if="wxQrStatus === 'idle' || wxQrStatus === 'error' || wxQrStatus === 'expired' || wxQrStatus === 'confirmed'"
@@ -272,6 +278,9 @@ const platforms = [
 
       <!-- 企业微信 -->
       <template v-if="p.key === 'wecom'">
+        <SettingRow :label="t('platform.channelEnabled')" :hint="t('platform.channelEnabledHint')">
+          <NSwitch :value="getCreds('wecom').enabled" :loading="isSaving('wecom', 'enabled')" @update:value="v => saveCredentials('wecom', 'enabled', { enabled: v })" />
+        </SettingRow>
         <SettingRow :label="t('platform.botId')" :hint="t('platform.botIdHint')">
           <NInput :default-value="getCreds('wecom').extra?.bot_id || ''" :loading="isSaving('wecom', 'bot_id')" clearable size="small" class="input-lg" placeholder="请输入机器人 ID" @change="v => saveCredentials('wecom', 'bot_id', { extra: { ...getCreds('wecom').extra, bot_id: v } })" />
         </SettingRow>

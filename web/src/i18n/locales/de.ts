@@ -55,7 +55,9 @@ export default {
     fetch: 'Abrufen',
     add: 'Hinzufugen',
     enable: 'Aktivieren',
+    enabled: 'Aktiviert',
     disable: 'Deaktivieren',
+    closed: 'Geschlossen',
     configured: 'Konfiguriert',
     notConfigured: 'Nicht konfiguriert',
     confirm: 'Bestatigen',
@@ -414,6 +416,8 @@ export default {
 
   // Platform channel settings
   platform: {
+    channelEnabled: 'Kanal aktivieren',
+    channelEnabledHint: 'Wenn geschlossen, verbindet dieser Kanal nicht und empfangt oder sendet keine Nachrichten',
     requireMention: "Erwahnung {'@'} erfordern",
     requireMentionGroup: "Erwahnung {'@'} in Gruppen erfordern zum Antworten",
     requireMentionChannel: "Erwahnung {'@'} in Kanalen erfordern zum Antworten",

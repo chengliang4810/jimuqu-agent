@@ -56,7 +56,9 @@ export default {
     fetch: 'Fetch',
     add: 'Add',
     enable: 'Enable',
+    enabled: 'Enabled',
     disable: 'Disable',
+    closed: 'Closed',
     configured: 'Configured',
     notConfigured: 'Not configured',
     confirm: 'Confirm',
@@ -494,6 +496,8 @@ export default {
 
   // Platform channel settings
   platform: {
+    channelEnabled: 'Enable channel',
+    channelEnabledHint: 'When closed, this channel will not connect, receive, or deliver messages',
     requireMention: "Require {'@'}Mention",
     requireMentionGroup: "Require {'@'}mention in groups to respond",
     requireMentionChannel: "Require {'@'}mention in channels to respond",

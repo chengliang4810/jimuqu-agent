@@ -117,14 +117,14 @@ export async function fetchConfig(_sections?: string[]): Promise<AppConfig> {
     weixin: data.channels?.weixin || {},
     platforms: {
       feishu: {
-        enabled: !!env.JIMUQU_FEISHU_ENABLED?.is_set,
+        enabled: !!data.channels?.feishu?.enabled,
         extra: {
           app_id: envPreview(env, 'JIMUQU_FEISHU_APP_ID'),
           app_secret: envPreview(env, 'JIMUQU_FEISHU_APP_SECRET'),
         },
       },
       dingtalk: {
-        enabled: !!env.JIMUQU_DINGTALK_ENABLED?.is_set,
+        enabled: !!data.channels?.dingtalk?.enabled,
         extra: {
           client_id: envPreview(env, 'JIMUQU_DINGTALK_CLIENT_ID'),
           client_secret: envPreview(env, 'JIMUQU_DINGTALK_CLIENT_SECRET'),
@@ -132,14 +132,14 @@ export async function fetchConfig(_sections?: string[]): Promise<AppConfig> {
         },
       },
       wecom: {
-        enabled: !!env.JIMUQU_WECOM_ENABLED?.is_set,
+        enabled: !!data.channels?.wecom?.enabled,
         extra: {
           bot_id: envPreview(env, 'JIMUQU_WECOM_BOT_ID'),
           secret: envPreview(env, 'JIMUQU_WECOM_SECRET'),
         },
       },
       weixin: {
-        enabled: !!env.JIMUQU_WEIXIN_ENABLED?.is_set,
+        enabled: !!data.channels?.weixin?.enabled,
         token: envPreview(env, 'JIMUQU_WEIXIN_TOKEN'),
         extra: {
           account_id: envPreview(env, 'JIMUQU_WEIXIN_ACCOUNT_ID'),

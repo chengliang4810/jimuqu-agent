@@ -55,7 +55,9 @@ export default {
     fetch: '가져오기',
     add: '추가',
     enable: '활성화',
+    enabled: '활성화됨',
     disable: '비활성화',
+    closed: '닫힘',
     configured: '구성됨',
     notConfigured: '미구성',
     confirm: '확인',
@@ -414,6 +416,8 @@ export default {
 
   // 플랫폼 채널 설정
   platform: {
+    channelEnabled: '채널 활성화',
+    channelEnabledHint: '닫혀 있으면 이 채널은 연결하지 않고 메시지를 받거나 보내지 않습니다',
     requireMention: "{'@'}멘션 필요",
     requireMentionGroup: "그룹에서 {'@'}멘션 시에만 응답",
     requireMentionChannel: "채널에서 {'@'}멘션 시에만 응답",

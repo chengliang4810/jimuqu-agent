@@ -55,7 +55,9 @@ export default {
     fetch: 'Recuperer',
     add: 'Ajouter',
     enable: 'Activer',
+    enabled: 'Active',
     disable: 'Desactiver',
+    closed: 'Ferme',
     configured: 'Configure',
     notConfigured: 'Non configure',
     confirm: 'Confirmer',
@@ -414,6 +416,8 @@ export default {
 
   // Platform channel settings
   platform: {
+    channelEnabled: 'Activer le canal',
+    channelEnabledHint: 'Quand il est ferme, ce canal ne se connecte pas et ne recoit ni n envoie de messages',
     requireMention: "Exiger une mention {'@'}",
     requireMentionGroup: "Exiger une mention {'@'} dans les groupes pour repondre",
     requireMentionChannel: "Exiger une mention {'@'} dans les canaux pour repondre",

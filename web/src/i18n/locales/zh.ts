@@ -56,7 +56,9 @@ export default {
     fetch: '获取',
     add: '添加',
     enable: '启用',
+    enabled: '启用',
     disable: '禁用',
+    closed: '关闭',
     configured: '已配置',
     notConfigured: '未配置',
     confirm: '确定',
@@ -489,6 +491,8 @@ export default {
 
   // 平台频道设置
   platform: {
+    channelEnabled: '启用频道',
+    channelEnabledHint: '关闭后不会连接该频道，也不会接收或投递消息',
     requireMention: "需要 {'@'}提及",
     requireMentionGroup: "群组中需要 {'@'}机器人 才会响应",
     requireMentionChannel: "频道中需要 {'@'}机器人 才会响应",
@@ -526,10 +530,10 @@ export default {
     appIdHint: '飞书 App ID',
     appSecret: 'App Secret',
     appSecretHint: '飞书 App Secret',
-    clientId: 'Client ID',
-    clientIdHint: '钉钉 Client ID',
-    clientSecret: 'Client Secret',
-    clientSecretHint: '钉钉 Client Secret',
+    clientId: '客户端 ID',
+    clientIdHint: '钉钉 Stream 模式使用的客户端 ID',
+    clientSecret: '客户端密钥',
+    clientSecretHint: '钉钉 Stream 模式使用的客户端密钥',
     botId: 'Bot ID',
     botIdHint: '企业微信 Bot ID',
     wecomSecretHint: '企业微信 Bot Secret',

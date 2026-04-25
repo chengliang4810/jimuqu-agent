@@ -55,7 +55,9 @@ export default {
     fetch: '取得',
     add: '追加',
     enable: '有効化',
+    enabled: '有効',
     disable: '無効化',
+    closed: '閉じる',
     configured: '設定済み',
     notConfigured: '未設定',
     confirm: '確認',
@@ -414,6 +416,8 @@ export default {
 
   // プラットフォームチャンネル設定
   platform: {
+    channelEnabled: 'チャンネルを有効化',
+    channelEnabledHint: '閉じると、このチャンネルは接続せず、メッセージの受信や送信もしません',
     requireMention: "メンションが必要",
     requireMentionGroup: "グループで応答するには {'@'}メンションが必要",
     requireMentionChannel: "チャンネルで応答するには {'@'}メンションが必要",

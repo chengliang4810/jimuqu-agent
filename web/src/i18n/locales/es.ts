@@ -55,7 +55,9 @@ export default {
     fetch: 'Obtener',
     add: 'Anadir',
     enable: 'Activar',
+    enabled: 'Activado',
     disable: 'Desactivar',
+    closed: 'Cerrado',
     configured: 'Configurado',
     notConfigured: 'No configurado',
     confirm: 'Confirmar',
@@ -414,6 +416,8 @@ export default {
 
   // Platform channel settings
   platform: {
+    channelEnabled: 'Activar canal',
+    channelEnabledHint: 'Cuando esta cerrado, este canal no se conecta ni recibe o entrega mensajes',
     requireMention: "Requerir mencion {'@'}",
     requireMentionGroup: "Requerir mencion {'@'} en grupos para responder",
     requireMentionChannel: "Requerir mencion {'@'} en canales para responder",

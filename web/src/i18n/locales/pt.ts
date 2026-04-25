@@ -55,7 +55,9 @@ export default {
     fetch: 'Buscar',
     add: 'Adicionar',
     enable: 'Ativar',
+    enabled: 'Ativado',
     disable: 'Desativar',
+    closed: 'Fechado',
     configured: 'Configurado',
     notConfigured: 'Nao configurado',
     confirm: 'Confirmar',
@@ -414,6 +416,8 @@ export default {
 
   // Platform channel settings
   platform: {
+    channelEnabled: 'Ativar canal',
+    channelEnabledHint: 'Quando fechado, este canal nao conecta, recebe ou entrega mensagens',
     requireMention: "Exigir mencao {'@'}",
     requireMentionGroup: "Exigir mencao {'@'} em grupos para responder",
     requireMentionChannel: "Exigir mencao {'@'} em canais para responder",

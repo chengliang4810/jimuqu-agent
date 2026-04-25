@@ -13,29 +13,20 @@ const props = defineProps<{
 const expanded = ref(true)
 const { t } = useI18n()
 
-const configured = computed(() => {
-  const creds = props.credentials
-  if (!creds) return false
-  const keys = ['token', 'api_key', 'app_id', 'client_id', 'secret', 'app_secret', 'client_secret', 'access_token', 'bot_id', 'account_id', 'enabled']
-  // Check top-level and nested extra.*
-  const targets = [creds, creds.extra].filter(Boolean)
-  return targets.some(obj =>
-    keys.some(key => {
-      const val = (obj as Record<string, any>)[key]
-      return val !== undefined && val !== null && val !== '' && val !== false
-    })
-  )
+const enabled = computed(() => {
+  if (props.credentials?.enabled !== undefined) return !!props.credentials.enabled
+  return !!props.config?.enabled
 })
 </script>
 
 <template>
-  <div class="platform-card" :class="{ configured }">
+  <div class="platform-card" :class="{ enabled }">
     <div class="platform-card-header" @click="expanded = !expanded">
       <div class="platform-info">
         <span class="platform-icon" v-html="icon" />
         <span class="platform-name">{{ name }}</span>
-        <NTag :type="configured ? 'success' : 'default'" size="small" round>
-          {{ configured ? t('common.configured') : t('common.notConfigured') }}
+        <NTag :type="enabled ? 'success' : 'default'" size="small" round>
+          {{ enabled ? t('common.enabled') : t('common.closed') }}
         </NTag>
       </div>
       <span class="expand-icon" :class="{ expanded }">&#9662;</span>
@@ -56,7 +47,7 @@ const configured = computed(() => {
   margin-bottom: 12px;
   overflow: hidden;
 
-  &.configured {
+  &.enabled {
     border-color: rgba(var(--success-rgb), 0.2);
   }
 }
