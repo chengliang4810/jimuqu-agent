@@ -399,6 +399,7 @@ public class RuntimeConfigResolver {
         add(mappings, "JIMUQU_GATEWAY_INJECTION_SECRET", "jimuqu.gateway.injectionSecret");
         add(mappings, "JIMUQU_GATEWAY_INJECTION_MAX_BODY_BYTES", "jimuqu.gateway.injectionMaxBodyBytes");
         add(mappings, "JIMUQU_GATEWAY_INJECTION_REPLAY_WINDOW_SECONDS", "jimuqu.gateway.injectionReplayWindowSeconds");
+        add(mappings, "JIMUQU_DASHBOARD_ACCESS_TOKEN", "jimuqu.dashboard.accessToken");
 
         add(mappings, "JIMUQU_AGENT_HEARTBEAT_ENABLED", "jimuqu.agent.heartbeat.enabled");
         add(mappings, "JIMUQU_AGENT_HEARTBEAT_INTERVAL_MINUTES", "jimuqu.agent.heartbeat.intervalMinutes");

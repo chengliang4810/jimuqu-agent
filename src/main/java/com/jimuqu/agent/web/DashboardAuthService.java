@@ -1,6 +1,7 @@
 package com.jimuqu.agent.web;
 
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.config.AppConfig;
 import org.noear.snack4.ONode;
 import org.noear.solon.core.handle.Context;
 
@@ -23,20 +24,26 @@ public class DashboardAuthService {
             "/api/model/info"
     ));
 
-    private final String sessionToken = UUID.randomUUID().toString().replace("-", "");
+    private final AppConfig appConfig;
+    private final String fallbackSessionToken = UUID.randomUUID().toString().replace("-", "");
     private final List<Long> revealTimestamps = new ArrayList<Long>();
+
+    public DashboardAuthService(AppConfig appConfig) {
+        this.appConfig = appConfig;
+    }
 
     public boolean isPublicApiPath(String path) {
         return PUBLIC_API_PATHS.contains(path);
     }
 
     public String sessionToken() {
-        return sessionToken;
+        return accessToken();
     }
 
     public boolean isAuthorized(Context context) {
         String auth = context.header("Authorization");
-        return ("Bearer " + sessionToken).equals(auth);
+        String token = accessToken();
+        return StrUtil.isNotBlank(token) && ("Bearer " + token).equals(auth);
     }
 
     public boolean canRevealToken(Context context) {
@@ -56,7 +63,11 @@ public class DashboardAuthService {
     }
 
     public String injectToken(String html) {
-        String script = "<script>window.__JIMUQU_SESSION_TOKEN__=\"" + sessionToken + "\";</script>";
+        String token = accessToken();
+        if (StrUtil.isBlank(token)) {
+            return html;
+        }
+        String script = "<script>window.__JIMUQU_SESSION_TOKEN__=\"" + escapeJs(token) + "\";</script>";
         if (html.contains("</head>")) {
             return html.replace("</head>", script + "</head>");
         }
@@ -117,5 +128,14 @@ public class DashboardAuthService {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private String accessToken() {
+        String configured = appConfig == null || appConfig.getDashboard() == null ? "" : StrUtil.nullToEmpty(appConfig.getDashboard().getAccessToken());
+        return StrUtil.isBlank(configured) ? fallbackSessionToken : configured;
+    }
+
+    private String escapeJs(String value) {
+        return StrUtil.nullToEmpty(value).replace("\\", "\\\\").replace("\"", "\\\"").replace("<", "\\u003c");
     }
 }

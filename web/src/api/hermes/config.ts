@@ -63,6 +63,31 @@ function envPreview(env: Record<string, RuntimeConfigInfo>, key: string): string
   return item.redacted_value || '已设置'
 }
 
+
+export async function fetchRuntimeConfigItems(): Promise<Record<string, RuntimeConfigInfo>> {
+  return request<Record<string, RuntimeConfigInfo>>('/api/runtime-config')
+}
+
+export async function setRuntimeConfigItem(key: string, value: string): Promise<void> {
+  const text = (value || '').trim()
+  if (!text) {
+    await request(`/api/runtime-config?key=${encodeURIComponent(key)}`, { method: 'DELETE' })
+    return
+  }
+  await request('/api/runtime-config', {
+    method: 'PUT',
+    body: JSON.stringify({ key, value: text }),
+  })
+}
+
+export async function revealRuntimeConfigItem(key: string): Promise<string> {
+  const data = await request<{ value: string }>('/api/runtime-config/reveal', {
+    method: 'POST',
+    body: JSON.stringify({ key }),
+  })
+  return data.value || ''
+}
+
 export async function fetchConfig(_sections?: string[]): Promise<AppConfig> {
   const [data, env] = await Promise.all([
     request<Record<string, any>>('/api/config'),
@@ -198,9 +223,8 @@ export async function saveCredentials(
     const raw = entry.value
     const text = typeof raw === 'boolean' ? String(raw) : (raw ?? '').toString().trim()
     if (!text) {
-      await request('/api/runtime-config', {
+      await request(`/api/runtime-config?key=${encodeURIComponent(entry.key)}`, {
         method: 'DELETE',
-        body: JSON.stringify({ key: entry.key }),
       })
     } else {
       await request('/api/runtime-config', {

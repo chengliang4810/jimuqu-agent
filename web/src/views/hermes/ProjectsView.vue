@@ -54,8 +54,19 @@ async function submitTodo() {
 async function handleStatus(todo: ProjectTodo, status: ProjectTodoStatus) {
   if (!currentId.value || todo.status === status) return
   await updateTodoStatus(currentId.value, todo.id, status)
-  message.success(`Updated ${todo.no} -> ${status}`)
+  message.success(`已更新 ${todo.no} -> ${statusLabel(status)}`)
   current.value = await getProject(currentId.value)
+}
+
+function statusLabel(status: ProjectTodoStatus) {
+  const labels: Record<ProjectTodoStatus, string> = {
+    todo: '待处理',
+    in_progress: '进行中',
+    waiting_user: '等待用户',
+    review: '待复核',
+    done: '已完成',
+  }
+  return labels[status] || status
 }
 
 onMounted(reload)
@@ -65,19 +76,19 @@ onMounted(reload)
   <div class="projects-view">
     <header class="page-header">
       <div>
-        <h1>Projects</h1>
-        <p>Local project workbench, hierarchical todos, and multi-agent board.</p>
+        <h1>项目</h1>
+        <p>本地项目工作台、分层待办和多 Agent 看板。</p>
       </div>
       <NSpace>
-        <NButton @click="reload">Refresh</NButton>
-        <NButton type="primary" @click="showProjectModal = true">New Project</NButton>
+        <NButton @click="reload">刷新</NButton>
+        <NButton type="primary" @click="showProjectModal = true">新建项目</NButton>
       </NSpace>
     </header>
 
     <NSpin :show="loading">
       <div class="workspace">
         <aside class="project-list">
-          <NEmpty v-if="!projects.length" description="No projects" />
+          <NEmpty v-if="!projects.length" description="暂无项目" />
           <button v-for="project in projects" :key="project.id" class="project-item" :class="{ active: current?.id === project.id }" @click="selectProject(project.slug)">
             <strong>{{ project.title }}</strong>
             <span>{{ project.slug }}</span>
@@ -85,26 +96,26 @@ onMounted(reload)
         </aside>
 
         <main class="board-panel">
-          <NEmpty v-if="!current" description="Select or create a project" />
+          <NEmpty v-if="!current" description="请选择或新建一个项目" />
           <template v-if="current">
             <section class="project-hero">
               <div>
                 <div class="slug">{{ activeProject.slug }}</div>
                 <h2>{{ activeProject.title }}</h2>
-                <p>{{ activeProject.goal || 'No goal set' }}</p>
+                <p>{{ activeProject.goal || '暂未设置目标' }}</p>
                 <code>{{ activeProject.dir }}</code>
               </div>
-              <NButton type="primary" @click="showTodoModal = true">Add Todo</NButton>
+              <NButton type="primary" @click="showTodoModal = true">新增待办</NButton>
             </section>
 
             <section class="board-grid">
               <NCard v-for="column in activeProject.board" :key="column.status" class="board-column" content-style="padding: 12px">
                 <template #header>
-                  <div class="column-header"><span>{{ column.title }}</span><em>{{ column.count }}</em></div>
+                  <div class="column-header"><span>{{ statusLabel(column.status) }}</span><em>{{ column.count }}</em></div>
                 </template>
                 <div class="todo-stack">
                   <ProjectTodoCard v-for="todo in column.todos" :key="todo.id" :todo="todo" @status="handleStatus" />
-                  <NEmpty v-if="!column.todos.length" size="small" description="Empty" />
+                  <NEmpty v-if="!column.todos.length" size="small" description="暂无内容" />
                 </div>
               </NCard>
             </section>
@@ -113,21 +124,21 @@ onMounted(reload)
       </div>
     </NSpin>
 
-    <NModal v-model:show="showProjectModal" preset="card" title="New Project" class="project-modal">
+    <NModal v-model:show="showProjectModal" preset="card" title="新建项目" class="project-modal">
       <NSpace vertical>
-        <NInput v-model:value="projectForm.slug" placeholder="slug, optional" />
-        <NInput v-model:value="projectForm.title" placeholder="Project title" />
-        <NInput v-model:value="projectForm.goal" type="textarea" placeholder="Project background / goal" />
-        <NButton type="primary" block @click="submitProject">Create</NButton>
+        <NInput v-model:value="projectForm.slug" placeholder="项目标识，可选" />
+        <NInput v-model:value="projectForm.title" placeholder="项目标题" />
+        <NInput v-model:value="projectForm.goal" type="textarea" placeholder="项目背景 / 目标" />
+        <NButton type="primary" block @click="submitProject">创建</NButton>
       </NSpace>
     </NModal>
 
-    <NModal v-model:show="showTodoModal" preset="card" title="Add Todo" class="project-modal">
+    <NModal v-model:show="showTodoModal" preset="card" title="新增待办" class="project-modal">
       <NSpace vertical>
-        <NInput v-model:value="todoForm.title" placeholder="Todo title" />
-        <NInput v-model:value="todoForm.description" type="textarea" placeholder="Description" />
-        <NSelect v-model:value="todoForm.priority" :options="[{label:'low',value:'low'},{label:'normal',value:'normal'},{label:'high',value:'high'}]" />
-        <NButton type="primary" block @click="submitTodo">Add</NButton>
+        <NInput v-model:value="todoForm.title" placeholder="待办标题" />
+        <NInput v-model:value="todoForm.description" type="textarea" placeholder="描述" />
+        <NSelect v-model:value="todoForm.priority" :options="[{label:'低',value:'low'},{label:'普通',value:'normal'},{label:'高',value:'high'}]" />
+        <NButton type="primary" block @click="submitTodo">添加</NButton>
       </NSpace>
     </NModal>
   </div>

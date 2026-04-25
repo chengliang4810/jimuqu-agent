@@ -1,226 +1,137 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
-import { NButton, NInput, NModal, NForm, NFormItem, NPopconfirm, useMessage } from "naive-ui";
+import { onMounted, ref } from "vue";
+import { NButton, NInput, NPopconfirm, useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
-import { fetchAuthStatus, setupPassword, changePassword, changeUsername, removePassword } from "@/api/auth";
+import { clearApiKey, getApiKey, setApiKey } from "@/api/client";
+import { fetchRuntimeConfigItems, revealRuntimeConfigItem, setRuntimeConfigItem } from "@/api/hermes/config";
+
+const ACCESS_TOKEN_KEY = "JIMUQU_DASHBOARD_ACCESS_TOKEN";
 
 const { t } = useI18n();
 const message = useMessage();
 
-const hasPasswordLogin = ref(false);
-const username = ref<string | null>(null);
 const loading = ref(false);
+const saving = ref(false);
+const revealing = ref(false);
+const configured = ref(false);
+const tokenPreview = ref("");
+const accessToken = ref("");
 
-// Setup form
-const showSetupModal = ref(false);
-const setupUsername = ref("");
-const setupPasswordVal = ref("");
-const setupPasswordConfirm = ref("");
+onMounted(loadTokenStatus);
 
-// Change password form
-const showChangePasswordModal = ref(false);
-const currentPasswordForPwd = ref("");
-const newPasswordVal = ref("");
-const newPasswordConfirm = ref("");
-
-// Change username form
-const showChangeUsernameModal = ref(false);
-const currentPasswordForName = ref("");
-const newUsernameVal = ref("");
-
-onMounted(async () => {
-  try {
-    const status = await fetchAuthStatus();
-    hasPasswordLogin.value = status.hasPasswordLogin;
-    username.value = status.username;
-  } catch { /* ignore */ }
-});
-
-async function handleSetup() {
-  if (setupPasswordVal.value !== setupPasswordConfirm.value) {
-    message.error(t("login.passwordMismatch"));
-    return;
-  }
-  if (setupPasswordVal.value.length < 6) {
-    message.error(t("login.passwordTooShort"));
-    return;
-  }
+async function loadTokenStatus() {
   loading.value = true;
   try {
-    await setupPassword(setupUsername.value, setupPasswordVal.value);
-    hasPasswordLogin.value = true;
-    username.value = setupUsername.value;
-    showSetupModal.value = false;
-    setupUsername.value = "";
-    setupPasswordVal.value = "";
-    setupPasswordConfirm.value = "";
-    message.success(t("login.setupSuccess"));
+    const items = await fetchRuntimeConfigItems();
+    const item = items[ACCESS_TOKEN_KEY];
+    configured.value = !!item?.is_set;
+    tokenPreview.value = item?.redacted_value || "";
   } catch (err: any) {
-    message.error(err.message || t("common.saveFailed"));
+    message.error(err.message || t("common.fetchFailed"));
   } finally {
     loading.value = false;
   }
 }
 
-async function handleChangePassword() {
-  if (newPasswordVal.value !== newPasswordConfirm.value) {
-    message.error(t("login.passwordMismatch"));
+async function saveAccessToken() {
+  const nextToken = accessToken.value.trim();
+  if (!nextToken) {
+    message.error(t("account.accessTokenRequired"));
     return;
   }
-  if (newPasswordVal.value.length < 6) {
-    message.error(t("login.passwordTooShort"));
-    return;
-  }
-  loading.value = true;
+
+  saving.value = true;
   try {
-    await changePassword(currentPasswordForPwd.value, newPasswordVal.value);
-    showChangePasswordModal.value = false;
-    currentPasswordForPwd.value = "";
-    newPasswordVal.value = "";
-    newPasswordConfirm.value = "";
-    message.success(t("login.passwordChanged"));
+    await setRuntimeConfigItem(ACCESS_TOKEN_KEY, nextToken);
+    setApiKey(nextToken);
+    accessToken.value = "";
+    await loadTokenStatus();
+    message.success(t("account.accessTokenSaved"));
+    window.location.reload();
   } catch (err: any) {
     message.error(err.message || t("common.saveFailed"));
   } finally {
-    loading.value = false;
+    saving.value = false;
   }
 }
 
-async function handleChangeUsername() {
-  if (newUsernameVal.value.trim().length < 2) {
-    message.error(t("login.usernameTooShort"));
-    return;
-  }
-  loading.value = true;
+async function revealAccessToken() {
+  revealing.value = true;
   try {
-    await changeUsername(currentPasswordForName.value, newUsernameVal.value.trim());
-    username.value = newUsernameVal.value.trim();
-    showChangeUsernameModal.value = false;
-    currentPasswordForName.value = "";
-    newUsernameVal.value = "";
-    message.success(t("login.usernameChanged"));
+    const token = await revealRuntimeConfigItem(ACCESS_TOKEN_KEY);
+    accessToken.value = token;
+  } catch (err: any) {
+    message.error(err.message || t("account.accessTokenRevealFailed"));
+  } finally {
+    revealing.value = false;
+  }
+}
+
+async function removeAccessToken() {
+  saving.value = true;
+  try {
+    await setRuntimeConfigItem(ACCESS_TOKEN_KEY, "");
+    accessToken.value = "";
+    clearApiKey();
+    await loadTokenStatus();
+    message.success(t("account.accessTokenRemoved"));
+    window.location.reload();
   } catch (err: any) {
     message.error(err.message || t("common.saveFailed"));
   } finally {
-    loading.value = false;
+    saving.value = false;
   }
 }
 
-async function handleRemove() {
-  loading.value = true;
-  try {
-    await removePassword();
-    hasPasswordLogin.value = false;
-    username.value = null;
-    message.success(t("login.passwordRemoved"));
-  } catch (err: any) {
-    message.error(err.message || t("common.saveFailed"));
-  } finally {
-    loading.value = false;
-  }
-}
-
-function openSetupModal() {
-  setupUsername.value = "";
-  setupPasswordVal.value = "";
-  setupPasswordConfirm.value = "";
-  showSetupModal.value = true;
-}
-
-function openChangePasswordModal() {
-  currentPasswordForPwd.value = "";
-  newPasswordVal.value = "";
-  newPasswordConfirm.value = "";
-  showChangePasswordModal.value = true;
-}
-
-function openChangeUsernameModal() {
-  currentPasswordForName.value = "";
-  newUsernameVal.value = "";
-  showChangeUsernameModal.value = true;
+function useCurrentToken() {
+  accessToken.value = getApiKey();
 }
 </script>
 
 <template>
   <div class="account-settings">
-    <p class="section-desc">{{ t("login.setupDescription") }}</p>
+    <p class="section-desc">{{ t("account.accessTokenDescription") }}</p>
 
-    <!-- Not configured -->
-    <div v-if="!hasPasswordLogin" class="action-row">
-      <span class="action-label">{{ t("login.passwordLoginNotConfigured") }}</span>
-      <NButton type="primary" @click="openSetupModal">{{ t("login.setupPassword") }}</NButton>
-    </div>
+    <div class="token-card">
+      <div class="token-status">
+        <span class="status-label">{{ t("account.accessTokenStatus") }}</span>
+        <span class="status-value" :class="{ configured }">
+          {{ configured ? t("common.configured") : t("common.notConfigured") }}
+        </span>
+        <code v-if="tokenPreview" class="token-preview">{{ tokenPreview }}</code>
+      </div>
 
-    <!-- Configured -->
-    <div v-else class="configured-section">
-      <div class="action-row">
-        <span class="action-label">{{ t("login.passwordLoginConfigured", { username }) }}</span>
-        <div class="action-buttons">
-          <NButton @click="openChangePasswordModal">{{ t("login.changePassword") }}</NButton>
-          <NButton @click="openChangeUsernameModal">{{ t("login.changeUsername") }}</NButton>
-          <NPopconfirm @positive-click="handleRemove">
-            <template #trigger>
-              <NButton type="error" ghost :loading="loading">{{ t("login.removePasswordLogin") }}</NButton>
-            </template>
-            {{ t("login.removeConfirm") }}
-          </NPopconfirm>
-        </div>
+      <NInput
+        v-model:value="accessToken"
+        type="password"
+        show-password-on="click"
+        :placeholder="t('account.accessTokenPlaceholder')"
+        :disabled="loading || saving"
+        @keyup.enter="saveAccessToken"
+      />
+
+      <div class="action-buttons">
+        <NButton @click="useCurrentToken">{{ t("account.useCurrentToken") }}</NButton>
+        <NButton :loading="revealing" :disabled="!configured" @click="revealAccessToken">
+          {{ t("account.revealAccessToken") }}
+        </NButton>
+        <NPopconfirm
+          :positive-text="t('common.delete')"
+          :negative-text="t('common.cancel')"
+          @positive-click="removeAccessToken"
+        >
+          <template #trigger>
+            <NButton type="error" ghost :loading="saving" :disabled="!configured">
+              {{ t("account.removeAccessToken") }}
+            </NButton>
+          </template>
+          {{ t("account.removeAccessTokenConfirm") }}
+        </NPopconfirm>
+        <NButton type="primary" :loading="saving" @click="saveAccessToken">
+          {{ t("common.save") }}
+        </NButton>
       </div>
     </div>
-
-    <!-- Setup modal -->
-    <NModal v-model:show="showSetupModal" preset="dialog" :title="t('login.setupPassword')">
-      <NForm label-placement="top">
-        <NFormItem :label="t('login.username')">
-          <NInput v-model:value="setupUsername" :placeholder="t('login.usernamePlaceholder')" />
-        </NFormItem>
-        <NFormItem :label="t('login.newPassword')">
-          <NInput v-model:value="setupPasswordVal" type="password" show-password-on="click" :placeholder="t('login.passwordPlaceholder')" />
-        </NFormItem>
-        <NFormItem :label="t('login.confirmPassword')">
-          <NInput v-model:value="setupPasswordConfirm" type="password" show-password-on="click" :placeholder="t('login.confirmPassword')" @keyup.enter="handleSetup" />
-        </NFormItem>
-      </NForm>
-      <template #action>
-        <NButton @click="showSetupModal = false">{{ t("common.cancel") }}</NButton>
-        <NButton type="primary" :loading="loading" @click="handleSetup">{{ t("common.save") }}</NButton>
-      </template>
-    </NModal>
-
-    <!-- Change password modal -->
-    <NModal v-model:show="showChangePasswordModal" preset="dialog" :title="t('login.changePassword')">
-      <NForm label-placement="top">
-        <NFormItem :label="t('login.currentPassword')">
-          <NInput v-model:value="currentPasswordForPwd" type="password" show-password-on="click" :placeholder="t('login.currentPassword')" />
-        </NFormItem>
-        <NFormItem :label="t('login.newPassword')">
-          <NInput v-model:value="newPasswordVal" type="password" show-password-on="click" :placeholder="t('login.newPassword')" />
-        </NFormItem>
-        <NFormItem :label="t('login.confirmPassword')">
-          <NInput v-model:value="newPasswordConfirm" type="password" show-password-on="click" :placeholder="t('login.confirmPassword')" @keyup.enter="handleChangePassword" />
-        </NFormItem>
-      </NForm>
-      <template #action>
-        <NButton @click="showChangePasswordModal = false">{{ t("common.cancel") }}</NButton>
-        <NButton type="primary" :loading="loading" @click="handleChangePassword">{{ t("common.save") }}</NButton>
-      </template>
-    </NModal>
-
-    <!-- Change username modal -->
-    <NModal v-model:show="showChangeUsernameModal" preset="dialog" :title="t('login.changeUsername')">
-      <NForm label-placement="top">
-        <NFormItem :label="t('login.currentPassword')">
-          <NInput v-model:value="currentPasswordForName" type="password" show-password-on="click" :placeholder="t('login.currentPassword')" />
-        </NFormItem>
-        <NFormItem :label="t('login.newUsername')">
-          <NInput v-model:value="newUsernameVal" :placeholder="t('login.usernamePlaceholder')" @keyup.enter="handleChangeUsername" />
-        </NFormItem>
-      </NForm>
-      <template #action>
-        <NButton @click="showChangeUsernameModal = false">{{ t("common.cancel") }}</NButton>
-        <NButton type="primary" :loading="loading" @click="handleChangeUsername">{{ t("common.save") }}</NButton>
-      </template>
-    </NModal>
   </div>
 </template>
 
@@ -238,21 +149,45 @@ function openChangeUsernameModal() {
   line-height: 1.6;
 }
 
-.action-row {
+.token-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 720px;
 }
 
-.action-label {
-  font-size: 14px;
+.token-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.status-label {
   color: $text-secondary;
+}
+
+.status-value {
+  color: $text-muted;
+
+  &.configured {
+    color: $success;
+  }
+}
+
+.token-preview {
+  color: $text-muted;
+  background: $bg-input;
+  border: 1px solid $border-color;
+  border-radius: $radius-sm;
+  padding: 2px 8px;
 }
 
 .action-buttons {
   display: flex;
-  gap: 8px;
-  flex-shrink: 0;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 </style>

@@ -7,15 +7,24 @@ const props = defineProps<{ todo: ProjectTodo }>()
 const emit = defineEmits<{ status: [todo: ProjectTodo, status: ProjectTodoStatus] }>()
 
 const statusOptions = [
-  { label: 'todo', value: 'todo' },
-  { label: 'in progress', value: 'in_progress' },
-  { label: 'waiting user', value: 'waiting_user' },
-  { label: 'review', value: 'review' },
-  { label: 'done', value: 'done' },
+  { label: '待处理', value: 'todo' },
+  { label: '进行中', value: 'in_progress' },
+  { label: '等待用户', value: 'waiting_user' },
+  { label: '待复核', value: 'review' },
+  { label: '已完成', value: 'done' },
 ]
+
+const priorityLabels: Record<string, string> = {
+  low: '低',
+  normal: '普通',
+  high: '高',
+  urgent: '紧急',
+}
 
 const updated = computed(() => props.todo.updated_at ? new Date(props.todo.updated_at).toLocaleString() : '-')
 const progress = computed(() => props.todo.child_total > 0 ? `${props.todo.child_done}/${props.todo.child_total}` : '')
+const priorityLabel = computed(() => priorityLabels[props.todo.priority || 'normal'] || props.todo.priority || '普通')
+const agentLabel = computed(() => props.todo.assigned_agent === 'project-manager' || !props.todo.assigned_agent ? '项目经理' : props.todo.assigned_agent)
 function handleStatus(value: string) { emit('status', props.todo, value as ProjectTodoStatus) }
 </script>
 
@@ -23,18 +32,18 @@ function handleStatus(value: string) { emit('status', props.todo, value as Proje
   <article class="project-todo-card">
     <div class="card-topline">
       <span class="todo-no">{{ todo.no }}</span>
-      <span v-if="progress" class="progress-chip">Children {{ progress }}</span>
-      <span class="agent-chip">{{ todo.assigned_agent || 'project-manager' }}</span>
+      <span v-if="progress" class="progress-chip">子待办 {{ progress }}</span>
+      <span class="agent-chip">{{ agentLabel }}</span>
     </div>
     <h3 class="todo-title">{{ todo.title }}</h3>
     <p v-if="todo.description" class="todo-description">{{ todo.description }}</p>
     <div class="card-footer">
-      <span class="priority" :class="todo.priority || 'normal'">{{ todo.priority || 'normal' }}</span>
+      <span class="priority" :class="todo.priority || 'normal'">{{ priorityLabel }}</span>
       <span class="updated">{{ updated }}</span>
     </div>
     <div class="card-actions">
       <NSelect size="tiny" :value="todo.status" :options="statusOptions" @update:value="handleStatus" />
-      <NButton v-if="todo.status !== 'done'" size="tiny" quaternary type="primary" @click="handleStatus('done')">Done</NButton>
+      <NButton v-if="todo.status !== 'done'" size="tiny" quaternary type="primary" @click="handleStatus('done')">完成</NButton>
     </div>
   </article>
 </template>

@@ -545,7 +545,7 @@ public class ProjectService {
             List<Map<String, Object>> cards = new ArrayList<Map<String, Object>>();
             for (ProjectTodoRecord todo : board.get(status)) cards.add(todoView(todo));
             column.put("status", status);
-            column.put("title", status);
+            column.put("title", statusLabel(status));
             column.put("count", cards.size());
             column.put("todos", cards);
             columns.add(column);
@@ -562,6 +562,25 @@ public class ProjectService {
             result.add(map);
         }
         return result;
+    }
+
+    private String statusLabel(String status) {
+        if (ProjectTodoStatus.TODO.equals(status)) {
+            return "待处理";
+        }
+        if (ProjectTodoStatus.IN_PROGRESS.equals(status)) {
+            return "进行中";
+        }
+        if (ProjectTodoStatus.WAITING_USER.equals(status)) {
+            return "等待用户";
+        }
+        if (ProjectTodoStatus.REVIEW.equals(status)) {
+            return "待复核";
+        }
+        if (ProjectTodoStatus.DONE.equals(status)) {
+            return "已完成";
+        }
+        return status;
     }
 
     private List<Map<String, Object>> runsView(ProjectRecord project) throws Exception {

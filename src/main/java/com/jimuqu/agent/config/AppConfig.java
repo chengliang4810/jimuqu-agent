@@ -91,6 +91,11 @@ public class AppConfig {
     private GatewayConfig gateway = new GatewayConfig();
 
     /**
+     * Dashboard and API access configuration.
+     */
+    private DashboardConfig dashboard = new DashboardConfig();
+
+    /**
      * Agent 运行配置。
      */
     private AgentConfig agent = new AgentConfig();
@@ -272,6 +277,7 @@ public class AppConfig {
         config.getGateway().setInjectionSecret(resolveSecret("JIMUQU_GATEWAY_INJECTION_SECRET", readString(props, overrides, "jimuqu.gateway.injectionSecret", "")));
         config.getGateway().setInjectionMaxBodyBytes(resolveInt("JIMUQU_GATEWAY_INJECTION_MAX_BODY_BYTES", readInt(props, overrides, "jimuqu.gateway.injectionMaxBodyBytes", 65536)));
         config.getGateway().setInjectionReplayWindowSeconds(resolveInt("JIMUQU_GATEWAY_INJECTION_REPLAY_WINDOW_SECONDS", readInt(props, overrides, "jimuqu.gateway.injectionReplayWindowSeconds", 300)));
+        config.getDashboard().setAccessToken(resolveSecret("JIMUQU_DASHBOARD_ACCESS_TOKEN", readString(props, overrides, "jimuqu.dashboard.accessToken", "")));
         config.getAgent().setPersonalities(loadPersonalities(props, overrides));
         config.getAgent().getHeartbeat().setEnabled(resolveBoolean("JIMUQU_AGENT_HEARTBEAT_ENABLED", readBoolean(props, overrides, "jimuqu.agent.heartbeat.enabled", false)));
         config.getAgent().getHeartbeat().setIntervalMinutes(resolveInt("JIMUQU_AGENT_HEARTBEAT_INTERVAL_MINUTES", readInt(props, overrides, "jimuqu.agent.heartbeat.intervalMinutes", RuntimePathConstants.DEFAULT_HEARTBEAT_INTERVAL_MINUTES)));
@@ -338,6 +344,7 @@ public class AppConfig {
         this.gateway.setInjectionSecret(other.getGateway().getInjectionSecret());
         this.gateway.setInjectionMaxBodyBytes(other.getGateway().getInjectionMaxBodyBytes());
         this.gateway.setInjectionReplayWindowSeconds(other.getGateway().getInjectionReplayWindowSeconds());
+        this.dashboard.setAccessToken(other.getDashboard().getAccessToken());
         this.agent.setPersonalities(clonePersonalities(other.getAgent().getPersonalities()));
         this.agent.getHeartbeat().setEnabled(other.getAgent().getHeartbeat().isEnabled());
         this.agent.getHeartbeat().setIntervalMinutes(other.getAgent().getHeartbeat().getIntervalMinutes());
@@ -1831,5 +1838,18 @@ public class AppConfig {
          * Replay window in seconds for signed gateway injection requests.
          */
         private int injectionReplayWindowSeconds = 300;
+    }
+
+    /**
+     * Dashboard and API access configuration.
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class DashboardConfig {
+        /**
+         * Shared bearer token for dashboard pages and API requests.
+         */
+        private String accessToken;
     }
 }

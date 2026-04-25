@@ -55,7 +55,12 @@ const { t } = useI18n()
         <span class="session-item-time">{{ formatTimestampMs(session.createdAt) }}</span>
       </span>
     </div>
-    <NPopconfirm v-if="canDelete" @positive-click="emit('delete')">
+    <NPopconfirm
+      v-if="canDelete"
+      :positive-text="t('common.delete')"
+      :negative-text="t('common.cancel')"
+      @positive-click="emit('delete')"
+    >
       <template #trigger>
         <button class="session-item-delete" @click.stop>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>

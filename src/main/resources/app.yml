@@ -17,6 +17,9 @@ jimuqu.runtime.cacheDir: runtime/cache
 jimuqu.runtime.stateDb: runtime/state.db
 jimuqu.logging.dir: runtime/logs
 
+# Dashboard and API shared access token. If empty, startup generates a temporary local token.
+jimuqu.dashboard.accessToken:
+
 # 默认大模型配置
 providers.default.name: Default Provider
 providers.default.baseUrl: https://subapi.jimuqu.com

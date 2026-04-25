@@ -36,8 +36,8 @@ import org.noear.solon.core.handle.Filter;
 @Configuration
 public class DashboardConfiguration {
     @Bean
-    public DashboardAuthService dashboardAuthService() {
-        return new DashboardAuthService();
+    public DashboardAuthService dashboardAuthService(AppConfig appConfig) {
+        return new DashboardAuthService(appConfig);
     }
 
     @Bean

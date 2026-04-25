@@ -601,6 +601,8 @@ onUnmounted(() => {
           </div>
           <NPopconfirm
             v-if="sessions.length > 1"
+            :positive-text="t('common.delete')"
+            :negative-text="t('common.cancel')"
             @positive-click="closeSession(s.id)"
           >
             <template #trigger>

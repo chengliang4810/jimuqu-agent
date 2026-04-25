@@ -1,5 +1,6 @@
 package com.jimuqu.agent.web;
 
+import cn.hutool.core.util.StrUtil;
 import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Controller;
 import org.noear.solon.annotation.Mapping;
@@ -34,8 +35,15 @@ public class DashboardRuntimeConfigController {
 
     @Mapping(value = "/api/runtime-config", method = MethodType.DELETE)
     public Map<String, Object> remove(Context context) throws Exception {
-        ONode body = ONode.ofJson(context.body());
-        return DashboardResponse.ok(runtimeConfigService.remove(body.get("key").getString()));
+        String key = context.param("key");
+        if (StrUtil.isBlank(key) && StrUtil.isNotBlank(context.body())) {
+            ONode body = ONode.ofJson(context.body());
+            key = body.get("key").getString();
+        }
+        if (StrUtil.isBlank(key)) {
+            throw new IllegalArgumentException("配置项 key 不能为空");
+        }
+        return DashboardResponse.ok(runtimeConfigService.remove(key));
     }
 
     @Mapping(value = "/api/runtime-config/reveal", method = MethodType.POST)

@@ -35,6 +35,11 @@ jimuqu:
   logging:
     dir: runtime/logs
 
+  dashboard:
+    # Shared bearer token for both dashboard pages and /api/* requests.
+    # Leave empty to use a temporary token generated at startup.
+    accessToken: ""
+
   llm:
     stream: false
     reasoningEffort: medium
