@@ -61,7 +61,7 @@ public class WeixinQrSetupServiceTest {
         config.getRuntime().setLogsDir(new File(runtimeHome, "logs").getAbsolutePath());
         config.getChannels().getWeixin().setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
 
-        GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(config, new LinkedHashMap<com.jimuqu.agent.core.enums.PlatformType, com.jimuqu.agent.core.service.ChannelAdapter>());
+        GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(config, new com.jimuqu.agent.gateway.service.ChannelConnectionManager(new LinkedHashMap<com.jimuqu.agent.core.enums.PlatformType, com.jimuqu.agent.core.service.ChannelAdapter>()));
         WeixinQrSetupService service = new WeixinQrSetupService(config, new DashboardConfigService(config, refreshService), refreshService);
 
         Map<String, Object> start = service.start();

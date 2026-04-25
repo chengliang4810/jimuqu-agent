@@ -23,10 +23,13 @@ public class DashboardRuntimeConfigService {
         this.configResolver = RuntimeConfigResolver.initialize(appConfig.getRuntime().getHome());
         this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
         this.definitions = Arrays.asList(
-                new ConfigItemDefinition("JIMUQU_LLM_PROVIDER", "默认模型 provider 覆盖", "provider", false, false, null, Arrays.asList("llm")),
-                new ConfigItemDefinition("JIMUQU_LLM_API_URL", "默认模型 API 地址覆盖", "provider", false, false, null, Arrays.asList("llm")),
-                new ConfigItemDefinition("JIMUQU_LLM_MODEL", "默认模型名覆盖", "provider", false, false, null, Arrays.asList("llm")),
-                new ConfigItemDefinition("JIMUQU_LLM_API_KEY", "默认模型 API 密钥", "provider", true, false, null, Arrays.asList("llm")),
+                new ConfigItemDefinition("JIMUQU_LLM_PROVIDER_KEY", "默认模型 provider key", "provider", false, false, null, Arrays.asList("llm")),
+                new ConfigItemDefinition("JIMUQU_LLM_DEFAULT_MODEL", "全局默认模型覆盖", "provider", false, false, null, Arrays.asList("llm")),
+                new ConfigItemDefinition("JIMUQU_DEFAULT_PROVIDER_NAME", "默认 provider 名称", "provider", false, false, null, Arrays.asList("llm")),
+                new ConfigItemDefinition("JIMUQU_DEFAULT_PROVIDER_BASE_URL", "默认 provider 基础地址", "provider", false, false, null, Arrays.asList("llm")),
+                new ConfigItemDefinition("JIMUQU_DEFAULT_PROVIDER_MODEL", "默认 provider 模型", "provider", false, false, null, Arrays.asList("llm")),
+                new ConfigItemDefinition("JIMUQU_DEFAULT_PROVIDER_DIALECT", "默认 provider 协议方言", "provider", false, false, null, Arrays.asList("llm")),
+                new ConfigItemDefinition("JIMUQU_DEFAULT_PROVIDER_API_KEY", "默认 provider API 密钥", "provider", true, false, null, Arrays.asList("llm")),
                 new ConfigItemDefinition("JIMUQU_REACT_MAX_STEPS", "主代理最大推理步数", "provider", false, true, null, Arrays.asList("llm")),
                 new ConfigItemDefinition("JIMUQU_REACT_RETRY_MAX", "主代理决策重试次数", "provider", false, true, null, Arrays.asList("llm")),
                 new ConfigItemDefinition("JIMUQU_REACT_RETRY_DELAY_MS", "主代理决策重试延迟（毫秒）", "provider", false, true, null, Arrays.asList("llm")),
@@ -56,6 +59,9 @@ public class DashboardRuntimeConfigService {
                 new ConfigItemDefinition("JIMUQU_WEIXIN_TOKEN", "微信令牌", "messaging", true, false, null, Arrays.asList("weixin")),
                 new ConfigItemDefinition("JIMUQU_WEIXIN_ACCOUNT_ID", "微信 iLink accountId", "messaging", false, false, null, Arrays.asList("weixin")),
                 new ConfigItemDefinition("JIMUQU_WEIXIN_GROUP_ALLOWED_USERS", "微信群聊 allowlist", "messaging", false, true, null, Arrays.asList("weixin")),
+                new ConfigItemDefinition("JIMUQU_GATEWAY_INJECTION_SECRET", "HTTP gateway injection HMAC secret", "security", true, true, null, Arrays.asList("gateway")),
+                new ConfigItemDefinition("JIMUQU_GATEWAY_INJECTION_MAX_BODY_BYTES", "HTTP gateway injection max body bytes", "security", false, true, null, Arrays.asList("gateway")),
+                new ConfigItemDefinition("JIMUQU_GATEWAY_INJECTION_REPLAY_WINDOW_SECONDS", "HTTP gateway injection replay window seconds", "security", false, true, null, Arrays.asList("gateway")),
                 new ConfigItemDefinition("JIMUQU_UPDATE_REPO", "版本检查使用的 GitHub 仓库，格式 owner/repo", "runtime", false, true, null, Arrays.asList("version")),
                 new ConfigItemDefinition("JIMUQU_UPDATE_RELEASE_API_URL", "自定义最新版本检查 API 地址，默认 GitHub releases/latest", "runtime", false, true, null, Arrays.asList("version")),
                 new ConfigItemDefinition("JIMUQU_UPDATE_HTTP_PROXY", "版本检查 HTTP 代理地址，例如 http://proxy.example:7890", "runtime", false, true, null, Arrays.asList("version")),
@@ -87,6 +93,10 @@ public class DashboardRuntimeConfigService {
     }
 
     public Map<String, Object> reveal(String key) {
+        ConfigItemDefinition definition = requireSupported(key);
+        if (!definition.password) {
+            throw new IllegalStateException("Runtime config item is not revealable: " + key);
+        }
         String value = configResolver.get(key);
         if (StrUtil.isBlank(value)) {
             throw new IllegalStateException("Runtime config item not set: " + key);
@@ -128,9 +138,13 @@ public class DashboardRuntimeConfigService {
     }
 
     private void ensureSupported(String key) {
+        requireSupported(key);
+    }
+
+    private ConfigItemDefinition requireSupported(String key) {
         for (ConfigItemDefinition definition : definitions) {
             if (definition.key.equals(key)) {
-                return;
+                return definition;
             }
         }
         throw new IllegalStateException("Unsupported runtime config item: " + key);

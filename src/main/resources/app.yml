@@ -18,10 +18,13 @@ jimuqu.runtime.stateDb: runtime/state.db
 jimuqu.logging.dir: runtime/logs
 
 # 默认大模型配置
-jimuqu.llm.provider: openai-responses
-jimuqu.llm.apiUrl: https://subapi.jimuqu.com/v1/responses
-jimuqu.llm.apiKey:
-jimuqu.llm.model: gpt-5.4
+providers.default.name: Default Provider
+providers.default.baseUrl: https://subapi.jimuqu.com
+providers.default.apiKey:
+providers.default.defaultModel: gpt-5.4
+providers.default.dialect: openai-responses
+model.providerKey: default
+model.default:
 jimuqu.llm.stream: false
 jimuqu.llm.reasoningEffort: medium
 jimuqu.llm.temperature: 0.2

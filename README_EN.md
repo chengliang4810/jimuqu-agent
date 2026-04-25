@@ -1,0 +1,223 @@
+# jimuqu-agent
+
+English | [简体中文](README.md)
+
+jimuqu-agent is a single-instance Agent service built with Java, Solon, and Solon AI. The project aims to reproduce the core behavior and capabilities of Hermes Agent in the Java / Solon ecosystem, with a focus on the Agent loop, tool calling, sessions, memory, skills, scheduled tasks, Chinese messaging channels, and a dashboard-first setup and diagnostics experience.
+
+> The project is under active development. APIs and configuration keys may change as the implementation evolves. Feedback and contributions are welcome.
+
+## Features
+
+- **Agent core loop**: multi-turn sessions, streaming/non-streaming model calls, tool calls, context compression, retry, rollback, and session search.
+- **Model protocols**: supports common interfaces such as `openai`, `openai-responses`, `ollama`, `gemini`, and `anthropic`.
+- **Tool system**: built-in tools for file operations, search, patching, Shell/Python/JavaScript execution, Todo, Memory, scheduled jobs, web search/fetch, and message delivery.
+- **Chinese messaging channels**: focuses on Feishu, DingTalk, WeCom, and Weixin; websocket / stream first, with Weixin iLink long-poll retained.
+- **Dashboard-first operations**: status, sessions, configuration, channel doctor, runtime settings, logs, skills, and scheduled jobs.
+- **Persistence**: SQLite-backed storage for sessions, policies, scheduled jobs, channel states, and project workbench data.
+- **Skills and memory**: local skills, Skills Hub imports, long-term memory, user context, and context file collaboration.
+- **Deployment**: supports `java -jar` and Docker / Docker Compose single-instance deployments.
+
+## Tech Stack
+
+- Java source compatibility: 1.8
+- Build: Maven, Node.js/npm for the Dashboard frontend
+- Web framework: Solon
+- AI orchestration: Solon AI, Solon AI Agent, Solon AI Skills
+- JSON: Snack4
+- Utilities: Hutool
+- Database: SQLite
+- Frontend: Vue / Vite
+- Container: Docker, Docker Compose
+
+## Quick Start
+
+### Requirements
+
+- JDK 8+ (JDK 17 recommended)
+- Maven 3.9+
+- Node.js 20+ and npm
+- Network access to your target LLM provider
+
+### Clone and Build
+
+```bash
+git clone https://github.com/chengliang4810/jimuqu-agent.git
+cd jimuqu-agent
+mvn -DskipTests package
+```
+
+Maven runs `npm install` and `npm run build` in the `web` directory during `generate-resources` by default. To build only the backend:
+
+```bash
+mvn -DskipTests -Dskip.web.build=true package
+```
+
+### Run
+
+```bash
+java -jar target/jimuqu-agent-0.0.1.jar
+```
+
+The default endpoint is:
+
+```text
+http://127.0.0.1:8080
+```
+
+On startup, the service creates a local `runtime/` directory for configuration, SQLite data, cache, logs, skills, and context files.
+
+### Docker Compose
+
+```bash
+docker compose up -d
+```
+
+The default Compose file mounts local `./runtime` to `/app/runtime` inside the container for persistent runtime data.
+
+## Configuration
+
+Default configuration lives in:
+
+```text
+src/main/resources/app.yml
+```
+
+Model providers are managed by the runtime configuration file and the Dashboard. The runtime file is created at:
+
+```text
+runtime/config.yml
+```
+
+Recommended model configuration structure:
+
+```yaml
+providers:
+  default:
+    name: Default Provider
+    baseUrl: https://subapi.jimuqu.com
+    apiKey: YOUR_API_KEY
+    defaultModel: gpt-5.4
+    dialect: openai-responses
+model:
+  providerKey: default
+  default: ""
+fallbackProviders: []
+```
+
+Common runtime settings:
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `server.port` | `8080` | HTTP server port |
+| `jimuqu.runtime.home` | `runtime` | Runtime root directory |
+| `jimuqu.runtime.stateDb` | `runtime/state.db` | SQLite database path |
+| `providers.<key>.baseUrl` | - | Model service base URL |
+| `providers.<key>.apiKey` | - | Model service API key |
+| `providers.<key>.defaultModel` | - | Default model for the provider |
+| `providers.<key>.dialect` | `openai-responses` | Protocol dialect |
+| `model.providerKey` | `default` | Active default provider |
+| `model.default` | empty | Global model override; when empty, provider `defaultModel` is used |
+| `jimuqu.llm.stream` | `false` | Enables streaming output |
+| `jimuqu.llm.reasoningEffort` | `medium` | Default reasoning effort |
+| `jimuqu.scheduler.enabled` | `true` | Enables scheduled jobs |
+
+Prefer the Dashboard for provider and default-model management, or edit `runtime/config.yml` directly. Keep secrets out of Git.
+
+## Messaging Channels
+
+Supported and prioritized channels:
+
+| Channel | Prefix | Inbound mode | Status |
+| --- | --- | --- | --- |
+| Feishu | `jimuqu.channels.feishu.*` | websocket / platform capabilities | In progress |
+| DingTalk | `jimuqu.channels.dingtalk.*` | stream mode | In progress |
+| WeCom | `jimuqu.channels.wecom.*` | websocket / platform capabilities | In progress |
+| Weixin | `jimuqu.channels.weixin.*` | iLink long-poll | In progress |
+
+The Dashboard includes channel status and doctor endpoints. Prefer the Dashboard for setup, diagnostics, and troubleshooting.
+
+## Slash Commands
+
+Common in-conversation commands:
+
+- `/new`: start a new session
+- `/retry`: retry the previous turn
+- `/undo`: undo the previous turn
+- `/branch`: branch from the current session
+- `/resume`: resume a session
+- `/status`: show runtime status
+- `/usage`: show token usage
+- `/model`: inspect or switch models
+- `/tools`: inspect tool state
+- `/skills`: manage skills
+- `/cron`: manage scheduled jobs
+- `/pairing`: channel user pairing and approvals
+- `/project`: project workbench and task breakdown
+- `/approve` / `/deny`: dangerous command approval
+
+## API Overview
+
+Main HTTP endpoints:
+
+- `GET /api/status`: runtime status
+- `POST /api/gateway/message`: signed gateway message injection
+- `GET /api/gateway/doctor`: channel diagnostics
+- `GET /api/sessions`: session list
+- `POST /api/chat/runs`: Dashboard chat run
+- `GET /api/config`: read configuration
+- `GET /api/runtime-config`: runtime settings
+- `GET /api/projects`: project workbench list
+- `POST /api/projects`: create project
+
+Dashboard APIs require a session token by default. Gateway injection uses HMAC signature headers.
+
+## Project Layout
+
+```text
+src/main/java/com/jimuqu/agent/
+├── agent/          # Agent profiles and project-workbench roles
+├── bootstrap/      # Solon startup, bean wiring, HTTP controllers
+├── config/         # Config loading, env overrides, path normalization
+├── context/        # AGENTS / MEMORY / USER / Skills context
+├── core/           # Domain models, repository interfaces, service interfaces
+├── engine/         # Agent loop, compression, delegation
+├── gateway/        # Messaging channels, auth, delivery, runtime refresh
+├── llm/            # Model protocol adapters and Solon AI integration
+├── project/        # Project workbench, todos, runs, questions
+├── scheduler/      # Cron and heartbeat scheduling
+├── skillhub/       # Skills Hub, imports, guardrails, sources
+├── storage/        # SQLite repository implementations
+├── support/        # Runtime support utilities
+├── tool/           # Built-in tool registry and implementations
+└── web/            # Dashboard backend services and controllers
+```
+
+## Testing
+
+Run the full Maven test lifecycle, including the frontend-bound build steps:
+
+```bash
+mvn test
+```
+
+Compile only the backend:
+
+```bash
+mvn -DskipTests -Dskip.web.build=true compile
+```
+
+Run selected tests:
+
+```bash
+mvn "-Dtest=ProjectWorkbenchCommandTest,DashboardControllerHttpTest" test
+```
+
+> In Windows PowerShell, quote `-Dtest=...` when using comma-separated test names.
+
+## Contributing
+
+Issues and pull requests are welcome. Before contributing, please check existing issues, run relevant tests, and describe the motivation, main implementation details, and verification scope in your pull request.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

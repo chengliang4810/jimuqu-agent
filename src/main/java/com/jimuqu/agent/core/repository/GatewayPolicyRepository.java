@@ -78,6 +78,11 @@ public interface GatewayPolicyRepository {
      */
     void savePairingRequest(PairingRequestRecord record) throws Exception;
 
+    default boolean createAdminClaimRequestIfAbsent(PairingRequestRecord record) throws Exception {
+        savePairingRequest(record);
+        return true;
+    }
+
     /**
      * 删除指定 pairing 请求。
      */

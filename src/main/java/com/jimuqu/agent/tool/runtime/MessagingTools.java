@@ -34,10 +34,19 @@ public class MessagingTools {
                               @Param(name = "text", description = "要发送的文本") String text,
                               @Param(name = "mediaPaths", description = "可选本地附件路径数组", required = false) List<String> mediaPaths,
                               @Param(name = "channelExtrasJson", description = "可选渠道扩展 JSON；例如钉钉 AI card 所需参数", required = false) String channelExtrasJson) throws Exception {
-        String[] parts = sourceKey.split(":", 3);
+        String[] parts = sourceKey == null ? new String[0] : sourceKey.split(":", 3);
+        if (parts.length < 2) {
+            return error("invalid sourceKey");
+        }
         PlatformType sourcePlatform = PlatformType.fromName(parts[0]);
+        if (sourcePlatform == null) {
+            return error("invalid source platform: " + parts[0]);
+        }
         String sourceChatId = parts[1];
         PlatformType targetPlatform = PlatformType.fromName(platform == null || platform.trim().length() == 0 ? parts[0] : platform);
+        if (targetPlatform == null) {
+            return error("invalid target platform: " + platform);
+        }
         String targetChatId = chatId == null || chatId.trim().length() == 0 ? parts[1] : chatId;
         String targetUserId = parts.length > 2 ? parts[2] : null;
         List<MessageAttachment> attachments = resolveAttachments(targetPlatform, mediaPaths);
@@ -59,6 +68,10 @@ public class MessagingTools {
                 attachments != null && !attachments.isEmpty()
         );
         return "Message delivered";
+    }
+
+    private String error(String message) {
+        return new ONode().set("success", false).set("error", message).toJson();
     }
 
     private List<MessageAttachment> resolveAttachments(PlatformType platform, List<String> mediaPaths) {

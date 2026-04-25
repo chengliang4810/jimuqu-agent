@@ -30,14 +30,14 @@ public enum PlatformType {
     WEIXIN;
 
     /**
-     * 按名称解析平台，无法识别时回退为内存平台。
+     * 按名称解析平台，无法识别时返回 null。
      *
      * @param name 平台名
      * @return 平台枚举
      */
     public static PlatformType fromName(String name) {
         if (name == null) {
-            return MEMORY;
+            return null;
         }
 
         String normalized = name.trim().toUpperCase();
@@ -47,6 +47,6 @@ public enum PlatformType {
             }
         }
 
-        return MEMORY;
+        return null;
     }
 }

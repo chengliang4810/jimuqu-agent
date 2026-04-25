@@ -14,6 +14,8 @@ import org.noear.solon.ai.agent.react.intercept.HITLTask;
 import org.noear.solon.flow.FlowContext;
 
 import java.text.Normalizer;
+import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -119,9 +121,9 @@ public class DangerousCommandApprovalService {
         }
 
         if (scope == ApprovalScope.SESSION) {
-            addSessionApproval(session.getContext(), pending.getPatternKey());
+            addSessionApproval(session.getContext(), pending.approvalKey());
         } else if (scope == ApprovalScope.ALWAYS) {
-            addAlwaysApproval(pending.getPatternKey());
+            addAlwaysApproval(pending.approvalKey());
         }
 
         String comment = scope.comment();
@@ -210,11 +212,52 @@ public class DangerousCommandApprovalService {
         return loadSessionApprovals(session.getContext()).contains(patternKey);
     }
 
+    public boolean isSessionApproved(AgentSession session, String toolName, String patternKey, String command) {
+        if (session == null || StrUtil.hasBlank(toolName, patternKey)) {
+            return false;
+        }
+        return loadSessionApprovals(session.getContext()).contains(approvalKey(toolName, patternKey, normalize(command)));
+    }
+
     public boolean isAlwaysApproved(String patternKey) {
         if (StrUtil.isBlank(patternKey)) {
             return false;
         }
         return loadAlwaysApprovedPatterns().contains(patternKey);
+    }
+
+    public boolean isAlwaysApproved(String toolName, String patternKey, String command) {
+        if (StrUtil.hasBlank(toolName, patternKey)) {
+            return false;
+        }
+        return loadAlwaysApprovedPatterns().contains(approvalKey(toolName, patternKey, normalize(command)));
+    }
+
+
+    public List<String> listSessionApprovals(AgentSession session) {
+        if (session == null) {
+            return new ArrayList<String>();
+        }
+        return new ArrayList<String>(loadSessionApprovals(session.getContext()));
+    }
+
+    public List<String> listAlwaysApprovals() {
+        return new ArrayList<String>(loadAlwaysApprovedPatterns());
+    }
+
+    public void clearSessionApprovals(AgentSession session) throws Exception {
+        if (session == null) {
+            return;
+        }
+        session.getContext().remove(CONTEXT_SESSION_APPROVALS);
+        session.getContext().remove(CONTEXT_PENDING_APPROVAL);
+        session.updateSnapshot();
+    }
+
+    public void clearAlwaysApprovals() throws Exception {
+        if (globalSettingRepository != null) {
+            globalSettingRepository.set(AgentSettingConstants.DANGEROUS_COMMAND_ALWAYS_PATTERNS, ONode.serialize(new ArrayList<String>()));
+        }
     }
 
     public static String commandFromCardActionPayload(Object raw) {
@@ -249,11 +292,17 @@ public class DangerousCommandApprovalService {
             return null;
         }
 
+        String approvalKey = approvalKey(toolName, detection.getPatternKey(), detection.getNormalizedCode());
+        PendingApproval pending = getPendingApproval(trace.getSession());
         if (trace.getContext().getAs(HITL.DECISION_PREFIX + toolName) != null) {
-            return detection.getDescription();
+            if (pending != null && approvalKey.equals(pending.approvalKey())) {
+                trace.getContext().remove(CONTEXT_PENDING_APPROVAL);
+                return null;
+            }
+            trace.getContext().remove(HITL.DECISION_PREFIX + toolName);
         }
 
-        if (isApproved(trace.getContext(), detection.getPatternKey())) {
+        if (isApproved(trace.getContext(), approvalKey)) {
             trace.getContext().remove(CONTEXT_PENDING_APPROVAL);
             return null;
         }
@@ -268,6 +317,8 @@ public class DangerousCommandApprovalService {
         payload.put("patternKey", detection.getPatternKey());
         payload.put("description", detection.getDescription());
         payload.put("command", StrUtil.nullToEmpty(code));
+        payload.put("commandHash", commandHash(detection.getNormalizedCode()));
+        payload.put("approvalKey", approvalKey(toolName, detection.getPatternKey(), detection.getNormalizedCode()));
         payload.put("createdAt", System.currentTimeMillis());
         return payload;
     }
@@ -284,8 +335,8 @@ public class DangerousCommandApprovalService {
         return buffer.toString();
     }
 
-    private boolean isApproved(FlowContext context, String patternKey) {
-        return loadSessionApprovals(context).contains(patternKey) || loadAlwaysApprovedPatterns().contains(patternKey);
+    private boolean isApproved(FlowContext context, String approvalKey) {
+        return loadSessionApprovals(context).contains(approvalKey) || loadAlwaysApprovedPatterns().contains(approvalKey);
     }
 
     private void addSessionApproval(FlowContext context, String patternKey) {
@@ -369,6 +420,8 @@ public class DangerousCommandApprovalService {
         String patternKey = stringValue(map.get("patternKey"));
         String description = stringValue(map.get("description"));
         String command = stringValue(map.get("command"));
+        String commandHash = stringValue(map.get("commandHash"));
+        String approvalKey = stringValue(map.get("approvalKey"));
         if (StrUtil.hasBlank(toolName, patternKey)) {
             return null;
         }
@@ -378,6 +431,8 @@ public class DangerousCommandApprovalService {
         pending.setPatternKey(patternKey);
         pending.setDescription(description);
         pending.setCommand(command);
+        pending.setCommandHash(commandHash);
+        pending.setApprovalKey(approvalKey);
         return pending;
     }
 
@@ -455,6 +510,30 @@ public class DangerousCommandApprovalService {
         return normalized.trim();
     }
 
+    private String approvalKey(String toolName, String patternKey, String normalizedCode) {
+        return StrUtil.nullToEmpty(toolName).trim()
+                + ":" + StrUtil.nullToEmpty(patternKey).trim()
+                + ":" + commandHash(normalizedCode);
+    }
+
+    private String commandHash(String normalizedCode) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(StrUtil.nullToEmpty(normalizedCode).getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder();
+            for (byte value : hash) {
+                String hex = Integer.toHexString(value & 0xff);
+                if (hex.length() == 1) {
+                    builder.append('0');
+                }
+                builder.append(hex);
+            }
+            return builder.toString();
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to hash dangerous command", e);
+        }
+    }
+
     private static Pattern pattern(String regex) {
         return Pattern.compile(regex, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     }
@@ -480,6 +559,8 @@ public class DangerousCommandApprovalService {
         private String patternKey;
         private String description;
         private String command;
+        private String commandHash;
+        private String approvalKey;
 
         public String getToolName() {
             return toolName;
@@ -511,6 +592,26 @@ public class DangerousCommandApprovalService {
 
         public void setCommand(String command) {
             this.command = command;
+        }
+
+        public String getCommandHash() {
+            return commandHash;
+        }
+
+        public void setCommandHash(String commandHash) {
+            this.commandHash = commandHash;
+        }
+
+        public String getApprovalKey() {
+            return approvalKey;
+        }
+
+        public void setApprovalKey(String approvalKey) {
+            this.approvalKey = approvalKey;
+        }
+
+        public String approvalKey() {
+            return StrUtil.blankToDefault(approvalKey, StrUtil.nullToEmpty(toolName) + ":" + StrUtil.nullToEmpty(patternKey) + ":" + StrUtil.nullToEmpty(commandHash));
         }
     }
 

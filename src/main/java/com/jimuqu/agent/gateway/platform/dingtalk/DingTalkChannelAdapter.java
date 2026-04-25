@@ -50,6 +50,7 @@ import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.repository.ChannelStateRepository;
 import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
 import com.jimuqu.agent.support.AttachmentCacheService;
+import com.jimuqu.agent.support.BoundedAttachmentIO;
 import com.jimuqu.agent.support.constants.GatewayBehaviorConstants;
 import org.noear.snack4.ONode;
 
@@ -396,7 +397,7 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
         }
         try {
             String downloadUrl = resolveDownloadUrl(downloadCode);
-            byte[] data = HttpRequest.get(downloadUrl).timeout(30000).execute().bodyBytes();
+            byte[] data = BoundedAttachmentIO.downloadHutool(downloadUrl, 30000, BoundedAttachmentIO.DEFAULT_MAX_BYTES);
             attachments.add(attachmentCacheService.cacheBytes(PlatformType.DINGTALK, kind, fileName, mimeType, false, transcribedText, data));
         } catch (Exception e) {
             log.warn("[DINGTALK] attachment download failed: kind={}, code={}, message={}", kind, downloadCode, e.getMessage());

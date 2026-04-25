@@ -33,17 +33,17 @@ public class VersionUpdateCommandTest {
         GatewayReply checkReply = commandService.handle(message, "/version check");
         GatewayReply runReply = commandService.handle(message, "/version update");
 
-        assertThat(versionReply.getContent()).contains("应用版本");
+        assertThat(versionReply.getContent()).contains("搴旂敤鐗堟湰");
         assertThat(updateService.formatCalls).isEqualTo(2);
         assertThat(updateService.startCalls).isEqualTo(1);
-        assertThat(checkReply.getContent()).contains("应用版本");
+        assertThat(checkReply.getContent()).contains("搴旂敤鐗堟湰");
         assertThat(runReply.getContent()).contains("started update");
     }
 
     private DefaultCommandService commandService(TestEnvironment env, AppUpdateService updateService) {
         GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(
                 env.appConfig,
-                new LinkedHashMap<com.jimuqu.agent.core.enums.PlatformType, com.jimuqu.agent.core.service.ChannelAdapter>()
+                new com.jimuqu.agent.gateway.service.ChannelConnectionManager(new LinkedHashMap<com.jimuqu.agent.core.enums.PlatformType, com.jimuqu.agent.core.service.ChannelAdapter>())
         );
         LlmProviderService llmProviderService = new LlmProviderService(env.appConfig);
         RuntimeSettingsService runtimeSettingsService = new RuntimeSettingsService(
@@ -95,7 +95,9 @@ public class VersionUpdateCommandTest {
                 runtimeSettingsService,
                 displaySettingsService,
                 updateService,
-                env.dangerousCommandApprovalService
+                env.dangerousCommandApprovalService,
+                env.agentProfileService,
+                env.projectService
         );
     }
 
@@ -110,7 +112,7 @@ public class VersionUpdateCommandTest {
         @Override
         public String formatVersionReport(boolean forceRefresh) {
             formatCalls++;
-            return "应用版本: v0.0.1";
+            return "搴旂敤鐗堟湰: v0.0.1";
         }
 
         @Override

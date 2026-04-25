@@ -5,6 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
+import com.jimuqu.agent.support.RuntimePathGuard;
 import lombok.RequiredArgsConstructor;
 import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
@@ -33,15 +34,27 @@ public class FileTools {
      */
     private final String sourceKey;
 
+    private final RuntimePathGuard pathGuard;
+
+    public FileTools(CheckpointService checkpointService,
+                     SessionRepository sessionRepository,
+                     String sourceKey) {
+        this(checkpointService, sessionRepository, sourceKey, defaultPathGuard());
+    }
+
+    private static RuntimePathGuard defaultPathGuard() {
+        return new RuntimePathGuard(com.jimuqu.agent.config.AppConfig.load(new org.noear.solon.core.Props()));
+    }
+
     @ToolMapping(name = "read_file", description = "Read a UTF-8 text file from disk by absolute or relative path.")
     public String readFile(@Param(name = "path", description = "文件绝对路径或相对路径") String path) {
-        return FileUtil.readUtf8String(FileUtil.file(path));
+        return FileUtil.readUtf8String(pathGuard.requireAllowedToolPath(path));
     }
 
     @ToolMapping(name = "write_file", description = "Write UTF-8 text content to a file path, creating parent directories when needed.")
     public String writeFile(@Param(name = "path", description = "目标文件路径") String path,
                             @Param(name = "content", description = "写入的 UTF-8 文本内容") String content) throws Exception {
-        File file = FileUtil.file(path);
+        File file = pathGuard.requireAllowedToolPath(path);
         checkpoint(file);
         FileUtil.mkParentDirs(file);
         FileUtil.writeUtf8String(content, file);
@@ -52,10 +65,13 @@ public class FileTools {
     public String patch(@Param(name = "path", description = "目标文件路径") String path,
                         @Param(name = "findText", description = "要替换的原始文本") String findText,
                         @Param(name = "replaceText", description = "替换后的文本") String replaceText) throws Exception {
-        File file = FileUtil.file(path);
+        File file = pathGuard.requireAllowedToolPath(path);
         String original = FileUtil.readUtf8String(file);
         if (StrUtil.isEmpty(findText) || !original.contains(findText)) {
             return "Patch target not found in file: " + file.getAbsolutePath();
+        }
+        if (original.indexOf(findText) != original.lastIndexOf(findText)) {
+            return "Patch target is not unique in file: " + file.getAbsolutePath();
         }
         checkpoint(file);
         FileUtil.writeUtf8String(original.replace(findText, replaceText), file);
@@ -65,10 +81,15 @@ public class FileTools {
     @ToolMapping(name = "search_files", description = "Search for text inside files under a directory path.")
     public String searchFiles(@Param(name = "rootPath", description = "搜索根目录") String rootPath,
                               @Param(name = "pattern", description = "要搜索的文本模式") String pattern) {
-        List<File> files = FileUtil.loopFiles(FileUtil.file(rootPath));
+        File root = pathGuard.requireAllowedToolPath(rootPath);
+        List<File> files = FileUtil.loopFiles(root);
         StringBuilder buffer = new StringBuilder();
+        int scanned = 0;
         for (File file : files) {
             if (file.isDirectory()) {
+                continue;
+            }
+            if (++scanned > 2000 || file.length() > 1024L * 1024L) {
                 continue;
             }
 

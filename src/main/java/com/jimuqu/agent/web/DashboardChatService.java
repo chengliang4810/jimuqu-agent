@@ -13,6 +13,7 @@ import com.jimuqu.agent.core.service.CommandService;
 import com.jimuqu.agent.core.service.ConversationEventSink;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.support.AttachmentCacheService;
+import com.jimuqu.agent.support.BoundedExecutorFactory;
 import com.jimuqu.agent.support.IdSupport;
 import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.constants.CompressionConstants;
@@ -35,13 +36,10 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Dashboard chat 运行服务。
@@ -66,16 +64,11 @@ public class DashboardChatService {
         this.conversationOrchestrator = conversationOrchestrator;
         this.commandService = commandService;
         this.attachmentCacheService = attachmentCacheService;
-        this.executor = Executors.newCachedThreadPool(new ThreadFactory() {
-            private final AtomicInteger sequence = new AtomicInteger(1);
+        this.executor = BoundedExecutorFactory.fixed("dashboard-chat-run", 4, 128);
+    }
 
-            @Override
-            public Thread newThread(Runnable runnable) {
-                Thread thread = new Thread(runnable, "dashboard-chat-run-" + sequence.getAndIncrement());
-                thread.setDaemon(true);
-                return thread;
-            }
-        });
+    public void shutdown() {
+        executor.shutdownNow();
     }
 
     public Map<String, Object> uploads(UploadedFile[] files) throws Exception {
@@ -286,11 +279,13 @@ public class DashboardChatService {
         if (request.attachments != null && !request.attachments.isEmpty()) {
             List<MessageAttachment> attachments = new ArrayList<MessageAttachment>();
             for (AttachmentInput item : request.attachments) {
-                MessageAttachment attachment = new MessageAttachment();
-                attachment.setOriginalName(item.name);
-                attachment.setLocalPath(item.localPath);
-                attachment.setKind(item.kind);
-                attachment.setMimeType(item.mimeType);
+                MessageAttachment attachment = attachmentCacheService.fromMediaCacheFile(
+                        PlatformType.MEMORY,
+                        new java.io.File(item.localPath),
+                        item.kind,
+                        false,
+                        null
+                );
                 attachments.add(attachment);
             }
             message.setAttachments(attachments);

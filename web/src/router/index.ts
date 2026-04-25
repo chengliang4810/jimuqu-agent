@@ -21,6 +21,11 @@ const router = createRouter({
       component: () => import('@/views/hermes/JobsView.vue'),
     },
     {
+      path: '/hermes/projects',
+      name: 'hermes.projects',
+      component: () => import('@/views/hermes/ProjectsView.vue'),
+    },
+    {
       path: '/hermes/models',
       name: 'hermes.models',
       component: () => import('@/views/hermes/ModelsView.vue'),

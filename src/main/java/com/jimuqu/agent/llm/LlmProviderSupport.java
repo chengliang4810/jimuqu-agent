@@ -35,10 +35,22 @@ public final class LlmProviderSupport {
 
         String normalized = stripTrailingSlash(raw);
         String normalizedDialect = normalizeDialect(dialect);
+        if (StrUtil.endWithIgnoreCase(normalized, "/v1/chat/completions")
+                || StrUtil.endWithIgnoreCase(normalized, "/v1/responses")
+                || StrUtil.endWithIgnoreCase(normalized, "/api/chat")
+                || StrUtil.endWithIgnoreCase(normalized, "/v1/messages")) {
+            return normalized;
+        }
         if (LlmConstants.PROVIDER_OPENAI.equals(normalizedDialect)) {
+            if (StrUtil.endWithIgnoreCase(normalized, "/v1")) {
+                return normalized + "/chat/completions";
+            }
             return normalized + "/v1/chat/completions";
         }
         if (LlmConstants.PROVIDER_OPENAI_RESPONSES.equals(normalizedDialect)) {
+            if (StrUtil.endWithIgnoreCase(normalized, "/v1")) {
+                return normalized + "/responses";
+            }
             return normalized + "/v1/responses";
         }
         if (LlmConstants.PROVIDER_OLLAMA.equals(normalizedDialect)) {

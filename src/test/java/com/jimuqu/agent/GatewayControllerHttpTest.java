@@ -1,6 +1,8 @@
 package com.jimuqu.agent;
 
 import cn.hutool.core.io.FileUtil;
+import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.support.RuntimePathGuard;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.core.model.SessionRecord;
@@ -23,6 +25,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.URL;
@@ -33,6 +37,7 @@ import java.util.Arrays;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class GatewayControllerHttpTest {
+    private static final String GATEWAY_SECRET = "gateway-test-secret";
     private static int port;
     private static File runtimeHome;
 
@@ -48,6 +53,7 @@ public class GatewayControllerHttpTest {
                 "--jimuqu.runtime.skillsDir=" + new File(runtimeHome, "skills").getAbsolutePath(),
                 "--jimuqu.runtime.cacheDir=" + new File(runtimeHome, "cache").getAbsolutePath(),
                 "--jimuqu.runtime.stateDb=" + new File(runtimeHome, "state.db").getAbsolutePath(),
+                "--jimuqu.gateway.injectionSecret=" + GATEWAY_SECRET,
                 "--jimuqu.scheduler.enabled=false"
         });
 
@@ -103,7 +109,7 @@ public class GatewayControllerHttpTest {
         sessionRepository.bindNewSession(sourceKey);
 
         File file = FileUtil.file(runtimeHome, "cache", "http-rollback.txt");
-        FileTools fileTools = new FileTools(checkpointService, sessionRepository, sourceKey);
+        FileTools fileTools = new FileTools(checkpointService, sessionRepository, sourceKey, new RuntimePathGuard(bean(AppConfig.class)));
         fileTools.writeFile(file.getAbsolutePath(), "v1");
         fileTools.writeFile(file.getAbsolutePath(), "v2");
 
@@ -155,7 +161,13 @@ public class GatewayControllerHttpTest {
         connection.setRequestMethod("POST");
         connection.setDoOutput(true);
         connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-        byte[] body = ONode.serialize(message).getBytes(StandardCharsets.UTF_8);
+        String bodyText = ONode.serialize(message);
+        byte[] body = bodyText.getBytes(StandardCharsets.UTF_8);
+        String timestamp = String.valueOf(System.currentTimeMillis() / 1000L);
+        String nonce = chatId + "-" + System.nanoTime();
+        connection.setRequestProperty("X-Jimuqu-Timestamp", timestamp);
+        connection.setRequestProperty("X-Jimuqu-Nonce", nonce);
+        connection.setRequestProperty("X-Jimuqu-Signature", "sha256=" + hmac(timestamp + "." + nonce + "." + bodyText));
         connection.setFixedLengthStreamingMode(body.length);
         OutputStream outputStream = connection.getOutputStream();
         try {
@@ -176,6 +188,21 @@ public class GatewayControllerHttpTest {
             reader.close();
             connection.disconnect();
         }
+    }
+
+    private static String hmac(String payload) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(GATEWAY_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        byte[] bytes = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+        StringBuilder builder = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) {
+            String hex = Integer.toHexString(value & 0xff);
+            if (hex.length() == 1) {
+                builder.append('0');
+            }
+            builder.append(hex);
+        }
+        return builder.toString();
     }
 
     private static void waitForHealth() throws Exception {

@@ -69,7 +69,11 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 
   const contentType = res.headers.get('content-type') || ''
   if (contentType.includes('application/json')) {
-    return res.json()
+    const json = await res.json()
+    if (json && typeof json === 'object' && 'success' in json && 'data' in json) {
+      return json.data as T
+    }
+    return json
   }
 
   return (await res.text()) as T

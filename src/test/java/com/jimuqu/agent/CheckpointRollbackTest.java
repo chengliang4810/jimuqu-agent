@@ -2,6 +2,7 @@ package com.jimuqu.agent;
 
 import cn.hutool.core.io.FileUtil;
 import com.jimuqu.agent.support.TestEnvironment;
+import com.jimuqu.agent.support.RuntimePathGuard;
 import com.jimuqu.agent.tool.runtime.FileTools;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +17,7 @@ public class CheckpointRollbackTest {
         env.sessionRepository.bindNewSession("MEMORY:room-a:user-a");
 
         File file = FileUtil.file(env.appConfig.getRuntime().getCacheDir(), "sample.txt");
-        FileTools fileTools = new FileTools(env.checkpointService, env.sessionRepository, "MEMORY:room-a:user-a");
+        FileTools fileTools = new FileTools(env.checkpointService, env.sessionRepository, "MEMORY:room-a:user-a", new RuntimePathGuard(env.appConfig));
 
         fileTools.writeFile(file.getAbsolutePath(), "v1");
         fileTools.writeFile(file.getAbsolutePath(), "v2");

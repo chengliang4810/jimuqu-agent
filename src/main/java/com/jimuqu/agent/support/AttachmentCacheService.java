@@ -64,15 +64,35 @@ public class AttachmentCacheService {
         if (file == null || !file.isFile()) {
             throw new IllegalArgumentException("Attachment file does not exist: " + file);
         }
+        File canonical = FileUtil.file(file).getAbsoluteFile();
+        FileUtil.file(platformDir(platform)).getAbsoluteFile();
+        if (!isUnderCacheRoot(canonical)) {
+            throw new IllegalArgumentException("Attachment file is outside runtime cache: " + file);
+        }
 
         MessageAttachment attachment = new MessageAttachment();
-        attachment.setKind(normalizeKind(explicitKind, file.getName(), null));
-        attachment.setLocalPath(file.getAbsolutePath());
-        attachment.setOriginalName(file.getName());
-        attachment.setMimeType(normalizeMimeType(null, file.getName()));
+        attachment.setKind(normalizeKind(explicitKind, canonical.getName(), null));
+        attachment.setLocalPath(canonical.getAbsolutePath());
+        attachment.setOriginalName(safeName(canonical.getName()));
+        attachment.setMimeType(normalizeMimeType(null, canonical.getName()));
         attachment.setFromQuote(fromQuote);
         attachment.setTranscribedText(StrUtil.nullToEmpty(transcribedText).trim());
         return attachment;
+    }
+
+    public MessageAttachment fromMediaCacheFile(PlatformType platform,
+                                                File file,
+                                                String explicitKind,
+                                                boolean fromQuote,
+                                                String transcribedText) {
+        if (file == null || !file.isFile()) {
+            throw new IllegalArgumentException("Attachment file does not exist: " + file);
+        }
+        File canonical = FileUtil.file(file).getAbsoluteFile();
+        if (!isUnderMediaRoot(canonical)) {
+            throw new IllegalArgumentException("Attachment file is outside media cache: " + file);
+        }
+        return fromLocalFile(platform, canonical, explicitKind, fromQuote, transcribedText);
     }
 
     public File platformDir(PlatformType platform) {
@@ -196,7 +216,45 @@ public class AttachmentCacheService {
                 .replace("<", "_")
                 .replace(">", "_")
                 .replace("|", "_");
+        StringBuilder cleaned = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            cleaned.append(Character.isISOControl(ch) ? '_' : ch);
+        }
+        value = cleaned.toString().trim();
+        if (value.length() > 120) {
+            value = value.substring(0, 120);
+        }
         return value.length() == 0 ? "attachment.bin" : value;
+    }
+
+    private boolean isUnderCacheRoot(File file) {
+        File runtimeCacheRoot = cacheRoot.getParentFile() == null ? cacheRoot : cacheRoot.getParentFile();
+        return isUnder(file, runtimeCacheRoot);
+    }
+
+    private boolean isUnderMediaRoot(File file) {
+        return isUnder(file, cacheRoot);
+    }
+
+    private boolean isUnder(File file, File root) {
+        try {
+            if (isUnderPath(file.getCanonicalFile(), root.getCanonicalFile())) {
+                return true;
+            }
+        } catch (Exception ignored) {
+        }
+        return isUnderPath(file.getAbsoluteFile(), root.getAbsoluteFile());
+    }
+
+    private boolean isUnderPath(File file, File root) {
+        String rootPath = root.toPath().toAbsolutePath().normalize().toString();
+        String filePath = file.toPath().toAbsolutePath().normalize().toString();
+        if (File.separatorChar == '\\') {
+            rootPath = rootPath.toLowerCase(Locale.ROOT);
+            filePath = filePath.toLowerCase(Locale.ROOT);
+        }
+        return filePath.equals(rootPath) || filePath.startsWith(rootPath + File.separator);
     }
 
     private static String extension(String name) {

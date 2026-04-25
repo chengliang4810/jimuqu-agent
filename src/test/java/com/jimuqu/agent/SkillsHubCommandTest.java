@@ -79,7 +79,7 @@ public class SkillsHubCommandTest {
     }
 
     private DefaultCommandService commandService(TestEnvironment env, SkillHubService skillHubService) {
-        GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(env.appConfig, new java.util.LinkedHashMap<com.jimuqu.agent.core.enums.PlatformType, com.jimuqu.agent.core.service.ChannelAdapter>());
+        GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(env.appConfig, new com.jimuqu.agent.gateway.service.ChannelConnectionManager(new java.util.LinkedHashMap<com.jimuqu.agent.core.enums.PlatformType, com.jimuqu.agent.core.service.ChannelAdapter>()));
         LlmProviderService llmProviderService = new LlmProviderService(env.appConfig);
         RuntimeSettingsService runtimeSettingsService = new RuntimeSettingsService(
                 env.appConfig,
@@ -131,7 +131,9 @@ public class SkillsHubCommandTest {
                 runtimeSettingsService,
                 displaySettingsService,
                 appUpdateService,
-                env.dangerousCommandApprovalService
+                env.dangerousCommandApprovalService,
+                env.agentProfileService,
+                env.projectService
         );
     }
 

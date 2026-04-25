@@ -12,6 +12,7 @@ import com.jimuqu.agent.core.service.SessionSearchService;
 import com.jimuqu.agent.core.service.SkillHubService;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.support.AttachmentCacheService;
+import com.jimuqu.agent.support.RuntimePathGuard;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.support.constants.ToolNameConstants;
@@ -139,6 +140,26 @@ public class DefaultToolRegistry implements ToolRegistry {
      */
     private final RuntimeSettingsService runtimeSettingsService;
 
+    private final RuntimePathGuard pathGuard;
+
+    public DefaultToolRegistry(AppConfig appConfig,
+                               SqlitePreferenceStore preferenceStore,
+                               SessionRepository sessionRepository,
+                               CronJobRepository cronJobRepository,
+                               DeliveryService deliveryService,
+                               MemoryService memoryService,
+                               SessionSearchService sessionSearchService,
+                               LocalSkillService localSkillService,
+                               SkillHubService skillHubService,
+                               CheckpointService checkpointService,
+                               DelegationService delegationService,
+                               AttachmentCacheService attachmentCacheService,
+                               RuntimeSettingsService runtimeSettingsService) {
+        this(appConfig, preferenceStore, sessionRepository, cronJobRepository, deliveryService, memoryService,
+                sessionSearchService, localSkillService, skillHubService, checkpointService, delegationService,
+                attachmentCacheService, runtimeSettingsService, new RuntimePathGuard(appConfig));
+    }
+
     @Override
     public List<String> listToolNames() {
         return new ArrayList<String>(TOOL_NAMES);
@@ -148,7 +169,7 @@ public class DefaultToolRegistry implements ToolRegistry {
     public List<Object> resolveEnabledTools(String sourceKey) {
         List<Object> tools = new ArrayList<Object>();
 
-        FileTools fileTools = new FileTools(checkpointService, sessionRepository, sourceKey);
+        FileTools fileTools = new FileTools(checkpointService, sessionRepository, sourceKey, pathGuard);
         TodoTools todoTools = new TodoTools(appConfig, sourceKey);
         MemoryTools memoryTools = new MemoryTools(memoryService);
         SessionSearchTools sessionSearchTools = new SessionSearchTools(sessionSearchService, sourceKey);
@@ -166,9 +187,6 @@ public class DefaultToolRegistry implements ToolRegistry {
         WebsearchTool websearchTool = WebsearchTool.getInstance();
         WebfetchTool webfetchTool = WebfetchTool.getInstance();
         CodeSearchTool codeSearchTool = CodeSearchTool.getInstance();
-        boolean shellSkillAdded = false;
-        boolean pythonSkillAdded = false;
-        boolean nodejsSkillAdded = false;
         boolean clockSkillAdded = false;
 
         for (String toolName : TOOL_NAMES) {
@@ -184,32 +202,27 @@ public class DefaultToolRegistry implements ToolRegistry {
                 tools.add(new FileTools.PatchTool(fileTools));
             } else if (ToolNameConstants.SEARCH_FILES.equals(toolName)) {
                 tools.add(new FileTools.SearchFilesTool(fileTools));
-            } else if (ToolNameConstants.EXISTS_CMD.equals(toolName)
-                    || ToolNameConstants.LIST_FILES.equals(toolName)
-                    || ToolNameConstants.EXECUTE_SHELL.equals(toolName)) {
-                if (!shellSkillAdded) {
-                    tools.add(shellSkill);
-                    shellSkillAdded = true;
-                }
+            } else if (ToolNameConstants.EXISTS_CMD.equals(toolName)) {
+                tools.add(new SystemSkillTools.ExistsCmdTool(shellSkill));
+            } else if (ToolNameConstants.LIST_FILES.equals(toolName)) {
+                tools.add(new SystemSkillTools.ListFilesTool(shellSkill));
+            } else if (ToolNameConstants.EXECUTE_SHELL.equals(toolName)) {
+                tools.add(new SystemSkillTools.ExecuteShellTool(shellSkill));
             } else if (ToolNameConstants.EXECUTE_PYTHON.equals(toolName)) {
-                if (!pythonSkillAdded) {
-                    tools.add(pythonSkill);
-                    pythonSkillAdded = true;
-                }
+                tools.add(new SystemSkillTools.ExecutePythonTool(pythonSkill));
             } else if (ToolNameConstants.EXECUTE_JS.equals(toolName)) {
-                if (!nodejsSkillAdded) {
-                    tools.add(nodejsSkill);
-                    nodejsSkillAdded = true;
-                }
+                tools.add(new SystemSkillTools.ExecuteJsTool(nodejsSkill));
             } else if (ToolNameConstants.GET_CURRENT_TIME.equals(toolName)) {
                 if (!clockSkillAdded) {
                     tools.add(systemClockSkill);
                     clockSkillAdded = true;
                 }
-            } else if (ToolNameConstants.CONFIG_GET.equals(toolName)
-                    || ToolNameConstants.CONFIG_SET.equals(toolName)
-                    || ToolNameConstants.CONFIG_SET_SECRET.equals(toolName)) {
-                tools.add(configTools);
+            } else if (ToolNameConstants.CONFIG_GET.equals(toolName)) {
+                tools.add(new ConfigTools.ConfigGetTool(configTools));
+            } else if (ToolNameConstants.CONFIG_SET.equals(toolName)) {
+                tools.add(new ConfigTools.ConfigSetTool(configTools));
+            } else if (ToolNameConstants.CONFIG_SET_SECRET.equals(toolName)) {
+                tools.add(new ConfigTools.ConfigSetSecretTool(configTools));
             } else if (ToolNameConstants.TODO.equals(toolName)) {
                 tools.add(todoTools);
             } else if (ToolNameConstants.MEMORY.equals(toolName)) {
@@ -293,7 +306,7 @@ public class DefaultToolRegistry implements ToolRegistry {
         try {
             return preferenceStore.isToolEnabled(sourceKey, toolName);
         } catch (SQLException e) {
-            return true;
+            return false;
         }
     }
 

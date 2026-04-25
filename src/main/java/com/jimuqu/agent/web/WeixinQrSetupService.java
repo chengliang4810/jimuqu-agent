@@ -6,6 +6,7 @@ import cn.hutool.http.ContentType;
 import cn.hutool.http.HttpRequest;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.config.RuntimeConfigResolver;
+import com.jimuqu.agent.support.BoundedExecutorFactory;
 import org.noear.snack4.ONode;
 
 import java.text.SimpleDateFormat;
@@ -16,7 +17,6 @@ import java.util.TimeZone;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * 微信 iLink QR 登录服务。
@@ -32,7 +32,7 @@ public class WeixinQrSetupService {
     private final DashboardConfigService configService;
     private final com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
     private final RuntimeConfigResolver configResolver;
-    private final ExecutorService executor = Executors.newCachedThreadPool();
+    private final ExecutorService executor = BoundedExecutorFactory.fixed("weixin-qr-setup", 2, 32);
     private final ConcurrentMap<String, TicketState> tickets = new ConcurrentHashMap<String, TicketState>();
 
     public WeixinQrSetupService(AppConfig appConfig,
@@ -59,6 +59,10 @@ public class WeixinQrSetupService {
             }
         });
         return toMap(state);
+    }
+
+    public void shutdown() {
+        executor.shutdownNow();
     }
 
     public Map<String, Object> get(String ticket) {

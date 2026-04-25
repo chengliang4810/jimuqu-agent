@@ -74,23 +74,17 @@ public class SqliteGatewayPolicyRepository implements GatewayPolicyRepository {
     }
 
     public boolean createPlatformAdminIfAbsent(PlatformAdminRecord record) throws Exception {
-        if (getPlatformAdmin(record.getPlatform()) != null) {
-            return false;
-        }
-
         Connection connection = database.openConnection();
         try {
-            PreparedStatement statement = connection.prepareStatement("insert into platform_admins (platform, user_id, user_name, chat_id, created_at) values (?, ?, ?, ?, ?)");
+            PreparedStatement statement = connection.prepareStatement("insert or ignore into platform_admins (platform, user_id, user_name, chat_id, created_at) values (?, ?, ?, ?, ?)");
             statement.setString(1, key(record.getPlatform()));
             statement.setString(2, record.getUserId());
             statement.setString(3, record.getUserName());
             statement.setString(4, record.getChatId());
             statement.setLong(5, record.getCreatedAt());
-            statement.executeUpdate();
+            int affected = statement.executeUpdate();
             statement.close();
-            return true;
-        } catch (Exception e) {
-            return false;
+            return affected > 0;
         } finally {
             connection.close();
         }
@@ -235,6 +229,27 @@ public class SqliteGatewayPolicyRepository implements GatewayPolicyRepository {
             statement.setLong(7, record.getExpiresAt());
             statement.executeUpdate();
             statement.close();
+        } finally {
+            connection.close();
+        }
+    }
+
+    public boolean createAdminClaimRequestIfAbsent(PairingRequestRecord record) throws Exception {
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement("insert or ignore into pairing_requests (platform, code, user_id, user_name, chat_id, created_at, expires_at) values (?, ?, ?, ?, ?, ?, ?)");
+            statement.setString(1, key(record.getPlatform()));
+            statement.setString(2, ADMIN_CLAIM_CODE);
+            statement.setString(3, record.getUserId());
+            statement.setString(4, record.getUserName());
+            statement.setString(5, record.getChatId());
+            statement.setLong(6, record.getCreatedAt());
+            statement.setLong(7, record.getExpiresAt());
+            try {
+                return statement.executeUpdate() > 0;
+            } finally {
+                statement.close();
+            }
         } finally {
             connection.close();
         }

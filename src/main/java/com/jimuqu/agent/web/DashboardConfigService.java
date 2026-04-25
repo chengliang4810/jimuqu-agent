@@ -11,6 +11,8 @@ import org.yaml.snakeyaml.Yaml;
 import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -23,6 +25,7 @@ import java.util.Map;
  */
 public class DashboardConfigService {
     private static final List<String> PASSTHROUGH_PREFIXES = Arrays.asList("channels.wecom.groups.");
+    private static final Object WRITE_LOCK = new Object();
 
     private final AppConfig appConfig;
     private final com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
@@ -146,6 +149,9 @@ public class DashboardConfigService {
 
         addField(new FieldDefinition("gateway.allowedUsers", "list", "security", "全局允许用户列表"));
         addField(new FieldDefinition("gateway.allowAllUsers", "boolean", "security", "是否全局允许所有用户"));
+        addField(new FieldDefinition("gateway.injectionSecret", "password", "security", "HTTP 网关注入签名密钥"));
+        addField(new FieldDefinition("gateway.injectionMaxBodyBytes", "number", "security", "HTTP 网关注入最大请求体字节数"));
+        addField(new FieldDefinition("gateway.injectionReplayWindowSeconds", "number", "security", "HTTP 网关注入重放窗口秒数"));
 
         addChannelFields("feishu", "JIMUQU_FEISHU_ENABLED", "JIMUQU_FEISHU_ALLOWED_USERS", "JIMUQU_FEISHU_ALLOW_ALL_USERS", "JIMUQU_FEISHU_UNAUTHORIZED_DM_BEHAVIOR");
         addField(new FieldDefinition("channels.feishu.websocketUrl", "string", "messaging", "飞书 websocket 地址"));
@@ -378,15 +384,28 @@ public class DashboardConfigService {
     }
 
     private void writeOverrideFile(Map<String, Object> fieldValues) {
-        Map<String, Object> root = loadRawConfigRoot();
-        Map<String, Object> jimuqu = ensureJimuquRoot(root);
-        clearManagedFields(jimuqu);
-        for (Map.Entry<String, Object> entry : fieldValues.entrySet()) {
-            setNestedValue(jimuqu, entry.getKey(), entry.getValue());
-        }
+        synchronized (WRITE_LOCK) {
+            Map<String, Object> root = loadRawConfigRoot();
+            Map<String, Object> jimuqu = ensureJimuquRoot(root);
+            clearManagedFields(jimuqu);
+            for (Map.Entry<String, Object> entry : fieldValues.entrySet()) {
+                setNestedValue(jimuqu, entry.getKey(), entry.getValue());
+            }
 
-        FileUtil.mkParentDirs(appConfig.getRuntime().getConfigFile());
-        FileUtil.writeUtf8String(dump(root), new File(appConfig.getRuntime().getConfigFile()));
+            File configFile = new File(appConfig.getRuntime().getConfigFile());
+            FileUtil.mkParentDirs(configFile);
+            File temp = new File(configFile.getParentFile(), configFile.getName() + ".tmp");
+            FileUtil.writeUtf8String(dump(root), temp);
+            try {
+                try {
+                    Files.move(temp.toPath(), configFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                } catch (Exception atomicFailed) {
+                    Files.move(temp.toPath(), configFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+            } catch (Exception e) {
+                throw new IllegalStateException("Failed to write config file", e);
+            }
+        }
     }
 
     private String dumpYaml(Map<String, Object> fieldValues) {

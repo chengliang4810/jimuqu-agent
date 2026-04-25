@@ -65,7 +65,11 @@ public class GatewayAuthorizationService {
 
             PairingRequestRecord claim = repository.getAdminClaimRequest(platform);
             long now = System.currentTimeMillis();
-            if (claim == null || claim.getExpiresAt() < now) {
+            if (claim != null && claim.getExpiresAt() < now) {
+                repository.deletePairingRequest(platform, PairingConstants.ADMIN_CLAIM_CODE);
+                claim = null;
+            }
+            if (claim == null) {
                 PairingRequestRecord record = new PairingRequestRecord();
                 record.setPlatform(platform);
                 record.setCode(PairingConstants.ADMIN_CLAIM_CODE);
@@ -74,8 +78,8 @@ public class GatewayAuthorizationService {
                 record.setChatId(message.getChatId());
                 record.setCreatedAt(now);
                 record.setExpiresAt(now + PairingConstants.CODE_TTL_MILLIS);
-                repository.savePairingRequest(record);
-                claim = record;
+                repository.createAdminClaimRequestIfAbsent(record);
+                claim = repository.getAdminClaimRequest(platform);
             }
 
             if (sameUser(claim.getUserId(), message.getUserId())) {

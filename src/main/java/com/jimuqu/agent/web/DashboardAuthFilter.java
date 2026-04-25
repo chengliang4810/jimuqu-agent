@@ -27,7 +27,10 @@ public class DashboardAuthFilter implements Filter {
         }
 
         String path = ctx.path();
-        if (path.startsWith("/api/") && !authService.isPublicApiPath(path) && !authService.isAuthorized(ctx)) {
+        boolean signedGatewayInjection = "/api/gateway/message".equals(path)
+                && "POST".equalsIgnoreCase(ctx.method())
+                && ctx.header("X-Jimuqu-Signature") != null;
+        if (path.startsWith("/api/") && !signedGatewayInjection && !authService.isPublicApiPath(path) && !authService.isAuthorized(ctx)) {
             ctx.status(401);
             ctx.contentType("application/json;charset=UTF-8");
             ctx.output(ONode.serialize(Collections.singletonMap("detail", "Unauthorized")));

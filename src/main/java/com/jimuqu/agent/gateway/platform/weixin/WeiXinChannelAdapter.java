@@ -17,6 +17,7 @@ import com.jimuqu.agent.core.model.MessageAttachment;
 import com.jimuqu.agent.core.repository.ChannelStateRepository;
 import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
 import com.jimuqu.agent.support.AttachmentCacheService;
+import com.jimuqu.agent.support.BoundedAttachmentIO;
 import com.jimuqu.agent.support.constants.GatewayBehaviorConstants;
 import org.noear.snack4.ONode;
 
@@ -486,13 +487,13 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
                 clearLastError();
                 setDetail("long-poll active");
                 String nextSyncBuf = response.get("get_updates_buf").getString();
-                if (StrUtil.isNotBlank(nextSyncBuf)) {
-                    syncBuf = nextSyncBuf;
-                    saveSyncBuf(syncBuf);
-                }
                 ONode msgs = response.get("msgs");
                 for (int i = 0; i < msgs.size(); i++) {
                     processInboundMessage(msgs.get(i));
+                }
+                if (StrUtil.isNotBlank(nextSyncBuf)) {
+                    syncBuf = nextSyncBuf;
+                    saveSyncBuf(syncBuf);
                 }
             } catch (Exception e) {
                 log.warn("[WEIXIN] poll failed: {}", e.getMessage());
@@ -668,10 +669,7 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     }
 
     private byte[] downloadBytes(String url) {
-        return HttpRequest.get(url)
-                .timeout(60000)
-                .execute()
-                .bodyBytes();
+        return BoundedAttachmentIO.downloadHutool(url, 60000, BoundedAttachmentIO.DEFAULT_MAX_BYTES);
     }
 
     private byte[] parseAesKey(String hexAesKey, String encodedAesKey) {

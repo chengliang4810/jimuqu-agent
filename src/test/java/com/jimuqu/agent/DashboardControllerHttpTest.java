@@ -16,9 +16,12 @@ import java.net.ServerSocket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -38,7 +41,9 @@ public class DashboardControllerHttpTest {
                 "--jimuqu.runtime.skillsDir=" + new File(runtimeHome, "skills").getAbsolutePath(),
                 "--jimuqu.runtime.cacheDir=" + new File(runtimeHome, "cache").getAbsolutePath(),
                 "--jimuqu.runtime.stateDb=" + new File(runtimeHome, "state.db").getAbsolutePath(),
-                "--jimuqu.scheduler.enabled=false"
+                "--jimuqu.scheduler.enabled=false",
+                "--jimuqu.gateway.allowAllUsers=true",
+                "--jimuqu.gateway.injectionSecret=test-injection-secret"
         });
 
         waitForHealth();
@@ -68,14 +73,18 @@ public class DashboardControllerHttpTest {
         HttpResult status = request("GET", "/api/status", null, null);
         assertThat(status.status).isEqualTo(200);
         assertThat(status.body).contains("\"version\"");
-        assertThat(status.body).contains("\"setup_state\"");
+        assertThat(status.body).doesNotContain("\"setup_state\"");
+
+        HttpResult authorizedStatus = request("GET", "/api/status", null, token);
+        assertThat(authorizedStatus.status).isEqualTo(200);
+        assertThat(authorizedStatus.body).contains("\"setup_state\"");
 
         HttpResult unauthorizedRuntimeConfig = request("GET", "/api/runtime-config", null, null);
         assertThat(unauthorizedRuntimeConfig.status).isEqualTo(401);
 
         HttpResult authorizedRuntimeConfig = request("GET", "/api/runtime-config", null, token);
         assertThat(authorizedRuntimeConfig.status).isEqualTo(200);
-        assertThat(authorizedRuntimeConfig.body).contains("JIMUQU_LLM_API_KEY");
+        assertThat(authorizedRuntimeConfig.body).contains("JIMUQU_DEFAULT_PROVIDER_API_KEY");
 
         HttpResult unauthorizedDoctor = request("GET", "/api/gateway/doctor", null, null);
         assertThat(unauthorizedDoctor.status).isEqualTo(401);
@@ -131,14 +140,14 @@ public class DashboardControllerHttpTest {
         assertThat(FileUtil.readUtf8String(overrideFile)).contains("dashboard-model");
 
         HttpResult saveRuntimeConfig = request("PUT", "/api/runtime-config",
-                "{\"key\":\"JIMUQU_LLM_API_KEY\",\"value\":\"secret12345678\"}",
+                "{\"key\":\"JIMUQU_DEFAULT_PROVIDER_API_KEY\",\"value\":\"secret12345678\"}",
                 token);
         assertThat(saveRuntimeConfig.status).isEqualTo(200);
         assertThat(overrideFile).exists();
         assertThat(FileUtil.readUtf8String(overrideFile)).contains("apiKey: secret12345678");
 
         HttpResult revealRuntimeConfig = request("POST", "/api/runtime-config/reveal",
-                "{\"key\":\"JIMUQU_LLM_API_KEY\"}",
+                "{\"key\":\"JIMUQU_DEFAULT_PROVIDER_API_KEY\"}",
                 token);
         assertThat(revealRuntimeConfig.status).isEqualTo(200);
         assertThat(revealRuntimeConfig.body).contains("secret12345678");
@@ -225,6 +234,56 @@ public class DashboardControllerHttpTest {
         assertThat(undoEvents).contains("event: run.completed");
     }
 
+    @Test
+    void shouldReturnProjectApiResponsesAndValidateBadRequests() throws Exception {
+        String token = extractToken(request("GET", "/", null, null).body);
+
+        HttpResult list = request("GET", "/api/projects", null, token);
+        assertThat(list.status).isEqualTo(200);
+        assertThat(list.body).contains("\"success\":true").contains("\"data\"").contains("\"projects\"");
+
+        HttpResult invalidProject = request("POST", "/api/projects", "{\"slug\":\"bad slug!\",\"title\":\"Bad\"}", token);
+        assertThat(invalidProject.status).isEqualTo(400);
+        assertThat(invalidProject.body).contains("BAD_REQUEST").contains("project slug");
+
+        HttpResult create = request("POST", "/api/projects", "{\"slug\":\"http-demo\",\"title\":\"HTTP Demo\"}", token);
+        assertThat(create.status).isEqualTo(200);
+        ONode created = ONode.ofJson(create.body);
+        String projectId = created.get("data").get("id").getString();
+        assertThat(created.get("success").getBoolean()).isTrue();
+        assertThat(created.get("id").getString()).isNull();
+
+        HttpResult invalidTodo = request("POST", "/api/projects/" + projectId + "/todos", "{}", token);
+        assertThat(invalidTodo.status).isEqualTo(400);
+        assertThat(invalidTodo.body).contains("todo title");
+
+        HttpResult todo = request("POST", "/api/projects/" + projectId + "/todos", "{\"title\":\"Build validation\"}", token);
+        assertThat(todo.status).isEqualTo(200);
+        String todoId = ONode.ofJson(todo.body).get("data").get("id").getString();
+
+        HttpResult invalidStatus = request("POST", "/api/projects/" + projectId + "/todos/" + todoId + "/status", "{\"status\":\"bad\"}", token);
+        assertThat(invalidStatus.status).isEqualTo(400);
+        assertThat(invalidStatus.body).contains("Unsupported todo status");
+    }
+
+    @Test
+    void shouldRejectBadGatewayInjectionWithoutBurningNonce() throws Exception {
+        String body = "{\"platform\":\"MEMORY\",\"chatId\":\"signed-chat\",\"userId\":\"signed-user\",\"text\":\"/status\"}";
+        String timestamp = String.valueOf(System.currentTimeMillis() / 1000L);
+        String nonce = "nonce-" + System.nanoTime();
+
+        Map<String, String> badHeaders = signedHeaders(timestamp, nonce, body, "wrong-secret");
+        HttpResult bad = request("POST", "/api/gateway/message", body, null, badHeaders);
+        assertThat(bad.status).isEqualTo(401);
+
+        Map<String, String> goodHeaders = signedHeaders(timestamp, nonce, body, "test-injection-secret");
+        HttpResult good = request("POST", "/api/gateway/message", body, null, goodHeaders);
+        assertThat(good.status).isEqualTo(200);
+
+        HttpResult replay = request("POST", "/api/gateway/message", body, null, goodHeaders);
+        assertThat(replay.status).isEqualTo(409);
+    }
+
     private static void createSampleSkill() {
         File skillFile = FileUtil.file(runtimeHome, "skills", "sample-skill", "SKILL.md");
         String content = "---\nname: sample-skill\ndescription: Sample skill for dashboard tests\n---\n\n# Sample\n";
@@ -238,12 +297,21 @@ public class DashboardControllerHttpTest {
     }
 
     private static HttpResult request(String method, String path, String body, String token) throws Exception {
+        return request(method, path, body, token, null);
+    }
+
+    private static HttpResult request(String method, String path, String body, String token, Map<String, String> headers) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL("http://127.0.0.1:" + port + path).openConnection();
         connection.setRequestMethod(method);
         connection.setConnectTimeout(3000);
         connection.setReadTimeout(3000);
         if (token != null) {
             connection.setRequestProperty("Authorization", "Bearer " + token);
+        }
+        if (headers != null) {
+            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                connection.setRequestProperty(entry.getKey(), entry.getValue());
+            }
         }
         if (body != null) {
             connection.setDoOutput(true);
@@ -275,6 +343,29 @@ public class DashboardControllerHttpTest {
             reader.close();
             connection.disconnect();
         }
+    }
+
+    private static Map<String, String> signedHeaders(String timestamp, String nonce, String body, String secret) throws Exception {
+        Map<String, String> headers = new LinkedHashMap<String, String>();
+        headers.put("X-Jimuqu-Timestamp", timestamp);
+        headers.put("X-Jimuqu-Nonce", nonce);
+        headers.put("X-Jimuqu-Signature", "sha256=" + hmacSha256(secret, timestamp + "." + nonce + "." + body));
+        return headers;
+    }
+
+    private static String hmacSha256(String secret, String payload) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        byte[] bytes = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+        StringBuilder builder = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) {
+            String hex = Integer.toHexString(value & 0xff);
+            if (hex.length() == 1) {
+                builder.append('0');
+            }
+            builder.append(hex);
+        }
+        return builder.toString();
     }
 
     private static HttpResult requestMultipart(String path, String token, String fileName, String content) throws Exception {

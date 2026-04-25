@@ -1,17 +1,13 @@
 package com.jimuqu.agent.support.constants;
 
 /**
- * 对话内命令与常见动作常量。
+ * Shared slash command and action constants.
  */
 public interface GatewayCommandConstants {
-    /**
-     * 命令前缀。
-     */
+    /** Command prefix. */
     String COMMAND_PREFIX = "/";
 
-    /**
-     * 通用动作名。
-     */
+    /** Common command actions. */
     String ACTION_LIST = "list";
     String ACTION_ENABLE = "enable";
     String ACTION_DISABLE = "disable";
@@ -39,9 +35,7 @@ public interface GatewayCommandConstants {
     String ACTION_ADD = "add";
     String ACTION_REMOVE = "remove";
 
-    /**
-     * 一级命令。
-     */
+    /** Top-level command names. */
     String COMMAND_NEW = "new";
     String COMMAND_RESET = "reset";
     String COMMAND_RETRY = "retry";
@@ -64,12 +58,12 @@ public interface GatewayCommandConstants {
     String COMMAND_ROLLBACK = "rollback";
     String COMMAND_REASONING = "reasoning";
     String COMMAND_HELP = "help";
+    String COMMAND_AGENT = "agent";
+    String COMMAND_PROJECT = "project";
     String COMMAND_APPROVE = "approve";
     String COMMAND_DENY = "deny";
 
-    /**
-     * 完整 slash 命令文本。
-     */
+    /** Full slash command text. */
     String SLASH_NEW = COMMAND_PREFIX + COMMAND_NEW;
     String SLASH_RESET = COMMAND_PREFIX + COMMAND_RESET;
     String SLASH_RETRY = COMMAND_PREFIX + COMMAND_RETRY;
@@ -92,6 +86,8 @@ public interface GatewayCommandConstants {
     String SLASH_ROLLBACK = COMMAND_PREFIX + COMMAND_ROLLBACK;
     String SLASH_REASONING = COMMAND_PREFIX + COMMAND_REASONING;
     String SLASH_HELP = COMMAND_PREFIX + COMMAND_HELP;
+    String SLASH_AGENT = COMMAND_PREFIX + COMMAND_AGENT;
+    String SLASH_PROJECT = COMMAND_PREFIX + COMMAND_PROJECT;
     String SLASH_APPROVE = COMMAND_PREFIX + COMMAND_APPROVE;
     String SLASH_DENY = COMMAND_PREFIX + COMMAND_DENY;
 }

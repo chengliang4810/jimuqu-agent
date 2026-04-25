@@ -8,6 +8,8 @@ import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -16,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 运行时配置解析器，统一处理 runtime/config.yml 中的敏感值与兼容别名。
+ * 运行时配置解析器，统一处理 runtime/config.yml 中的可写配置项。
  */
 public class RuntimeConfigResolver {
     private static final Object LOCK = new Object();
@@ -143,13 +145,17 @@ public class RuntimeConfigResolver {
             return;
         }
 
-        Map<String, Object> flattened = new LinkedHashMap<String, Object>();
-        Object parsed = new Yaml().load(FileUtil.readUtf8String(configFile));
-        if (parsed instanceof Map) {
-            flatten("", sanitizeMap((Map<?, ?>) parsed), flattened);
+        try {
+            Map<String, Object> flattened = new LinkedHashMap<String, Object>();
+            Object parsed = new Yaml().load(FileUtil.readUtf8String(configFile));
+            if (parsed instanceof Map) {
+                flatten("", sanitizeMap((Map<?, ?>) parsed), flattened);
+            }
+            fileValues = flattened;
+            lastLoadedAt = configFile.lastModified();
+        } catch (Exception e) {
+            lastLoadedAt = configFile.lastModified();
         }
-        fileValues = flattened;
-        lastLoadedAt = configFile.lastModified();
     }
 
     private void reloadIfNeeded() {
@@ -186,7 +192,17 @@ public class RuntimeConfigResolver {
         options.setIndent(2);
         options.setIndicatorIndent(1);
         FileUtil.mkParentDirs(configFile);
-        FileUtil.writeUtf8String(new Yaml(options).dump(root), configFile);
+        try {
+            File temp = new File(configFile.getParentFile(), configFile.getName() + ".tmp");
+            FileUtil.writeUtf8String(new Yaml(options).dump(root), temp);
+            try {
+                Files.move(temp.toPath(), configFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (Exception atomicFailed) {
+                Files.move(temp.toPath(), configFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to write runtime config", e);
+        }
         reload();
     }
 
@@ -345,10 +361,13 @@ public class RuntimeConfigResolver {
         add(mappings, "JIMUQU_RUNTIME_CACHE_DIR", "jimuqu.runtime.cacheDir");
         add(mappings, "JIMUQU_RUNTIME_STATE_DB", "jimuqu.runtime.stateDb");
 
-        add(mappings, "JIMUQU_LLM_PROVIDER", "jimuqu.llm.provider");
-        add(mappings, "JIMUQU_LLM_API_URL", "jimuqu.llm.apiUrl");
-        add(mappings, "JIMUQU_LLM_API_KEY", "jimuqu.llm.apiKey");
-        add(mappings, "JIMUQU_LLM_MODEL", "jimuqu.llm.model");
+        add(mappings, "JIMUQU_LLM_PROVIDER_KEY", "model.providerKey");
+        add(mappings, "JIMUQU_LLM_DEFAULT_MODEL", "model.default");
+        add(mappings, "JIMUQU_DEFAULT_PROVIDER_NAME", "providers.default.name");
+        add(mappings, "JIMUQU_DEFAULT_PROVIDER_BASE_URL", "providers.default.baseUrl");
+        add(mappings, "JIMUQU_DEFAULT_PROVIDER_API_KEY", "providers.default.apiKey");
+        add(mappings, "JIMUQU_DEFAULT_PROVIDER_MODEL", "providers.default.defaultModel");
+        add(mappings, "JIMUQU_DEFAULT_PROVIDER_DIALECT", "providers.default.dialect");
         add(mappings, "JIMUQU_LLM_STREAM", "jimuqu.llm.stream");
         add(mappings, "JIMUQU_LLM_REASONING_EFFORT", "jimuqu.llm.reasoningEffort");
         add(mappings, "JIMUQU_LLM_TEMPERATURE", "jimuqu.llm.temperature");
@@ -377,6 +396,9 @@ public class RuntimeConfigResolver {
 
         add(mappings, "JIMUQU_GATEWAY_ALLOWED_USERS", "jimuqu.gateway.allowedUsers");
         add(mappings, "JIMUQU_GATEWAY_ALLOW_ALL_USERS", "jimuqu.gateway.allowAllUsers");
+        add(mappings, "JIMUQU_GATEWAY_INJECTION_SECRET", "jimuqu.gateway.injectionSecret");
+        add(mappings, "JIMUQU_GATEWAY_INJECTION_MAX_BODY_BYTES", "jimuqu.gateway.injectionMaxBodyBytes");
+        add(mappings, "JIMUQU_GATEWAY_INJECTION_REPLAY_WINDOW_SECONDS", "jimuqu.gateway.injectionReplayWindowSeconds");
 
         add(mappings, "JIMUQU_AGENT_HEARTBEAT_ENABLED", "jimuqu.agent.heartbeat.enabled");
         add(mappings, "JIMUQU_AGENT_HEARTBEAT_INTERVAL_MINUTES", "jimuqu.agent.heartbeat.intervalMinutes");

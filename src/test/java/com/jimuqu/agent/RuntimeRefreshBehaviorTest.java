@@ -67,7 +67,7 @@ public class RuntimeRefreshBehaviorTest {
     private RuntimeSettingsService runtimeSettingsService(TestEnvironment env, RecordingChannelAdapter adapter) {
         Map<PlatformType, ChannelAdapter> adapters = new LinkedHashMap<PlatformType, ChannelAdapter>();
         adapters.put(adapter.platform(), adapter);
-        GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(env.appConfig, adapters);
+        GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(env.appConfig, new com.jimuqu.agent.gateway.service.ChannelConnectionManager(adapters));
         DashboardConfigService configService = new DashboardConfigService(env.appConfig, refreshService);
         DashboardRuntimeConfigService runtimeConfigService = new DashboardRuntimeConfigService(env.appConfig, refreshService);
         LlmProviderService llmProviderService = new LlmProviderService(env.appConfig);

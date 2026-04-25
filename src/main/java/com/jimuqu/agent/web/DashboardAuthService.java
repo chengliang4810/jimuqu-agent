@@ -4,11 +4,12 @@ import cn.hutool.core.util.StrUtil;
 import org.noear.snack4.ONode;
 import org.noear.solon.core.handle.Context;
 
+import java.net.URI;
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -19,8 +20,7 @@ public class DashboardAuthService {
             "/api/status",
             "/api/config/defaults",
             "/api/config/schema",
-            "/api/model/info",
-            "/api/gateway/message"
+            "/api/model/info"
     ));
 
     private final String sessionToken = UUID.randomUUID().toString().replace("-", "");
@@ -37,6 +37,22 @@ public class DashboardAuthService {
     public boolean isAuthorized(Context context) {
         String auth = context.header("Authorization");
         return ("Bearer " + sessionToken).equals(auth);
+    }
+
+    public boolean canRevealToken(Context context) {
+        return isAuthorized(context) || isLocalRequest(context);
+    }
+
+    public boolean isLocalRequest(Context context) {
+        String ip = context.remoteIp();
+        if (StrUtil.isBlank(ip)) {
+            return false;
+        }
+        try {
+            return InetAddress.getByName(ip).isLoopbackAddress();
+        } catch (Exception e) {
+            return "127.0.0.1".equals(ip) || "0:0:0:0:0:0:0:1".equals(ip) || "::1".equals(ip);
+        }
     }
 
     public String injectToken(String html) {
@@ -87,10 +103,19 @@ public class DashboardAuthService {
     }
 
     private boolean isLocalOrigin(String origin) {
-        String lower = origin.toLowerCase(Locale.ROOT);
-        return lower.startsWith("http://127.0.0.1")
-                || lower.startsWith("https://127.0.0.1")
-                || lower.startsWith("http://localhost")
-                || lower.startsWith("https://localhost");
+        try {
+            URI uri = URI.create(origin);
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+            if (!("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) || StrUtil.isBlank(host)) {
+                return false;
+            }
+            if ("localhost".equalsIgnoreCase(host)) {
+                return true;
+            }
+            return InetAddress.getByName(host).isLoopbackAddress();
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

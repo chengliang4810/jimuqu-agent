@@ -124,7 +124,7 @@ public class PersonaWorkspaceService {
     }
 
     public String readDiary(String relativePath) {
-        File target = FileUtil.file(workspaceDir, relativePath);
+        File target = diaryFile(relativePath);
         if (!target.exists()) {
             return "";
         }
@@ -132,7 +132,31 @@ public class PersonaWorkspaceService {
     }
 
     public String absoluteDiaryPath(String relativePath) {
-        return FileUtil.file(workspaceDir, relativePath).getAbsolutePath();
+        return diaryFile(relativePath).getAbsolutePath();
+    }
+
+    private File diaryFile(String relativePath) {
+        if (StrUtil.isBlank(relativePath) || relativePath.indexOf('\\') >= 0) {
+            throw new IllegalArgumentException("Invalid diary path");
+        }
+        if (!listDiaryRelativePaths().contains(relativePath)) {
+            throw new IllegalArgumentException("Diary file is not available: " + relativePath);
+        }
+        try {
+            File target = FileUtil.file(workspaceDir, relativePath).getCanonicalFile();
+            File root = memoryDir.getCanonicalFile();
+            String targetPath = target.getAbsolutePath();
+            String rootPath = root.getAbsolutePath();
+            if (!targetPath.startsWith(rootPath + File.separator)) {
+                throw new IllegalArgumentException("Diary file is outside memory directory");
+            }
+            return target;
+        } catch (Exception e) {
+            if (e instanceof IllegalArgumentException) {
+                throw (IllegalArgumentException) e;
+            }
+            throw new IllegalArgumentException("Invalid diary path", e);
+        }
     }
 
     /**

@@ -2,6 +2,7 @@ package com.jimuqu.agent.tool.runtime;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.HashUtil;
+import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.config.AppConfig;
 import lombok.RequiredArgsConstructor;
 import org.noear.snack4.ONode;
@@ -23,7 +24,13 @@ public class TodoTools {
                        @Param(name = "value", description = "add/done 时的条目内容", required = false) String value) {
         File file = todoFile();
         ONode node = file.exists() ? ONode.ofJson(FileUtil.readUtf8String(file)) : new ONode().asArray();
+        if (StrUtil.isBlank(action)) {
+            return error("action is required");
+        }
         if ("add".equalsIgnoreCase(action)) {
+            if (StrUtil.isBlank(value)) {
+                return error("value is required for add");
+            }
             node.add(value);
             FileUtil.writeUtf8String(node.toJson(), file);
             return "Todo added: " + value;
@@ -33,6 +40,9 @@ public class TodoTools {
             return "Todo list cleared";
         }
         if ("done".equalsIgnoreCase(action)) {
+            if (StrUtil.isBlank(value)) {
+                return error("value is required for done");
+            }
             for (int i = 0; i < node.size(); i++) {
                 if (value.equals(node.get(i).getString())) {
                     node.remove(i);
@@ -42,7 +52,14 @@ public class TodoTools {
             FileUtil.writeUtf8String(node.toJson(), file);
             return "Todo removed: " + value;
         }
-        return node.toJson();
+        if ("list".equalsIgnoreCase(action)) {
+            return node.toJson();
+        }
+        return error("unsupported todo action: " + action);
+    }
+
+    private String error(String message) {
+        return new ONode().set("success", false).set("error", message).toJson();
     }
 
     private File todoFile() {

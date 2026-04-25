@@ -20,21 +20,21 @@ public class DashboardSessionController {
 
     @Mapping(value = "/api/sessions", method = MethodType.GET)
     public Map<String, Object> sessions(Context context) throws Exception {
-        return sessionService.getSessions(context.paramAsInt("limit", 20), context.paramAsInt("offset", 0));
+        return DashboardResponse.ok(sessionService.getSessions(context.paramAsInt("limit", 20), context.paramAsInt("offset", 0)));
     }
 
     @Mapping(value = "/api/sessions/search", method = MethodType.GET)
     public Map<String, Object> search(Context context) throws Exception {
-        return sessionService.searchSessions(context.param("q"));
+        return DashboardResponse.ok(sessionService.searchSessions(context.param("q")));
     }
 
     @Mapping(value = "/api/sessions/{id}/messages", method = MethodType.GET)
     public Map<String, Object> messages(String id) throws Exception {
-        return sessionService.getSessionMessages(id);
+        return DashboardResponse.ok(sessionService.getSessionMessages(id));
     }
 
     @Mapping(value = "/api/sessions/{id}", method = MethodType.DELETE)
     public Map<String, Object> delete(String id) throws Exception {
-        return sessionService.deleteSession(id);
+        return DashboardResponse.ok(sessionService.deleteSession(id));
     }
 }

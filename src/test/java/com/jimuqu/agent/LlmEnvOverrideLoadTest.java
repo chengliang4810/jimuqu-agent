@@ -12,16 +12,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class LlmEnvOverrideLoadTest {
     @Test
-    void shouldLoadProviderApiUrlModelAndApiKeyFromRuntimeConfig() throws Exception {
+    void shouldLoadStructuredProviderModelAndApiKeyFromRuntimeConfig() throws Exception {
         File runtimeHome = Files.createTempDirectory("jimuqu-agent-llm-env").toFile();
         File envFile = new File(runtimeHome, "config.yml");
         FileUtil.writeUtf8String(
-                "jimuqu:\n"
-                        + "  llm:\n"
-                        + "    provider: openai-responses\n"
-                        + "    apiUrl: https://api.jimuqu.com/v1/responses\n"
-                        + "    model: gpt-5.4\n"
-                        + "    apiKey: test-key\n",
+                "providers:\n"
+                        + "  default:\n"
+                        + "    name: Default Provider\n"
+                        + "    baseUrl: https://api.jimuqu.com\n"
+                        + "    apiKey: test-key\n"
+                        + "    defaultModel: gpt-5.4\n"
+                        + "    dialect: openai-responses\n"
+                        + "model:\n"
+                        + "  providerKey: default\n"
+                        + "  default: \"\"\n",
                 envFile
         );
 
@@ -31,13 +35,14 @@ public class LlmEnvOverrideLoadTest {
         props.put("jimuqu.runtime.skillsDir", new File(runtimeHome, "skills").getAbsolutePath());
         props.put("jimuqu.runtime.cacheDir", new File(runtimeHome, "cache").getAbsolutePath());
         props.put("jimuqu.runtime.stateDb", new File(runtimeHome, "state.db").getAbsolutePath());
-        props.put("jimuqu.llm.provider", "ollama");
-        props.put("jimuqu.llm.apiUrl", "http://127.0.0.1:11434");
-        props.put("jimuqu.llm.model", "qwen");
+        props.put("providers.default.dialect", "ollama");
+        props.put("providers.default.baseUrl", "http://127.0.0.1:11434");
+        props.put("providers.default.defaultModel", "qwen");
 
         AppConfig config = AppConfig.load(props);
 
-        assertThat(config.getLlm().getProvider()).isEqualTo("openai-responses");
+        assertThat(config.getLlm().getProvider()).isEqualTo("default");
+        assertThat(config.getLlm().getDialect()).isEqualTo("openai-responses");
         assertThat(config.getLlm().getApiUrl()).isEqualTo("https://api.jimuqu.com/v1/responses");
         assertThat(config.getLlm().getModel()).isEqualTo("gpt-5.4");
         assertThat(config.getLlm().getApiKey()).isEqualTo("test-key");

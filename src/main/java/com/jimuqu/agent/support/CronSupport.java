@@ -25,6 +25,7 @@ public final class CronSupport {
         if (parts.length != 5) {
             return fromEpochMillis + 60000L;
         }
+        validate(parts);
 
         Calendar candidate = Calendar.getInstance();
         candidate.setTimeInMillis(fromEpochMillis + 60000L);
@@ -55,7 +56,59 @@ public final class CronSupport {
         if (normalized < 0) {
             normalized = 0;
         }
-        return matches(expr, normalized);
+        return matches(expr, normalized) || (normalized == 0 && matches(expr, 7));
+    }
+
+    public static void validate(String cronExpr) {
+        if (cronExpr == null || cronExpr.trim().isEmpty()) {
+            throw new IllegalArgumentException("Cron expression is required");
+        }
+        String[] parts = cronExpr.trim().split("\\s+");
+        if (parts.length != 5) {
+            throw new IllegalArgumentException("Cron expression must have 5 fields");
+        }
+        validate(parts);
+    }
+
+    private static void validate(String[] parts) {
+        validateField(parts[0], 0, 59);
+        validateField(parts[1], 0, 23);
+        validateField(parts[2], 1, 31);
+        validateField(parts[3], 1, 12);
+        validateField(parts[4], 0, 7);
+    }
+
+    private static void validateField(String expr, int min, int max) {
+        if ("*".equals(expr)) {
+            return;
+        }
+        if (expr.startsWith("*/")) {
+            int step = Integer.parseInt(expr.substring(2));
+            if (step <= 0) {
+                throw new IllegalArgumentException("Cron step must be positive");
+            }
+            return;
+        }
+        String[] items = expr.split(",");
+        for (String item : items) {
+            String trimmed = item.trim();
+            if (trimmed.length() == 0) {
+                throw new IllegalArgumentException("Cron field contains empty item");
+            }
+            if (trimmed.indexOf('-') > 0) {
+                String[] range = trimmed.split("-", 2);
+                int start = Integer.parseInt(range[0]);
+                int end = Integer.parseInt(range[1]);
+                if (start > end || start < min || end > max) {
+                    throw new IllegalArgumentException("Cron range is out of bounds");
+                }
+            } else {
+                int value = Integer.parseInt(trimmed);
+                if (value < min || value > max) {
+                    throw new IllegalArgumentException("Cron value is out of bounds");
+                }
+            }
+        }
     }
 
     /**

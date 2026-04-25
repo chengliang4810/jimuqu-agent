@@ -51,6 +51,10 @@ public class HeartbeatScheduler {
         }
     }
 
+    public void shutdown() {
+        stop();
+    }
+
     public void tickSafe() {
         try {
             tick();

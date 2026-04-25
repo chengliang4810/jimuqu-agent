@@ -131,8 +131,9 @@ public class DashboardPageController {
                     "error.txt").asAttachment(false);
         }
 
+        String rendered = authService.canRevealToken(context) ? authService.injectToken(html) : html;
         return new DownloadedFile("text/html;charset=UTF-8",
-                authService.injectToken(html).getBytes(StandardCharsets.UTF_8),
+                rendered.getBytes(StandardCharsets.UTF_8),
                 "index.html").asAttachment(false);
     }
 

@@ -72,9 +72,6 @@ public class LocalSkillService implements SkillCatalogService {
         FileUtil.mkdir(appConfig.getRuntime().getSkillsDir());
     }
 
-    /**
-     * 为兼容旧命令面，返回全部可见技能的规范名。
-     */
     public List<String> listSkillNames() {
         try {
             processPendingImportsQuietly();
@@ -89,9 +86,6 @@ public class LocalSkillService implements SkillCatalogService {
         }
     }
 
-    /**
-     * 为兼容旧命令面，查看技能主文件。
-     */
     public String inspect(String skillName) {
         try {
             processPendingImportsQuietly();
@@ -293,6 +287,9 @@ public class LocalSkillService implements SkillCatalogService {
         SkillDescriptor descriptor = findDescriptor(nameOrPath);
         if (descriptor == null) {
             throw new IllegalStateException("Skill not found: " + nameOrPath);
+        }
+        if ("SKILL.md".equalsIgnoreCase(StrUtil.nullToEmpty(filePath).trim().replace('\\', '/'))) {
+            return editSkill(nameOrPath, fileContent).canonicalName();
         }
         validateSupportFilePath(filePath);
         File target = resolveSkillFile(descriptor, filePath);

@@ -21,9 +21,6 @@ public class LlmProviderService {
     }
 
     public ResolvedProvider resolveEffectiveProvider(SessionRecord session) {
-        if (appConfig.getProviders() == null || appConfig.getProviders().isEmpty()) {
-            return resolveLegacySnapshot(session);
-        }
         String providerKey = StrUtil.nullToEmpty(appConfig.getModel().getProviderKey()).trim();
         String model = "";
         String override = session == null ? "" : StrUtil.nullToEmpty(session.getModelOverride()).trim();
@@ -81,45 +78,11 @@ public class LlmProviderService {
     }
 
     public boolean hasProvider(String providerKey) {
-        if (appConfig.getProviders() == null || appConfig.getProviders().isEmpty()) {
-            return StrUtil.equals(StrUtil.nullToEmpty(appConfig.getLlm().getProvider()).trim(), StrUtil.nullToEmpty(providerKey).trim());
-        }
         return appConfig.getProviders().containsKey(StrUtil.nullToEmpty(providerKey).trim());
     }
 
     public Map<String, AppConfig.ProviderConfig> providers() {
         return appConfig.getProviders();
-    }
-
-    private ResolvedProvider resolveLegacySnapshot(SessionRecord session) {
-        String providerKey = StrUtil.nullToEmpty(appConfig.getLlm().getProvider()).trim();
-        String dialect = StrUtil.isNotBlank(appConfig.getLlm().getDialect())
-                ? appConfig.getLlm().getDialect().trim()
-                : providerKey;
-        String model = StrUtil.nullToEmpty(appConfig.getLlm().getModel()).trim();
-        String override = session == null ? "" : StrUtil.nullToEmpty(session.getModelOverride()).trim();
-        if (StrUtil.isNotBlank(override)) {
-            if (override.contains(":")) {
-                String[] parts = override.split(":", 2);
-                providerKey = StrUtil.nullToEmpty(parts[0]).trim();
-                model = StrUtil.nullToEmpty(parts[1]).trim();
-                if (StrUtil.isBlank(dialect)) {
-                    dialect = providerKey;
-                }
-            } else {
-                model = override;
-            }
-        }
-
-        ResolvedProvider resolved = new ResolvedProvider();
-        resolved.setProviderKey(providerKey);
-        resolved.setLabel(providerKey);
-        resolved.setDialect(LlmProviderSupport.normalizeDialect(dialect));
-        resolved.setBaseUrl(appConfig.getLlm().getApiUrl());
-        resolved.setApiUrl(appConfig.getLlm().getApiUrl());
-        resolved.setApiKey(appConfig.getLlm().getApiKey());
-        resolved.setModel(model);
-        return resolved;
     }
 
     public static class ResolvedProvider {

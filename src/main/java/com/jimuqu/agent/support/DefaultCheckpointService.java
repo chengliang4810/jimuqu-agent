@@ -99,7 +99,7 @@ public class DefaultCheckpointService implements CheckpointService {
         ONode filesNode = manifest.get("files");
         for (int i = 0; i < filesNode.size(); i++) {
             ONode item = filesNode.get(i);
-            File target = FileUtil.file(item.get("path").getString());
+            File target = requireSafeRollbackTarget(item.get("path").getString());
             boolean existed = item.get("exists").getBoolean();
             if (!existed) {
                 if (target.exists()) {
@@ -108,7 +108,7 @@ public class DefaultCheckpointService implements CheckpointService {
                 continue;
             }
 
-            File snapshot = FileUtil.file(item.get("snapshot").getString());
+            File snapshot = requireSafeSnapshot(record, item.get("snapshot").getString());
             FileUtil.mkParentDirs(target);
             FileUtil.copy(snapshot, target, true);
         }
@@ -116,6 +116,31 @@ public class DefaultCheckpointService implements CheckpointService {
         record.setRestoredAt(System.currentTimeMillis());
         updateRestoredAt(record);
         return record;
+    }
+
+    private File requireSafeRollbackTarget(String path) throws Exception {
+        File target = FileUtil.file(path).getCanonicalFile();
+        File project = new File(System.getProperty("user.dir")).getCanonicalFile();
+        File runtime = new File(appConfig.getRuntime().getHome()).getCanonicalFile();
+        if (isUnder(target, project) || isUnder(target, runtime)) {
+            return target;
+        }
+        throw new IllegalArgumentException("Checkpoint target is outside allowed roots: " + path);
+    }
+
+    private File requireSafeSnapshot(CheckpointRecord record, String path) throws Exception {
+        File snapshot = FileUtil.file(path).getCanonicalFile();
+        File checkpointDir = FileUtil.file(record.getCheckpointDir()).getCanonicalFile();
+        if (!isUnder(snapshot, checkpointDir)) {
+            throw new IllegalArgumentException("Checkpoint snapshot is outside checkpoint directory: " + path);
+        }
+        return snapshot;
+    }
+
+    private boolean isUnder(File file, File root) {
+        String filePath = file.getAbsolutePath();
+        String rootPath = root.getAbsolutePath();
+        return filePath.equals(rootPath) || filePath.startsWith(rootPath + File.separator);
     }
 
     @Override

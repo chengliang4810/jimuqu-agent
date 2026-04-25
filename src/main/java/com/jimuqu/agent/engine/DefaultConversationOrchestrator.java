@@ -31,6 +31,8 @@ import org.noear.solon.ai.chat.message.ChatMessage;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * DefaultConversationOrchestrator 实现。
@@ -66,17 +68,21 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     private final DisplaySettingsService displaySettingsService;
     private final RuntimeSettingsService runtimeSettingsService;
     private final DangerousCommandApprovalService dangerousCommandApprovalService;
+    private final ConcurrentMap<String, Object> sourceLocks = new ConcurrentHashMap<String, Object>();
 
     public GatewayReply handleIncoming(GatewayMessage message) throws Exception {
         return handleIncoming(message, ConversationEventSink.noop());
     }
 
     public GatewayReply handleIncoming(GatewayMessage message, ConversationEventSink eventSink) throws Exception {
-        SessionRecord session = sessionRepository.getBoundSession(message.sourceKey());
-        if (session == null) {
-            session = sessionRepository.bindNewSession(message.sourceKey());
+        String sourceKey = message.sourceKey();
+        synchronized (lockFor(sourceKey)) {
+            SessionRecord session = sessionRepository.getBoundSession(sourceKey);
+            if (session == null) {
+                session = sessionRepository.bindNewSession(sourceKey);
+            }
+            return runOnSession(session, message, eventSink);
         }
-        return runOnSession(session, message, eventSink);
     }
 
     public GatewayReply runScheduled(GatewayMessage syntheticMessage) throws Exception {
@@ -84,11 +90,14 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     }
 
     public GatewayReply runScheduled(GatewayMessage syntheticMessage, ConversationEventSink eventSink) throws Exception {
-        SessionRecord session = sessionRepository.getBoundSession(syntheticMessage.sourceKey());
-        if (session == null) {
-            session = sessionRepository.bindNewSession(syntheticMessage.sourceKey());
+        String sourceKey = syntheticMessage.sourceKey();
+        synchronized (lockFor(sourceKey)) {
+            SessionRecord session = sessionRepository.getBoundSession(sourceKey);
+            if (session == null) {
+                session = sessionRepository.bindNewSession(sourceKey);
+            }
+            return runOnSession(session, syntheticMessage, eventSink);
         }
-        return runOnSession(session, syntheticMessage, eventSink);
     }
 
     public GatewayReply resumePending(String sourceKey) throws Exception {
@@ -96,6 +105,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     }
 
     public GatewayReply resumePending(String sourceKey, ConversationEventSink eventSink) throws Exception {
+        synchronized (lockFor(sourceKey)) {
         SessionRecord session = sessionRepository.getBoundSession(sourceKey);
         if (session == null) {
             return GatewayReply.error("当前来源键没有可恢复的会话。");
@@ -147,6 +157,18 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         reply.setSessionId(session.getSessionId());
         reply.setBranchName(session.getBranchName());
         return reply;
+        }
+    }
+
+    private Object lockFor(String sourceKey) {
+        String key = StrUtil.blankToDefault(sourceKey, "__default__");
+        Object existing = sourceLocks.get(key);
+        if (existing != null) {
+            return existing;
+        }
+        Object created = new Object();
+        Object previous = sourceLocks.putIfAbsent(key, created);
+        return previous == null ? created : previous;
     }
 
     private GatewayReply runOnSession(SessionRecord session, GatewayMessage message, ConversationEventSink eventSink) throws Exception {

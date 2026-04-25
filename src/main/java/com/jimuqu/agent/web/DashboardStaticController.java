@@ -2,6 +2,7 @@ package com.jimuqu.agent.web;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.IoUtil;
+import com.jimuqu.agent.support.RuntimePathGuard;
 import org.noear.solon.annotation.Controller;
 import org.noear.solon.annotation.Mapping;
 import org.noear.solon.core.handle.Context;
@@ -15,6 +16,12 @@ import java.io.InputStream;
  */
 @Controller
 public class DashboardStaticController {
+    private final RuntimePathGuard pathGuard;
+
+    public DashboardStaticController(RuntimePathGuard pathGuard) {
+        this.pathGuard = pathGuard;
+    }
+
     @Mapping("/assets/**")
     public Object assets(Context context) {
         return renderResource(context, "static" + context.path());
@@ -57,7 +64,10 @@ public class DashboardStaticController {
 
     private File loadDevFile(String resourcePath) {
         String relative = resourcePath.startsWith("static/") ? resourcePath.substring("static/".length()) : resourcePath;
-        File devFile = new File(System.getProperty("user.dir"), "web/dist/" + relative.replace('/', File.separatorChar));
+        if (relative.contains("..") || relative.startsWith("/") || relative.startsWith("\\")) {
+            return null;
+        }
+        File devFile = pathGuard.requireUnderWebDist(new File(System.getProperty("user.dir"), "web/dist/" + relative.replace('/', File.separatorChar)));
         if (devFile.exists() && devFile.isFile()) {
             return devFile;
         }

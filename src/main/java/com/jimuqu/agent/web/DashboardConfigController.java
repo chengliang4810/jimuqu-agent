@@ -22,31 +22,31 @@ public class DashboardConfigController {
 
     @Mapping(value = "/api/config", method = MethodType.GET)
     public Map<String, Object> config() {
-        return configService.getConfig();
+        return DashboardResponse.ok(configService.getConfig());
     }
 
     @Mapping(value = "/api/config/defaults", method = MethodType.GET)
     public Map<String, Object> defaults() {
-        return configService.getDefaults();
+        return DashboardResponse.ok(configService.getDefaults());
     }
 
     @Mapping(value = "/api/config/schema", method = MethodType.GET)
     public Map<String, Object> schema() {
-        return configService.getSchema();
+        return DashboardResponse.ok(configService.getSchema());
     }
 
     @Mapping(value = "/api/config/raw", method = MethodType.GET)
     public Map<String, Object> raw() {
-        return configService.getRaw();
+        return DashboardResponse.ok(configService.getRaw());
     }
 
     @Mapping(value = "/api/config", method = MethodType.PUT)
     public Map<String, Object> save(Context context) throws Exception {
-        return configService.saveConfig(ONode.deserialize(ONode.ofJson(context.body()).get("config").toJson(), LinkedHashMap.class));
+        return DashboardResponse.ok(configService.saveConfig(ONode.deserialize(ONode.ofJson(context.body()).get("config").toJson(), LinkedHashMap.class)));
     }
 
     @Mapping(value = "/api/config/raw", method = MethodType.PUT)
     public Map<String, Object> saveRaw(Context context) throws Exception {
-        return configService.saveRaw(ONode.ofJson(context.body()).get("yaml_text").getString());
+        return DashboardResponse.ok(configService.saveRaw(ONode.ofJson(context.body()).get("yaml_text").getString()));
     }
 }

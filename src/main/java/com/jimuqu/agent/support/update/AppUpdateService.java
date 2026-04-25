@@ -7,6 +7,9 @@ import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.config.RuntimeConfigResolver;
+import com.jimuqu.agent.support.BoundedAttachmentIO;
+import com.jimuqu.agent.support.BoundedExecutorFactory;
+import com.jimuqu.agent.support.SecretRedactor;
 import org.noear.snack4.ONode;
 
 import java.io.File;
@@ -15,6 +18,8 @@ import java.net.Proxy;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 版本检查与在线更新服务。
@@ -24,6 +29,7 @@ public class AppUpdateService {
 
     private final AppConfig appConfig;
     private final AppVersionService versionService;
+    private final ScheduledExecutorService exitExecutor = BoundedExecutorFactory.scheduled("self-update-exit", 1);
     private volatile String lastErrorMessage;
     private volatile long lastErrorAt;
 
@@ -174,19 +180,16 @@ public class AppUpdateService {
     }
 
     protected void scheduleCurrentProcessExit() {
-        Thread thread = new Thread(new Runnable() {
+        exitExecutor.schedule(new Runnable() {
             @Override
             public void run() {
-                try {
-                    Thread.sleep(3000L);
-                } catch (InterruptedException ignored) {
-                    Thread.currentThread().interrupt();
-                }
                 System.exit(0);
             }
-        }, "jimuqu-self-update-exit");
-        thread.setDaemon(true);
-        thread.start();
+        }, 3L, TimeUnit.SECONDS);
+    }
+
+    public void shutdown() {
+        exitExecutor.shutdownNow();
     }
 
     protected ReleaseInfo loadCachedLatestRelease() {
@@ -251,14 +254,30 @@ public class AppUpdateService {
     }
 
     protected void downloadAsset(String assetUrl, File target) {
-        HttpResponse response = HttpRequest.get(assetUrl)
-                .timeout(60000)
-                .executeAsync();
-        if (response.getStatus() >= 400) {
-            throw new IllegalStateException("下载更新包失败，HTTP " + response.getStatus());
+        ensureTrustedUpdateAssetUrl(assetUrl);
+        BoundedAttachmentIO.downloadHutoolToFile(assetUrl, target, 60000, BoundedAttachmentIO.UPDATE_JAR_MAX_BYTES);
+    }
+
+    private void ensureTrustedUpdateAssetUrl(String assetUrl) {
+        try {
+            URI uri = URI.create(assetUrl);
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+            if (!"https".equalsIgnoreCase(scheme) || StrUtil.isBlank(host)) {
+                throw new IllegalArgumentException("Update asset URL must be HTTPS");
+            }
+            String normalizedHost = host.toLowerCase();
+            if (!("github.com".equals(normalizedHost)
+                    || "api.github.com".equals(normalizedHost)
+                    || "objects.githubusercontent.com".equals(normalizedHost)
+                    || normalizedHost.endsWith(".githubusercontent.com"))) {
+                throw new IllegalArgumentException("Update asset URL host is not trusted: " + normalizedHost);
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid update asset URL");
         }
-        FileUtil.mkParentDirs(target);
-        response.writeBody(target);
     }
 
     private File cacheFile() {
@@ -292,11 +311,15 @@ public class AppUpdateService {
                 request.header(Header.AUTHORIZATION, "Bearer " + token.trim());
             }
             HttpResponse response = request.execute();
-            result.setStatusCode(response.getStatus());
-            result.setBody(response.body());
+            try {
+                result.setStatusCode(response.getStatus());
+                result.setBody(BoundedAttachmentIO.readHutoolText(response, BoundedAttachmentIO.JSON_MAX_BYTES));
+            } finally {
+                response.close();
+            }
         } catch (Exception e) {
             result.setStatusCode(-1);
-            result.setErrorMessage(e.getClass().getSimpleName() + ": " + e.getMessage());
+            result.setErrorMessage(e.getClass().getSimpleName() + ": " + SecretRedactor.redact(e.getMessage()));
         }
         return result;
     }

@@ -1,6 +1,8 @@
 package com.jimuqu.agent.support;
 
 import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.agent.AgentProfileRepository;
+import com.jimuqu.agent.agent.AgentProfileService;
 import com.jimuqu.agent.context.AsyncSkillLearningService;
 import com.jimuqu.agent.context.BuiltinMemoryProvider;
 import com.jimuqu.agent.context.DefaultMemoryManager;
@@ -43,6 +45,8 @@ import com.jimuqu.agent.gateway.command.DefaultCommandService;
 import com.jimuqu.agent.gateway.service.DefaultGatewayService;
 import com.jimuqu.agent.llm.SolonAiLlmGateway;
 import com.jimuqu.agent.llm.LlmProviderSupport;
+import com.jimuqu.agent.project.repository.ProjectRepository;
+import com.jimuqu.agent.project.service.ProjectService;
 import com.jimuqu.agent.skillhub.service.DefaultSkillGuardService;
 import com.jimuqu.agent.skillhub.service.DefaultSkillHubService;
 import com.jimuqu.agent.skillhub.service.DefaultSkillImportService;
@@ -52,11 +56,13 @@ import com.jimuqu.agent.skillhub.support.GitHubAuth;
 import com.jimuqu.agent.skillhub.support.SkillHubHttpClient;
 import com.jimuqu.agent.skillhub.support.SkillHubStateStore;
 import com.jimuqu.agent.storage.repository.SqliteCronJobRepository;
+import com.jimuqu.agent.storage.repository.SqliteAgentProfileRepository;
 import com.jimuqu.agent.storage.repository.SqliteChannelStateRepository;
 import com.jimuqu.agent.storage.repository.SqliteDatabase;
 import com.jimuqu.agent.storage.repository.SqliteGlobalSettingRepository;
 import com.jimuqu.agent.storage.repository.SqliteGatewayPolicyRepository;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
+import com.jimuqu.agent.storage.repository.SqliteProjectRepository;
 import com.jimuqu.agent.storage.repository.SqliteSessionRepository;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.DefaultCheckpointService;
@@ -105,6 +111,8 @@ public class TestEnvironment {
     public final ProcessRegistry processRegistry;
     public final SkillHubService skillHubService;
     public final DangerousCommandApprovalService dangerousCommandApprovalService;
+    public final AgentProfileService agentProfileService;
+    public final ProjectService projectService;
 
     public static TestEnvironment withFakeLlm() throws Exception {
         return create(new FakeLlmGateway());
@@ -145,6 +153,10 @@ public class TestEnvironment {
         CronJobRepository cronJobRepository = new SqliteCronJobRepository(database);
         GatewayPolicyRepository gatewayPolicyRepository = new SqliteGatewayPolicyRepository(database);
         ChannelStateRepository channelStateRepository = new SqliteChannelStateRepository(database);
+        AgentProfileRepository agentProfileRepository = new SqliteAgentProfileRepository(database);
+        AgentProfileService agentProfileService = new AgentProfileService(agentProfileRepository);
+        ProjectRepository projectRepository = new SqliteProjectRepository(database);
+        ProjectService projectService = new ProjectService(config, projectRepository, agentProfileService, globalSettingRepository);
         SkillHubStateStore skillHubStateStore = new SkillHubStateStore(new File(config.getRuntime().getSkillsDir()));
         SkillGuardService skillGuardService = new DefaultSkillGuardService();
         SkillHubHttpClient skillHubHttpClient = new DefaultSkillHubHttpClient();
@@ -167,7 +179,7 @@ public class TestEnvironment {
         ProcessRegistry processRegistry = new ProcessRegistry();
         DangerousCommandApprovalService dangerousCommandApprovalService = new DangerousCommandApprovalService(globalSettingRepository);
         AttachmentCacheService attachmentCacheService = new AttachmentCacheService(config);
-        GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(config, adapters);
+        GatewayRuntimeRefreshService refreshService = new GatewayRuntimeRefreshService(config, new com.jimuqu.agent.gateway.service.ChannelConnectionManager(adapters));
         DashboardConfigService dashboardConfigService = new DashboardConfigService(config, refreshService);
         DashboardRuntimeConfigService dashboardRuntimeConfigService = new DashboardRuntimeConfigService(config, refreshService);
         AppVersionService appVersionService = new AppVersionService(config);
@@ -184,7 +196,7 @@ public class TestEnvironment {
         ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, deliveryService, displaySettingsService, runtimeSettingsService, dangerousCommandApprovalService);
         holder.set(orchestrator);
         SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService);
-        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService, displaySettingsService, appUpdateService, dangerousCommandApprovalService);
+        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService, displaySettingsService, appUpdateService, dangerousCommandApprovalService, agentProfileService, projectService);
         DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService, sessionRepository, gatewayAuthorizationService, skillLearningService, memoryManager);
         return new TestEnvironment(
                 config,
@@ -208,7 +220,9 @@ public class TestEnvironment {
                 sessionSearchService,
                 processRegistry,
                 skillHubService,
-                dangerousCommandApprovalService
+                dangerousCommandApprovalService,
+                agentProfileService,
+                projectService
         );
     }
 
@@ -271,4 +285,3 @@ public class TestEnvironment {
         return value == null || value.trim().isEmpty() ? defaultValue : value.trim();
     }
 }
-

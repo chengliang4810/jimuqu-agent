@@ -3,6 +3,7 @@ package com.jimuqu.agent.web;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.support.SecretRedactor;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -35,7 +36,7 @@ public class DashboardLogsService {
             if (!matchesComponent(line, component)) {
                 continue;
             }
-            filtered.add(line);
+            filtered.add(SecretRedactor.redact(line, 2000));
         }
 
         int safeLineCount = lineCount <= 0 ? 100 : Math.min(lineCount, 500);

@@ -26,7 +26,8 @@ public class MessagingToolsAttachmentTest {
                 env.appConfig
         );
 
-        Path tempDir = Files.createTempDirectory("jimuqu-media-tool");
+        Path tempDir = new File(env.appConfig.getRuntime().getCacheDir(), "tool-media").toPath();
+        Files.createDirectories(tempDir);
         File image = tempDir.resolve("demo.png").toFile();
         File voice = tempDir.resolve("note.silk").toFile();
         Files.write(image.toPath(), new byte[]{1, 2, 3});

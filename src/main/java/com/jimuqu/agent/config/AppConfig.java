@@ -150,7 +150,7 @@ public class AppConfig {
         config.getLlm().setTemperature(resolveDouble("JIMUQU_LLM_TEMPERATURE", readDouble(props, overrides, "jimuqu.llm.temperature", RuntimePathConstants.DEFAULT_TEMPERATURE)));
         config.getLlm().setMaxTokens(resolveInt("JIMUQU_LLM_MAX_TOKENS", readInt(props, overrides, "jimuqu.llm.maxTokens", RuntimePathConstants.DEFAULT_MAX_TOKENS)));
         config.getLlm().setContextWindowTokens(resolveInt("JIMUQU_LLM_CONTEXT_WINDOW_TOKENS", readInt(props, overrides, "jimuqu.llm.contextWindowTokens", RuntimePathConstants.DEFAULT_CONTEXT_WINDOW_TOKENS)));
-        applyProviderConfiguration(config, props, structuredOverrides);
+        applyProviderConfiguration(config, props, overrides, structuredOverrides);
 
         config.getScheduler().setEnabled(resolveBoolean("JIMUQU_SCHEDULER_ENABLED", readBoolean(props, overrides, "jimuqu.scheduler.enabled", true)));
         config.getScheduler().setTickSeconds(resolveInt("JIMUQU_SCHEDULER_TICK_SECONDS", readInt(props, overrides, "jimuqu.scheduler.tickSeconds", RuntimePathConstants.DEFAULT_SCHEDULER_TICK_SECONDS)));
@@ -269,6 +269,9 @@ public class AppConfig {
 
         config.getGateway().setAllowedUsers(resolveList("JIMUQU_GATEWAY_ALLOWED_USERS", readRaw(props, overrides, "jimuqu.gateway.allowedUsers", "")));
         config.getGateway().setAllowAllUsers(resolveBoolean("JIMUQU_GATEWAY_ALLOW_ALL_USERS", readBoolean(props, overrides, "jimuqu.gateway.allowAllUsers", false)));
+        config.getGateway().setInjectionSecret(resolveSecret("JIMUQU_GATEWAY_INJECTION_SECRET", readString(props, overrides, "jimuqu.gateway.injectionSecret", "")));
+        config.getGateway().setInjectionMaxBodyBytes(resolveInt("JIMUQU_GATEWAY_INJECTION_MAX_BODY_BYTES", readInt(props, overrides, "jimuqu.gateway.injectionMaxBodyBytes", 65536)));
+        config.getGateway().setInjectionReplayWindowSeconds(resolveInt("JIMUQU_GATEWAY_INJECTION_REPLAY_WINDOW_SECONDS", readInt(props, overrides, "jimuqu.gateway.injectionReplayWindowSeconds", 300)));
         config.getAgent().setPersonalities(loadPersonalities(props, overrides));
         config.getAgent().getHeartbeat().setEnabled(resolveBoolean("JIMUQU_AGENT_HEARTBEAT_ENABLED", readBoolean(props, overrides, "jimuqu.agent.heartbeat.enabled", false)));
         config.getAgent().getHeartbeat().setIntervalMinutes(resolveInt("JIMUQU_AGENT_HEARTBEAT_INTERVAL_MINUTES", readInt(props, overrides, "jimuqu.agent.heartbeat.intervalMinutes", RuntimePathConstants.DEFAULT_HEARTBEAT_INTERVAL_MINUTES)));
@@ -311,7 +314,7 @@ public class AppConfig {
     /**
      * 用新的配置快照覆盖当前实例，保留对象引用稳定。
      */
-    public void applyFrom(AppConfig other) {
+    public synchronized void applyFrom(AppConfig other) {
         if (other == null) {
             return;
         }
@@ -332,7 +335,14 @@ public class AppConfig {
         copyChannel(this.channels.getWeixin(), other.getChannels().getWeixin());
         this.gateway.setAllowedUsers(new ArrayList<String>(other.getGateway().getAllowedUsers()));
         this.gateway.setAllowAllUsers(other.getGateway().isAllowAllUsers());
+        this.gateway.setInjectionSecret(other.getGateway().getInjectionSecret());
+        this.gateway.setInjectionMaxBodyBytes(other.getGateway().getInjectionMaxBodyBytes());
+        this.gateway.setInjectionReplayWindowSeconds(other.getGateway().getInjectionReplayWindowSeconds());
         this.agent.setPersonalities(clonePersonalities(other.getAgent().getPersonalities()));
+        this.agent.getHeartbeat().setEnabled(other.getAgent().getHeartbeat().isEnabled());
+        this.agent.getHeartbeat().setIntervalMinutes(other.getAgent().getHeartbeat().getIntervalMinutes());
+        this.agent.getHeartbeat().setDeliveryMode(other.getAgent().getHeartbeat().getDeliveryMode());
+        this.agent.getHeartbeat().setQuietToken(other.getAgent().getHeartbeat().getQuietToken());
     }
 
     private void copyRuntime(RuntimeConfig other) {
@@ -873,17 +883,10 @@ public class AppConfig {
         return props.getBool(key, defaultValue);
     }
 
-    private static void applyProviderConfiguration(AppConfig config, Props props, Map<String, Object> structuredOverrides) {
-        Map<String, ProviderConfig> providers = parseProviders(structuredOverrides.get("providers"));
-        ModelConfig modelConfig = parseModelConfig(structuredOverrides.get("model"));
+    private static void applyProviderConfiguration(AppConfig config, Props props, Map<String, Object> overrides, Map<String, Object> structuredOverrides) {
+        Map<String, ProviderConfig> providers = parseProviders(structuredOverrides.get("providers"), props);
+        ModelConfig modelConfig = parseModelConfig(structuredOverrides.get("model"), props);
         List<FallbackProviderConfig> fallbackChain = parseFallbackProviders(structuredOverrides.get("fallbackProviders"));
-
-        if (providers.isEmpty()) {
-            ProviderConfig defaultProvider = synthesizeDefaultProvider(props);
-            providers.put(RuntimePathConstants.DEFAULT_PROVIDER_KEY, defaultProvider);
-            modelConfig.setProviderKey(RuntimePathConstants.DEFAULT_PROVIDER_KEY);
-            modelConfig.setDefault("");
-        }
 
         validateProviderConfiguration(providers, modelConfig, fallbackChain);
 
@@ -904,8 +907,9 @@ public class AppConfig {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, ProviderConfig> parseProviders(Object rawProviders) {
+    private static Map<String, ProviderConfig> parseProviders(Object rawProviders, Props props) {
         Map<String, ProviderConfig> providers = new LinkedHashMap<String, ProviderConfig>();
+        providers.put(RuntimePathConstants.DEFAULT_PROVIDER_KEY, loadDefaultProvider(props));
         if (!(rawProviders instanceof Map)) {
             return providers;
         }
@@ -918,28 +922,74 @@ public class AppConfig {
             }
 
             Map<Object, Object> rawProvider = (Map<Object, Object>) entry.getValue();
-            ProviderConfig provider = new ProviderConfig();
-            provider.setName(readNestedString(rawProvider, "name"));
-            provider.setBaseUrl(readNestedString(rawProvider, "baseUrl"));
-            provider.setApiKey(readNestedString(rawProvider, "apiKey"));
-            provider.setDefaultModel(readNestedString(rawProvider, "defaultModel"));
-            provider.setDialect(readNestedString(rawProvider, "dialect"));
+            ProviderConfig provider = RuntimePathConstants.DEFAULT_PROVIDER_KEY.equals(key)
+                    ? cloneProvider(providers.get(RuntimePathConstants.DEFAULT_PROVIDER_KEY))
+                    : new ProviderConfig();
+            applyProviderString(rawProvider, "name", provider, "name");
+            applyProviderString(rawProvider, "baseUrl", provider, "baseUrl");
+            applyProviderString(rawProvider, "apiKey", provider, "apiKey");
+            applyProviderString(rawProvider, "defaultModel", provider, "defaultModel");
+            applyProviderString(rawProvider, "dialect", provider, "dialect");
             providers.put(key, provider);
         }
 
         return providers;
     }
 
+    private static ProviderConfig cloneProvider(ProviderConfig source) {
+        ProviderConfig copy = new ProviderConfig();
+        if (source != null) {
+            copy.setName(source.getName());
+            copy.setBaseUrl(source.getBaseUrl());
+            copy.setApiKey(source.getApiKey());
+            copy.setDefaultModel(source.getDefaultModel());
+            copy.setDialect(source.getDialect());
+        }
+        return copy;
+    }
+
+    private static void applyProviderString(Map<Object, Object> rawProvider,
+                                            String key,
+                                            ProviderConfig provider,
+                                            String field) {
+        if (!rawProvider.containsKey(key)) {
+            return;
+        }
+        String value = readNestedString(rawProvider, key);
+        if ("name".equals(field)) {
+            provider.setName(value);
+        } else if ("baseUrl".equals(field)) {
+            provider.setBaseUrl(value);
+        } else if ("apiKey".equals(field)) {
+            provider.setApiKey(value);
+        } else if ("defaultModel".equals(field)) {
+            provider.setDefaultModel(value);
+        } else if ("dialect".equals(field)) {
+            provider.setDialect(value);
+        }
+    }
+
     @SuppressWarnings("unchecked")
-    private static ModelConfig parseModelConfig(Object rawModel) {
+    private static ModelConfig parseModelConfig(Object rawModel, Props props) {
         ModelConfig modelConfig = new ModelConfig();
+        modelConfig.setProviderKey(StrUtil.blankToDefault(
+                props.get("model.providerKey"),
+                RuntimePathConstants.DEFAULT_PROVIDER_KEY
+        ));
+        modelConfig.setDefault(StrUtil.nullToEmpty(props.get("model.default")).trim());
         if (!(rawModel instanceof Map)) {
             return modelConfig;
         }
 
         Map<Object, Object> rawMap = (Map<Object, Object>) rawModel;
-        modelConfig.setProviderKey(readNestedString(rawMap, "providerKey"));
-        modelConfig.setDefault(readNestedString(rawMap, "default"));
+        String providerKey = readNestedString(rawMap, "providerKey");
+        String defaultModel = readNestedString(rawMap, "default");
+        if (StrUtil.isNotBlank(providerKey)) {
+            modelConfig.setProviderKey(providerKey);
+        }
+        if (StrUtil.isNotBlank(defaultModel)) {
+            modelConfig.setDefault(defaultModel);
+        }
         return modelConfig;
     }
 
@@ -966,15 +1016,14 @@ public class AppConfig {
         return result;
     }
 
-    private static ProviderConfig synthesizeDefaultProvider(Props props) {
-        String dialect = readString(props, Collections.<String, Object>emptyMap(), "jimuqu.llm.provider", RuntimePathConstants.DEFAULT_LLM_PROVIDER);
-        String apiUrl = readString(props, Collections.<String, Object>emptyMap(), "jimuqu.llm.apiUrl", RuntimePathConstants.DEFAULT_LLM_API_URL);
-        String defaultModel = readString(props, Collections.<String, Object>emptyMap(), "jimuqu.llm.model", RuntimePathConstants.DEFAULT_LLM_MODEL);
-
+    private static ProviderConfig loadDefaultProvider(Props props) {
+        String dialect = StrUtil.blankToDefault(props.get("providers.default.dialect"), RuntimePathConstants.DEFAULT_LLM_PROVIDER);
+        String baseUrl = StrUtil.blankToDefault(props.get("providers.default.baseUrl"), RuntimePathConstants.DEFAULT_LLM_API_URL);
+        String defaultModel = StrUtil.blankToDefault(props.get("providers.default.defaultModel"), RuntimePathConstants.DEFAULT_LLM_MODEL);
         ProviderConfig provider = new ProviderConfig();
-        provider.setName("Default Provider");
-        provider.setBaseUrl(LlmProviderSupport.deriveBaseUrl(apiUrl, dialect));
-        provider.setApiKey(resolveSecret("JIMUQU_LLM_API_KEY", props.get("jimuqu.llm.apiKey", "")));
+        provider.setName(StrUtil.blankToDefault(props.get("providers.default.name"), "Default Provider"));
+        provider.setBaseUrl(LlmProviderSupport.deriveBaseUrl(baseUrl, dialect));
+        provider.setApiKey(StrUtil.nullToEmpty(props.get("providers.default.apiKey")).trim());
         provider.setDefaultModel(defaultModel);
         provider.setDialect(LlmProviderSupport.normalizeDialect(dialect));
         return provider;
@@ -1136,10 +1185,10 @@ public class AppConfig {
         return new File(base, file.getPath());
     }
 
-    private static String resolveRuntimePath(String rawValue, String runtimeHome, String legacyDefault, String childName) {
-        String value = StrUtil.blankToDefault(rawValue, legacyDefault);
+    private static String resolveRuntimePath(String rawValue, String runtimeHome, String defaultPath, String childName) {
+        String value = StrUtil.blankToDefault(rawValue, defaultPath);
         if (!RuntimePathConstants.RUNTIME_HOME.equals(runtimeHome)
-                && legacyDefault.equals(value)) {
+                && defaultPath.equals(value)) {
             return new File(runtimeHome, childName).getPath();
         }
         return value;
@@ -1767,5 +1816,20 @@ public class AppConfig {
          * 是否允许所有用户访问。
          */
         private boolean allowAllUsers;
+
+        /**
+         * HTTP gateway injection HMAC secret.
+         */
+        private String injectionSecret;
+
+        /**
+         * Maximum accepted gateway injection body size.
+         */
+        private int injectionMaxBodyBytes = 65536;
+
+        /**
+         * Replay window in seconds for signed gateway injection requests.
+         */
+        private int injectionReplayWindowSeconds = 300;
     }
 }

@@ -22,16 +22,16 @@ public class DashboardGatewayController {
 
     @Mapping(value = "/api/gateway/doctor", method = MethodType.GET)
     public Map<String, Object> doctor() throws Exception {
-        return doctorService.doctor();
+        return DashboardResponse.ok(doctorService.doctor());
     }
 
     @Mapping(value = "/api/gateway/setup/weixin/qr", method = MethodType.POST)
     public Map<String, Object> startWeixinQr() {
-        return weixinQrSetupService.start();
+        return DashboardResponse.ok(weixinQrSetupService.start());
     }
 
     @Mapping(value = "/api/gateway/setup/weixin/qr/{ticket}", method = MethodType.GET)
     public Map<String, Object> getWeixinQr(String ticket) {
-        return weixinQrSetupService.get(ticket);
+        return DashboardResponse.ok(weixinQrSetupService.get(ticket));
     }
 }

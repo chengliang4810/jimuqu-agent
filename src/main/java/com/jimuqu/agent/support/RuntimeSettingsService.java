@@ -24,9 +24,13 @@ import java.util.Map;
  */
 public class RuntimeSettingsService {
     private static final List<String> CONFIG_KEY_WHITELIST = Arrays.asList(
-            "llm.provider",
-            "llm.apiUrl",
-            "llm.model",
+            "model.providerKey",
+            "model.default",
+            "providers.default.name",
+            "providers.default.baseUrl",
+            "providers.default.apiKey",
+            "providers.default.defaultModel",
+            "providers.default.dialect",
             "llm.stream",
             "llm.reasoningEffort",
             "llm.temperature",
@@ -61,7 +65,10 @@ public class RuntimeSettingsService {
             "react.summarizationMaxMessages",
             "react.summarizationMaxTokens",
             "gateway.allowedUsers",
-            "gateway.allowAllUsers"
+            "gateway.allowAllUsers",
+            "gateway.injectionSecret",
+            "gateway.injectionMaxBodyBytes",
+            "gateway.injectionReplayWindowSeconds"
     );
 
     private static final List<String> CHANNEL_KEY_SUFFIX_WHITELIST = Arrays.asList(
@@ -262,7 +269,9 @@ public class RuntimeSettingsService {
                 || "display.toolPreviewLength".equals(key)
                 || "display.progressThrottleMs".equals(key)
                 || "llm.maxTokens".equals(key)
-                || "llm.contextWindowTokens".equals(key)) {
+                || "llm.contextWindowTokens".equals(key)
+                || "gateway.injectionMaxBodyBytes".equals(key)
+                || "gateway.injectionReplayWindowSeconds".equals(key)) {
             return Integer.valueOf(value);
         }
         if ("react.summarizationEnabled".equals(key)) {
@@ -338,7 +347,7 @@ public class RuntimeSettingsService {
     }
 
     private boolean shouldReconnectChannelsForConfigKey(String key) {
-        return key != null && key.startsWith("channels.");
+        return key != null && (key.startsWith("channels.") || key.startsWith("gateway.injection"));
     }
 
     private boolean shouldReconnectChannelsForEnvKey(String envKey) {

@@ -9,6 +9,7 @@ import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.repository.ChannelStateRepository;
 import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
 import com.jimuqu.agent.support.AttachmentCacheService;
+import com.jimuqu.agent.support.BoundedAttachmentIO;
 import com.jimuqu.agent.support.constants.GatewayBehaviorConstants;
 import lombok.RequiredArgsConstructor;
 import okhttp3.*;
@@ -31,7 +32,6 @@ import java.util.concurrent.*;
 public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
     private static final String DEFAULT_WS_URL = "wss://openws.work.weixin.qq.com";
     private static final String APP_CMD_CALLBACK = "aibot_msg_callback";
-    private static final String APP_CMD_LEGACY_CALLBACK = "aibot_callback";
     private static final String APP_CMD_SEND = "aibot_send_msg";
     private static final String APP_CMD_RESPONSE = "aibot_respond_msg";
     private static final String APP_CMD_UPLOAD_MEDIA_INIT = "aibot_upload_media_init";
@@ -114,6 +114,7 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
             if (webSocket != null) {
                 webSocket.cancel();
             }
+            webSocket = null;
             setConnected(false);
             setSetupState("error");
             setLastError("wecom_connect_failed", e.getMessage());
@@ -206,7 +207,7 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
                 return;
             }
             String cmd = node.get("cmd").getString();
-            if (APP_CMD_CALLBACK.equals(cmd) || APP_CMD_LEGACY_CALLBACK.equals(cmd)) {
+            if (APP_CMD_CALLBACK.equals(cmd)) {
                 rememberReplyReqId(node.get("body").get("msgid").getString(), payloadReqId(node));
                 handleInbound(node);
             }
@@ -218,8 +219,22 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
                 future.completeExceptionally(t);
             }
             pendingResponses.clear();
+            WeComChannelAdapter.this.webSocket = null;
+            setConnected(false);
+            setSetupState("error");
+            setLastError("wecom_websocket_failure", t == null ? "unknown" : t.getMessage());
+            setDetail("websocket disconnected");
             openLatch.countDown();
             log.warn("[WECOM] websocket failure: {}", t.getMessage());
+        }
+
+        @Override
+        public void onClosed(WebSocket webSocket, int code, String reason) {
+            pendingResponses.clear();
+            WeComChannelAdapter.this.webSocket = null;
+            setConnected(false);
+            setSetupState("disconnected");
+            setDetail("websocket closed: " + code + " " + reason);
         }
     }
 
@@ -352,15 +367,7 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
             if (!response.isSuccessful()) {
                 throw new IllegalStateException("WeCom download failed: " + response.code());
             }
-            ResponseBody body = response.body();
-            if (body == null) {
-                throw new IllegalStateException("WeCom download body is empty");
-            }
-            byte[] data = body.bytes();
-            if (data.length > maxBytes) {
-                throw new IllegalStateException("WeCom media exceeds max size");
-            }
-            return data;
+            return BoundedAttachmentIO.readOkHttpResponse(response, maxBytes);
         } finally {
             response.close();
         }

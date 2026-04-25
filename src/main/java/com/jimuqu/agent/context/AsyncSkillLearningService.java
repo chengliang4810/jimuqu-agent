@@ -12,11 +12,11 @@ import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.MemoryService;
 import com.jimuqu.agent.core.service.SkillLearningService;
 import com.jimuqu.agent.support.MessageSupport;
+import com.jimuqu.agent.support.BoundedExecutorFactory;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * 主回复后的异步学习闭环服务。
@@ -28,7 +28,11 @@ public class AsyncSkillLearningService implements SkillLearningService {
     private final MemoryService memoryService;
     private final LocalSkillService localSkillService;
     private final CheckpointService checkpointService;
-    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private final ExecutorService executorService = BoundedExecutorFactory.fixed("async-skill-learning", 1, 64);
+
+    public void shutdown() {
+        executorService.shutdownNow();
+    }
 
     @Override
     public void schedulePostReplyLearning(final SessionRecord session,

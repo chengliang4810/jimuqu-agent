@@ -2,6 +2,7 @@ package com.jimuqu.agent.web;
 
 import org.noear.solon.annotation.Controller;
 import org.noear.solon.annotation.Mapping;
+import org.noear.solon.core.handle.Context;
 import org.noear.solon.core.handle.MethodType;
 
 import java.util.Map;
@@ -12,18 +13,21 @@ import java.util.Map;
 @Controller
 public class DashboardStatusController {
     private final DashboardStatusService statusService;
+    private final DashboardAuthService authService;
 
-    public DashboardStatusController(DashboardStatusService statusService) {
+    public DashboardStatusController(DashboardStatusService statusService,
+                                     DashboardAuthService authService) {
         this.statusService = statusService;
+        this.authService = authService;
     }
 
     @Mapping(value = "/api/status", method = MethodType.GET)
-    public Map<String, Object> status() throws Exception {
-        return statusService.getStatus();
+    public Map<String, Object> status(Context context) throws Exception {
+        return DashboardResponse.ok(statusService.getStatus(authService.isAuthorized(context)));
     }
 
     @Mapping(value = "/api/model/info", method = MethodType.GET)
-    public Map<String, Object> modelInfo() {
-        return statusService.getModelInfo();
+    public Map<String, Object> modelInfo(Context context) {
+        return DashboardResponse.ok(statusService.getModelInfo(authService.isAuthorized(context)));
     }
 }

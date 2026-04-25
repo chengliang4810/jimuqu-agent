@@ -31,7 +31,9 @@ public class DangerousCommandApprovalCommandTest {
 
         assertThat(reply.getContent()).isEqualTo("echo:resume");
         assertThat(env.dangerousCommandApprovalService.getPendingApproval(updatedAgentSession)).isNull();
-        assertThat(env.dangerousCommandApprovalService.isSessionApproved(updatedAgentSession, "recursive_delete")).isTrue();
+        assertThat(env.dangerousCommandApprovalService.isSessionApproved(updatedAgentSession, "recursive_delete")).isFalse();
+        assertThat(env.dangerousCommandApprovalService.isSessionApproved(updatedAgentSession, "execute_shell", "recursive_delete", "rm -rf runtime/cache")).isTrue();
+        assertThat(env.dangerousCommandApprovalService.isSessionApproved(updatedAgentSession, "execute_shell", "recursive_delete", "rm -rf runtime/logs")).isFalse();
     }
 
     @Test
@@ -53,6 +55,8 @@ public class DangerousCommandApprovalCommandTest {
         GatewayReply reply = env.send("room-2", "user-2", "/approve always");
 
         assertThat(reply.getContent()).isEqualTo("echo:resume");
-        assertThat(env.dangerousCommandApprovalService.isAlwaysApproved("recursive_delete")).isTrue();
+        assertThat(env.dangerousCommandApprovalService.isAlwaysApproved("recursive_delete")).isFalse();
+        assertThat(env.dangerousCommandApprovalService.isAlwaysApproved("execute_shell", "recursive_delete", "rm -rf runtime/cache")).isTrue();
+        assertThat(env.dangerousCommandApprovalService.isAlwaysApproved("execute_shell", "recursive_delete", "rm -rf runtime/logs")).isFalse();
     }
 }

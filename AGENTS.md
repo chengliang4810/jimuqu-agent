@@ -74,7 +74,7 @@ git -C D:\projects\hermes-agent status --short --branch
 - 渠道传输层遵循 websocket-first：平台官方支持 websocket / stream 时优先采用；仅微信保留 Hermes 原有 iLink long-poll。
 - 不要因为某个技术点实现方便，就偏离成以脚本、前端展示页、营销官网、实验性研究代码为中心的项目。
 - 若出现“为了兼容 Hermes 原实现而牺牲 Java/Solon 可维护性”的情况，优先保持 Java 侧架构清晰，再在行为层面对齐。
-- 已明确不做：多模态模型输入、图像生成、独立 TTS/语音转写服务、自研 Web 搜索/提取实现、浏览器自动化内置实现、价格和 token 统计、研究与实验能力、完整 CLI/TUI 交互层。
+- 已明确不做：多模态模型输入、图像生成、独立 TTS/语音转写服务、浏览器自动化内置实现、价格分析/价格计算、研究与实验能力、完整 CLI/TUI 交互层。
 - 浏览器自动化能力不进入内置主线；如后续需要，按“用户自行安装 skill 扩展”的方式处理。
 
 ## 默认实现原则
@@ -115,7 +115,7 @@ git -C D:\projects\hermes-agent status --short --branch
 - `/new`、`/retry`、`/undo`、`/branch`、`/resume` 等会话控制
 - 模型切换、推理强度、快速模式
 - 会话状态与基础运行信息
-- 不做面向用户的 token 使用量统计与价格分析
+- 保留 token 使用量统计；不做价格分析/价格计算
 - checkpoint / rollback
 
 ### B. CLI / 交互层
@@ -148,14 +148,14 @@ git -C D:\projects\hermes-agent status --short --branch
 - Prompt caching
 - 模型元数据、上下文长度、token 估算
 - 智能模型路由
-- 不做价格和 token 统计
+- 保留 token 估算与使用量统计；不做价格分析/价格计算
 
 ### E. 工具系统
 
 - 终端命令执行
 - 进程管理
 - 文件读写、搜索、补丁
-- 不做 Web 搜索与网页提取
+- 保留内置 Websearch / Webfetch
 - 不做浏览器自动化内置实现
 - 代码执行沙箱
 - 子 Agent / delegation / mixture of agents
@@ -172,6 +172,8 @@ git -C D:\projects\hermes-agent status --short --branch
 
 - Skills 本地管理
 - Skills Hub / 手动导入兼容 / 在线 source 搜索安装
+- 内置 Websearch / Webfetch
+- token 使用量统计
 - 任务后沉淀技能或改进技能
 - MEMORY / USER / AGENTS 等上下文文件协同
 - 跨会话检索与总结
@@ -222,9 +224,9 @@ git -C D:\projects\hermes-agent status --short --branch
 - 多模态模型输入
 - 图像理解/生成
 - TTS / 独立语音转写服务
-- 自研 Web 搜索 / 提取
+
 - 浏览器自动化内置实现
-- 价格和 token 统计
+- 价格分析/价格计算
 - 完整 CLI / TUI 交互层
 - 研究与实验能力
 - Docker 之外的执行后端
@@ -246,6 +248,8 @@ git -C D:\projects\hermes-agent status --short --branch
 - Docker 部署
 - 单实例架构
 - Skills Hub / 手动导入兼容 / 在线 source 搜索安装
+- 内置 Websearch / Webfetch
+- token 使用量统计
 
 ## 后续任务执行要求
 

@@ -23,19 +23,19 @@ public class DashboardRuntimeConfigController {
 
     @Mapping(value = "/api/runtime-config", method = MethodType.GET)
     public Map<String, Object> configItems() {
-        return runtimeConfigService.getConfigItems();
+        return DashboardResponse.ok(runtimeConfigService.getConfigItems());
     }
 
     @Mapping(value = "/api/runtime-config", method = MethodType.PUT)
     public Map<String, Object> set(Context context) throws Exception {
         ONode body = ONode.ofJson(context.body());
-        return runtimeConfigService.set(body.get("key").getString(), body.get("value").getString());
+        return DashboardResponse.ok(runtimeConfigService.set(body.get("key").getString(), body.get("value").getString()));
     }
 
     @Mapping(value = "/api/runtime-config", method = MethodType.DELETE)
     public Map<String, Object> remove(Context context) throws Exception {
         ONode body = ONode.ofJson(context.body());
-        return runtimeConfigService.remove(body.get("key").getString());
+        return DashboardResponse.ok(runtimeConfigService.remove(body.get("key").getString()));
     }
 
     @Mapping(value = "/api/runtime-config/reveal", method = MethodType.POST)
@@ -44,6 +44,6 @@ public class DashboardRuntimeConfigController {
             throw new IllegalStateException("Reveal rate limit exceeded");
         }
         ONode body = ONode.ofJson(context.body());
-        return runtimeConfigService.reveal(body.get("key").getString());
+        return DashboardResponse.ok(runtimeConfigService.reveal(body.get("key").getString()));
     }
 }

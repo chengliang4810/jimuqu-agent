@@ -3,9 +3,11 @@ package com.jimuqu.agent.bootstrap;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.gateway.service.DefaultGatewayService;
+import com.jimuqu.agent.gateway.service.GatewayInjectionAuthService;
 import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Controller;
 import org.noear.solon.annotation.Mapping;
+import org.noear.solon.core.handle.MethodType;
 import org.noear.solon.core.handle.Context;
 
 /**
@@ -17,9 +19,12 @@ public class GatewayController {
      * 网关服务。
      */
     private final DefaultGatewayService gatewayService;
+    private final GatewayInjectionAuthService injectionAuthService;
 
-    public GatewayController(DefaultGatewayService gatewayService) {
+    public GatewayController(DefaultGatewayService gatewayService,
+                             GatewayInjectionAuthService injectionAuthService) {
         this.gatewayService = gatewayService;
+        this.injectionAuthService = injectionAuthService;
     }
 
     /**
@@ -28,9 +33,42 @@ public class GatewayController {
      * @param context HTTP 上下文
      * @return 处理结果
      */
-    @Mapping("/api/gateway/message")
+    @Mapping(value = "/api/gateway/message", method = MethodType.POST)
     public GatewayReply message(Context context) throws Exception {
-        GatewayMessage message = ONode.deserialize(context.body(), GatewayMessage.class);
+        String body = context.body();
+        try {
+            injectionAuthService.verify(context, body);
+        } catch (IllegalStateException e) {
+            GatewayReply reply = new GatewayReply();
+            reply.setError(true);
+            reply.setContent(e.getMessage());
+            return reply;
+        }
+        GatewayMessage message = ONode.deserialize(body, GatewayMessage.class);
+        validateMessage(message);
         return gatewayService.handle(message);
+    }
+
+    private void validateMessage(GatewayMessage message) {
+        if (message == null || message.getPlatform() == null) {
+            throw new IllegalArgumentException("Gateway message platform is required");
+        }
+        switch (message.getPlatform()) {
+            case MEMORY:
+            case FEISHU:
+            case DINGTALK:
+            case WECOM:
+            case WEIXIN:
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported gateway platform");
+        }
+        if (isBlank(message.getChatId()) || isBlank(message.getUserId())) {
+            throw new IllegalArgumentException("Gateway message chatId and userId are required");
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().length() == 0;
     }
 }

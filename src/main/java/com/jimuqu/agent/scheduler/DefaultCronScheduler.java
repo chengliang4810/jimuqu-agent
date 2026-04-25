@@ -48,6 +48,10 @@ public class DefaultCronScheduler {
         }
     }
 
+    public void shutdown() {
+        stop();
+    }
+
     public void tickSafe() {
         try {
             tick();

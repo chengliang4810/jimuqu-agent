@@ -47,6 +47,10 @@ public class DashboardStatusService {
     }
 
     public Map<String, Object> getStatus() throws Exception {
+        return getStatus(true);
+    }
+
+    public Map<String, Object> getStatus(boolean detailed) throws Exception {
         gatewayRuntimeRefreshService.refreshIfNeeded();
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         List<SessionRecord> recentSessions = sessionRepository.listRecent(20);
@@ -82,12 +86,12 @@ public class DashboardStatusService {
                     ? (status.isConnected() ? "connected" : (fatal ? "fatal" : "disconnected"))
                     : "disabled");
             item.put("updated_at", isoNow());
-            item.put("detail", detail);
-            item.put("setup_state", status.getSetupState());
+            item.put("detail", detailed ? detail : publicDetail(status));
+            item.put("setup_state", detailed ? status.getSetupState() : null);
             item.put("connection_mode", status.getConnectionMode());
-            item.put("missing_env", status.getMissingEnv());
-            item.put("features", status.getFeatures());
-            item.put("error_message", fatal ? StrUtil.blankToDefault(status.getLastErrorMessage(), detail) : null);
+            item.put("missing_env", detailed ? status.getMissingEnv() : null);
+            item.put("features", detailed ? status.getFeatures() : null);
+            item.put("error_message", detailed && fatal ? StrUtil.blankToDefault(status.getLastErrorMessage(), detail) : null);
             item.put("error_code", fatal ? StrUtil.blankToDefault(status.getLastErrorCode(), "channel_unavailable") : null);
             platformStates.put(status.getPlatform().name().toLowerCase(), item);
         }
@@ -102,15 +106,21 @@ public class DashboardStatusService {
         }
 
         result.put("active_sessions", activeSessions);
-        result.put("config_path", appConfig.getRuntime().getConfigFile());
+        if (detailed) {
+            result.put("config_path", appConfig.getRuntime().getConfigFile());
+        }
         result.put("config_version", configVersion());
-        result.put("gateway_exit_reason", anyFatal ? firstFatalDetail(statuses) : null);
-        result.put("gateway_pid", parsePid());
+        result.put("gateway_exit_reason", detailed && anyFatal ? firstFatalDetail(statuses) : null);
+        if (detailed) {
+            result.put("gateway_pid", parsePid());
+        }
         result.put("gateway_platforms", platformStates);
         result.put("gateway_running", anyConnected);
         result.put("gateway_state", gatewayState);
         result.put("gateway_updated_at", isoNow());
-        result.put("hermes_home", appConfig.getRuntime().getHome());
+        if (detailed) {
+            result.put("hermes_home", appConfig.getRuntime().getHome());
+        }
         result.put("latest_config_version", configVersion());
         result.put("release_date", new SimpleDateFormat("yyyy-MM-dd").format(new Date()));
         AppUpdateService.VersionStatus versionStatus = appUpdateService.getVersionStatus(false);
@@ -120,14 +130,20 @@ public class DashboardStatusService {
         result.put("latest_version", versionStatus.getLatestVersion());
         result.put("latest_tag", versionStatus.getLatestTag());
         result.put("update_available", versionStatus.isUpdateAvailable());
-        result.put("release_url", versionStatus.getReleaseUrl());
-        result.put("release_api_url", versionStatus.getReleaseApiUrl());
-        result.put("update_error_message", versionStatus.getUpdateErrorMessage());
+        if (detailed) {
+            result.put("release_url", versionStatus.getReleaseUrl());
+            result.put("release_api_url", versionStatus.getReleaseApiUrl());
+            result.put("update_error_message", versionStatus.getUpdateErrorMessage());
+        }
         result.put("update_error_at", versionStatus.getUpdateErrorAt() > 0 ? versionStatus.getUpdateErrorAt() : null);
         return result;
     }
 
     public Map<String, Object> getModelInfo() {
+        return getModelInfo(true);
+    }
+
+    public Map<String, Object> getModelInfo(boolean detailed) {
         LlmProviderService.ResolvedProvider resolved = llmProviderService.resolveEffectiveProvider(null);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("model", resolved.getModel());
@@ -135,8 +151,10 @@ public class DashboardStatusService {
         result.put("providerKey", resolved.getProviderKey());
         result.put("providerLabel", resolved.getLabel());
         result.put("dialect", resolved.getDialect());
-        result.put("baseUrl", resolved.getBaseUrl());
-        result.put("fallbackProviders", appConfig.getFallbackProviders());
+        if (detailed) {
+            result.put("baseUrl", resolved.getBaseUrl());
+            result.put("fallbackProviders", appConfig.getFallbackProviders());
+        }
         result.put("auto_context_length", appConfig.getLlm().getContextWindowTokens());
         result.put("config_context_length", appConfig.getLlm().getContextWindowTokens());
         result.put("effective_context_length", appConfig.getLlm().getContextWindowTokens());
@@ -150,6 +168,13 @@ public class DashboardStatusService {
         capabilities.put("model_family", resolved.getDialect());
         result.put("capabilities", capabilities);
         return result;
+    }
+
+    private String publicDetail(ChannelStatus status) {
+        if (!status.isEnabled()) {
+            return "disabled";
+        }
+        return status.isConnected() ? "connected" : "disconnected";
     }
 
     private Integer parsePid() {

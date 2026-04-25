@@ -30,6 +30,7 @@ import com.jimuqu.agent.core.model.MessageAttachment;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.gateway.platform.base.AbstractConfigurableChannelAdapter;
 import com.jimuqu.agent.support.AttachmentCacheService;
+import com.jimuqu.agent.support.BoundedAttachmentIO;
 import com.jimuqu.agent.support.constants.GatewayBehaviorConstants;
 import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
 import lombok.RequiredArgsConstructor;
@@ -643,7 +644,7 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
                     mimeType,
                     false,
                     null,
-                    response.bodyBytes()
+                    BoundedAttachmentIO.readHutoolResponse(response, BoundedAttachmentIO.DEFAULT_MAX_BYTES)
             );
         } finally {
             response.close();

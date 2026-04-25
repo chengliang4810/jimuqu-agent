@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.support.MessageSupport;
+import com.jimuqu.agent.support.SecretRedactor;
 import com.jimuqu.agent.support.SourceKeySupport;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.ChatRole;
@@ -56,7 +57,7 @@ public class DashboardSessionService {
         for (ChatMessage message : MessageSupport.loadMessages(record.getNdjson())) {
             Map<String, Object> item = new LinkedHashMap<String, Object>();
             item.put("role", message.getRole().name().toLowerCase(Locale.ROOT));
-            item.put("content", message.getContent());
+            item.put("content", SecretRedactor.redact(message.getContent(), 8000));
             item.put("timestamp", null);
 
             if (message instanceof AssistantMessage) {
@@ -66,7 +67,7 @@ public class DashboardSessionService {
                     for (ToolCall call : assistant.getToolCalls()) {
                         Map<String, Object> function = new LinkedHashMap<String, Object>();
                         function.put("name", call.getName());
-                        function.put("arguments", StrUtil.blankToDefault(call.getArgumentsStr(), ONode.serialize(call.getArguments())));
+                        function.put("arguments", SecretRedactor.redact(StrUtil.blankToDefault(call.getArgumentsStr(), ONode.serialize(call.getArguments())), 4000));
 
                         Map<String, Object> toolCall = new LinkedHashMap<String, Object>();
                         toolCall.put("id", call.getId());

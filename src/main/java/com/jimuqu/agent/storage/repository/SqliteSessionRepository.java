@@ -157,6 +157,7 @@ public class SqliteSessionRepository implements SessionRepository {
 
         Connection connection = database.openConnection();
         try {
+            connection.setAutoCommit(false);
             PreparedStatement statement = connection.prepareStatement(
                     "insert or replace into sessions (session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, agent_snapshot_json, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, last_input_tokens, last_output_tokens, last_reasoning_tokens, last_cache_read_tokens, last_total_tokens, cumulative_input_tokens, cumulative_output_tokens, cumulative_reasoning_tokens, cumulative_cache_read_tokens, cumulative_total_tokens, last_usage_at, last_resolved_provider, last_resolved_model, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
@@ -194,9 +195,14 @@ public class SqliteSessionRepository implements SessionRepository {
             statement.close();
 
             upsertSearchIndex(connection, sessionRecord);
+            connection.commit();
             sessionRecord.setCreatedAt(createdAt);
             sessionRecord.setUpdatedAt(updatedAt);
+        } catch (Exception e) {
+            connection.rollback();
+            throw e;
         } finally {
+            connection.setAutoCommit(true);
             connection.close();
         }
     }
@@ -301,6 +307,7 @@ public class SqliteSessionRepository implements SessionRepository {
     public void delete(String sessionId) throws Exception {
         Connection connection = database.openConnection();
         try {
+            connection.setAutoCommit(false);
             PreparedStatement deleteFts = connection.prepareStatement("delete from sessions_fts where session_id = ?");
             deleteFts.setString(1, sessionId);
             deleteFts.executeUpdate();
@@ -315,7 +322,12 @@ public class SqliteSessionRepository implements SessionRepository {
             deleteSession.setString(1, sessionId);
             deleteSession.executeUpdate();
             deleteSession.close();
+            connection.commit();
+        } catch (Exception e) {
+            connection.rollback();
+            throw e;
         } finally {
+            connection.setAutoCommit(true);
             connection.close();
         }
     }

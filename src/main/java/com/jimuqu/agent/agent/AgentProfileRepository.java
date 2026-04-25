@@ -1,0 +1,11 @@
+package com.jimuqu.agent.agent;
+
+import java.util.List;
+
+public interface AgentProfileRepository {
+    AgentProfile save(AgentProfile profile) throws Exception;
+
+    AgentProfile findByName(String agentName) throws Exception;
+
+    List<AgentProfile> listAll() throws Exception;
+}

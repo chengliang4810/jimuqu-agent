@@ -352,11 +352,11 @@ public class SolonAiLlmGateway implements LlmGateway {
 
         AppConfig.LlmConfig primary = toLlmConfig(llmProviderService.resolveEffectiveProvider(session));
         candidates.add(primary);
-        seen.add(primary.getProvider() + "|" + primary.getModel());
+        seen.add(providerSignature(primary));
 
         for (LlmProviderService.ResolvedProvider fallback : llmProviderService.resolveFallbackProviders()) {
             AppConfig.LlmConfig candidate = toLlmConfig(fallback);
-            String signature = candidate.getProvider() + "|" + candidate.getModel();
+            String signature = providerSignature(candidate);
             if (seen.add(signature)) {
                 candidates.add(candidate);
             }
@@ -452,7 +452,7 @@ public class SolonAiLlmGateway implements LlmGateway {
         if (StrUtil.isBlank(resolved.getProvider())) {
             throw new IllegalStateException("LLM provider 不能为空。");
         }
-        String dialect = StrUtil.isNotBlank(resolved.getDialect()) ? resolved.getDialect() : resolved.getProvider();
+        String dialect = LlmProviderSupport.normalizeDialect(StrUtil.isNotBlank(resolved.getDialect()) ? resolved.getDialect() : resolved.getProvider());
         if (!LlmConstants.SUPPORTED_PROVIDERS.contains(dialect)) {
             throw new IllegalStateException("不支持的 provider dialect：" + dialect);
         }
@@ -470,7 +470,7 @@ public class SolonAiLlmGateway implements LlmGateway {
 
     private ChatModel buildChatModel(AppConfig.LlmConfig resolved) {
         ensureCustomDialectsRegistered();
-        String dialect = StrUtil.isNotBlank(resolved.getDialect()) ? resolved.getDialect() : resolved.getProvider();
+        String dialect = LlmProviderSupport.normalizeDialect(StrUtil.isNotBlank(resolved.getDialect()) ? resolved.getDialect() : resolved.getProvider());
 
         ChatModel.Builder builder = ChatModel.of(resolved.getApiUrl())
                 .provider(dialect)
@@ -484,12 +484,21 @@ public class SolonAiLlmGateway implements LlmGateway {
         builder.modelOptions(options -> {
             options.temperature(resolved.getTemperature());
             options.max_tokens(resolved.getMaxTokens());
-            if (resolved.getReasoningEffort() != null && resolved.getReasoningEffort().trim().length() > 0) {
+            if (LlmConstants.PROVIDER_OPENAI_RESPONSES.equals(dialect)
+                    && resolved.getReasoningEffort() != null && resolved.getReasoningEffort().trim().length() > 0) {
                 options.optionSet("reasoning", java.util.Collections.<String, Object>singletonMap("effort", resolved.getReasoningEffort()));
             }
         });
 
         return builder.build();
+    }
+
+    private String providerSignature(AppConfig.LlmConfig config) {
+        return StrUtil.nullToEmpty(config.getProvider())
+                + "|" + StrUtil.nullToEmpty(config.getDialect())
+                + "|" + StrUtil.nullToEmpty(config.getApiUrl())
+                + "|" + StrUtil.nullToEmpty(config.getModel())
+                + "|" + (StrUtil.isBlank(config.getApiKey()) ? "no-key" : "has-key");
     }
 
     private void ensureCustomDialectsRegistered() {

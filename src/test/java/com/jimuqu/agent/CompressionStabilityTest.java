@@ -105,7 +105,7 @@ public class CompressionStabilityTest {
     }
 
     @Test
-    void shouldPreferLatestGoalAndDropLegacyHeadAfterSummaryExists() throws Exception {
+    void shouldPreferLatestGoalAndDropOldHeadAfterSummaryExists() throws Exception {
         DefaultContextCompressionService service = new DefaultContextCompressionService(config());
         SessionRecord session = new SessionRecord();
         session.setSessionId("s-4b");
