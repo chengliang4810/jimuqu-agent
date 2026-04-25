@@ -48,7 +48,22 @@ public class FileTools {
 
     @ToolMapping(name = "read_file", description = "Read a UTF-8 text file from disk by absolute or relative path.")
     public String readFile(@Param(name = "path", description = "文件绝对路径或相对路径") String path) {
-        return FileUtil.readUtf8String(pathGuard.requireAllowedToolPath(path));
+        File file;
+        try {
+            file = pathGuard.requireAllowedToolPath(path);
+        } catch (IllegalArgumentException e) {
+            return "Cannot read file: " + e.getMessage();
+        }
+        if (path != null && (path.contains("!/") || path.contains("!\\"))) {
+            return "Cannot read file: jar-internal paths are not disk files: " + path;
+        }
+        if (!file.exists()) {
+            return "File not found: " + file.getAbsolutePath();
+        }
+        if (!file.isFile()) {
+            return "Path is not a file: " + file.getAbsolutePath();
+        }
+        return FileUtil.readUtf8String(file);
     }
 
     @ToolMapping(name = "write_file", description = "Write UTF-8 text content to a file path, creating parent directories when needed.")

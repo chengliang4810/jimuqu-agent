@@ -25,4 +25,14 @@ public class CheckpointRollbackTest {
         env.checkpointService.rollbackLatest("MEMORY:room-a:user-a");
         assertThat(FileUtil.readUtf8String(file)).isEqualTo("v1");
     }
+
+    @Test
+    void readFileShouldReturnReadableErrorForJarInternalPath() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        FileTools fileTools = new FileTools(env.checkpointService, env.sessionRepository, "MEMORY:room-a:user-a", new RuntimePathGuard(env.appConfig));
+
+        String result = fileTools.readFile(env.appConfig.getRuntime().getHome() + "/jimuqu-agent.jar!/org/noear/solon/core/USER.md");
+
+        assertThat(result).contains("jar-internal paths are not disk files");
+    }
 }
