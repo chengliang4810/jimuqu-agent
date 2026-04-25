@@ -25,6 +25,16 @@ public class DashboardSkillsController {
         return skillsService.getSkills();
     }
 
+    @Mapping(value = "/api/skills/view", method = MethodType.GET)
+    public Map<String, Object> view(Context context) throws Exception {
+        return skillsService.viewSkill(context.param("name"), context.param("filePath"));
+    }
+
+    @Mapping(value = "/api/skills/files", method = MethodType.GET)
+    public List<Map<String, Object>> files(Context context) throws Exception {
+        return skillsService.getSkillFiles(context.param("name"));
+    }
+
     @Mapping(value = "/api/skills/toggle", method = MethodType.PUT)
     public Map<String, Object> toggle(Context context) throws Exception {
         ONode body = ONode.ofJson(context.body());

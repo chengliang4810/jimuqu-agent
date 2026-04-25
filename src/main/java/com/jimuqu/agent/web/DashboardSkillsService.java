@@ -2,7 +2,9 @@ package com.jimuqu.agent.web;
 
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.core.model.SkillDescriptor;
+import com.jimuqu.agent.core.model.SkillView;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
+import com.jimuqu.agent.support.constants.SkillConstants;
 import com.jimuqu.agent.support.constants.ToolNameConstants;
 
 import java.sql.SQLException;
@@ -41,6 +43,23 @@ public class DashboardSkillsService {
     public Map<String, Object> toggleSkill(String name, boolean enabled) throws Exception {
         preferenceStore.setSkillEnabledGlobal(name, enabled);
         return Collections.<String, Object>singletonMap("ok", true);
+    }
+
+    public Map<String, Object> viewSkill(String name, String filePath) throws Exception {
+        SkillView view = localSkillService.viewSkill(name, filePath);
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("name", view.getDescriptor().canonicalName());
+        result.put("description", view.getDescriptor().getDescription());
+        result.put("category", view.getDescriptor().getCategory() == null ? SkillConstants.DEFAULT_CATEGORY : view.getDescriptor().getCategory());
+        result.put("filePath", view.getFilePath());
+        result.put("content", view.getContent());
+        result.put("files", skillFiles(view.getDescriptor()));
+        return result;
+    }
+
+    public List<Map<String, Object>> getSkillFiles(String name) throws Exception {
+        SkillView view = localSkillService.viewSkill(name, null);
+        return skillFiles(view.getDescriptor());
     }
 
     public List<Map<String, Object>> getToolsets() {
@@ -108,6 +127,32 @@ public class DashboardSkillsService {
         item.put("configured", true);
         item.put("tools", tools);
         return item;
+    }
+
+    private List<Map<String, Object>> skillFiles(SkillDescriptor descriptor) {
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+        result.add(skillFile(SkillConstants.SKILL_FILE_NAME));
+        for (String path : descriptor.getLinkedFiles()) {
+            result.add(skillFile(path));
+        }
+        return result;
+    }
+
+    private Map<String, Object> skillFile(String path) {
+        Map<String, Object> item = new LinkedHashMap<String, Object>();
+        item.put("path", path);
+        item.put("name", fileName(path));
+        item.put("isDir", false);
+        return item;
+    }
+
+    private String fileName(String path) {
+        if (path == null) {
+            return "";
+        }
+        String normalized = path.replace('\\', '/');
+        int index = normalized.lastIndexOf('/');
+        return index < 0 ? normalized : normalized.substring(index + 1);
     }
 
     private boolean isSkillEnabled(String name) {

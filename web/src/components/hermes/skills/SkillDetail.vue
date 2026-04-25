@@ -25,9 +25,8 @@ async function loadSkill() {
   files.value = []
   content.value = ''
   try {
-    const skillPath = `${props.category}/${props.skill}/SKILL.md`
     const [skillContent, skillFiles] = await Promise.all([
-      fetchSkillContent(skillPath),
+      fetchSkillContent(props.category, props.skill),
       fetchSkillFiles(props.category, props.skill),
     ])
     content.value = skillContent
@@ -43,18 +42,7 @@ async function viewFile(filePath: string) {
   fileLoading.value = true
   viewingFile.value = filePath
   try {
-    // filePath might be absolute or relative; normalize to relative under category/skill/
-    const base = `${props.category}/${props.skill}/`
-    let relPath = filePath
-    if (filePath.startsWith('/')) {
-      // Strip absolute prefix to get relative path
-      const segments = filePath.split('/.hermes/skills/')[1]
-      if (segments) {
-        const afterSkillDir = segments.split('/').slice(2).join('/')
-        relPath = afterSkillDir
-      }
-    }
-    fileContent.value = await fetchSkillContent(`${base}${relPath}`)
+    fileContent.value = await fetchSkillContent(props.category, props.skill, filePath)
   } catch (err: any) {
     fileContent.value = t('skills.fileLoadFailed') + `: ${err.message}`
   } finally {

@@ -38,6 +38,10 @@ interface DashboardSkill {
   enabled: boolean
 }
 
+interface SkillContentResponse {
+  content: string
+}
+
 interface WorkspaceFile {
   key: string
   path: string
@@ -69,13 +73,20 @@ export async function fetchSkills(): Promise<SkillCategory[]> {
   }))
 }
 
-export async function fetchSkillContent(skillPath: string): Promise<string> {
-  const [category, skill] = skillPath.split('/')
-  return `# ${skill || skillPath}\n\n当前后端未开放技能文件内容读取。\n\n- 分类：${category || 'general'}\n- 标识：${skill || skillPath}\n`
+function canonicalSkillName(category: string, skill: string): string {
+  return category && category !== 'general' ? `${category}/${skill}` : skill
 }
 
-export async function fetchSkillFiles(_category: string, _skill: string): Promise<SkillFileEntry[]> {
-  return []
+export async function fetchSkillContent(category: string, skill: string, filePath?: string): Promise<string> {
+  const params = new URLSearchParams({ name: canonicalSkillName(category, skill) })
+  if (filePath) params.set('filePath', filePath)
+  const res = await request<SkillContentResponse>(`/api/skills/view?${params.toString()}`)
+  return res.content || ''
+}
+
+export async function fetchSkillFiles(category: string, skill: string): Promise<SkillFileEntry[]> {
+  const params = new URLSearchParams({ name: canonicalSkillName(category, skill) })
+  return request<SkillFileEntry[]>(`/api/skills/files?${params.toString()}`)
 }
 
 async function getWorkspaceFile(key: string): Promise<WorkspaceFile | null> {

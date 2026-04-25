@@ -14,6 +14,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.LinkedHashMap;
@@ -164,6 +165,21 @@ public class DashboardControllerHttpTest {
         assertThat(skills.status).isEqualTo(200);
         assertThat(skills.body).contains("sample-skill");
 
+        HttpResult skillView = request("GET", "/api/skills/view?name=sample-skill", null, token);
+        assertThat(skillView.status).isEqualTo(200);
+        assertThat(ONode.ofJson(skillView.body).get("content").getString()).contains("Sample skill for dashboard tests");
+
+        HttpResult skillFiles = request("GET", "/api/skills/files?name=sample-skill", null, token);
+        assertThat(skillFiles.status).isEqualTo(200);
+        assertThat(skillFiles.body).contains("references/info.md");
+
+        HttpResult skillSupportFile = request("GET", "/api/skills/view?name=sample-skill&filePath="
+                        + URLEncoder.encode("references/info.md", "UTF-8"),
+                null,
+                token);
+        assertThat(skillSupportFile.status).isEqualTo(200);
+        assertThat(ONode.ofJson(skillSupportFile.body).get("content").getString()).contains("supporting skill notes");
+
         HttpResult toggleSkill = request("PUT", "/api/skills/toggle",
                 "{\"name\":\"sample-skill\",\"enabled\":false}",
                 token);
@@ -288,6 +304,9 @@ public class DashboardControllerHttpTest {
         File skillFile = FileUtil.file(runtimeHome, "skills", "sample-skill", "SKILL.md");
         String content = "---\nname: sample-skill\ndescription: Sample skill for dashboard tests\n---\n\n# Sample\n";
         FileUtil.writeUtf8String(content, skillFile);
+        File references = FileUtil.file(runtimeHome, "skills", "sample-skill", "references");
+        FileUtil.mkdir(references);
+        FileUtil.writeUtf8String("supporting skill notes", FileUtil.file(references, "info.md"));
     }
 
     private static String extractToken(String html) {
