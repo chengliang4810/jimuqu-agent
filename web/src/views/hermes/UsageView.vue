@@ -11,7 +11,7 @@ const { t } = useI18n()
 const usageStore = useUsageStore()
 
 onMounted(() => {
-  usageStore.loadSessions()
+  usageStore.loadUsage()
 })
 </script>
 
@@ -19,17 +19,17 @@ onMounted(() => {
   <div class="usage-view">
     <header class="page-header">
       <h2 class="header-title">{{ t('usage.title') }}</h2>
-      <NButton size="small" quaternary :loading="usageStore.isLoading" @click="usageStore.loadSessions()">
+      <NButton size="small" quaternary :loading="usageStore.isLoading" @click="usageStore.loadUsage()">
         {{ t('usage.refresh') }}
       </NButton>
     </header>
 
     <div class="usage-content">
-      <div v-if="usageStore.isLoading && usageStore.sessions.length === 0" class="usage-loading">
+      <div v-if="usageStore.isLoading && !usageStore.analytics" class="usage-loading">
         {{ t('common.loading') }}
       </div>
 
-      <template v-else-if="usageStore.sessions.length > 0">
+      <template v-else-if="usageStore.analytics && usageStore.totalSessions > 0">
         <StatCards />
         <ModelBreakdown />
         <DailyTrend />

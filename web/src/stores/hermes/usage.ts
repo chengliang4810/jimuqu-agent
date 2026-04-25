@@ -1,4 +1,4 @@
-import { fetchSessions, type SessionSummary } from '@/api/hermes/sessions'
+import { fetchUsageAnalytics, type UsageAnalytics } from '@/api/hermes/usage'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
@@ -20,35 +20,29 @@ interface ModelUsage {
 }
 
 export const useUsageStore = defineStore('usage', () => {
-  const sessions = ref<SessionSummary[]>([])
+  const analytics = ref<UsageAnalytics | null>(null)
   const isLoading = ref(false)
 
-  async function loadSessions() {
+  async function loadUsage() {
     isLoading.value = true
     try {
-      sessions.value = await fetchSessions()
+      analytics.value = await fetchUsageAnalytics(30)
     } catch (err) {
-      console.error('Failed to load sessions for usage:', err)
+      console.error('Failed to load usage analytics:', err)
     } finally {
       isLoading.value = false
     }
   }
 
-  const totalInputTokens = computed(() =>
-    sessions.value.reduce((sum, s) => sum + (s.input_tokens || 0), 0),
-  )
+  const totalInputTokens = computed(() => analytics.value?.totals.total_input || 0)
 
-  const totalOutputTokens = computed(() =>
-    sessions.value.reduce((sum, s) => sum + (s.output_tokens || 0), 0),
-  )
+  const totalOutputTokens = computed(() => analytics.value?.totals.total_output || 0)
 
   const totalTokens = computed(() => totalInputTokens.value + totalOutputTokens.value)
 
-  const totalSessions = computed(() => sessions.value.length)
+  const totalSessions = computed(() => analytics.value?.totals.total_sessions || 0)
 
-  const totalCacheTokens = computed(() =>
-    sessions.value.reduce((sum, s) => sum + (s.cache_read_tokens || 0), 0),
-  )
+  const totalCacheTokens = computed(() => analytics.value?.totals.total_cache_read || 0)
 
   const cacheHitRate = computed(() => {
     const total = totalInputTokens.value
@@ -56,77 +50,40 @@ export const useUsageStore = defineStore('usage', () => {
     return ((totalCacheTokens.value / total) * 100)
   })
 
-  const estimatedCost = computed(() =>
-    sessions.value.reduce((sum, s) => {
-      const cost = s.actual_cost_usd ?? s.estimated_cost_usd ?? 0
-      return sum + cost
-    }, 0),
-  )
+  const estimatedCost = computed(() => analytics.value?.totals.total_estimated_cost || 0)
 
   const modelUsage = computed<ModelUsage[]>(() => {
-    const map = new Map<string, ModelUsage>()
-    for (const s of sessions.value) {
-      const key = s.model || 'unknown'
-      if (!map.has(key)) {
-        map.set(key, {
-          model: key,
-          inputTokens: 0,
-          outputTokens: 0,
-          cacheTokens: 0,
-          totalTokens: 0,
-          sessions: 0,
-        })
-      }
-      const entry = map.get(key)!
-      entry.inputTokens += s.input_tokens || 0
-      entry.outputTokens += s.output_tokens || 0
-      entry.cacheTokens += s.cache_read_tokens || 0
-      entry.totalTokens += (s.input_tokens || 0) + (s.output_tokens || 0)
-      entry.sessions += 1
-    }
-    return [...map.values()].sort((a, b) => b.totalTokens - a.totalTokens)
+    return (analytics.value?.by_model || [])
+      .map((item) => ({
+        model: item.model || 'unknown',
+        inputTokens: item.input_tokens || 0,
+        outputTokens: item.output_tokens || 0,
+        cacheTokens: 0,
+        totalTokens: (item.input_tokens || 0) + (item.output_tokens || 0),
+        sessions: item.sessions || 0,
+      }))
+      .sort((a, b) => b.totalTokens - a.totalTokens)
   })
 
   const dailyUsage = computed<DailyUsage[]>(() => {
-    const map = new Map<string, DailyUsage>()
-    const now = new Date()
-
-    // Initialize last 30 days
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(now)
-      d.setDate(d.getDate() - i)
-      const key = d.toISOString().slice(0, 10)
-      map.set(key, { date: key, tokens: 0, cache: 0, sessions: 0, cost: 0 })
-    }
-
-    for (const s of sessions.value) {
-      const d = new Date(s.started_at * 1000)
-      const key = d.toISOString().slice(0, 10)
-      const entry = map.get(key)
-      if (entry) {
-        entry.tokens += (s.input_tokens || 0) + (s.output_tokens || 0)
-        entry.cache += s.cache_read_tokens || 0
-        entry.sessions += 1
-        const cost = s.actual_cost_usd ?? s.estimated_cost_usd ?? 0
-        entry.cost += cost
-      }
-    }
-
-    return [...map.values()]
+    return (analytics.value?.daily || []).map((item) => ({
+      date: item.day,
+      tokens: (item.input_tokens || 0) + (item.output_tokens || 0),
+      cache: item.cache_read_tokens || 0,
+      sessions: item.sessions || 0,
+      cost: item.actual_cost || item.estimated_cost || 0,
+    }))
   })
 
   const avgSessionsPerDay = computed(() => {
-    const firstDate = sessions.value.length > 0
-      ? new Date(sessions.value[sessions.value.length - 1].started_at * 1000)
-      : new Date()
-    const days = Math.max(1, Math.ceil((Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24)))
+    const days = Math.max(1, dailyUsage.value.length || 30)
     return totalSessions.value / days
   })
 
   return {
-    sessions,
+    analytics,
     isLoading,
-    loadSessions,
+    loadUsage,
     totalInputTokens,
     totalOutputTokens,
     totalTokens,

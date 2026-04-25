@@ -51,6 +51,16 @@ public class SessionUsageTrackingTest {
         assertThat(((Number) totals.get("total_input")).longValue()).isGreaterThan(0L);
         assertThat(((Number) totals.get("total_output")).longValue()).isGreaterThan(0L);
         assertThat(((Number) totals.get("total_sessions")).intValue()).isGreaterThanOrEqualTo(1);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> daily = (List<Map<String, Object>>) analytics.get("daily");
+        assertThat(daily)
+                .isNotEmpty()
+                .anySatisfy(day -> {
+                    long tokens = ((Number) day.get("input_tokens")).longValue()
+                            + ((Number) day.get("output_tokens")).longValue();
+                    assertThat(tokens).isGreaterThan(0L);
+                    assertThat(((Number) day.get("sessions")).intValue()).isGreaterThanOrEqualTo(1);
+                });
     }
 
     private void bootstrapAdmin(TestEnvironment env) throws Exception {

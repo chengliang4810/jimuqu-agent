@@ -12,7 +12,7 @@ function formatTokens(n: number): string {
 }
 
 function formatCost(n: number): string {
-  if (n === 0) return '$0.00'
+  if (n <= 0) return '--'
   if (n < 0.01) return '<$0.01'
   return '$' + n.toFixed(2)
 }
