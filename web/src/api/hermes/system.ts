@@ -177,6 +177,7 @@ export async function addCustomProvider(data: CustomProvider): Promise<void> {
 }
 
 export async function fetchProviderModels(data: {
+  providerKey?: string
   baseUrl: string
   apiKey?: string
   dialect: string

@@ -144,9 +144,16 @@ public class DashboardProviderService {
     }
 
     public Map<String, Object> listRemoteModels(Map<String, Object> data) {
+        String providerKey = readString(data, "providerKey");
         String baseUrl = readString(data, "baseUrl");
         String apiKey = readString(data, "apiKey");
         String dialect = LlmProviderSupport.normalizeDialect(readString(data, "dialect"));
+        AppConfig.ProviderConfig provider = StrUtil.isBlank(providerKey) ? null : appConfig.getProviders().get(providerKey);
+        if (provider != null) {
+            baseUrl = StrUtil.blankToDefault(baseUrl, provider.getBaseUrl());
+            apiKey = StrUtil.blankToDefault(apiKey, provider.getApiKey());
+            dialect = LlmProviderSupport.normalizeDialect(StrUtil.blankToDefault(dialect, provider.getDialect()));
+        }
         if (StrUtil.isBlank(baseUrl)) {
             throw new IllegalArgumentException("baseUrl 不能为空。");
         }
@@ -157,9 +164,10 @@ public class DashboardProviderService {
         String url = LlmProviderSupport.buildModelListUrl(baseUrl, dialect);
         HttpRequest request = HttpRequest.get(url).timeout(15000);
         if (StrUtil.isNotBlank(apiKey)) {
-            request.header("Authorization", "Bearer " + apiKey);
             if (LlmConstants.PROVIDER_GEMINI.equals(dialect)) {
                 request.form("key", apiKey);
+            } else {
+                request.header("Authorization", "Bearer " + apiKey);
             }
             if (LlmConstants.PROVIDER_ANTHROPIC.equals(dialect)) {
                 request.header("x-api-key", apiKey);

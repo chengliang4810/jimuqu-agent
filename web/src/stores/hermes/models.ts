@@ -55,7 +55,7 @@ export const useModelsStore = defineStore('models', () => {
     appStore.loadModels()
   }
 
-  async function fetchProviderModels(data: { baseUrl: string; apiKey?: string; dialect: string }) {
+  async function fetchProviderModels(data: { providerKey?: string; baseUrl: string; apiKey?: string; dialect: string }) {
     return systemApi.fetchProviderModels(data)
   }
 

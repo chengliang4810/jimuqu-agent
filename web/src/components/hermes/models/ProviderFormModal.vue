@@ -92,12 +92,15 @@ async function handleSave() {
   loading.value = true
   try {
     if (isEdit.value) {
-      await modelsStore.updateProvider(formData.value.providerKey.trim(), {
+      const nextProvider = {
         name: formData.value.name.trim(),
         baseUrl: formData.value.baseUrl.trim(),
-        apiKey: formData.value.apiKey.trim(),
         defaultModel: formData.value.defaultModel.trim(),
         dialect: formData.value.dialect,
+        apiKey: formData.value.apiKey.trim() || undefined,
+      }
+      await modelsStore.updateProvider(formData.value.providerKey.trim(), {
+        ...nextProvider,
       })
       message.success(t('models.providerUpdated'))
     } else {
@@ -127,6 +130,7 @@ async function fetchModelList() {
   modelsLoading.value = true
   try {
     const res = await modelsStore.fetchProviderModels({
+      providerKey: isEdit.value ? formData.value.providerKey.trim() : undefined,
       baseUrl: formData.value.baseUrl.trim(),
       apiKey: formData.value.apiKey.trim(),
       dialect: formData.value.dialect,

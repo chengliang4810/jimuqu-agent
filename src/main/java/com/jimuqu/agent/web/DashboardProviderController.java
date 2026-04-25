@@ -33,7 +33,15 @@ public class DashboardProviderController {
 
     @Mapping(value = "/api/providers/models", method = MethodType.POST)
     public Map<String, Object> listModels(Context context) throws Exception {
-        return DashboardResponse.ok(providerService.listRemoteModels(ONode.deserialize(ONode.ofJson(context.body()).toJson(), LinkedHashMap.class)));
+        try {
+            return DashboardResponse.ok(providerService.listRemoteModels(ONode.deserialize(ONode.ofJson(context.body()).toJson(), LinkedHashMap.class)));
+        } catch (IllegalArgumentException e) {
+            context.status(400);
+            return DashboardResponse.error("PROVIDER_MODELS_BAD_REQUEST", e.getMessage());
+        } catch (IllegalStateException e) {
+            context.status(502);
+            return DashboardResponse.error("PROVIDER_MODELS_FETCH_FAILED", e.getMessage());
+        }
     }
 
     @Mapping(value = "/api/providers/{providerKey}", method = MethodType.PUT)
