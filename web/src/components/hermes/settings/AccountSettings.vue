@@ -1,11 +1,11 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { NButton, NInput, NPopconfirm, useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
-import { clearApiKey, getApiKey, setApiKey } from "@/api/client";
+import { clearApiKey, setApiKey } from "@/api/client";
 import { fetchRuntimeConfigItems, revealRuntimeConfigItem, setRuntimeConfigItem } from "@/api/hermes/config";
 
-const ACCESS_TOKEN_KEY = "JIMUQU_DASHBOARD_ACCESS_TOKEN";
+const ACCESS_TOKEN_KEY = "jimuqu.dashboard.accessToken";
 
 const { t } = useI18n();
 const message = useMessage();
@@ -58,8 +58,7 @@ async function saveAccessToken() {
 async function revealAccessToken() {
   revealing.value = true;
   try {
-    const token = await revealRuntimeConfigItem(ACCESS_TOKEN_KEY);
-    accessToken.value = token;
+    accessToken.value = await revealRuntimeConfigItem(ACCESS_TOKEN_KEY);
   } catch (err: any) {
     message.error(err.message || t("account.accessTokenRevealFailed"));
   } finally {
@@ -67,24 +66,22 @@ async function revealAccessToken() {
   }
 }
 
-async function removeAccessToken() {
+async function clearAccessToken() {
   saving.value = true;
   try {
     await setRuntimeConfigItem(ACCESS_TOKEN_KEY, "");
     accessToken.value = "";
+    tokenPreview.value = "";
+    configured.value = false;
     clearApiKey();
     await loadTokenStatus();
-    message.success(t("account.accessTokenRemoved"));
+    message.success(t("account.accessTokenCleared"));
     window.location.reload();
   } catch (err: any) {
     message.error(err.message || t("common.saveFailed"));
   } finally {
     saving.value = false;
   }
-}
-
-function useCurrentToken() {
-  accessToken.value = getApiKey();
 }
 </script>
 
@@ -93,12 +90,19 @@ function useCurrentToken() {
     <p class="section-desc">{{ t("account.accessTokenDescription") }}</p>
 
     <div class="token-card">
-      <div class="token-status">
-        <span class="status-label">{{ t("account.accessTokenStatus") }}</span>
+      <div class="token-header">
+        <div>
+          <div class="token-title">{{ t("account.dashboardAccessToken") }}</div>
+          <code class="config-key">{{ ACCESS_TOKEN_KEY }}</code>
+        </div>
         <span class="status-value" :class="{ configured }">
           {{ configured ? t("common.configured") : t("common.notConfigured") }}
         </span>
-        <code v-if="tokenPreview" class="token-preview">{{ tokenPreview }}</code>
+      </div>
+
+      <div v-if="tokenPreview" class="token-preview-row">
+        <span>{{ t("account.currentValue") }}</span>
+        <code class="token-preview">{{ tokenPreview }}</code>
       </div>
 
       <NInput
@@ -111,25 +115,25 @@ function useCurrentToken() {
       />
 
       <div class="action-buttons">
-        <NButton @click="useCurrentToken">{{ t("account.useCurrentToken") }}</NButton>
-        <NButton :loading="revealing" :disabled="!configured" @click="revealAccessToken">
+        <NButton type="primary" :loading="saving" :disabled="loading" @click="saveAccessToken">
+          {{ t("common.save") }}
+        </NButton>
+        <NButton :loading="revealing" :disabled="!configured || loading || saving" @click="revealAccessToken">
           {{ t("account.revealAccessToken") }}
         </NButton>
         <NPopconfirm
-          :positive-text="t('common.delete')"
+          :positive-text="t('common.confirm')"
           :negative-text="t('common.cancel')"
-          @positive-click="removeAccessToken"
+          :disabled="!configured"
+          @positive-click="clearAccessToken"
         >
           <template #trigger>
-            <NButton type="error" ghost :loading="saving" :disabled="!configured">
-              {{ t("account.removeAccessToken") }}
+            <NButton type="error" quaternary :disabled="!configured || loading || saving">
+              {{ t("account.clearAccessToken") }}
             </NButton>
           </template>
-          {{ t("account.removeAccessTokenConfirm") }}
+          {{ t("account.clearAccessTokenConfirm") }}
         </NPopconfirm>
-        <NButton type="primary" :loading="saving" @click="saveAccessToken">
-          {{ t("common.save") }}
-        </NButton>
       </div>
     </div>
   </div>
@@ -139,55 +143,77 @@ function useCurrentToken() {
 @use "@/styles/variables" as *;
 
 .account-settings {
-  padding: 8px 0;
+  margin-top: 16px;
 }
 
 .section-desc {
+  margin: 0 0 16px;
+  color: $text-secondary;
   font-size: 13px;
-  color: $text-muted;
-  margin: 0 0 20px;
   line-height: 1.6;
 }
 
 .token-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  border: 1px solid $border-color;
+  border-radius: $radius-md;
+  padding: 16px;
+  background: $bg-card;
   max-width: 720px;
 }
 
-.token-status {
+.token-header {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  font-size: 13px;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
-.status-label {
+.token-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-primary;
+  margin-bottom: 4px;
+}
+
+.config-key,
+.token-preview {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+}
+
+.config-key {
   color: $text-secondary;
 }
 
 .status-value {
   color: $text-muted;
+  font-size: 12px;
+  white-space: nowrap;
 
   &.configured {
     color: $success;
   }
 }
 
-.token-preview {
+.token-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
   color: $text-muted;
-  background: $bg-input;
-  border: 1px solid $border-color;
-  border-radius: $radius-sm;
-  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.token-preview {
+  color: $text-secondary;
 }
 
 .action-buttons {
   display: flex;
-  gap: 10px;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
 }
 </style>
+

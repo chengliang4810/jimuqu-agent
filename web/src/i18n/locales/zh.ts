@@ -45,6 +45,7 @@ export default {
     edit: '编辑',
     save: '保存',
     saved: '已保存',
+    fetchFailed: '加载失败',
     saveFailed: '保存失败',
     ok: '确定',
     copied: '已复制',
@@ -66,6 +67,21 @@ export default {
   },
 
   // 侧边栏
+
+  account: {
+    dashboardAccessToken: 'Dashboard 访问令牌',
+    accessTokenDescription: '这里只配置一个运行时配置项：jimuqu.dashboard.accessToken。它用于 Dashboard 页面和 /api/* 请求的 Bearer Token。',
+    accessTokenPlaceholder: '输入新的访问令牌',
+    accessTokenRequired: '访问令牌不能为空',
+    accessTokenSaved: '访问令牌已保存',
+    accessTokenCleared: '访问令牌已清空',
+    accessTokenRevealFailed: '读取访问令牌失败',
+    revealAccessToken: '显示当前值',
+    clearAccessToken: '清空令牌',
+    clearAccessTokenConfirm: '确定清空 jimuqu.dashboard.accessToken 吗？清空后服务会使用启动时生成的临时令牌。',
+    currentValue: '当前值',
+  },
+
   sidebar: {
     chat: '对话',
     search: '搜索',

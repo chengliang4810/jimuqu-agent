@@ -62,7 +62,7 @@ public class DashboardRuntimeConfigService {
                 new ConfigItemDefinition("JIMUQU_GATEWAY_INJECTION_SECRET", "HTTP gateway injection HMAC secret", "security", true, true, null, Arrays.asList("gateway")),
                 new ConfigItemDefinition("JIMUQU_GATEWAY_INJECTION_MAX_BODY_BYTES", "HTTP gateway injection max body bytes", "security", false, true, null, Arrays.asList("gateway")),
                 new ConfigItemDefinition("JIMUQU_GATEWAY_INJECTION_REPLAY_WINDOW_SECONDS", "HTTP gateway injection replay window seconds", "security", false, true, null, Arrays.asList("gateway")),
-                new ConfigItemDefinition("JIMUQU_DASHBOARD_ACCESS_TOKEN", "Dashboard 和 API 访问令牌", "security", true, false, null, Arrays.asList("dashboard")),
+                new ConfigItemDefinition("jimuqu.dashboard.accessToken", "Dashboard access token", "dashboard", true, false, null, Arrays.asList("dashboard")),
                 new ConfigItemDefinition("JIMUQU_UPDATE_REPO", "版本检查使用的 GitHub 仓库，格式 owner/repo", "runtime", false, true, null, Arrays.asList("version")),
                 new ConfigItemDefinition("JIMUQU_UPDATE_RELEASE_API_URL", "自定义最新版本检查 API 地址，默认 GitHub releases/latest", "runtime", false, true, null, Arrays.asList("version")),
                 new ConfigItemDefinition("JIMUQU_UPDATE_HTTP_PROXY", "版本检查 HTTP 代理地址，例如 http://proxy.example:7890", "runtime", false, true, null, Arrays.asList("version")),
