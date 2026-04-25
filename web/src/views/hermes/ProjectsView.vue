@@ -124,7 +124,12 @@ onMounted(reload)
       </div>
     </NSpin>
 
-    <NModal v-model:show="showProjectModal" preset="card" title="新建项目" class="project-modal">
+    <NModal
+      v-model:show="showProjectModal"
+      preset="card"
+      title="新建项目"
+      :style="{ width: 'min(520px, calc(100vw - 32px))' }"
+    >
       <NSpace vertical>
         <NInput v-model:value="projectForm.slug" placeholder="项目标识，可选" />
         <NInput v-model:value="projectForm.title" placeholder="项目标题" />
@@ -133,7 +138,12 @@ onMounted(reload)
       </NSpace>
     </NModal>
 
-    <NModal v-model:show="showTodoModal" preset="card" title="新增待办" class="project-modal">
+    <NModal
+      v-model:show="showTodoModal"
+      preset="card"
+      title="新增待办"
+      :style="{ width: 'min(520px, calc(100vw - 32px))' }"
+    >
       <NSpace vertical>
         <NInput v-model:value="todoForm.title" placeholder="待办标题" />
         <NInput v-model:value="todoForm.description" type="textarea" placeholder="描述" />
@@ -166,7 +176,6 @@ onMounted(reload)
 .column-header { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 700; color: $text-secondary; }
 .column-header em { font-style: normal; color: $accent-primary; }
 .todo-stack { display: flex; flex-direction: column; gap: 10px; }
-.project-modal { width: 520px; }
 </style>
 
 
