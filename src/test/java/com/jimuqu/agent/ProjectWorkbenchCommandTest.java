@@ -46,6 +46,24 @@ public class ProjectWorkbenchCommandTest {
     }
 
     @Test
+    void shouldDraftProjectFromRequirementAndAutodeliverAfterConfirm() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        bootstrapAdmin(env);
+
+        GatewayReply draftReply = env.send("admin-chat", "admin-user", "/project init Build dashboard project init workflow with tests");
+        assertThat(draftReply.getContent()).contains("Project init draft").contains("/project confirm").contains("frontend-agent");
+
+        GatewayReply confirmReply = env.send("admin-chat", "admin-user", "/project confirm");
+        assertThat(confirmReply.getContent()).contains("Confirmed project").contains("Autopilot delivery").contains("Delivered: all todos are done.");
+
+        GatewayReply boardReply = env.send("admin-chat", "admin-user", "/project board");
+        assertThat(boardReply.getContent()).contains("# done").contains("implementation-agent").contains("verification-agent");
+
+        GatewayReply agentReply = env.send("admin-chat", "admin-user", "/agent list");
+        assertThat(agentReply.getContent()).contains("frontend-agent").contains("implementation-agent").contains("verification-agent");
+    }
+
+    @Test
     void shouldBlockSecretLikeTodosAndResumeAfterAnswer() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         bootstrapAdmin(env);

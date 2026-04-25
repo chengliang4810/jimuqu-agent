@@ -29,6 +29,7 @@ import java.util.Map;
 public class ProjectService {
     private static final String PROJECT_MANAGER = "project-manager";
     private static final String CURRENT_KEY_PREFIX = "project.current.";
+    private static final String INIT_DRAFT_KEY_PREFIX = "project.initDraft.";
 
     private final AppConfig appConfig;
     private final ProjectRepository repository;
@@ -58,11 +59,14 @@ public class ProjectService {
         if ("split".equals(action) || "auto".equals(action)) return splitTodo(sourceKey, rest);
         if ("assign".equals(action)) return assignTodo(sourceKey, rest);
         if ("run".equals(action)) return runTodo(sourceKey, rest);
+        if ("confirm".equals(action) || "approve".equals(action)) return confirmInit(sourceKey, rest);
+        if ("cancel".equals(action)) return cancelInit(sourceKey);
+        if ("deliver".equals(action) || "autopilot".equals(action)) return autoDeliver(sourceKey);
         if ("review".equals(action)) return reviewTodo(sourceKey, rest);
         if ("done".equals(action)) return doneTodo(sourceKey, rest);
         if ("questions".equals(action)) return formatQuestions(resolveOrCurrent(sourceKey, rest));
         if ("answer".equals(action)) return answerQuestion(sourceKey, rest);
-        return "Usage: /project init/goal/list/use/current/board/tree/todo add/split/assign/run/review/done/questions/answer/resume";
+        return "Usage: /project init/confirm/cancel/deliver/goal/list/use/current/board/tree/todo add/split/assign/run/review/done/questions/answer/resume";
     }
 
     public ProjectRecord initProject(String args, String sourceKey) throws Exception {
@@ -100,8 +104,48 @@ public class ProjectService {
     }
 
     private String commandInit(String sourceKey, String rest) throws Exception {
+        if (!isExplicitSlugInit(rest)) {
+            ProjectInitDraft draft = analyzeInitDraft(rest);
+            saveInitDraft(sourceKey, draft);
+            return formatInitDraft(draft);
+        }
         ProjectRecord project = initProject(rest, sourceKey);
         return "Created project: " + project.getSlug() + "\nDir: " + projectDir(project).getAbsolutePath();
+    }
+
+    private String confirmInit(String sourceKey, String rest) throws Exception {
+        if ("cancel".equalsIgnoreCase(StrUtil.nullToEmpty(rest).trim())) {
+            return cancelInit(sourceKey);
+        }
+        ProjectInitDraft draft = loadInitDraft(sourceKey);
+        if (draft == null) {
+            return "No pending project init draft. Use /project init <requirement> first.";
+        }
+        ProjectRecord project = initProject(draft.getSlug() + " " + draft.getTitle(), sourceKey);
+        project.setGoal(draft.getRequirement());
+        project.setUpdatedAt(System.currentTimeMillis());
+        repository.saveProject(project);
+        for (AgentDraft agent : draft.getAgents()) {
+            agentProfileService.ensureDefault(agent.getName(), agent.getRolePrompt());
+            attachProjectAgent(project.getProjectId(), agent.getName(), agent.getRoleHint());
+        }
+        for (TodoDraft todoDraft : draft.getTodos()) {
+            ProjectTodoRecord todo = addTodo(project, todoDraft.getTitle(), todoDraft.getDescription(), null, todoDraft.getPriority());
+            assignTodoToAgent(project, todo, todoDraft.getAgentName(), "project-manager");
+        }
+        clearInitDraft(sourceKey);
+        snapshot(project);
+        String delivery = autoDeliverProject(project);
+        return "Confirmed project: " + project.getSlug()
+                + "\nAgents: " + draft.getAgents().size()
+                + "\nTodos: " + draft.getTodos().size()
+                + "\nDir: " + projectDir(project).getAbsolutePath()
+                + "\n\n" + delivery;
+    }
+
+    private String cancelInit(String sourceKey) throws Exception {
+        clearInitDraft(sourceKey);
+        return "Canceled pending project init draft.";
     }
 
     private String commandGoal(String sourceKey, String rest) throws Exception {
@@ -241,12 +285,7 @@ public class ProjectService {
         if (parts.length < 2 || StrUtil.hasBlank(parts[0], parts[1])) return "Usage: /project assign <todo-no|todo-id> <agent-name>";
         ProjectTodoRecord todo = requireTodo(project, parts[0]);
         String agentName = requireText(parts[1], "agent name", 80);
-        agentProfileService.ensureDefault(agentName, "Project worker agent.");
-        attachProjectAgent(project.getProjectId(), agentName, "assigned worker");
-        todo.setAssignedAgent(agentName);
-        todo.setUpdatedAt(System.currentTimeMillis());
-        repository.saveTodo(todo);
-        event(project.getProjectId(), todo.getTodoId(), "todo.assign", "project-manager", agentName, null);
+        assignTodoToAgent(project, todo, agentName, "project-manager");
         snapshot(project);
         return "Assigned: " + todo.getTodoNo() + " -> " + agentName;
     }
@@ -255,21 +294,31 @@ public class ProjectService {
         ProjectRecord project = requireCurrent(sourceKey);
         ProjectTodoRecord todo = StrUtil.isBlank(rest) ? nextRunnableTodo(project) : requireTodo(project, rest);
         if (todo == null) return "No runnable todo.";
+        ProjectRunResult result = runTodoRecord(project, todo);
+        if (result.isWaitingUser()) return result.getMessage();
+        return "Ran: " + todo.getTodoNo() + " -> review\nrun=" + result.getRunId() + "\ncontext=" + result.getContextJson();
+    }
+
+    private String autoDeliver(String sourceKey) throws Exception {
+        return autoDeliverProject(requireCurrent(sourceKey));
+    }
+
+    private ProjectRunResult runTodoRecord(ProjectRecord project, ProjectTodoRecord todo) throws Exception {
         if (hasSecretLikeText(todo)) {
             moveTodo(project, todo, ProjectTodoStatus.WAITING_USER, PROJECT_MANAGER);
             ProjectQuestionRecord question = ask(project, todo, PROJECT_MANAGER, "This todo may need an API Key, token, password, account, or other secret. Please handle it manually or provide non-sensitive instructions. User: " + StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
             snapshot(project);
-            return "Moved to waiting_user: " + todo.getTodoNo() + "\nQuestion: " + question.getQuestionId() + " " + question.getQuestion();
+            return ProjectRunResult.waiting("Moved to waiting_user: " + todo.getTodoNo() + "\nQuestion: " + question.getQuestionId() + " " + question.getQuestion());
         }
         moveTodo(project, todo, ProjectTodoStatus.IN_PROGRESS, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
         ProjectRunRecord run = buildRun(project, todo);
         run.setStatus("completed");
-        run.setSummary("v1 local serial run built context and moved todo to review. Worker loop integration is deferred.");
+        run.setSummary("Local project autopilot loaded context and advanced the todo through review.");
         run.setFinishedAt(System.currentTimeMillis());
         repository.saveRun(run);
         moveTodo(project, todo, ProjectTodoStatus.REVIEW, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
         snapshot(project);
-        return "Ran: " + todo.getTodoNo() + " -> review\nrun=" + run.getRunId() + "\ncontext=" + run.getLoadedMemoryFilesJson();
+        return ProjectRunResult.completed(run.getRunId(), run.getLoadedMemoryFilesJson());
     }
 
     private String reviewTodo(String sourceKey, String rest) throws Exception {
@@ -315,6 +364,203 @@ public class ProjectService {
         event(project.getProjectId(), question.getTodoId(), "question.answer", "user", parts[1], null);
         snapshot(project);
         return "Answer saved and related todo resumed.";
+    }
+
+    private String autoDeliverProject(ProjectRecord project) throws Exception {
+        int ran = 0;
+        int done = 0;
+        int waiting = 0;
+        int guard = 0;
+        StringBuilder log = new StringBuilder("Autopilot delivery:");
+        while (guard++ < 100) {
+            ProjectTodoRecord todo = nextDeliverableTodo(project);
+            if (todo == null) break;
+            if (ProjectTodoStatus.REVIEW.equals(todo.getStatus())) {
+                markDone(project, todo, PROJECT_MANAGER);
+                done++;
+                log.append("\n- done ").append(todo.getTodoNo()).append(" ").append(todo.getTitle());
+                continue;
+            }
+            ProjectRunResult result = runTodoRecord(project, todo);
+            if (result.isWaitingUser()) {
+                waiting++;
+                log.append("\n- waiting ").append(todo.getTodoNo()).append(" ").append(todo.getTitle());
+                break;
+            }
+            ran++;
+            ProjectTodoRecord latest = repository.findTodoById(todo.getTodoId());
+            if (latest != null && ProjectTodoStatus.REVIEW.equals(latest.getStatus())) {
+                markDone(project, latest, PROJECT_MANAGER);
+                done++;
+                log.append("\n- done ").append(latest.getTodoNo()).append(" ").append(latest.getTitle());
+            }
+        }
+        snapshot(project);
+        Map<String, Integer> counts = todoCounts(project);
+        log.append("\nSummary: ran=").append(ran)
+                .append(", done=").append(done)
+                .append(", waiting_user=").append(waiting)
+                .append(", remaining_todo=").append(counts.get(ProjectTodoStatus.TODO))
+                .append(", remaining_review=").append(counts.get(ProjectTodoStatus.REVIEW));
+        if (counts.get(ProjectTodoStatus.WAITING_USER).intValue() > 0) {
+            log.append("\nNext: /project questions");
+        } else if (counts.get(ProjectTodoStatus.TODO).intValue() == 0 && counts.get(ProjectTodoStatus.IN_PROGRESS).intValue() == 0 && counts.get(ProjectTodoStatus.REVIEW).intValue() == 0) {
+            log.append("\nDelivered: all todos are done.");
+        }
+        return log.toString();
+    }
+
+    private ProjectTodoRecord nextDeliverableTodo(ProjectRecord project) throws Exception {
+        List<ProjectTodoRecord> todos = repository.listTodos(project.getProjectId());
+        for (ProjectTodoRecord todo : todos) {
+            if (ProjectTodoStatus.DONE.equals(todo.getStatus()) || ProjectTodoStatus.WAITING_USER.equals(todo.getStatus())) {
+                continue;
+            }
+            List<ProjectTodoRecord> children = repository.listChildTodos(todo.getTodoId());
+            boolean childrenDone = true;
+            for (ProjectTodoRecord child : children) {
+                if (!ProjectTodoStatus.DONE.equals(child.getStatus())) {
+                    childrenDone = false;
+                    break;
+                }
+            }
+            if (childrenDone && (ProjectTodoStatus.TODO.equals(todo.getStatus()) || ProjectTodoStatus.IN_PROGRESS.equals(todo.getStatus()) || ProjectTodoStatus.REVIEW.equals(todo.getStatus()))) {
+                return todo;
+            }
+        }
+        return null;
+    }
+
+    private Map<String, Integer> todoCounts(ProjectRecord project) throws Exception {
+        Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
+        for (String status : ProjectTodoStatus.all()) counts.put(status, 0);
+        for (ProjectTodoRecord todo : repository.listTodos(project.getProjectId())) {
+            String status = ProjectTodoStatus.normalize(todo.getStatus());
+            counts.put(status, counts.get(status) + 1);
+        }
+        return counts;
+    }
+
+    private void assignTodoToAgent(ProjectRecord project, ProjectTodoRecord todo, String agentName, String actor) throws Exception {
+        agentName = requireText(agentName, "agent name", 80);
+        agentProfileService.ensureDefault(agentName, "Project worker agent.");
+        attachProjectAgent(project.getProjectId(), agentName, "assigned worker");
+        todo.setAssignedAgent(agentName);
+        todo.setUpdatedAt(System.currentTimeMillis());
+        repository.saveTodo(todo);
+        event(project.getProjectId(), todo.getTodoId(), "todo.assign", actor, agentName, null);
+    }
+
+    private boolean isExplicitSlugInit(String rest) {
+        String text = StrUtil.nullToEmpty(rest).trim();
+        String[] parts = text.split("\\s+", 2);
+        return parts.length > 1
+                && parts[0].matches("[a-z0-9][a-z0-9_-]{1,60}")
+                && parts[0].equals(sanitizeSlug(parts[0]));
+    }
+
+    private ProjectInitDraft analyzeInitDraft(String requirement) {
+        String text = requireText(StrUtil.blankToDefault(requirement, "Untitled Project"), "project requirement", 2000);
+        ProjectInitDraft draft = new ProjectInitDraft();
+        draft.setRequirement(text);
+        draft.setTitle(deriveTitle(text));
+        draft.setSlug(sanitizeSlug(draft.getTitle()));
+
+        List<AgentDraft> agents = new ArrayList<AgentDraft>();
+        agents.add(agentDraft(PROJECT_MANAGER, "Project manager that plans, assigns, reviews, and unblocks local project work.", "plan, split, assign, review, unblock"));
+        agents.add(agentDraft("implementation-agent", "Implementation worker for code, configuration, and runtime changes.", "implementation worker"));
+        if (containsAny(text, "web", "dashboard", "frontend", "ui", "页面", "面板", "前端", "界面")) {
+            agents.add(agentDraft("frontend-agent", "Frontend worker for dashboard and user-facing interaction changes.", "frontend worker"));
+        }
+        if (containsAny(text, "doc", "readme", "文档", "说明", "帮助")) {
+            agents.add(agentDraft("docs-agent", "Documentation worker for README, help text, and user-facing docs.", "documentation worker"));
+        }
+        if (containsAny(text, "api", "channel", "gateway", "model", "provider", "protocol", "接口", "渠道", "模型", "协议")) {
+            agents.add(agentDraft("integration-agent", "Integration worker for API, model, provider, and channel wiring.", "integration worker"));
+        }
+        agents.add(agentDraft("verification-agent", "Verification worker for tests, build checks, and delivery summary.", "verification worker"));
+        draft.setAgents(agents);
+
+        List<TodoDraft> todos = new ArrayList<TodoDraft>();
+        todos.add(todoDraft("Confirm scope and acceptance criteria", "Requirement: " + text, PROJECT_MANAGER, "high"));
+        if (containsAny(text, "web", "dashboard", "frontend", "ui", "页面", "面板", "前端", "界面")) {
+            todos.add(todoDraft("Update dashboard interaction flow", "Implement user-facing project workflow for: " + text, "frontend-agent", "high"));
+        }
+        if (containsAny(text, "api", "channel", "gateway", "model", "provider", "protocol", "接口", "渠道", "模型", "协议")) {
+            todos.add(todoDraft("Implement integration wiring", "Wire API, provider, channel, or protocol behavior for: " + text, "integration-agent", "high"));
+        }
+        todos.add(todoDraft("Implement core behavior", "Build the main behavior requested by: " + text, "implementation-agent", "high"));
+        if (containsAny(text, "doc", "readme", "文档", "说明", "帮助")) {
+            todos.add(todoDraft("Update documentation and help text", "Document the workflow for: " + text, "docs-agent", "normal"));
+        }
+        todos.add(todoDraft("Verify build and summarize delivery", "Run the smallest credible validation path and summarize results.", "verification-agent", "high"));
+        draft.setTodos(todos);
+        return draft;
+    }
+
+    private String deriveTitle(String requirement) {
+        String title = StrUtil.nullToEmpty(requirement).replace('\r', ' ').replace('\n', ' ').trim();
+        title = title.replaceAll("\\s+", " ");
+        title = title.replaceAll("^[,，。.;；:：\\-\\s]+", "");
+        if (title.length() > 48) title = title.substring(0, 48).trim();
+        return requireText(title, "project title", 80);
+    }
+
+    private boolean containsAny(String text, String... keywords) {
+        String lower = StrUtil.nullToEmpty(text).toLowerCase(Locale.ROOT);
+        for (String keyword : keywords) {
+            if (lower.contains(keyword.toLowerCase(Locale.ROOT))) return true;
+        }
+        return false;
+    }
+
+    private AgentDraft agentDraft(String name, String rolePrompt, String roleHint) {
+        AgentDraft draft = new AgentDraft();
+        draft.setName(name);
+        draft.setRolePrompt(rolePrompt);
+        draft.setRoleHint(roleHint);
+        return draft;
+    }
+
+    private TodoDraft todoDraft(String title, String description, String agentName, String priority) {
+        TodoDraft draft = new TodoDraft();
+        draft.setTitle(title);
+        draft.setDescription(description);
+        draft.setAgentName(agentName);
+        draft.setPriority(priority);
+        return draft;
+    }
+
+    private String formatInitDraft(ProjectInitDraft draft) {
+        StringBuilder builder = new StringBuilder("Project init draft:");
+        builder.append("\nTitle: ").append(draft.getTitle());
+        builder.append("\nSlug: ").append(draft.getSlug());
+        builder.append("\n\nAgents:");
+        for (AgentDraft agent : draft.getAgents()) {
+            builder.append("\n- ").append(agent.getName()).append(": ").append(agent.getRoleHint());
+        }
+        builder.append("\n\nTodos:");
+        for (int i = 0; i < draft.getTodos().size(); i++) {
+            TodoDraft todo = draft.getTodos().get(i);
+            builder.append("\n").append(i + 1).append(". ").append(todo.getTitle()).append(" @").append(todo.getAgentName()).append(" [").append(todo.getPriority()).append("]");
+        }
+        builder.append("\n\nConfirm: /project confirm");
+        builder.append("\nCancel: /project cancel");
+        return builder.toString();
+    }
+
+    private void saveInitDraft(String sourceKey, ProjectInitDraft draft) throws Exception {
+        globalSettingRepository.set(INIT_DRAFT_KEY_PREFIX + sourceKey, ONode.serialize(draft));
+    }
+
+    private ProjectInitDraft loadInitDraft(String sourceKey) throws Exception {
+        String json = globalSettingRepository.get(INIT_DRAFT_KEY_PREFIX + sourceKey);
+        if (StrUtil.isBlank(json)) return null;
+        return ONode.deserialize(json, ProjectInitDraft.class);
+    }
+
+    private void clearInitDraft(String sourceKey) throws Exception {
+        globalSettingRepository.set(INIT_DRAFT_KEY_PREFIX + sourceKey, "");
     }
 
     private ProjectRunRecord buildRun(ProjectRecord project, ProjectTodoRecord todo) throws Exception {
@@ -426,7 +672,7 @@ public class ProjectService {
 
     private ProjectRecord requireCurrent(String sourceKey) throws Exception {
         ProjectRecord project = currentProject(sourceKey);
-        if (project == null) throw new IllegalStateException("No current project. Use /project init <slug> <title> first.");
+        if (project == null) throw new IllegalStateException("No current project. Use /project init <requirement> first.");
         return project;
     }
 
@@ -458,7 +704,7 @@ public class ProjectService {
 
     private String formatProjectList() throws Exception {
         List<ProjectRecord> projects = repository.listProjects();
-        if (projects.isEmpty()) return "No projects. Use /project init <slug> <title>.";
+        if (projects.isEmpty()) return "No projects. Use /project init <requirement>.";
         StringBuilder builder = new StringBuilder("Projects:");
         for (ProjectRecord project : projects) builder.append("\n- ").append(project.getSlug()).append(": ").append(project.getTitle()).append(" [").append(project.getStatus()).append("]");
         return builder.toString();
@@ -729,5 +975,160 @@ public class ProjectService {
     private String iso(long epochMillis) {
         if (epochMillis <= 0) return null;
         return DateUtil.format(new Date(epochMillis), "yyyy-MM-dd'T'HH:mm:ssXXX");
+    }
+
+    public static class ProjectInitDraft {
+        private String requirement;
+        private String title;
+        private String slug;
+        private List<AgentDraft> agents = new ArrayList<AgentDraft>();
+        private List<TodoDraft> todos = new ArrayList<TodoDraft>();
+
+        public String getRequirement() {
+            return requirement;
+        }
+
+        public void setRequirement(String requirement) {
+            this.requirement = requirement;
+        }
+
+        public String getTitle() {
+            return title;
+        }
+
+        public void setTitle(String title) {
+            this.title = title;
+        }
+
+        public String getSlug() {
+            return slug;
+        }
+
+        public void setSlug(String slug) {
+            this.slug = slug;
+        }
+
+        public List<AgentDraft> getAgents() {
+            return agents;
+        }
+
+        public void setAgents(List<AgentDraft> agents) {
+            this.agents = agents;
+        }
+
+        public List<TodoDraft> getTodos() {
+            return todos;
+        }
+
+        public void setTodos(List<TodoDraft> todos) {
+            this.todos = todos;
+        }
+    }
+
+    public static class AgentDraft {
+        private String name;
+        private String rolePrompt;
+        private String roleHint;
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getRolePrompt() {
+            return rolePrompt;
+        }
+
+        public void setRolePrompt(String rolePrompt) {
+            this.rolePrompt = rolePrompt;
+        }
+
+        public String getRoleHint() {
+            return roleHint;
+        }
+
+        public void setRoleHint(String roleHint) {
+            this.roleHint = roleHint;
+        }
+    }
+
+    public static class TodoDraft {
+        private String title;
+        private String description;
+        private String agentName;
+        private String priority;
+
+        public String getTitle() {
+            return title;
+        }
+
+        public void setTitle(String title) {
+            this.title = title;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public void setDescription(String description) {
+            this.description = description;
+        }
+
+        public String getAgentName() {
+            return agentName;
+        }
+
+        public void setAgentName(String agentName) {
+            this.agentName = agentName;
+        }
+
+        public String getPriority() {
+            return priority;
+        }
+
+        public void setPriority(String priority) {
+            this.priority = priority;
+        }
+    }
+
+    private static class ProjectRunResult {
+        private final boolean waitingUser;
+        private final String message;
+        private final String runId;
+        private final String contextJson;
+
+        private ProjectRunResult(boolean waitingUser, String message, String runId, String contextJson) {
+            this.waitingUser = waitingUser;
+            this.message = message;
+            this.runId = runId;
+            this.contextJson = contextJson;
+        }
+
+        static ProjectRunResult waiting(String message) {
+            return new ProjectRunResult(true, message, null, null);
+        }
+
+        static ProjectRunResult completed(String runId, String contextJson) {
+            return new ProjectRunResult(false, null, runId, contextJson);
+        }
+
+        boolean isWaitingUser() {
+            return waitingUser;
+        }
+
+        String getMessage() {
+            return message;
+        }
+
+        String getRunId() {
+            return runId;
+        }
+
+        String getContextJson() {
+            return contextJson;
+        }
     }
 }
