@@ -1,0 +1,190 @@
+# Jimuqu Agent runtime configuration example.
+# Copy this file to runtime/config.yml and adjust values for your deployment.
+
+providers:
+  default:
+    name: Default Provider
+    baseUrl: https://subapi.jimuqu.com
+    apiKey: YOUR_API_KEY
+    defaultModel: gpt-5.4
+    dialect: openai-responses
+  local-ollama:
+    name: Local Ollama
+    baseUrl: http://127.0.0.1:11434
+    apiKey: ""
+    defaultModel: qwen3
+    dialect: ollama
+
+model:
+  providerKey: default
+  default: ""
+
+fallbackProviders: []
+# fallbackProviders:
+#   - provider: local-ollama
+#     model: qwen3
+
+jimuqu:
+  runtime:
+    home: runtime
+    contextDir: runtime/context
+    skillsDir: runtime/skills
+    cacheDir: runtime/cache
+    stateDb: runtime/state.db
+
+  logging:
+    dir: runtime/logs
+
+  llm:
+    stream: false
+    reasoningEffort: medium
+    temperature: 0.2
+    maxTokens: 4096
+    contextWindowTokens: 128000
+
+  scheduler:
+    enabled: true
+    tickSeconds: 60
+
+  compression:
+    enabled: true
+    thresholdPercent: 0.5
+    summaryModel: ""
+    protectHeadMessages: 3
+    tailRatio: 0.2
+
+  learning:
+    enabled: true
+    toolCallThreshold: 5
+
+  rollback:
+    enabled: true
+    maxCheckpointsPerSource: 20
+
+  display:
+    toolProgress: off
+    showReasoning: false
+    toolPreviewLength: 80
+    progressThrottleMs: 1500
+
+  react:
+    maxSteps: 12
+    retryMax: 3
+    retryDelayMs: 2000
+    delegateMaxSteps: 18
+    delegateRetryMax: 4
+    delegateRetryDelayMs: 2500
+    summarizationEnabled: true
+    summarizationMaxMessages: 40
+    summarizationMaxTokens: 32000
+
+  agent:
+    heartbeat:
+      enabled: false
+      intervalMinutes: 30
+      deliveryMode: home
+      quietToken: HEARTBEAT_OK
+    personalities:
+      helpful:
+        description: 友好、通用的默认助手
+        systemPrompt: 你是一个友好、可靠的中文技术助手，优先给出准确、可执行的答案。
+      concise:
+        description: 简洁直接，优先最短有效答案
+        systemPrompt: 你是一个非常简洁的中文技术助手，只输出解决问题所需的最少内容。
+      technical:
+        description: 偏工程化，强调原因、边界与验证
+        systemPrompt: 你是一个工程导向的中文技术助手，回答时强调约束、原因、风险和验证方式。
+        tone: 冷静、直接
+        style: 优先用清晰术语描述系统行为和实现边界
+
+  channels:
+    feishu:
+      enabled: false
+      appId: ""
+      appSecret: ""
+      websocketUrl: ""
+      allowedUsers: []
+      allowAllUsers: false
+      unauthorizedDmBehavior: pair
+      dmPolicy: open
+      groupPolicy: allowlist
+      groupAllowedUsers: []
+      botOpenId: ""
+      botUserId: ""
+      botName: ""
+      toolProgress: new
+
+    dingtalk:
+      enabled: false
+      clientId: ""
+      clientSecret: ""
+      robotCode: ""
+      coolAppCode: ""
+      streamUrl: ""
+      allowedUsers: []
+      allowAllUsers: false
+      unauthorizedDmBehavior: pair
+      dmPolicy: open
+      groupPolicy: open
+      groupAllowedUsers: []
+      toolProgress: new
+      progressCardTemplateId: ""
+
+    wecom:
+      enabled: false
+      botId: ""
+      secret: ""
+      websocketUrl: ""
+      allowedUsers: []
+      allowAllUsers: false
+      unauthorizedDmBehavior: pair
+      dmPolicy: open
+      groupPolicy: open
+      groupAllowedUsers: []
+      groups:
+        example_group_id:
+          allowFrom: []
+      toolProgress: off
+
+    weixin:
+      enabled: true
+      token: ""
+      accountId: ""
+      baseUrl: https://ilinkai.weixin.qq.com
+      cdnBaseUrl: https://novac2c.cdn.weixin.qq.com/c2c
+      longPollUrl: ""
+      allowedUsers: []
+      allowAllUsers: false
+      unauthorizedDmBehavior: pair
+      dmPolicy: open
+      groupPolicy: disabled
+      groupAllowedUsers: []
+      splitMultilineMessages: false
+      sendChunkDelaySeconds: 0.35
+      sendChunkRetries: 2
+      sendChunkRetryDelaySeconds: 1.0
+      toolProgress: off
+
+  gateway:
+    allowedUsers: []
+    allowAllUsers: false
+    injectionSecret: ""
+    injectionMaxBodyBytes: 65536
+    injectionReplayWindowSeconds: 300
+
+  update:
+    repo: ""
+    releaseApiUrl: ""
+    tagsApiUrl: ""
+    httpProxy: ""
+
+  integrations:
+    github:
+      token: ""
+      cliToken: ""
+      appId: ""
+      privateKeyPath: ""
+      installationId: ""
+
+  pdf:
+    fontPath: ""

@@ -88,20 +88,19 @@ src/main/resources/app.yml
 runtime/config.yml
 ```
 
-推荐的模型配置结构：
+完整示例可参考仓库根目录的 `config.example.yml`。
+
+最小 `runtime/config.yml` 示例：
 
 ```yaml
 providers:
   default:
-    name: Default Provider
     baseUrl: https://subapi.jimuqu.com
     apiKey: YOUR_API_KEY
     defaultModel: gpt-5.4
     dialect: openai-responses
 model:
   providerKey: default
-  default: ""
-fallbackProviders: []
 ```
 
 常用运行配置：
@@ -132,7 +131,14 @@ fallbackProviders: []
 | 企业微信 | `jimuqu.channels.wecom.*` | websocket / 平台能力 | 建设中 |
 | 微信 | `jimuqu.channels.weixin.*` | iLink long-poll | 建设中 |
 
-Dashboard 提供渠道状态与 doctor 入口，建议优先通过 Dashboard 完成接入、诊断和排错。
+Dashboard 提供渠道状态与 doctor 入口，建议优先通过 Dashboard 完成接入、诊断和排错。默认渠道示例仅开启微信：
+
+```yaml
+jimuqu:
+  channels:
+    weixin:
+      enabled: true
+```
 
 ## Slash Commands
 
@@ -152,22 +158,6 @@ Dashboard 提供渠道状态与 doctor 入口，建议优先通过 Dashboard 完
 - `/pairing`：渠道用户绑定与审批
 - `/project`：项目工作台与任务拆解
 - `/approve` / `/deny`：危险命令审批
-
-## API 概览
-
-主要 HTTP 入口：
-
-- `GET /api/status`：运行状态
-- `POST /api/gateway/message`：签名网关注入消息
-- `GET /api/gateway/doctor`：渠道诊断
-- `GET /api/sessions`：会话列表
-- `POST /api/chat/runs`：Dashboard 会话运行
-- `GET /api/config`：配置读取
-- `GET /api/runtime-config`：运行期配置
-- `GET /api/projects`：项目工作台列表
-- `POST /api/projects`：创建项目
-
-Dashboard API 默认需要会话 token；网关注入使用 HMAC 签名头进行认证。
 
 ## 目录结构
 
