@@ -64,11 +64,11 @@ public class ContextConfiguration {
         return new AgentProfileService(agentProfileRepository);
     }
 
-    @Bean
+    @Bean(destroyMethod = "shutdown")
     public ProjectService projectService(AppConfig appConfig,
-                                         ProjectRepository projectRepository,
-                                         AgentProfileService agentProfileService,
-                                         GlobalSettingRepository globalSettingRepository) {
+                                          ProjectRepository projectRepository,
+                                          AgentProfileService agentProfileService,
+                                          GlobalSettingRepository globalSettingRepository) {
         return new ProjectService(appConfig, projectRepository, agentProfileService, globalSettingRepository);
     }
 

@@ -15,32 +15,62 @@ import com.jimuqu.agent.project.model.ProjectRunRecord;
 import com.jimuqu.agent.project.model.ProjectTodoRecord;
 import com.jimuqu.agent.project.model.ProjectTodoStatus;
 import com.jimuqu.agent.project.repository.ProjectRepository;
+import com.jimuqu.agent.support.BoundedExecutorFactory;
 import com.jimuqu.agent.support.IdSupport;
 import org.noear.snack4.ONode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class ProjectService {
+    private static final Logger log = LoggerFactory.getLogger(ProjectService.class);
     private static final String PROJECT_MANAGER = "project-manager";
     private static final String CURRENT_KEY_PREFIX = "project.current.";
     private static final String INIT_DRAFT_KEY_PREFIX = "project.initDraft.";
+    private static final long DEFAULT_AUTO_DELIVERY_INITIAL_DELAY_MILLIS = 800L;
+    private static final long DEFAULT_AUTO_DELIVERY_STEP_DELAY_MILLIS = 800L;
 
     private final AppConfig appConfig;
     private final ProjectRepository repository;
     private final AgentProfileService agentProfileService;
     private final GlobalSettingRepository globalSettingRepository;
+    private final ScheduledExecutorService autoDeliveryExecutor = BoundedExecutorFactory.scheduled("project-autopilot", 1);
+    private final Set<String> activeDeliveries = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+    private volatile boolean autoDeliveryEnabled = true;
+    private volatile long autoDeliveryInitialDelayMillis = DEFAULT_AUTO_DELIVERY_INITIAL_DELAY_MILLIS;
+    private volatile long autoDeliveryStepDelayMillis = DEFAULT_AUTO_DELIVERY_STEP_DELAY_MILLIS;
 
     public ProjectService(AppConfig appConfig, ProjectRepository repository, AgentProfileService agentProfileService, GlobalSettingRepository globalSettingRepository) {
         this.appConfig = appConfig;
         this.repository = repository;
         this.agentProfileService = agentProfileService;
         this.globalSettingRepository = globalSettingRepository;
+    }
+
+    public void shutdown() {
+        autoDeliveryExecutor.shutdownNow();
+    }
+
+    public void setAutoDeliveryEnabledForTest(boolean autoDeliveryEnabled) {
+        this.autoDeliveryEnabled = autoDeliveryEnabled;
+    }
+
+    public void setAutoDeliveryDelaysForTest(long initialDelayMillis, long stepDelayMillis) {
+        this.autoDeliveryInitialDelayMillis = Math.max(0L, initialDelayMillis);
+        this.autoDeliveryStepDelayMillis = Math.max(0L, stepDelayMillis);
     }
 
     public String handleCommand(String sourceKey, String args) throws Exception {
@@ -131,12 +161,13 @@ public class ProjectService {
         }
         clearInitDraft(sourceKey);
         snapshot(project);
+        String deliveryMessage = startAutoDelivery(project, "project.confirm");
         return "项目已创建：" + project.getSlug()
                 + "\nAgent 数量：" + draft.getAgents().size()
                 + "\n待办数量：" + draft.getTodos().size()
                 + "\n目录：" + projectDir(project).getAbsolutePath()
                 + "\n\n待办已进入 todo 阶段，可在页面查看执行过程。"
-                + "\n下一步：/project run 或 /project deliver";
+                + "\n" + deliveryMessage;
     }
 
     private String cancelInit(String sourceKey) throws Exception {
@@ -296,22 +327,34 @@ public class ProjectService {
     }
 
     private String autoDeliver(String sourceKey) throws Exception {
-        return autoDeliverProject(requireCurrent(sourceKey));
+        return startAutoDelivery(requireCurrent(sourceKey), "project.deliver");
     }
 
     private ProjectRunResult runTodoRecord(ProjectRecord project, ProjectTodoRecord todo) throws Exception {
+        return runTodoRecord(project, todo, false);
+    }
+
+    private ProjectRunResult runTodoRecord(ProjectRecord project, ProjectTodoRecord todo, boolean observable) throws Exception {
         if (hasSecretLikeText(todo)) {
             moveTodo(project, todo, ProjectTodoStatus.WAITING_USER, PROJECT_MANAGER);
-            ProjectQuestionRecord question = ask(project, todo, PROJECT_MANAGER, "This todo may need an API Key, token, password, account, or other secret. Please handle it manually or provide non-sensitive instructions. User: " + StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
+            ProjectQuestionRecord question = ask(project, todo, PROJECT_MANAGER, "该待办可能需要 API Key、token、password、账号或其他敏感信息。请手动处理，或提供不包含敏感内容的执行说明。执行者：" + StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
             snapshot(project);
-            return ProjectRunResult.waiting("Moved to waiting_user: " + todo.getTodoNo() + "\nQuestion: " + question.getQuestionId() + " " + question.getQuestion());
+            return ProjectRunResult.waiting("已转入 waiting_user：" + todo.getTodoNo() + "\n问题：" + question.getQuestionId() + " " + question.getQuestion());
         }
         moveTodo(project, todo, ProjectTodoStatus.IN_PROGRESS, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
         ProjectRunRecord run = buildRun(project, todo);
+        if (observable && !pauseAutoDeliveryStep()) {
+            run.setStatus("failed");
+            run.setSummary("自动推进被中断。");
+            run.setFinishedAt(System.currentTimeMillis());
+            repository.saveRun(run);
+            return ProjectRunResult.waiting("自动推进已中断：" + todo.getTodoNo());
+        }
         run.setStatus("completed");
-        run.setSummary("Local project autopilot loaded context and advanced the todo through review.");
+        run.setSummary("本地项目自动推进已加载上下文，并将待办推进到复核阶段。");
         run.setFinishedAt(System.currentTimeMillis());
         repository.saveRun(run);
+        event(project.getProjectId(), todo.getTodoId(), "run.complete", StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER), run.getRunId(), null);
         moveTodo(project, todo, ProjectTodoStatus.REVIEW, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
         snapshot(project);
         return ProjectRunResult.completed(run.getRunId(), run.getLoadedMemoryFilesJson());
@@ -362,28 +405,79 @@ public class ProjectService {
         return "Answer saved and related todo resumed.";
     }
 
+    private String startAutoDelivery(final ProjectRecord project, String trigger) throws Exception {
+        if (!autoDeliveryEnabled) {
+            event(project.getProjectId(), null, "autopilot.skip", trigger, "自动推进未启动。", null);
+            snapshot(project);
+            return "自动推进未启动。下一步：/project deliver";
+        }
+        if (!activeDeliveries.add(project.getProjectId())) {
+            return "自动推进已在运行，可在项目页面查看实时状态。";
+        }
+        event(project.getProjectId(), null, "autopilot.queue", trigger, "项目已进入自动推进队列。", null);
+        snapshot(project);
+        try {
+            autoDeliveryExecutor.schedule(new Runnable() {
+                @Override
+                public void run() {
+                    autoDeliverProjectSafe(project.getProjectId());
+                }
+            }, autoDeliveryInitialDelayMillis, TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException e) {
+            activeDeliveries.remove(project.getProjectId());
+            throw e;
+        }
+        return "自动推进已开始，可在项目页面查看中间执行状态。";
+    }
+
+    private void autoDeliverProjectSafe(String projectId) {
+        try {
+            ProjectRecord project = repository.findProjectById(projectId);
+            if (project == null) {
+                return;
+            }
+            autoDeliverProject(project);
+        } catch (Exception e) {
+            log.warn("Project auto delivery failed: {}", projectId, e);
+            try {
+                event(projectId, null, "autopilot.fail", PROJECT_MANAGER, e.getMessage(), null);
+            } catch (Exception ignored) {
+                // Ignore secondary event failures.
+            }
+        } finally {
+            activeDeliveries.remove(projectId);
+        }
+    }
+
     private String autoDeliverProject(ProjectRecord project) throws Exception {
         int ran = 0;
         int done = 0;
         int waiting = 0;
         int guard = 0;
-        StringBuilder log = new StringBuilder("Autopilot delivery:");
+        StringBuilder log = new StringBuilder("自动推进：");
+        event(project.getProjectId(), null, "autopilot.start", PROJECT_MANAGER, "自动推进开始。", null);
         while (guard++ < 100) {
+            project = repository.findProjectById(project.getProjectId());
+            if (project == null) {
+                break;
+            }
             ProjectTodoRecord todo = nextDeliverableTodo(project);
             if (todo == null) break;
             if (ProjectTodoStatus.REVIEW.equals(todo.getStatus())) {
+                if (!pauseAutoDeliveryStep()) break;
                 markDone(project, todo, PROJECT_MANAGER);
                 done++;
                 log.append("\n- done ").append(todo.getTodoNo()).append(" ").append(todo.getTitle());
                 continue;
             }
-            ProjectRunResult result = runTodoRecord(project, todo);
+            ProjectRunResult result = runTodoRecord(project, todo, true);
             if (result.isWaitingUser()) {
                 waiting++;
                 log.append("\n- waiting ").append(todo.getTodoNo()).append(" ").append(todo.getTitle());
                 break;
             }
             ran++;
+            if (!pauseAutoDeliveryStep()) break;
             ProjectTodoRecord latest = repository.findTodoById(todo.getTodoId());
             if (latest != null && ProjectTodoStatus.REVIEW.equals(latest.getStatus())) {
                 markDone(project, latest, PROJECT_MANAGER);
@@ -399,11 +493,29 @@ public class ProjectService {
                 .append(", remaining_todo=").append(counts.get(ProjectTodoStatus.TODO))
                 .append(", remaining_review=").append(counts.get(ProjectTodoStatus.REVIEW));
         if (counts.get(ProjectTodoStatus.WAITING_USER).intValue() > 0) {
-            log.append("\nNext: /project questions");
+            log.append("\n下一步：/project questions");
+            event(project.getProjectId(), null, "autopilot.blocked", PROJECT_MANAGER, log.toString(), null);
         } else if (counts.get(ProjectTodoStatus.TODO).intValue() == 0 && counts.get(ProjectTodoStatus.IN_PROGRESS).intValue() == 0 && counts.get(ProjectTodoStatus.REVIEW).intValue() == 0) {
-            log.append("\nDelivered: all todos are done.");
+            log.append("\n已交付：所有待办已完成。");
+            event(project.getProjectId(), null, "autopilot.done", PROJECT_MANAGER, log.toString(), null);
+        } else {
+            event(project.getProjectId(), null, "autopilot.pause", PROJECT_MANAGER, log.toString(), null);
         }
         return log.toString();
+    }
+
+    private boolean pauseAutoDeliveryStep() {
+        long delay = autoDeliveryStepDelayMillis;
+        if (delay <= 0L) {
+            return true;
+        }
+        try {
+            Thread.sleep(delay);
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
     }
 
     private ProjectTodoRecord nextDeliverableTodo(ProjectRecord project) throws Exception {
@@ -787,6 +899,7 @@ public class ProjectService {
         map.put("updated_at", iso(project.getUpdatedAt()));
         map.put("created_at", iso(project.getCreatedAt()));
         map.put("dir", projectDir(project).getAbsolutePath());
+        map.put("autopilot_running", activeDeliveries.contains(project.getProjectId()));
         if (includeCounts) {
             Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
             for (String status : ProjectTodoStatus.all()) counts.put(status, 0);

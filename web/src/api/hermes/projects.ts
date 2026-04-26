@@ -34,6 +34,7 @@ export interface ProjectSummary {
   updated_at?: string
   created_at?: string
   dir?: string
+  autopilot_running?: boolean
   counts?: Record<ProjectTodoStatus, number>
 }
 

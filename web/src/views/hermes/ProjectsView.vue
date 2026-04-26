@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { NButton, NCard, NEmpty, NInput, NModal, NSelect, NSpace, NSpin, useMessage } from 'naive-ui'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { NButton, NCard, NEmpty, NInput, NModal, NSelect, NSpace, NSpin, NTag, useMessage } from 'naive-ui'
 import { createProject, createTodo, getProject, listProjects, updateTodoStatus, type ProjectDetail, type ProjectSummary, type ProjectTodo, type ProjectTodoStatus } from '@/api/hermes/projects'
 import ProjectTodoCard from '@/components/hermes/projects/ProjectTodoCard.vue'
 
@@ -13,6 +13,7 @@ const showTodoModal = ref(false)
 const projectForm = ref({ slug: '', title: '', goal: '' })
 const todoForm = ref({ title: '', description: '', priority: 'normal' })
 const currentId = computed(() => current.value?.id || current.value?.slug || '')
+let pollTimer: number | undefined
 const activeProject = computed<ProjectDetail>(() => current.value || {
   id: '',
   slug: '',
@@ -26,14 +27,23 @@ const activeProject = computed<ProjectDetail>(() => current.value || {
   events: [],
 })
 
-async function reload() {
-  loading.value = true
+async function reload(showLoading = true) {
+  if (showLoading) loading.value = true
   try {
     projects.value = await listProjects()
     if (!current.value && projects.value.length) await selectProject(projects.value[0].slug)
     else if (current.value) current.value = await getProject(current.value.slug)
   } finally {
-    loading.value = false
+    if (showLoading) loading.value = false
+  }
+}
+
+async function pollCurrent() {
+  if (!current.value || loading.value) return
+  try {
+    await reload(false)
+  } catch (_) {
+    // 轮询失败不打断用户正在查看的项目面板。
   }
 }
 
@@ -69,7 +79,14 @@ function statusLabel(status: ProjectTodoStatus) {
   return labels[status] || status
 }
 
-onMounted(reload)
+onMounted(() => {
+  reload()
+  pollTimer = window.setInterval(pollCurrent, 1500)
+})
+
+onUnmounted(() => {
+  if (pollTimer) window.clearInterval(pollTimer)
+})
 </script>
 
 <template>
@@ -80,7 +97,7 @@ onMounted(reload)
         <p>本地项目工作台、分层待办和多 Agent 看板。</p>
       </div>
       <NSpace>
-        <NButton @click="reload">刷新</NButton>
+        <NButton @click="reload()">刷新</NButton>
         <NButton type="primary" @click="showProjectModal = true">新建项目</NButton>
       </NSpace>
     </header>
@@ -100,7 +117,10 @@ onMounted(reload)
           <template v-if="current">
             <section class="project-hero">
               <div>
-                <div class="slug">{{ activeProject.slug }}</div>
+                <div class="project-meta">
+                  <span class="slug">{{ activeProject.slug }}</span>
+                  <NTag v-if="activeProject.autopilot_running" size="small" type="info" round>自动推进中</NTag>
+                </div>
                 <h2>{{ activeProject.title }}</h2>
                 <p>{{ activeProject.goal || '暂未设置目标' }}</p>
                 <code>{{ activeProject.dir }}</code>
@@ -170,6 +190,7 @@ onMounted(reload)
 .project-hero { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .project-hero h2 { font-size: 22px; color: $text-primary; margin: 4px 0 8px; }
 .project-hero code { display: inline-block; margin-top: 8px; color: $text-muted; font-size: 12px; }
+.project-meta { display: flex; align-items: center; gap: 8px; }
 .slug { color: $accent-primary; font-size: 12px; font-weight: 700; }
 .board-grid { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 4px; }
 .board-column { min-width: 220px; background: rgba(var(--bg-card), .68); }

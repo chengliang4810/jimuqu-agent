@@ -14,6 +14,7 @@ public class ProjectWorkbenchCommandTest {
     @Test
     void shouldManageAgentsAndProjectTodos() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.projectService.setAutoDeliveryEnabledForTest(false);
         bootstrapAdmin(env);
 
         GatewayReply agentReply = env.send("admin-chat", "admin-user", "/agent create builder implementation worker");
@@ -49,29 +50,31 @@ public class ProjectWorkbenchCommandTest {
     }
 
     @Test
-    void shouldDraftProjectFromRequirementAndDeliverOnlyWhenRequested() throws Exception {
+    void shouldDraftProjectFromRequirementAndStartAutoDeliveryAfterConfirm() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.projectService.setAutoDeliveryDelaysForTest(500L, 10L);
         bootstrapAdmin(env);
 
         GatewayReply draftReply = env.send("admin-chat", "admin-user", "/project init Build dashboard project init workflow with tests");
         assertThat(draftReply.getContent()).contains("项目初始化草稿").contains("/project confirm").contains("frontend-agent");
 
         GatewayReply confirmReply = env.send("admin-chat", "admin-user", "/project confirm");
-        assertThat(confirmReply.getContent()).contains("项目已创建").contains("待办已进入 todo 阶段").doesNotContain("Autopilot delivery");
+        assertThat(confirmReply.getContent()).contains("项目已创建").contains("待办已进入 todo 阶段").contains("自动推进已开始");
 
         GatewayReply boardReply = env.send("admin-chat", "admin-user", "/project board");
         assertThat(boardReply.getContent()).contains("# todo").contains("implementation-agent").contains("verification-agent").contains("# done (0)");
 
-        GatewayReply deliverReply = env.send("admin-chat", "admin-user", "/project deliver");
-        assertThat(deliverReply.getContent()).contains("Autopilot delivery").contains("Delivered: all todos are done.");
+        String deliveredBoard = waitForBoard(env, "admin-chat", "admin-user", "# done (4)", 3000L);
+        assertThat(deliveredBoard).contains("# todo (0)").contains("# in_progress (0)").contains("# review (0)");
 
         GatewayReply agentReply = env.send("admin-chat", "admin-user", "/agent list");
         assertThat(agentReply.getContent()).contains("frontend-agent").contains("implementation-agent").contains("verification-agent");
     }
 
     @Test
-    void shouldDraftChineseAnalysisReportProjectAndKeepTodosPending() throws Exception {
+    void shouldDraftChineseAnalysisReportProjectAndStartAutoDelivery() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.projectService.setAutoDeliveryDelaysForTest(500L, 10L);
         bootstrapAdmin(env);
 
         GatewayReply draftReply = env.send("admin-chat", "admin-user", "/project init 将开源项目：后端https://github.com/chengliang4810/jimuqu-admin.git 前端 https://github.com/chengliang4810/jimuqu-admin-ui.git 分析一下，分析完给我一份pdf报告");
@@ -86,15 +89,19 @@ public class ProjectWorkbenchCommandTest {
         assertThat(draftReply.getContent()).doesNotContain("Project init draft").doesNotContain("Confirm scope and acceptance criteria");
 
         GatewayReply confirmReply = env.send("admin-chat", "admin-user", "/project confirm");
-        assertThat(confirmReply.getContent()).contains("项目已创建").contains("待办已进入 todo 阶段").doesNotContain("Delivered: all todos are done.");
+        assertThat(confirmReply.getContent()).contains("项目已创建").contains("待办已进入 todo 阶段").contains("自动推进已开始");
 
         GatewayReply boardReply = env.send("admin-chat", "admin-user", "/project board");
         assertThat(boardReply.getContent()).contains("# todo (").contains("# done (0)");
+
+        String deliveredBoard = waitForBoard(env, "admin-chat", "admin-user", "# done (6)", 4000L);
+        assertThat(deliveredBoard).contains("生成交付文档或 PDF 报告").contains("# todo (0)");
     }
 
     @Test
     void shouldBlockSecretLikeTodosAndResumeAfterAnswer() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.projectService.setAutoDeliveryEnabledForTest(false);
         bootstrapAdmin(env);
 
         env.send("admin-chat", "admin-user", "/project init Secret Demo");
@@ -102,7 +109,7 @@ public class ProjectWorkbenchCommandTest {
         env.send("admin-chat", "admin-user", "/project todo add Configure API key");
 
         GatewayReply runReply = env.send("admin-chat", "admin-user", "/project run TODO-004");
-        assertThat(runReply.getContent()).contains("waiting_user").contains("User:");
+        assertThat(runReply.getContent()).contains("waiting_user").contains("执行者：");
 
         GatewayReply questionsReply = env.send("admin-chat", "admin-user", "/project questions");
         assertThat(questionsReply.getContent()).contains("API Key");
@@ -151,5 +158,19 @@ public class ProjectWorkbenchCommandTest {
     private void bootstrapAdmin(TestEnvironment env) throws Exception {
         env.send("admin-chat", "admin-user", "hello");
         env.send("admin-chat", "admin-user", "/pairing claim-admin");
+    }
+
+    private String waitForBoard(TestEnvironment env, String chatId, String userId, String expected, long timeoutMillis) throws Exception {
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        String content = "";
+        while (System.currentTimeMillis() < deadline) {
+            GatewayReply reply = env.send(chatId, userId, "/project board");
+            content = reply.getContent();
+            if (content.contains(expected)) {
+                return content;
+            }
+            Thread.sleep(50L);
+        }
+        return content;
     }
 }
