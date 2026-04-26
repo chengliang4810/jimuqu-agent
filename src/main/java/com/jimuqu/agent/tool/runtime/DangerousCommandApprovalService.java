@@ -289,6 +289,7 @@ public class DangerousCommandApprovalService {
         DetectionResult detection = detect(toolName, code);
         if (detection == null) {
             trace.getContext().remove(CONTEXT_PENDING_APPROVAL);
+            persistTraceSnapshot(trace);
             return null;
         }
 
@@ -297,18 +298,28 @@ public class DangerousCommandApprovalService {
         if (trace.getContext().getAs(HITL.DECISION_PREFIX + toolName) != null) {
             if (pending != null && approvalKey.equals(pending.approvalKey())) {
                 trace.getContext().remove(CONTEXT_PENDING_APPROVAL);
+                persistTraceSnapshot(trace);
                 return null;
             }
             trace.getContext().remove(HITL.DECISION_PREFIX + toolName);
+            persistTraceSnapshot(trace);
         }
 
         if (isApproved(trace.getContext(), approvalKey)) {
             trace.getContext().remove(CONTEXT_PENDING_APPROVAL);
+            persistTraceSnapshot(trace);
             return null;
         }
 
         trace.getContext().put(CONTEXT_PENDING_APPROVAL, createPendingMap(toolName, detection, code));
+        persistTraceSnapshot(trace);
         return buildPendingMessage(toolName, detection, code);
+    }
+
+    private void persistTraceSnapshot(ReActTrace trace) {
+        if (trace != null && trace.getSession() != null) {
+            trace.getSession().updateSnapshot();
+        }
     }
 
     private Map<String, Object> createPendingMap(String toolName, DetectionResult detection, String code) {

@@ -59,4 +59,16 @@ public class DangerousCommandApprovalCommandTest {
         assertThat(env.dangerousCommandApprovalService.isAlwaysApproved("execute_shell", "recursive_delete", "rm -rf runtime/cache")).isTrue();
         assertThat(env.dangerousCommandApprovalService.isAlwaysApproved("execute_shell", "recursive_delete", "rm -rf runtime/logs")).isFalse();
     }
+
+    @Test
+    void shouldReturnChineseMessageWhenApproveHasNoPendingCommand() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.gatewayService.handle(env.message("room-3", "user-3", "hello"));
+        env.gatewayAuthorizationService.claimAdmin(env.message("room-3", "user-3", "/pairing claim-admin"));
+
+        GatewayReply reply = env.send("room-3", "user-3", "/approve always");
+
+        assertThat(reply.getContent()).contains("待审批的危险命令");
+        assertThat(reply.getContent()).doesNotContain("???");
+    }
 }

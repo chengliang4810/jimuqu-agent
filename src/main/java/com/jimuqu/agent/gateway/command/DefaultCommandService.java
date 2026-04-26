@@ -707,7 +707,7 @@ public class DefaultCommandService implements CommandService {
     private GatewayReply handleDangerousApprove(GatewayMessage message, String args) throws Exception {
         SessionRecord session = sessionRepository.getBoundSession(message.sourceKey());
         if (session == null) {
-            return GatewayReply.error("?????????????");
+            return GatewayReply.error("当前没有绑定会话，也没有待审批的危险命令。请先触发需要审批的工具调用。");
         }
 
         SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
@@ -721,12 +721,12 @@ public class DefaultCommandService implements CommandService {
 
         DangerousCommandApprovalService.PendingApproval pending = dangerousCommandApprovalService.getPendingApproval(agentSession);
         if (pending == null) {
-            return GatewayReply.error("?????????????");
+            return GatewayReply.error("当前没有待审批的危险命令。若刚刚收到审批提示，请重试原始请求；也可以使用 /approve list 查看审批状态。");
         }
 
         DangerousCommandApprovalService.ApprovalScope scope = parseApprovalScope(args);
         if (!dangerousCommandApprovalService.approve(agentSession, scope, message.getUserName())) {
-            return GatewayReply.error("????????????????");
+            return GatewayReply.error("危险命令审批状态已失效，请重试原始请求。");
         }
         return conversationOrchestrator.resumePending(message.sourceKey());
     }
@@ -756,7 +756,7 @@ public class DefaultCommandService implements CommandService {
             dangerousCommandApprovalService.clearAlwaysApprovals();
             return GatewayReply.ok("cleared all approvals");
         }
-        return GatewayReply.error("???/approve clear session|always|all");
+        return GatewayReply.error("用法：/approve clear session|always|all");
     }
     private GatewayReply handleDangerousDeny(GatewayMessage message) throws Exception {
         SessionRecord session = sessionRepository.getBoundSession(message.sourceKey());
