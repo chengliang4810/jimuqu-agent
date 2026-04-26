@@ -42,9 +42,9 @@ import java.util.concurrent.TimeUnit;
 
 public class ProjectService {
     private static final Logger log = LoggerFactory.getLogger(ProjectService.class);
-    private static final String PROJECT_MANAGER = "project-manager";
-    private static final String CURRENT_KEY_PREFIX = "project.current.";
-    private static final String INIT_DRAFT_KEY_PREFIX = "project.initDraft.";
+    private static final String PROJECT_MANAGER = "task-manager";
+    private static final String CURRENT_KEY_PREFIX = "task.current.";
+    private static final String INIT_DRAFT_KEY_PREFIX = "task.initDraft.";
     private static final long DEFAULT_AUTO_DELIVERY_INITIAL_DELAY_MILLIS = 800L;
     private static final long DEFAULT_AUTO_DELIVERY_STEP_DELAY_MILLIS = 800L;
 
@@ -53,7 +53,7 @@ public class ProjectService {
     private final AgentProfileService agentProfileService;
     private final GlobalSettingRepository globalSettingRepository;
     private final ConversationOrchestratorHolder conversationOrchestratorHolder;
-    private final ScheduledExecutorService autoDeliveryExecutor = BoundedExecutorFactory.scheduled("project-autopilot", 1);
+    private final ScheduledExecutorService autoDeliveryExecutor = BoundedExecutorFactory.scheduled("task-autopilot", 1);
     private final Set<String> activeDeliveries = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     private volatile boolean autoDeliveryEnabled = true;
     private volatile long autoDeliveryInitialDelayMillis = DEFAULT_AUTO_DELIVERY_INITIAL_DELAY_MILLIS;
@@ -99,15 +99,14 @@ public class ProjectService {
         if ("confirm".equals(action) || "approve".equals(action)) return confirmInit(sourceKey, rest);
         if ("cancel".equals(action)) return cancelInit(sourceKey);
         if ("deliver".equals(action) || "autopilot".equals(action)) return autoDeliver(sourceKey);
-        if ("review".equals(action)) return reviewTodo(sourceKey, rest);
         if ("done".equals(action)) return doneTodo(sourceKey, rest);
         if ("questions".equals(action)) return formatQuestions(resolveOrCurrent(sourceKey, rest));
         if ("answer".equals(action)) return answerQuestion(sourceKey, rest);
-        return "用法：/project init/confirm/cancel/deliver/goal/list/use/current/board/tree/todo add/split/assign/run/review/done/questions/answer/resume";
+        return "用法：/task init/confirm/cancel/deliver/board/todo add/split/assign/run/done/questions/answer";
     }
 
     public ProjectRecord initProject(String args, String sourceKey) throws Exception {
-        String title = StrUtil.blankToDefault(args, "Untitled Project").trim();
+        String title = StrUtil.blankToDefault(args, "Untitled Todo").trim();
         String slug;
         String[] parts = title.split("\\s+", 2);
         if (parts.length > 1 && parts[0].matches("[A-Za-z0-9][A-Za-z0-9_-]{1,60}")) {
@@ -116,7 +115,7 @@ public class ProjectService {
         } else {
             slug = sanitizeSlug(title);
         }
-        title = requireText(title, "project title", 160);
+        title = requireText(title, "task title", 160);
         ProjectRecord existing = repository.findProjectBySlug(slug);
         if (existing != null) {
             setCurrent(sourceKey, existing.getProjectId());
@@ -132,10 +131,10 @@ public class ProjectService {
         project.setCreatedAt(now);
         project.setUpdatedAt(now);
         repository.saveProject(project);
-        attachProjectAgent(project.getProjectId(), PROJECT_MANAGER, "plan, split, assign, review, unblock");
-        agentProfileService.ensureDefault(PROJECT_MANAGER, "Internal project manager for local projects.");
+        attachProjectAgent(project.getProjectId(), PROJECT_MANAGER, "plan, split, assign, unblock");
+        agentProfileService.ensureDefault(PROJECT_MANAGER, "Internal task manager for local todos.");
         setCurrent(sourceKey, project.getProjectId());
-        event(project.getProjectId(), null, "project.init", "user", title, null);
+        event(project.getProjectId(), null, "task.init", "user", title, null);
         snapshot(project);
         return project;
     }
@@ -152,7 +151,7 @@ public class ProjectService {
         }
         ProjectInitDraft draft = loadInitDraft(sourceKey);
         if (draft == null) {
-            return "没有待确认的项目初始化草稿。请先使用：/project init <需求>";
+            return "没有待确认的任务初始化草稿。请先使用：/task init <需求>";
         }
         ProjectRecord project = initProject(draft.getSlug() + " " + draft.getTitle(), sourceKey);
         project.setGoal(draft.getRequirement());
@@ -164,12 +163,12 @@ public class ProjectService {
         }
         for (TodoDraft todoDraft : draft.getTodos()) {
             ProjectTodoRecord todo = addTodo(project, todoDraft.getTitle(), todoDraft.getDescription(), null, todoDraft.getPriority());
-            assignTodoToAgent(project, todo, todoDraft.getAgentName(), "project-manager");
+            assignTodoToAgent(project, todo, todoDraft.getAgentName(), PROJECT_MANAGER);
         }
         clearInitDraft(sourceKey);
         snapshot(project);
-        String deliveryMessage = startAutoDelivery(project, "project.confirm");
-        return "项目已创建：" + project.getSlug()
+        String deliveryMessage = startAutoDelivery(project, "task.confirm");
+        return "任务工作台已创建：" + project.getSlug()
                 + "\nAgent 数量：" + draft.getAgents().size()
                 + "\n待办数量：" + draft.getTodos().size()
                 + "\n目录：" + projectDir(project).getAbsolutePath()
@@ -179,30 +178,30 @@ public class ProjectService {
 
     private String cancelInit(String sourceKey) throws Exception {
         clearInitDraft(sourceKey);
-        return "已取消待确认的项目初始化草稿。";
+        return "已取消待确认的待办初始化草稿。";
     }
 
     private String commandGoal(String sourceKey, String rest) throws Exception {
         ProjectRecord project = requireCurrent(sourceKey);
-        project.setGoal(requireText(rest, "project goal", 2000));
+        project.setGoal(requireText(rest, "task goal", 2000));
         project.setUpdatedAt(System.currentTimeMillis());
         repository.saveProject(project);
         event(project.getProjectId(), null, "goal", "user", rest, null);
         snapshot(project);
-        return "Updated project goal: " + project.getSlug();
+        return "已更新待办目标：" + project.getSlug();
     }
 
     private String commandUse(String sourceKey, String rest) throws Exception {
         ProjectRecord project = resolveProject(rest);
         setCurrent(sourceKey, project.getProjectId());
-        return "Current project: " + project.getSlug();
+        return "当前待办：" + project.getSlug();
     }
 
     public Map<String, Object> dashboard() throws Exception {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
-        List<Map<String, Object>> projects = new ArrayList<Map<String, Object>>();
-        for (ProjectRecord project : repository.listProjects()) projects.add(projectView(project, false));
-        result.put("projects", projects);
+        List<Map<String, Object>> todos = new ArrayList<Map<String, Object>>();
+        for (ProjectRecord project : repository.listProjects()) todos.add(projectView(project, false));
+        result.put("todos", todos);
         return result;
     }
 
@@ -220,13 +219,13 @@ public class ProjectService {
     public Map<String, Object> createProjectFromDashboard(Map<String, Object> body) throws Exception {
         String slug = stringValue(body.get("slug"));
         if (StrUtil.isNotBlank(slug) && !slug.matches("[A-Za-z0-9][A-Za-z0-9_-]{1,60}")) {
-            throw new IllegalArgumentException("project slug must contain only letters, numbers, underscore or dash");
+            throw new IllegalArgumentException("task slug must contain only letters, numbers, underscore or dash");
         }
-        String title = requireText(StrUtil.blankToDefault(stringValue(body.get("title")), "Untitled Project"), "project title", 160);
+        String title = requireText(StrUtil.blankToDefault(stringValue(body.get("title")), "Untitled Todo"), "task title", 160);
         String goal = stringValue(body.get("goal"));
         ProjectRecord project = initProject((StrUtil.isBlank(slug) ? "" : slug + " ") + title, "dashboard");
         if (StrUtil.isNotBlank(goal)) {
-            project.setGoal(requireText(goal, "project goal", 2000));
+            project.setGoal(requireText(goal, "task goal", 2000));
             project.setUpdatedAt(System.currentTimeMillis());
             repository.saveProject(project);
             snapshot(project);
@@ -251,7 +250,7 @@ public class ProjectService {
     private String handleTodoCommand(String sourceKey, String rest) throws Exception {
         String[] parts = StrUtil.nullToEmpty(rest).trim().split("\\s+", 2);
         String action = parts.length == 0 || StrUtil.isBlank(parts[0]) ? "add" : parts[0].toLowerCase(Locale.ROOT);
-        if (!"add".equals(action)) return "Usage: /project todo add <title>";
+        if (!"add".equals(action)) return "用法：/task todo add <title>";
         ProjectRecord project = requireCurrent(sourceKey);
         ProjectTodoRecord todo = addTodo(project, parts.length > 1 ? parts[1] : "", "", null, "normal");
         project.setCurrentTodoId(todo.getTodoId());
@@ -308,7 +307,7 @@ public class ProjectService {
             items.add("实现核心行为");
             items.add("验证并总结交付结果");
         }
-        for (String item : items) addTodo(project, item, "由 project-manager 拆分生成", parent == null ? null : parent.getTodoId(), "normal");
+        for (String item : items) addTodo(project, item, "由 task-manager 拆分生成", parent == null ? null : parent.getTodoId(), "normal");
         snapshot(project);
         return "已拆分待办：" + items.size() + " 项" + (parent == null ? "" : "，父待办=" + parent.getTodoNo());
     }
@@ -316,10 +315,10 @@ public class ProjectService {
     private String assignTodo(String sourceKey, String rest) throws Exception {
         ProjectRecord project = requireCurrent(sourceKey);
         String[] parts = StrUtil.nullToEmpty(rest).split("\\s+", 2);
-        if (parts.length < 2 || StrUtil.hasBlank(parts[0], parts[1])) return "Usage: /project assign <todo-no|todo-id> <agent-name>";
+        if (parts.length < 2 || StrUtil.hasBlank(parts[0], parts[1])) return "用法：/task assign <todo-no|todo-id> <agent-name>";
         ProjectTodoRecord todo = requireTodo(project, parts[0]);
         String agentName = requireText(parts[1], "agent name", 80);
-        assignTodoToAgent(project, todo, agentName, "project-manager");
+        assignTodoToAgent(project, todo, agentName, PROJECT_MANAGER);
         snapshot(project);
         return "Assigned: " + todo.getTodoNo() + " -> " + agentName;
     }
@@ -330,11 +329,11 @@ public class ProjectService {
         if (todo == null) return "没有可执行的待办。";
         ProjectRunResult result = runTodoRecord(project, todo);
         if (result.isWaitingUser()) return result.getMessage();
-        return "已执行：" + todo.getTodoNo() + " -> review\nrun=" + result.getRunId() + "\ncontext=" + result.getContextJson();
+        return "已执行：" + todo.getTodoNo() + " -> " + result.getStatus() + "\nrun=" + result.getRunId() + "\ncontext=" + result.getContextJson();
     }
 
     private String autoDeliver(String sourceKey) throws Exception {
-        return startAutoDelivery(requireCurrent(sourceKey), "project.deliver");
+        return startAutoDelivery(requireCurrent(sourceKey), "task.deliver");
     }
 
     private ProjectRunResult runTodoRecord(ProjectRecord project, ProjectTodoRecord todo) throws Exception {
@@ -356,21 +355,32 @@ public class ProjectService {
             }
             ConversationOrchestrator orchestrator = conversationOrchestratorHolder == null ? null : conversationOrchestratorHolder.get();
             if (orchestrator == null) {
-                throw new IllegalStateException("项目 Agent 运行器尚未就绪，无法执行待办。");
+                throw new IllegalStateException("待办 Agent 运行器尚未就绪，无法执行待办。");
             }
             GatewayReply reply = orchestrator.handleIncoming(buildProjectAgentMessage(project, todo, run));
             if (reply != null && reply.isError()) {
                 throw new IllegalStateException(reply.getContent());
             }
             String summary = reply == null ? "" : StrUtil.blankToDefault(reply.getContent(), "");
+            String finalStatus = resolveAgentFinalStatus(summary);
             run.setStatus("completed");
-            run.setSummary(trimToMax(StrUtil.blankToDefault(summary, "Agent 已完成本轮项目待办执行，等待复核。"), 4000, "run summary"));
+            run.setSummary(trimToMax(StrUtil.blankToDefault(summary, "Agent 已完成本轮待办执行。"), 4000, "run summary"));
             run.setFinishedAt(System.currentTimeMillis());
             repository.saveRun(run);
             event(project.getProjectId(), todo.getTodoId(), "run.complete", StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER), run.getRunId(), null);
-            moveTodo(project, todo, ProjectTodoStatus.REVIEW, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
+            if (ProjectTodoStatus.WAITING_USER.equals(finalStatus)) {
+                moveTodo(project, todo, ProjectTodoStatus.WAITING_USER, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
+                ask(project, todo, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER), "Agent 判断需要用户补充信息后再继续。待办：" + todo.getTodoNo() + "，摘要：" + run.getSummary());
+                snapshot(project);
+                return ProjectRunResult.waiting("Agent 已将待办转入 waiting_user：" + todo.getTodoNo());
+            }
+            if (ProjectTodoStatus.REVIEW.equals(finalStatus)) {
+                moveTodo(project, todo, ProjectTodoStatus.REVIEW, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
+            } else {
+                markDone(project, todo, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
+            }
             snapshot(project);
-            return ProjectRunResult.completed(run.getRunId(), run.getLoadedMemoryFilesJson());
+            return ProjectRunResult.completed(run.getRunId(), run.getLoadedMemoryFilesJson(), finalStatus);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             run.setStatus("failed");
@@ -385,28 +395,10 @@ public class ProjectService {
             run.setFinishedAt(System.currentTimeMillis());
             repository.saveRun(run);
             moveTodo(project, todo, ProjectTodoStatus.WAITING_USER, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
-            ask(project, todo, PROJECT_MANAGER, "项目 Agent 执行失败，需要处理后再继续。待办：" + todo.getTodoNo() + "，原因：" + run.getSummary());
+            ask(project, todo, PROJECT_MANAGER, "Agent 执行失败，需要处理后再继续。待办：" + todo.getTodoNo() + "，原因：" + run.getSummary());
             snapshot(project);
             return ProjectRunResult.waiting("执行失败，已转入 waiting_user：" + todo.getTodoNo() + "\n原因：" + run.getSummary());
         }
-    }
-
-    private String reviewTodo(String sourceKey, String rest) throws Exception {
-        ProjectRecord project = requireCurrent(sourceKey);
-        String[] parts = StrUtil.nullToEmpty(rest).split("\\s+", 3);
-        if (parts.length == 0 || StrUtil.isBlank(parts[0])) return "Usage: /project review <todo-no|todo-id> [pass|fail] [reason]";
-        ProjectTodoRecord todo = requireTodo(project, parts[0]);
-        String decision = parts.length > 1 ? parts[1].toLowerCase(Locale.ROOT) : "pass";
-        if ("pass".equals(decision) || "ok".equals(decision)) {
-            markDone(project, todo, PROJECT_MANAGER);
-            snapshot(project);
-            return "review passed, done: " + todo.getTodoNo();
-        }
-        String reason = parts.length > 2 ? parts[2] : "review failed and needs a fix";
-        moveTodo(project, todo, ProjectTodoStatus.TODO, PROJECT_MANAGER);
-        ProjectTodoRecord fix = addTodo(project, "Fix " + todo.getTitle(), reason, todo.getTodoId(), todo.getPriority());
-        snapshot(project);
-        return "review failed, created fix todo: " + fix.getTodoNo();
     }
 
     private String doneTodo(String sourceKey, String rest) throws Exception {
@@ -414,13 +406,13 @@ public class ProjectService {
         ProjectTodoRecord todo = requireTodo(project, rest);
         markDone(project, todo, "user");
         snapshot(project);
-        return "Done: " + todo.getTodoNo();
+        return "已完成：" + todo.getTodoNo();
     }
 
     private String answerQuestion(String sourceKey, String rest) throws Exception {
         ProjectRecord project = requireCurrent(sourceKey);
         String[] parts = StrUtil.nullToEmpty(rest).split("\\s+", 2);
-        if (parts.length < 2 || StrUtil.hasBlank(parts[0], parts[1])) return "Usage: /project answer <question-id> <answer>";
+        if (parts.length < 2 || StrUtil.hasBlank(parts[0], parts[1])) return "用法：/task answer <question-id> <answer>";
         ProjectQuestionRecord question = repository.findQuestionById(parts[0]);
         if (question == null || !project.getProjectId().equals(question.getProjectId())) return "Question not found: " + parts[0];
         question.setAnswer(parts[1]);
@@ -440,10 +432,10 @@ public class ProjectService {
         if (!autoDeliveryEnabled) {
             event(project.getProjectId(), null, "autopilot.skip", trigger, "自动推进未启动。", null);
             snapshot(project);
-            return "自动推进未启动。下一步：/project deliver";
+            return "自动推进未启动。下一步：/task deliver";
         }
         if (!activeDeliveries.add(project.getProjectId())) {
-            return "自动推进已在运行，可在项目页面查看实时状态。";
+            return "自动推进已在运行，可在待办页面查看实时状态。";
         }
         event(project.getProjectId(), null, "autopilot.queue", trigger, "项目已进入自动推进队列。", null);
         snapshot(project);
@@ -458,7 +450,7 @@ public class ProjectService {
             activeDeliveries.remove(project.getProjectId());
             throw e;
         }
-        return "自动推进已开始，可在项目页面查看中间执行状态。";
+        return "自动推进已开始，可在待办页面查看中间执行状态。";
     }
 
     private void autoDeliverProjectSafe(String projectId) {
@@ -504,7 +496,10 @@ public class ProjectService {
                 break;
             }
             ran++;
-            log.append("\n- review ").append(todo.getTodoNo()).append(" ").append(todo.getTitle());
+            if (ProjectTodoStatus.DONE.equals(result.getStatus())) {
+                done++;
+            }
+            log.append("\n- ").append(result.getStatus()).append(" ").append(todo.getTodoNo()).append(" ").append(todo.getTitle());
         }
         snapshot(project);
         Map<String, Integer> counts = todoCounts(project);
@@ -514,13 +509,13 @@ public class ProjectService {
                 .append(", remaining_todo=").append(counts.get(ProjectTodoStatus.TODO))
                 .append(", remaining_review=").append(counts.get(ProjectTodoStatus.REVIEW));
         if (counts.get(ProjectTodoStatus.WAITING_USER).intValue() > 0) {
-            log.append("\n下一步：/project questions");
+            log.append("\n下一步：/task questions");
             event(project.getProjectId(), null, "autopilot.blocked", PROJECT_MANAGER, log.toString(), null);
         } else if (counts.get(ProjectTodoStatus.TODO).intValue() == 0 && counts.get(ProjectTodoStatus.IN_PROGRESS).intValue() == 0 && counts.get(ProjectTodoStatus.REVIEW).intValue() == 0) {
             log.append("\n已交付：所有待办已完成。");
             event(project.getProjectId(), null, "autopilot.done", PROJECT_MANAGER, log.toString(), null);
         } else if (counts.get(ProjectTodoStatus.TODO).intValue() == 0 && counts.get(ProjectTodoStatus.IN_PROGRESS).intValue() == 0) {
-            log.append("\n自动执行已完成，待办已进入复核栏。请检查产出后使用 /project review <todo> pass 标记完成。");
+            log.append("\n自动执行已完成，部分待办由 Agent 留在 review 栏，可手动检查后使用 /task done <todo> 标记完成。");
             event(project.getProjectId(), null, "autopilot.review", PROJECT_MANAGER, log.toString(), null);
         } else {
             event(project.getProjectId(), null, "autopilot.pause", PROJECT_MANAGER, log.toString(), null);
@@ -584,14 +579,14 @@ public class ProjectService {
     }
 
     private ProjectInitDraft analyzeInitDraft(String requirement) {
-        String text = requireText(StrUtil.blankToDefault(requirement, "Untitled Project"), "project requirement", 2000);
+        String text = requireText(StrUtil.blankToDefault(requirement, "Untitled Todo"), "task requirement", 2000);
         ProjectInitDraft draft = new ProjectInitDraft();
         draft.setRequirement(text);
         draft.setTitle(deriveTitle(text));
         draft.setSlug(sanitizeSlug(draft.getTitle()));
 
         List<AgentDraft> agents = new ArrayList<AgentDraft>();
-        agents.add(agentDraft(PROJECT_MANAGER, "负责本地项目的计划、拆分、分派、复核和阻塞处理。", "计划、拆分、分派、复核、解除阻塞"));
+        agents.add(agentDraft(PROJECT_MANAGER, "负责本地待办的计划、拆分、分派和阻塞处理。", "计划、拆分、分派、解除阻塞"));
         agents.add(agentDraft("implementation-agent", "负责代码、配置和运行时行为的实现。", "实现执行者"));
         if (containsAny(text, "web", "dashboard", "frontend", "ui", "页面", "面板", "前端", "界面")) {
             agents.add(agentDraft("frontend-agent", "负责前端页面、面板和用户交互改动。", "前端执行者"));
@@ -641,7 +636,7 @@ public class ProjectService {
             return "开源项目分析报告";
         }
         if (title.length() > 48) title = title.substring(0, 48).trim();
-        return requireText(title, "project title", 80);
+        return requireText(title, "task title", 80);
     }
 
     private boolean containsAny(String text, String... keywords) {
@@ -670,7 +665,7 @@ public class ProjectService {
     }
 
     private String formatInitDraft(ProjectInitDraft draft) {
-        StringBuilder builder = new StringBuilder("项目初始化草稿：");
+        StringBuilder builder = new StringBuilder("待办初始化草稿：");
         builder.append("\n标题：").append(draft.getTitle());
         builder.append("\n标识：").append(draft.getSlug());
         builder.append("\n\nAgent：");
@@ -682,8 +677,8 @@ public class ProjectService {
             TodoDraft todo = draft.getTodos().get(i);
             builder.append("\n").append(i + 1).append(". ").append(todo.getTitle()).append(" @").append(todo.getAgentName()).append(" [").append(priorityLabel(todo.getPriority())).append("]");
         }
-        builder.append("\n\n确认：/project confirm");
-        builder.append("\n取消：/project cancel");
+        builder.append("\n\n确认：/task confirm");
+        builder.append("\n取消：/task cancel");
         return builder.toString();
     }
 
@@ -717,12 +712,12 @@ public class ProjectService {
 
     private ProjectRunRecord buildRun(ProjectRecord project, ProjectTodoRecord todo) throws Exception {
         long now = System.currentTimeMillis();
-        AgentProfile profile = agentProfileService.ensureDefault(StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER), "Project worker agent.");
+        AgentProfile profile = agentProfileService.ensureDefault(StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER), "Task worker agent.");
         File dir = projectDir(project);
         List<String> memoryFiles = new ArrayList<String>();
-        memoryFiles.add(new File(dir, "PROJECT.md").getAbsolutePath());
+        memoryFiles.add(new File(dir, "TODO_WORKSPACE.md").getAbsolutePath());
         memoryFiles.add(new File(dir, "MEMORY.md").getAbsolutePath());
-        memoryFiles.add(new File(dir, "PROJECT_STATE.md").getAbsolutePath());
+        memoryFiles.add(new File(dir, "TODO_STATE.md").getAbsolutePath());
         memoryFiles.add(new File(new File(dir, "agents"), profile.getAgentName() + File.separator + "MEMORY.md").getAbsolutePath());
         memoryFiles.add(new File(new File(dir, "todos"), todo.getTodoNo() + ".md").getAbsolutePath());
         ProjectRunRecord run = new ProjectRunRecord();
@@ -730,7 +725,7 @@ public class ProjectService {
         run.setProjectId(project.getProjectId());
         run.setTodoId(todo.getTodoId());
         run.setAgentName(profile.getAgentName());
-        run.setSessionId("project-" + project.getSlug() + "-" + todo.getTodoNo());
+        run.setSessionId("task-" + project.getSlug() + "-" + todo.getTodoNo());
         run.setWorkDir(dir.getAbsolutePath());
         run.setModel(StrUtil.blankToDefault(profile.getModel(), "default"));
         run.setAllowedToolsJson(StrUtil.blankToDefault(profile.getAllowedToolsJson(), "[]"));
@@ -745,10 +740,10 @@ public class ProjectService {
 
     private GatewayMessage buildProjectAgentMessage(ProjectRecord project, ProjectTodoRecord todo, ProjectRunRecord run) {
         String agentName = StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER);
-        String projectChatId = "project-" + project.getProjectId() + "-" + todo.getTodoId();
+        String projectChatId = "task-" + project.getProjectId() + "-" + todo.getTodoId();
         String sourceKey = PlatformType.MEMORY.name() + ":" + projectChatId + ":" + agentName;
-        GatewayMessage message = new GatewayMessage(PlatformType.MEMORY, "project-" + project.getSlug(), agentName, buildProjectAgentPrompt(project, todo, run));
-        message.setChatType("project");
+        GatewayMessage message = new GatewayMessage(PlatformType.MEMORY, "task-" + project.getSlug(), agentName, buildProjectAgentPrompt(project, todo, run));
+        message.setChatType("task");
         message.setChatName(project.getTitle());
         message.setUserName(PROJECT_MANAGER);
         message.setSourceKeyOverride(sourceKey);
@@ -757,20 +752,54 @@ public class ProjectService {
 
     private String buildProjectAgentPrompt(ProjectRecord project, ProjectTodoRecord todo, ProjectRunRecord run) {
         StringBuilder builder = new StringBuilder();
-        builder.append("你正在作为项目 Agent 执行一个本地项目待办。必须认真完成实际工作，不能只总结或只改变待办状态。");
-        builder.append("\n\n项目：").append(project.getTitle()).append("（").append(project.getSlug()).append("）");
+        builder.append("你正在作为待办 Agent 执行一个本地待办。必须认真完成实际工作，不能只总结或只改变待办状态。");
+        builder.append("\n\n待办工作台：").append(project.getTitle()).append("（").append(project.getSlug()).append("）");
         builder.append("\n目标：").append(StrUtil.blankToDefault(project.getGoal(), ""));
-        builder.append("\n项目目录：").append(projectDir(project).getAbsolutePath());
+        builder.append("\n工作目录：").append(projectDir(project).getAbsolutePath());
         builder.append("\n执行者：").append(StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
         builder.append("\n待办：").append(todo.getTodoNo()).append(" ").append(todo.getTitle());
         builder.append("\n优先级：").append(StrUtil.blankToDefault(todo.getPriority(), "normal"));
         builder.append("\n描述：").append(StrUtil.blankToDefault(todo.getDescription(), ""));
         builder.append("\n运行记录：").append(run.getRunId());
-        builder.append("\n\n请先读取项目目录下的 PROJECT.md、PROJECT_STATE.md 和当前 todo 文件，再按待办要求执行。");
+        builder.append("\n\n请先读取工作目录下的 TODO_WORKSPACE.md、TODO_STATE.md 和当前 todo 文件，再按待办要求执行。");
         builder.append("\n如果需要拉取仓库、分析代码、生成报告或运行验证，请实际使用工具完成。");
         builder.append("\n如果遇到危险命令审批、缺少凭据、网络失败或用户输入缺失，请明确说明阻塞原因。");
         builder.append("\n完成后用中文给出实际产出、修改/生成的文件路径、验证结果和剩余风险。");
+        builder.append("\n最后单独输出一行：状态：done、状态：review 或 状态：waiting_user。");
+        builder.append("\n除非确实需要用户补充信息或专门人工复核，否则默认使用 状态：done。");
         return builder.toString();
+    }
+
+    private String resolveAgentFinalStatus(String summary) {
+        String[] lines = StrUtil.nullToEmpty(summary).split("\\r?\\n");
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String line = StrUtil.nullToEmpty(lines[i]).trim().toLowerCase(Locale.ROOT);
+            if (StrUtil.isBlank(line)) {
+                continue;
+            }
+            line = line.replace('：', ':');
+            if (line.startsWith("状态:")) {
+                return normalizeAgentFinalStatus(line.substring("状态:".length()).trim());
+            }
+            if (line.startsWith("status:")) {
+                return normalizeAgentFinalStatus(line.substring("status:".length()).trim());
+            }
+            if (line.startsWith("status=")) {
+                return normalizeAgentFinalStatus(line.substring("status=".length()).trim());
+            }
+            break;
+        }
+        return ProjectTodoStatus.DONE;
+    }
+
+    private String normalizeAgentFinalStatus(String value) {
+        if ("waiting_user".equals(value)) {
+            return ProjectTodoStatus.WAITING_USER;
+        }
+        if ("review".equals(value) || "in_review".equals(value)) {
+            return ProjectTodoStatus.REVIEW;
+        }
+        return ProjectTodoStatus.DONE;
     }
 
     private void markDone(ProjectRecord project, ProjectTodoRecord todo, String actor) throws Exception {
@@ -854,7 +883,7 @@ public class ProjectService {
 
     private ProjectRecord requireCurrent(String sourceKey) throws Exception {
         ProjectRecord project = currentProject(sourceKey);
-        if (project == null) throw new IllegalStateException("No current project. Use /project init <requirement> first.");
+        if (project == null) throw new IllegalStateException("当前没有待办。请先使用 /task init <需求>。");
         return project;
     }
 
@@ -873,10 +902,10 @@ public class ProjectService {
     }
 
     private ProjectRecord resolveProject(String projectIdOrSlug) throws Exception {
-        if (StrUtil.isBlank(projectIdOrSlug)) throw new IllegalArgumentException("project slug or id is required");
+        if (StrUtil.isBlank(projectIdOrSlug)) throw new IllegalArgumentException("task slug or id is required");
         ProjectRecord project = repository.findProjectBySlug(projectIdOrSlug.trim());
         if (project == null) project = repository.findProjectById(projectIdOrSlug.trim());
-        if (project == null) throw new IllegalStateException("Project not found: " + projectIdOrSlug);
+        if (project == null) throw new IllegalStateException("未找到待办：" + projectIdOrSlug);
         return project;
     }
 
@@ -886,20 +915,20 @@ public class ProjectService {
 
     private String formatProjectList() throws Exception {
         List<ProjectRecord> projects = repository.listProjects();
-        if (projects.isEmpty()) return "No projects. Use /project init <requirement>.";
-        StringBuilder builder = new StringBuilder("Projects:");
+        if (projects.isEmpty()) return "暂无待办。请使用 /task init <需求>。";
+        StringBuilder builder = new StringBuilder("待办：");
         for (ProjectRecord project : projects) builder.append("\n- ").append(project.getSlug()).append(": ").append(project.getTitle()).append(" [").append(project.getStatus()).append("]");
         return builder.toString();
     }
 
     private String formatCurrent(String sourceKey) throws Exception {
         ProjectRecord project = currentProject(sourceKey);
-        return project == null ? "No current project." : "Current project: " + project.getSlug() + "\nGoal: " + StrUtil.blankToDefault(project.getGoal(), "not set");
+        return project == null ? "当前没有待办。" : "当前待办：" + project.getSlug() + "\n目标：" + StrUtil.blankToDefault(project.getGoal(), "未设置");
     }
 
     private String formatBoard(ProjectRecord project) throws Exception {
         Map<String, List<ProjectTodoRecord>> board = groupTodos(project);
-        StringBuilder builder = new StringBuilder("Project board: ").append(project.getSlug());
+        StringBuilder builder = new StringBuilder("待办看板：").append(project.getSlug());
         for (String status : ProjectTodoStatus.all()) {
             List<ProjectTodoRecord> todos = board.get(status);
             builder.append("\n\n# ").append(status).append(" (").append(todos.size()).append(")");
@@ -913,7 +942,7 @@ public class ProjectService {
 
     private String formatTree(ProjectRecord project) throws Exception {
         List<ProjectTodoRecord> todos = repository.listTodos(project.getProjectId());
-        StringBuilder builder = new StringBuilder("Project tree: ").append(project.getSlug());
+        StringBuilder builder = new StringBuilder("待办树：").append(project.getSlug());
         appendTree(builder, todos, null, "");
         return builder.toString();
     }
@@ -929,8 +958,8 @@ public class ProjectService {
 
     private String formatQuestions(ProjectRecord project) throws Exception {
         List<ProjectQuestionRecord> questions = repository.listQuestions(project.getProjectId(), "open");
-        if (questions.isEmpty()) return "No open questions.";
-        StringBuilder builder = new StringBuilder("Open questions:");
+        if (questions.isEmpty()) return "暂无待回答问题。";
+        StringBuilder builder = new StringBuilder("待回答问题：");
         for (ProjectQuestionRecord question : questions) builder.append("\n- ").append(question.getQuestionId()).append(" by ").append(question.getAskedBy()).append(": ").append(question.getQuestion());
         return builder.toString();
     }
@@ -1062,7 +1091,7 @@ public class ProjectService {
     private Map<String, Object> todoView(ProjectTodoRecord todo) {
         Map<String, Object> map = new LinkedHashMap<String, Object>();
         map.put("id", todo.getTodoId());
-        map.put("project_id", todo.getProjectId());
+        map.put("workspace_id", todo.getProjectId());
         map.put("parent_todo_id", todo.getParentTodoId());
         map.put("no", todo.getTodoNo());
         map.put("title", todo.getTitle());
@@ -1083,9 +1112,9 @@ public class ProjectService {
         FileUtil.mkdir(todosDir);
         FileUtil.mkdir(agentsDir);
         List<ProjectTodoRecord> todos = repository.listTodos(project.getProjectId());
-        FileUtil.writeUtf8String("# " + project.getTitle() + "\n\nSlug: " + project.getSlug() + "\nStatus: " + project.getStatus() + "\n\n## Goal\n" + StrUtil.blankToDefault(project.getGoal(), "") + "\n", new File(dir, "PROJECT.md"));
-        FileUtil.writeUtf8String("# Project Memory\n\n", new File(dir, "MEMORY.md"));
-        FileUtil.writeUtf8String(formatBoard(project) + "\n", new File(dir, "PROJECT_STATE.md"));
+        FileUtil.writeUtf8String("# " + project.getTitle() + "\n\nSlug: " + project.getSlug() + "\nStatus: " + project.getStatus() + "\n\n## Goal\n" + StrUtil.blankToDefault(project.getGoal(), "") + "\n", new File(dir, "TODO_WORKSPACE.md"));
+        FileUtil.writeUtf8String("# Todo Memory\n\n", new File(dir, "MEMORY.md"));
+        FileUtil.writeUtf8String(formatBoard(project) + "\n", new File(dir, "TODO_STATE.md"));
         for (ProjectTodoRecord todo : todos) {
             String content = "# " + todo.getTodoNo() + " " + todo.getTitle() + "\n\nStatus: " + todo.getStatus() + "\nAgent: " + StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER) + "\nPriority: " + StrUtil.blankToDefault(todo.getPriority(), "normal") + "\nParent: " + StrUtil.blankToDefault(todo.getParentTodoId(), "") + "\n\n## Description\n" + StrUtil.blankToDefault(todo.getDescription(), "") + "\n";
             FileUtil.writeUtf8String(content, new File(todosDir, todo.getTodoNo() + ".md"));
@@ -1100,7 +1129,7 @@ public class ProjectService {
     }
 
     private File projectDir(ProjectRecord project) {
-        return FileUtil.file(appConfig.getRuntime().getHome(), "projects", project.getSlug());
+        return FileUtil.file(appConfig.getRuntime().getHome(), "todos", project.getSlug());
     }
 
     private String nextTodoNo(ProjectRecord project, String parentTodoId) throws Exception {
@@ -1134,7 +1163,7 @@ public class ProjectService {
             return "open-source-project-analysis-report";
         }
         String slug = StrUtil.nullToEmpty(text).toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]+", "-").replaceAll("^-+|-+$", "");
-        if (StrUtil.isBlank(slug)) slug = "project-" + System.currentTimeMillis();
+        if (StrUtil.isBlank(slug)) slug = "task-" + System.currentTimeMillis();
         return slug.length() > 64 ? slug.substring(0, 64) : slug;
     }
 
@@ -1285,20 +1314,22 @@ public class ProjectService {
         private final String message;
         private final String runId;
         private final String contextJson;
+        private final String status;
 
-        private ProjectRunResult(boolean waitingUser, String message, String runId, String contextJson) {
+        private ProjectRunResult(boolean waitingUser, String message, String runId, String contextJson, String status) {
             this.waitingUser = waitingUser;
             this.message = message;
             this.runId = runId;
             this.contextJson = contextJson;
+            this.status = status;
         }
 
         static ProjectRunResult waiting(String message) {
-            return new ProjectRunResult(true, message, null, null);
+            return new ProjectRunResult(true, message, null, null, ProjectTodoStatus.WAITING_USER);
         }
 
-        static ProjectRunResult completed(String runId, String contextJson) {
-            return new ProjectRunResult(false, null, runId, contextJson);
+        static ProjectRunResult completed(String runId, String contextJson, String status) {
+            return new ProjectRunResult(false, null, runId, contextJson, status);
         }
 
         boolean isWaitingUser() {
@@ -1315,6 +1346,10 @@ public class ProjectService {
 
         String getContextJson() {
             return contextJson;
+        }
+
+        String getStatus() {
+            return status;
         }
     }
 }

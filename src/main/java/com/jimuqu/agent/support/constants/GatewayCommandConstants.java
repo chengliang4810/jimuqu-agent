@@ -59,7 +59,7 @@ public interface GatewayCommandConstants {
     String COMMAND_REASONING = "reasoning";
     String COMMAND_HELP = "help";
     String COMMAND_AGENT = "agent";
-    String COMMAND_PROJECT = "project";
+    String COMMAND_TASK = "task";
     String COMMAND_APPROVE = "approve";
     String COMMAND_DENY = "deny";
 
@@ -87,7 +87,7 @@ public interface GatewayCommandConstants {
     String SLASH_REASONING = COMMAND_PREFIX + COMMAND_REASONING;
     String SLASH_HELP = COMMAND_PREFIX + COMMAND_HELP;
     String SLASH_AGENT = COMMAND_PREFIX + COMMAND_AGENT;
-    String SLASH_PROJECT = COMMAND_PREFIX + COMMAND_PROJECT;
+    String SLASH_TASK = COMMAND_PREFIX + COMMAND_TASK;
     String SLASH_APPROVE = COMMAND_PREFIX + COMMAND_APPROVE;
     String SLASH_DENY = COMMAND_PREFIX + COMMAND_DENY;
 }

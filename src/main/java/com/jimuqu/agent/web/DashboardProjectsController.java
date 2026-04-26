@@ -18,12 +18,12 @@ public class DashboardProjectsController {
         this.projectService = projectService;
     }
 
-    @Mapping(value = "/api/projects", method = MethodType.GET)
+    @Mapping(value = "/api/todos", method = MethodType.GET)
     public Map<String, Object> projects() throws Exception {
         return DashboardResponse.ok(projectService.dashboard());
     }
 
-    @Mapping(value = "/api/projects", method = MethodType.POST)
+    @Mapping(value = "/api/todos", method = MethodType.POST)
     public Map<String, Object> create(Context context) throws Exception {
         try {
             return DashboardResponse.ok(projectService.createProjectFromDashboard(body(context)));
@@ -32,7 +32,7 @@ public class DashboardProjectsController {
         }
     }
 
-    @Mapping(value = "/api/projects/{id}", method = MethodType.GET)
+    @Mapping(value = "/api/todos/{id}", method = MethodType.GET)
     public Map<String, Object> detail(String id, Context context) throws Exception {
         try {
             return DashboardResponse.ok(projectService.detail(id));
@@ -41,7 +41,7 @@ public class DashboardProjectsController {
         }
     }
 
-    @Mapping(value = "/api/projects/{id}/todos", method = MethodType.POST)
+    @Mapping(value = "/api/todos/{id}/items", method = MethodType.POST)
     public Map<String, Object> createTodo(String id, Context context) throws Exception {
         try {
             return DashboardResponse.ok(projectService.createTodoFromDashboard(id, body(context)));
@@ -52,7 +52,7 @@ public class DashboardProjectsController {
         }
     }
 
-    @Mapping(value = "/api/projects/{id}/todos/{todoId}/status", method = MethodType.POST)
+    @Mapping(value = "/api/todos/{id}/items/{todoId}/status", method = MethodType.POST)
     public Map<String, Object> updateTodoStatus(String id, String todoId, Context context) throws Exception {
         try {
             return DashboardResponse.ok(projectService.updateTodoStatus(id, todoId, body(context)));

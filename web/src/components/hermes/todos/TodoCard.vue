@@ -1,10 +1,10 @@
 ﻿<script setup lang="ts">
 import { computed } from 'vue'
 import { NButton, NSelect } from 'naive-ui'
-import type { ProjectTodo, ProjectTodoStatus } from '@/api/hermes/projects'
+import type { TodoItem, TodoStatus } from '@/api/hermes/todos'
 
-const props = defineProps<{ todo: ProjectTodo }>()
-const emit = defineEmits<{ status: [todo: ProjectTodo, status: ProjectTodoStatus] }>()
+const props = defineProps<{ todo: TodoItem }>()
+const emit = defineEmits<{ status: [todo: TodoItem, status: TodoStatus] }>()
 
 const statusOptions = [
   { label: '待处理', value: 'todo' },
@@ -24,12 +24,12 @@ const priorityLabels: Record<string, string> = {
 const updated = computed(() => props.todo.updated_at ? new Date(props.todo.updated_at).toLocaleString() : '-')
 const progress = computed(() => props.todo.child_total > 0 ? `${props.todo.child_done}/${props.todo.child_total}` : '')
 const priorityLabel = computed(() => priorityLabels[props.todo.priority || 'normal'] || props.todo.priority || '普通')
-const agentLabel = computed(() => props.todo.assigned_agent === 'project-manager' || !props.todo.assigned_agent ? '项目经理' : props.todo.assigned_agent)
-function handleStatus(value: string) { emit('status', props.todo, value as ProjectTodoStatus) }
+const agentLabel = computed(() => props.todo.assigned_agent === 'task-manager' || !props.todo.assigned_agent ? '待办负责人' : props.todo.assigned_agent)
+function handleStatus(value: string) { emit('status', props.todo, value as TodoStatus) }
 </script>
 
 <template>
-  <article class="project-todo-card">
+  <article class="todo-card">
     <div class="card-topline">
       <span class="todo-no">{{ todo.no }}</span>
       <span v-if="progress" class="progress-chip">子待办 {{ progress }}</span>
@@ -50,8 +50,8 @@ function handleStatus(value: string) { emit('status', props.todo, value as Proje
 
 <style scoped lang="scss">
 @use '@/styles/variables' as *;
-.project-todo-card { border: 1px solid $border-color; border-radius: $radius-md; background: $bg-card; padding: 14px; display: flex; flex-direction: column; gap: 10px; transition: border-color $transition-fast, transform $transition-fast; }
-.project-todo-card:hover { border-color: rgba(var(--accent-primary-rgb), 0.32); transform: translateY(-1px); }
+.todo-card { border: 1px solid $border-color; border-radius: $radius-md; background: $bg-card; padding: 14px; display: flex; flex-direction: column; gap: 10px; transition: border-color $transition-fast, transform $transition-fast; }
+.todo-card:hover { border-color: rgba(var(--accent-primary-rgb), 0.32); transform: translateY(-1px); }
 .card-topline, .card-footer, .card-actions { display: flex; align-items: center; gap: 8px; }
 .card-topline { flex-wrap: wrap; }
 .todo-no { color: $accent-primary; font-size: 12px; font-weight: 700; font-family: \$font-code; }
