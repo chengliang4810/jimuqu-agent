@@ -27,7 +27,7 @@ import org.noear.solon.annotation.Configuration;
  */
 @Configuration
 public class StorageConfiguration {
-    @Bean
+    @Bean(destroyMethod = "shutdown")
     public SqliteDatabase sqliteDatabase(AppConfig appConfig) throws Exception {
         return new SqliteDatabase(appConfig);
     }

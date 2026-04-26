@@ -7,12 +7,19 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * SqliteDatabase 实现。
  */
 public class SqliteDatabase {
     private final String jdbcUrl;
+    private final ReentrantLock connectionLock = new ReentrantLock(true);
+    private Connection sharedConnection;
 
     public SqliteDatabase(AppConfig appConfig) throws SQLException {
         FileUtil.mkParentDirs(appConfig.getRuntime().getStateDb());
@@ -21,15 +28,89 @@ public class SqliteDatabase {
     }
 
     public Connection openConnection() throws SQLException {
-        Connection connection = DriverManager.getConnection(jdbcUrl);
-        Statement statement = connection.createStatement();
+        connectionLock.lock();
         try {
-            statement.execute("pragma busy_timeout=5000");
-            statement.execute("pragma journal_mode=WAL");
-        } finally {
-            statement.close();
+            return lockReleasingConnection(sharedConnection());
+        } catch (SQLException e) {
+            connectionLock.unlock();
+            throw e;
+        } catch (RuntimeException e) {
+            connectionLock.unlock();
+            throw e;
         }
-        return connection;
+    }
+
+    public void shutdown() {
+        connectionLock.lock();
+        try {
+            closeQuietly(sharedConnection);
+            sharedConnection = null;
+        } finally {
+            connectionLock.unlock();
+        }
+    }
+
+    private Connection sharedConnection() throws SQLException {
+        if (sharedConnection == null || sharedConnection.isClosed()) {
+            try {
+                sharedConnection = DriverManager.getConnection(jdbcUrl);
+                Statement statement = sharedConnection.createStatement();
+                try {
+                    statement.execute("pragma busy_timeout=5000");
+                    statement.execute("pragma journal_mode=WAL");
+                } finally {
+                    statement.close();
+                }
+            } catch (SQLException e) {
+                closeQuietly(sharedConnection);
+                sharedConnection = null;
+                throw e;
+            }
+        }
+        return sharedConnection;
+    }
+
+    private Connection lockReleasingConnection(final Connection delegate) {
+        InvocationHandler handler = new InvocationHandler() {
+            private boolean closed;
+
+            @Override
+            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                if ("close".equals(method.getName()) && method.getParameterTypes().length == 0) {
+                    if (!closed) {
+                        closed = true;
+                        connectionLock.unlock();
+                    }
+                    return null;
+                }
+                if ("isClosed".equals(method.getName()) && method.getParameterTypes().length == 0) {
+                    return Boolean.valueOf(closed || delegate.isClosed());
+                }
+                if (closed) {
+                    throw new SQLException("Connection is closed");
+                }
+                try {
+                    return method.invoke(delegate, args);
+                } catch (InvocationTargetException e) {
+                    throw e.getCause();
+                }
+            }
+        };
+        return (Connection) Proxy.newProxyInstance(
+                Connection.class.getClassLoader(),
+                new Class[]{Connection.class},
+                handler
+        );
+    }
+
+    private void closeQuietly(Connection connection) {
+        if (connection == null) {
+            return;
+        }
+        try {
+            connection.close();
+        } catch (Exception ignored) {
+        }
     }
 
     private void initSchema() throws SQLException {
