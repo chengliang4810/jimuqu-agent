@@ -37,6 +37,7 @@ import com.jimuqu.agent.skillhub.support.GitHubAuth;
 import com.jimuqu.agent.skillhub.support.SkillHubHttpClient;
 import com.jimuqu.agent.skillhub.support.SkillHubStateStore;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
+import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import org.noear.solon.annotation.Bean;
 import org.noear.solon.annotation.Configuration;
 import java.io.File;
@@ -68,8 +69,9 @@ public class ContextConfiguration {
     public ProjectService projectService(AppConfig appConfig,
                                           ProjectRepository projectRepository,
                                           AgentProfileService agentProfileService,
-                                          GlobalSettingRepository globalSettingRepository) {
-        return new ProjectService(appConfig, projectRepository, agentProfileService, globalSettingRepository);
+                                          GlobalSettingRepository globalSettingRepository,
+                                          ConversationOrchestratorHolder conversationOrchestratorHolder) {
+        return new ProjectService(appConfig, projectRepository, agentProfileService, globalSettingRepository, conversationOrchestratorHolder);
     }
 
     @Bean

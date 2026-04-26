@@ -6,7 +6,11 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.agent.AgentProfile;
 import com.jimuqu.agent.agent.AgentProfileService;
 import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.core.model.GatewayMessage;
+import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.core.repository.GlobalSettingRepository;
+import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.project.model.ProjectAgentRecord;
 import com.jimuqu.agent.project.model.ProjectEventRecord;
 import com.jimuqu.agent.project.model.ProjectQuestionRecord;
@@ -16,6 +20,7 @@ import com.jimuqu.agent.project.model.ProjectTodoRecord;
 import com.jimuqu.agent.project.model.ProjectTodoStatus;
 import com.jimuqu.agent.project.repository.ProjectRepository;
 import com.jimuqu.agent.support.BoundedExecutorFactory;
+import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.IdSupport;
 import org.noear.snack4.ONode;
 import org.slf4j.Logger;
@@ -47,17 +52,19 @@ public class ProjectService {
     private final ProjectRepository repository;
     private final AgentProfileService agentProfileService;
     private final GlobalSettingRepository globalSettingRepository;
+    private final ConversationOrchestratorHolder conversationOrchestratorHolder;
     private final ScheduledExecutorService autoDeliveryExecutor = BoundedExecutorFactory.scheduled("project-autopilot", 1);
     private final Set<String> activeDeliveries = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     private volatile boolean autoDeliveryEnabled = true;
     private volatile long autoDeliveryInitialDelayMillis = DEFAULT_AUTO_DELIVERY_INITIAL_DELAY_MILLIS;
     private volatile long autoDeliveryStepDelayMillis = DEFAULT_AUTO_DELIVERY_STEP_DELAY_MILLIS;
 
-    public ProjectService(AppConfig appConfig, ProjectRepository repository, AgentProfileService agentProfileService, GlobalSettingRepository globalSettingRepository) {
+    public ProjectService(AppConfig appConfig, ProjectRepository repository, AgentProfileService agentProfileService, GlobalSettingRepository globalSettingRepository, ConversationOrchestratorHolder conversationOrchestratorHolder) {
         this.appConfig = appConfig;
         this.repository = repository;
         this.agentProfileService = agentProfileService;
         this.globalSettingRepository = globalSettingRepository;
+        this.conversationOrchestratorHolder = conversationOrchestratorHolder;
     }
 
     public void shutdown() {
@@ -343,21 +350,45 @@ public class ProjectService {
         }
         moveTodo(project, todo, ProjectTodoStatus.IN_PROGRESS, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
         ProjectRunRecord run = buildRun(project, todo);
-        if (observable && !pauseAutoDeliveryStep()) {
-            run.setStatus("failed");
-            run.setSummary("自动推进被中断。");
+        try {
+            if (observable && !pauseAutoDeliveryStep()) {
+                throw new InterruptedException("自动推进被中断。");
+            }
+            ConversationOrchestrator orchestrator = conversationOrchestratorHolder == null ? null : conversationOrchestratorHolder.get();
+            if (orchestrator == null) {
+                throw new IllegalStateException("项目 Agent 运行器尚未就绪，无法执行待办。");
+            }
+            GatewayReply reply = orchestrator.handleIncoming(buildProjectAgentMessage(project, todo, run));
+            if (reply != null && reply.isError()) {
+                throw new IllegalStateException(reply.getContent());
+            }
+            String summary = reply == null ? "" : StrUtil.blankToDefault(reply.getContent(), "");
+            run.setStatus("completed");
+            run.setSummary(trimToMax(StrUtil.blankToDefault(summary, "Agent 已完成本轮项目待办执行，等待复核。"), 4000, "run summary"));
             run.setFinishedAt(System.currentTimeMillis());
             repository.saveRun(run);
+            event(project.getProjectId(), todo.getTodoId(), "run.complete", StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER), run.getRunId(), null);
+            moveTodo(project, todo, ProjectTodoStatus.REVIEW, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
+            snapshot(project);
+            return ProjectRunResult.completed(run.getRunId(), run.getLoadedMemoryFilesJson());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            run.setStatus("failed");
+            run.setSummary(e.getMessage());
+            run.setFinishedAt(System.currentTimeMillis());
+            repository.saveRun(run);
+            event(project.getProjectId(), todo.getTodoId(), "run.failed", StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER), e.getMessage(), null);
             return ProjectRunResult.waiting("自动推进已中断：" + todo.getTodoNo());
+        } catch (Exception e) {
+            run.setStatus("failed");
+            run.setSummary(trimToMax(StrUtil.blankToDefault(e.getMessage(), e.getClass().getSimpleName()), 4000, "run summary"));
+            run.setFinishedAt(System.currentTimeMillis());
+            repository.saveRun(run);
+            moveTodo(project, todo, ProjectTodoStatus.WAITING_USER, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
+            ask(project, todo, PROJECT_MANAGER, "项目 Agent 执行失败，需要处理后再继续。待办：" + todo.getTodoNo() + "，原因：" + run.getSummary());
+            snapshot(project);
+            return ProjectRunResult.waiting("执行失败，已转入 waiting_user：" + todo.getTodoNo() + "\n原因：" + run.getSummary());
         }
-        run.setStatus("completed");
-        run.setSummary("本地项目自动推进已加载上下文，并将待办推进到复核阶段。");
-        run.setFinishedAt(System.currentTimeMillis());
-        repository.saveRun(run);
-        event(project.getProjectId(), todo.getTodoId(), "run.complete", StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER), run.getRunId(), null);
-        moveTodo(project, todo, ProjectTodoStatus.REVIEW, StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
-        snapshot(project);
-        return ProjectRunResult.completed(run.getRunId(), run.getLoadedMemoryFilesJson());
     }
 
     private String reviewTodo(String sourceKey, String rest) throws Exception {
@@ -464,10 +495,6 @@ public class ProjectService {
             ProjectTodoRecord todo = nextDeliverableTodo(project);
             if (todo == null) break;
             if (ProjectTodoStatus.REVIEW.equals(todo.getStatus())) {
-                if (!pauseAutoDeliveryStep()) break;
-                markDone(project, todo, PROJECT_MANAGER);
-                done++;
-                log.append("\n- done ").append(todo.getTodoNo()).append(" ").append(todo.getTitle());
                 continue;
             }
             ProjectRunResult result = runTodoRecord(project, todo, true);
@@ -477,13 +504,7 @@ public class ProjectService {
                 break;
             }
             ran++;
-            if (!pauseAutoDeliveryStep()) break;
-            ProjectTodoRecord latest = repository.findTodoById(todo.getTodoId());
-            if (latest != null && ProjectTodoStatus.REVIEW.equals(latest.getStatus())) {
-                markDone(project, latest, PROJECT_MANAGER);
-                done++;
-                log.append("\n- done ").append(latest.getTodoNo()).append(" ").append(latest.getTitle());
-            }
+            log.append("\n- review ").append(todo.getTodoNo()).append(" ").append(todo.getTitle());
         }
         snapshot(project);
         Map<String, Integer> counts = todoCounts(project);
@@ -498,6 +519,9 @@ public class ProjectService {
         } else if (counts.get(ProjectTodoStatus.TODO).intValue() == 0 && counts.get(ProjectTodoStatus.IN_PROGRESS).intValue() == 0 && counts.get(ProjectTodoStatus.REVIEW).intValue() == 0) {
             log.append("\n已交付：所有待办已完成。");
             event(project.getProjectId(), null, "autopilot.done", PROJECT_MANAGER, log.toString(), null);
+        } else if (counts.get(ProjectTodoStatus.TODO).intValue() == 0 && counts.get(ProjectTodoStatus.IN_PROGRESS).intValue() == 0) {
+            log.append("\n自动执行已完成，待办已进入复核栏。请检查产出后使用 /project review <todo> pass 标记完成。");
+            event(project.getProjectId(), null, "autopilot.review", PROJECT_MANAGER, log.toString(), null);
         } else {
             event(project.getProjectId(), null, "autopilot.pause", PROJECT_MANAGER, log.toString(), null);
         }
@@ -532,7 +556,7 @@ public class ProjectService {
                     break;
                 }
             }
-            if (childrenDone && (ProjectTodoStatus.TODO.equals(todo.getStatus()) || ProjectTodoStatus.IN_PROGRESS.equals(todo.getStatus()) || ProjectTodoStatus.REVIEW.equals(todo.getStatus()))) {
+            if (childrenDone && (ProjectTodoStatus.TODO.equals(todo.getStatus()) || ProjectTodoStatus.IN_PROGRESS.equals(todo.getStatus()))) {
                 return todo;
             }
         }
@@ -717,6 +741,36 @@ public class ProjectService {
         repository.saveRun(run);
         event(project.getProjectId(), todo.getTodoId(), "run.start", profile.getAgentName(), run.getRunId(), null);
         return run;
+    }
+
+    private GatewayMessage buildProjectAgentMessage(ProjectRecord project, ProjectTodoRecord todo, ProjectRunRecord run) {
+        String agentName = StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER);
+        String projectChatId = "project-" + project.getProjectId() + "-" + todo.getTodoId();
+        String sourceKey = PlatformType.MEMORY.name() + ":" + projectChatId + ":" + agentName;
+        GatewayMessage message = new GatewayMessage(PlatformType.MEMORY, "project-" + project.getSlug(), agentName, buildProjectAgentPrompt(project, todo, run));
+        message.setChatType("project");
+        message.setChatName(project.getTitle());
+        message.setUserName(PROJECT_MANAGER);
+        message.setSourceKeyOverride(sourceKey);
+        return message;
+    }
+
+    private String buildProjectAgentPrompt(ProjectRecord project, ProjectTodoRecord todo, ProjectRunRecord run) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("你正在作为项目 Agent 执行一个本地项目待办。必须认真完成实际工作，不能只总结或只改变待办状态。");
+        builder.append("\n\n项目：").append(project.getTitle()).append("（").append(project.getSlug()).append("）");
+        builder.append("\n目标：").append(StrUtil.blankToDefault(project.getGoal(), ""));
+        builder.append("\n项目目录：").append(projectDir(project).getAbsolutePath());
+        builder.append("\n执行者：").append(StrUtil.blankToDefault(todo.getAssignedAgent(), PROJECT_MANAGER));
+        builder.append("\n待办：").append(todo.getTodoNo()).append(" ").append(todo.getTitle());
+        builder.append("\n优先级：").append(StrUtil.blankToDefault(todo.getPriority(), "normal"));
+        builder.append("\n描述：").append(StrUtil.blankToDefault(todo.getDescription(), ""));
+        builder.append("\n运行记录：").append(run.getRunId());
+        builder.append("\n\n请先读取项目目录下的 PROJECT.md、PROJECT_STATE.md 和当前 todo 文件，再按待办要求执行。");
+        builder.append("\n如果需要拉取仓库、分析代码、生成报告或运行验证，请实际使用工具完成。");
+        builder.append("\n如果遇到危险命令审批、缺少凭据、网络失败或用户输入缺失，请明确说明阻塞原因。");
+        builder.append("\n完成后用中文给出实际产出、修改/生成的文件路径、验证结果和剩余风险。");
+        return builder.toString();
     }
 
     private void markDone(ProjectRecord project, ProjectTodoRecord todo, String actor) throws Exception {

@@ -29,6 +29,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 默认工具注册表。
@@ -180,8 +181,8 @@ public class DefaultToolRegistry implements ToolRegistry {
         DelegateTools delegateTools = new DelegateTools(delegationService, sourceKey);
         ConfigTools configTools = new ConfigTools(runtimeSettingsService);
         String sysWorkDir = appConfig.getRuntime().getHome();
-        ShellSkill shellSkill = new ShellSkill(sysWorkDir);
-        PythonSkill pythonSkill = new PythonSkill(sysWorkDir);
+        ShellSkill shellSkill = new ShellSkill(sysWorkDir, defaultShellCommand(), defaultShellExtension());
+        PythonSkill pythonSkill = new PythonSkill(sysWorkDir, defaultPythonCommand());
         NodejsSkill nodejsSkill = new NodejsSkill(sysWorkDir);
         SystemClockSkill systemClockSkill = new SystemClockSkill();
         WebsearchTool websearchTool = WebsearchTool.getInstance();
@@ -319,5 +320,21 @@ public class DefaultToolRegistry implements ToolRegistry {
         } catch (SQLException ignored) {
             // V1 忽略偏好写入失败。
         }
+    }
+
+    private String defaultShellCommand() {
+        return isWindows() ? "cmd /c" : "/bin/sh";
+    }
+
+    private String defaultShellExtension() {
+        return isWindows() ? ".bat" : ".sh";
+    }
+
+    private String defaultPythonCommand() {
+        return isWindows() ? "python" : "python3";
+    }
+
+    private boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
 }

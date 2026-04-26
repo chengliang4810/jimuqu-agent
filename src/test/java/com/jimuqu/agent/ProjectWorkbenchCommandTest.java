@@ -52,7 +52,7 @@ public class ProjectWorkbenchCommandTest {
     @Test
     void shouldDraftProjectFromRequirementAndStartAutoDeliveryAfterConfirm() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
-        env.projectService.setAutoDeliveryDelaysForTest(500L, 10L);
+        env.projectService.setAutoDeliveryDelaysForTest(100L, 0L);
         bootstrapAdmin(env);
 
         GatewayReply draftReply = env.send("admin-chat", "admin-user", "/project init Build dashboard project init workflow with tests");
@@ -64,8 +64,8 @@ public class ProjectWorkbenchCommandTest {
         GatewayReply boardReply = env.send("admin-chat", "admin-user", "/project board");
         assertThat(boardReply.getContent()).contains("# todo").contains("implementation-agent").contains("verification-agent").contains("# done (0)");
 
-        String deliveredBoard = waitForBoard(env, "admin-chat", "admin-user", "# done (4)", 3000L);
-        assertThat(deliveredBoard).contains("# todo (0)").contains("# in_progress (0)").contains("# review (0)");
+        String reviewedBoard = waitForBoard(env, "admin-chat", "admin-user", "# review (4)", 20000L);
+        assertThat(reviewedBoard).contains("# todo (0)").contains("# in_progress (0)").contains("# done (0)");
 
         GatewayReply agentReply = env.send("admin-chat", "admin-user", "/agent list");
         assertThat(agentReply.getContent()).contains("frontend-agent").contains("implementation-agent").contains("verification-agent");
@@ -74,7 +74,7 @@ public class ProjectWorkbenchCommandTest {
     @Test
     void shouldDraftChineseAnalysisReportProjectAndStartAutoDelivery() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
-        env.projectService.setAutoDeliveryDelaysForTest(500L, 10L);
+        env.projectService.setAutoDeliveryDelaysForTest(100L, 0L);
         bootstrapAdmin(env);
 
         GatewayReply draftReply = env.send("admin-chat", "admin-user", "/project init 将开源项目：后端https://github.com/chengliang4810/jimuqu-admin.git 前端 https://github.com/chengliang4810/jimuqu-admin-ui.git 分析一下，分析完给我一份pdf报告");
@@ -94,8 +94,8 @@ public class ProjectWorkbenchCommandTest {
         GatewayReply boardReply = env.send("admin-chat", "admin-user", "/project board");
         assertThat(boardReply.getContent()).contains("# todo (").contains("# done (0)");
 
-        String deliveredBoard = waitForBoard(env, "admin-chat", "admin-user", "# done (6)", 4000L);
-        assertThat(deliveredBoard).contains("生成交付文档或 PDF 报告").contains("# todo (0)");
+        String reviewedBoard = waitForBoard(env, "admin-chat", "admin-user", "# review (6)", 30000L);
+        assertThat(reviewedBoard).contains("生成交付文档或 PDF 报告").contains("# todo (0)").contains("# done (0)");
     }
 
     @Test

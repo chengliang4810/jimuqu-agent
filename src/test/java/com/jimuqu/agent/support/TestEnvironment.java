@@ -156,7 +156,8 @@ public class TestEnvironment {
         AgentProfileRepository agentProfileRepository = new SqliteAgentProfileRepository(database);
         AgentProfileService agentProfileService = new AgentProfileService(agentProfileRepository);
         ProjectRepository projectRepository = new SqliteProjectRepository(database);
-        ProjectService projectService = new ProjectService(config, projectRepository, agentProfileService, globalSettingRepository);
+        ConversationOrchestratorHolder holder = new ConversationOrchestratorHolder();
+        ProjectService projectService = new ProjectService(config, projectRepository, agentProfileService, globalSettingRepository, holder);
         SkillHubStateStore skillHubStateStore = new SkillHubStateStore(new File(config.getRuntime().getSkillsDir()));
         SkillGuardService skillGuardService = new DefaultSkillGuardService();
         SkillHubHttpClient skillHubHttpClient = new DefaultSkillHubHttpClient();
@@ -169,7 +170,6 @@ public class TestEnvironment {
         PersonaWorkspaceService personaWorkspaceService = new PersonaWorkspaceService(config);
         FileContextService contextService = new FileContextService(config, localSkillService, memoryManager, globalSettingRepository, personaWorkspaceService);
         ContextCompressionService contextCompressionService = new DefaultContextCompressionService(config);
-        ConversationOrchestratorHolder holder = new ConversationOrchestratorHolder();
         MemoryChannelAdapter memoryAdapter = new MemoryChannelAdapter();
         Map<PlatformType, ChannelAdapter> adapters = new LinkedHashMap<PlatformType, ChannelAdapter>();
         adapters.put(PlatformType.MEMORY, memoryAdapter);
