@@ -5,12 +5,14 @@ import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import org.noear.solon.ai.agent.Agent;
 import org.noear.solon.ai.agent.AgentSession;
+import org.noear.solon.ai.agent.react.ReActTrace;
 import org.noear.solon.ai.agent.session.InMemoryAgentSession;
 import org.noear.solon.ai.chat.message.ChatMessage;
 import org.noear.solon.flow.FlowContext;
 import org.noear.solon.flow.FlowContextInternal;
 
 import java.util.Collection;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -20,6 +22,7 @@ import java.util.Map;
 public class SqliteAgentSession implements AgentSession {
     private static final String META_PENDING = "_agent_pending_";
     private static final String META_PENDING_REASON = "_pending_reason_";
+    private static final String STOP_LOOP_HISTORY = "stoploop_history";
 
     private final SessionRecord sessionRecord;
     private final SessionRepository sessionRepository;
@@ -125,6 +128,7 @@ public class SqliteAgentSession implements AgentSession {
         try {
             if (StrUtil.isNotBlank(sessionRecord.getAgentSnapshotJson())) {
                 FlowContext context = FlowContext.fromJson(sessionRecord.getAgentSnapshotJson());
+                normalizeSnapshotTypes(context);
                 if (isTruthy(context.get(META_PENDING))) {
                     if (context instanceof FlowContextInternal) {
                         ((FlowContextInternal) context).stopped(true);
@@ -138,6 +142,30 @@ public class SqliteAgentSession implements AgentSession {
             // fallback to a fresh context if the old snapshot cannot be restored
         }
         return FlowContext.of(sessionRecord.getSessionId());
+    }
+
+    private void normalizeSnapshotTypes(FlowContext context) {
+        if (context == null) {
+            return;
+        }
+        for (Object value : context.vars().values()) {
+            if (value instanceof ReActTrace) {
+                normalizeTraceExtras((ReActTrace) value);
+            }
+        }
+    }
+
+    private void normalizeTraceExtras(ReActTrace trace) {
+        Object history = trace.getExtra(STOP_LOOP_HISTORY);
+        if (history instanceof Collection && !(history instanceof LinkedList)) {
+            LinkedList<String> normalized = new LinkedList<String>();
+            for (Object item : (Collection<?>) history) {
+                if (item != null) {
+                    normalized.add(String.valueOf(item));
+                }
+            }
+            trace.setExtra(STOP_LOOP_HISTORY, normalized);
+        }
     }
 
     private void syncRecord(boolean persist) {

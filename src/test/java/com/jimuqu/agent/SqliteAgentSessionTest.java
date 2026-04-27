@@ -4,9 +4,12 @@ import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.storage.session.SqliteAgentSession;
 import com.jimuqu.agent.support.TestEnvironment;
 import org.junit.jupiter.api.Test;
+import org.noear.solon.ai.agent.react.ReActTrace;
 import org.noear.solon.ai.chat.message.ChatMessage;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -35,5 +38,23 @@ public class SqliteAgentSessionTest {
         assertThat(restored.getContext().<String>getAs("flag")).isEqualTo("demo");
         assertThat(restored.isPending()).isTrue();
         assertThat(restored.getPendingReason()).isEqualTo("need-review");
+    }
+
+    @Test
+    void shouldRestoreStopLoopHistoryAsLinkedList() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        SessionRecord session = env.sessionRepository.bindNewSession("MEMORY:room-b:user-b");
+
+        SqliteAgentSession agentSession = new SqliteAgentSession(session, env.sessionRepository);
+        ReActTrace trace = new ReActTrace();
+        trace.setExtra("stoploop_history", new ArrayList<String>(Arrays.asList("first", "second")));
+        agentSession.getContext().put("trace-1", trace);
+        agentSession.updateSnapshot();
+
+        SessionRecord reloaded = env.sessionRepository.findById(session.getSessionId());
+        SqliteAgentSession restored = new SqliteAgentSession(reloaded);
+        ReActTrace restoredTrace = restored.getContext().getAs("trace-1");
+
+        assertThat(restoredTrace.getExtra("stoploop_history")).isInstanceOf(LinkedList.class);
     }
 }
