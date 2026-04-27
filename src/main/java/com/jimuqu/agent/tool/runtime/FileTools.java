@@ -48,14 +48,14 @@ public class FileTools {
 
     @ToolMapping(name = "read_file", description = "Read a UTF-8 text file from disk by absolute or relative path.")
     public String readFile(@Param(name = "path", description = "文件绝对路径或相对路径") String path) {
+        if (isJarInternalPath(path)) {
+            return "Cannot read file: jar-internal paths are not disk files: " + path;
+        }
         File file;
         try {
             file = pathGuard.requireAllowedToolPath(path);
         } catch (IllegalArgumentException e) {
             return "Cannot read file: " + e.getMessage();
-        }
-        if (path != null && (path.contains("!/") || path.contains("!\\"))) {
-            return "Cannot read file: jar-internal paths are not disk files: " + path;
         }
         if (!file.exists()) {
             return "File not found: " + file.getAbsolutePath();
@@ -69,7 +69,18 @@ public class FileTools {
     @ToolMapping(name = "write_file", description = "Write UTF-8 text content to a file path, creating parent directories when needed.")
     public String writeFile(@Param(name = "path", description = "目标文件路径") String path,
                             @Param(name = "content", description = "写入的 UTF-8 文本内容") String content) throws Exception {
-        File file = pathGuard.requireAllowedToolPath(path);
+        if (isJarInternalPath(path)) {
+            return "Cannot write file: jar-internal paths are not disk files: " + path;
+        }
+        File file;
+        try {
+            file = pathGuard.requireAllowedToolPath(path);
+        } catch (IllegalArgumentException e) {
+            return "Cannot write file: " + e.getMessage();
+        }
+        if (file.exists() && !file.isFile()) {
+            return "Path is not a file: " + file.getAbsolutePath();
+        }
         checkpoint(file);
         FileUtil.mkParentDirs(file);
         FileUtil.writeUtf8String(content, file);
@@ -80,7 +91,21 @@ public class FileTools {
     public String patch(@Param(name = "path", description = "目标文件路径") String path,
                         @Param(name = "findText", description = "要替换的原始文本") String findText,
                         @Param(name = "replaceText", description = "替换后的文本") String replaceText) throws Exception {
-        File file = pathGuard.requireAllowedToolPath(path);
+        if (isJarInternalPath(path)) {
+            return "Cannot patch file: jar-internal paths are not disk files: " + path;
+        }
+        File file;
+        try {
+            file = pathGuard.requireAllowedToolPath(path);
+        } catch (IllegalArgumentException e) {
+            return "Cannot patch file: " + e.getMessage();
+        }
+        if (!file.exists()) {
+            return "File not found: " + file.getAbsolutePath();
+        }
+        if (!file.isFile()) {
+            return "Path is not a file: " + file.getAbsolutePath();
+        }
         String original = FileUtil.readUtf8String(file);
         if (StrUtil.isEmpty(findText) || !original.contains(findText)) {
             return "Patch target not found in file: " + file.getAbsolutePath();
@@ -144,6 +169,10 @@ public class FileTools {
                 session == null ? null : session.getSessionId(),
                 Collections.singletonList(file)
         );
+    }
+
+    private boolean isJarInternalPath(String path) {
+        return path != null && (path.contains("!/") || path.contains("!\\"));
     }
 
     /**

@@ -38,6 +38,27 @@ public class CheckpointRollbackTest {
     }
 
     @Test
+    void writeFileShouldReturnReadableErrorForJarInternalPath() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        FileTools fileTools = new FileTools(env.checkpointService, env.sessionRepository, "MEMORY:room-a:user-a", new RuntimePathGuard(env.appConfig));
+
+        String result = fileTools.writeFile(env.appConfig.getRuntime().getHome() + "/jimuqu-agent.jar!/org/noear/solon/core/USER.md", "content");
+
+        assertThat(result).contains("jar-internal paths are not disk files");
+        assertThat(FileUtil.file(env.appConfig.getRuntime().getHome(), "jimuqu-agent.jar!")).doesNotExist();
+    }
+
+    @Test
+    void patchShouldReturnReadableErrorForJarInternalPath() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        FileTools fileTools = new FileTools(env.checkpointService, env.sessionRepository, "MEMORY:room-a:user-a", new RuntimePathGuard(env.appConfig));
+
+        String result = fileTools.patch(env.appConfig.getRuntime().getHome() + "/jimuqu-agent.jar!/org/noear/solon/core/USER.md", "old", "new");
+
+        assertThat(result).contains("jar-internal paths are not disk files");
+    }
+
+    @Test
     void searchFilesShouldReturnReadableErrorForDisallowedRoot() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         FileTools fileTools = new FileTools(env.checkpointService, env.sessionRepository, "MEMORY:room-a:user-a", new RuntimePathGuard(env.appConfig));
