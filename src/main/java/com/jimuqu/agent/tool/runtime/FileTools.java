@@ -93,10 +93,21 @@ public class FileTools {
         return "Patched file: " + file.getAbsolutePath();
     }
 
-    @ToolMapping(name = "search_files", description = "Search for text inside files under a directory path.")
+    @ToolMapping(name = "search_files", description = "Search for text inside files under the current project directory or configured runtime home.")
     public String searchFiles(@Param(name = "rootPath", description = "搜索根目录") String rootPath,
                               @Param(name = "pattern", description = "要搜索的文本模式") String pattern) {
-        File root = pathGuard.requireAllowedToolPath(rootPath);
+        File root;
+        try {
+            root = pathGuard.requireAllowedToolPath(rootPath);
+        } catch (IllegalArgumentException e) {
+            return "Cannot search files: " + e.getMessage();
+        }
+        if (!root.exists()) {
+            return "Search root not found: " + root.getAbsolutePath();
+        }
+        if (!root.isDirectory()) {
+            return "Search root is not a directory: " + root.getAbsolutePath();
+        }
         List<File> files = FileUtil.loopFiles(root);
         StringBuilder buffer = new StringBuilder();
         int scanned = 0;
@@ -184,7 +195,7 @@ public class FileTools {
     public static class SearchFilesTool {
         private final FileTools delegate;
 
-        @ToolMapping(name = "search_files", description = "Search for text inside files under a directory path.")
+        @ToolMapping(name = "search_files", description = "Search for text inside files under the current project directory or configured runtime home.")
         public String searchFiles(@Param(name = "rootPath", description = "搜索根目录") String rootPath,
                                   @Param(name = "pattern", description = "要搜索的文本模式") String pattern) {
             return delegate.searchFiles(rootPath, pattern);

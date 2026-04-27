@@ -7,6 +7,7 @@ import com.jimuqu.agent.tool.runtime.FileTools;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.nio.file.Files;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -34,5 +35,17 @@ public class CheckpointRollbackTest {
         String result = fileTools.readFile(env.appConfig.getRuntime().getHome() + "/jimuqu-agent.jar!/org/noear/solon/core/USER.md");
 
         assertThat(result).contains("jar-internal paths are not disk files");
+    }
+
+    @Test
+    void searchFilesShouldReturnReadableErrorForDisallowedRoot() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        FileTools fileTools = new FileTools(env.checkpointService, env.sessionRepository, "MEMORY:room-a:user-a", new RuntimePathGuard(env.appConfig));
+        File outside = Files.createTempDirectory("jimuqu-agent-outside").toFile();
+
+        String result = fileTools.searchFiles(outside.getAbsolutePath(), "anything");
+
+        assertThat(result).contains("Cannot search files: Path is outside allowed roots");
+        assertThat(result).contains("Allowed roots");
     }
 }
