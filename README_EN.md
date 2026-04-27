@@ -117,7 +117,7 @@ Common runtime settings:
 | `providers.<key>.dialect` | `openai-responses` | Protocol dialect |
 | `model.providerKey` | `default` | Active default provider |
 | `model.default` | empty | Global model override; when empty, provider `defaultModel` is used |
-| `jimuqu.llm.stream` | `false` | Enables streaming output |
+| `jimuqu.llm.stream` | `true` | Enables streaming output |
 | `jimuqu.llm.reasoningEffort` | `medium` | Default reasoning effort |
 | `jimuqu.scheduler.enabled` | `true` | Enables scheduled jobs |
 

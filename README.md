@@ -116,7 +116,7 @@ model:
 | `providers.<key>.dialect` | `openai-responses` | 协议方言 |
 | `model.providerKey` | `default` | 当前默认提供方 |
 | `model.default` | 空 | 全局默认模型覆盖；为空时使用 provider 的 `defaultModel` |
-| `jimuqu.llm.stream` | `false` | 是否启用流式输出 |
+| `jimuqu.llm.stream` | `true` | 是否启用流式输出 |
 | `jimuqu.llm.reasoningEffort` | `medium` | 默认推理强度 |
 | `jimuqu.scheduler.enabled` | `true` | 是否启用定时任务调度 |
 

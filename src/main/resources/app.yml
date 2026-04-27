@@ -28,7 +28,7 @@ providers.default.defaultModel: gpt-5.4
 providers.default.dialect: openai-responses
 model.providerKey: default
 model.default:
-jimuqu.llm.stream: false
+jimuqu.llm.stream: true
 jimuqu.llm.reasoningEffort: medium
 jimuqu.llm.temperature: 0.2
 jimuqu.llm.maxTokens: 4096
@@ -60,7 +60,7 @@ jimuqu.rollback.enabled: true
 jimuqu.rollback.maxCheckpointsPerSource: 20
 
 # 聊天窗口显示
-jimuqu.display.toolProgress: off
+jimuqu.display.toolProgress: new
 jimuqu.display.showReasoning: false
 jimuqu.display.toolPreviewLength: 80
 jimuqu.display.progressThrottleMs: 1500

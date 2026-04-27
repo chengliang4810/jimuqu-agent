@@ -150,7 +150,7 @@ public class AppConfig {
         config.getRuntime().setConfigFile(configResolver.configFile().getPath());
         config.getRuntime().setLogsDir(new File(runtimeHome, "logs").getPath());
 
-        config.getLlm().setStream(resolveBoolean("JIMUQU_LLM_STREAM", readBoolean(props, overrides, "jimuqu.llm.stream", false)));
+        config.getLlm().setStream(resolveBoolean("JIMUQU_LLM_STREAM", readBoolean(props, overrides, "jimuqu.llm.stream", true)));
         config.getLlm().setReasoningEffort(resolveConfigString("JIMUQU_LLM_REASONING_EFFORT", readString(props, overrides, "jimuqu.llm.reasoningEffort", RuntimePathConstants.DEFAULT_REASONING_EFFORT)));
         config.getLlm().setTemperature(resolveDouble("JIMUQU_LLM_TEMPERATURE", readDouble(props, overrides, "jimuqu.llm.temperature", RuntimePathConstants.DEFAULT_TEMPERATURE)));
         config.getLlm().setMaxTokens(resolveInt("JIMUQU_LLM_MAX_TOKENS", readInt(props, overrides, "jimuqu.llm.maxTokens", RuntimePathConstants.DEFAULT_MAX_TOKENS)));
@@ -172,7 +172,7 @@ public class AppConfig {
         config.getRollback().setEnabled(resolveBoolean("JIMUQU_ROLLBACK_ENABLED", readBoolean(props, overrides, "jimuqu.rollback.enabled", true)));
         config.getRollback().setMaxCheckpointsPerSource(resolveInt("JIMUQU_ROLLBACK_MAX_CHECKPOINTS_PER_SOURCE", readInt(props, overrides, "jimuqu.rollback.maxCheckpointsPerSource", CheckpointConstants.DEFAULT_MAX_CHECKPOINTS_PER_SOURCE)));
 
-        config.getDisplay().setToolProgress(resolveConfigString("JIMUQU_DISPLAY_TOOL_PROGRESS", readString(props, overrides, "jimuqu.display.toolProgress", "off")));
+        config.getDisplay().setToolProgress(resolveConfigString("JIMUQU_DISPLAY_TOOL_PROGRESS", readString(props, overrides, "jimuqu.display.toolProgress", "new")));
         config.getDisplay().setShowReasoning(resolveBoolean("JIMUQU_DISPLAY_SHOW_REASONING", readBoolean(props, overrides, "jimuqu.display.showReasoning", false)));
         config.getDisplay().setToolPreviewLength(resolveInt("JIMUQU_DISPLAY_TOOL_PREVIEW_LENGTH", readInt(props, overrides, "jimuqu.display.toolPreviewLength", 80)));
         config.getDisplay().setProgressThrottleMs(resolveInt("JIMUQU_DISPLAY_PROGRESS_THROTTLE_MS", readInt(props, overrides, "jimuqu.display.progressThrottleMs", 1500)));
@@ -1443,7 +1443,7 @@ public class AppConfig {
         /**
          * 默认工具进度模式。
          */
-        private String toolProgress = "off";
+        private String toolProgress = "new";
 
         /**
          * 是否默认展示 reasoning。

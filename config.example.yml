@@ -41,7 +41,7 @@ jimuqu:
     accessToken: ""
 
   llm:
-    stream: false
+    stream: true
     reasoningEffort: medium
     temperature: 0.2
     maxTokens: 4096
@@ -67,7 +67,7 @@ jimuqu:
     maxCheckpointsPerSource: 20
 
   display:
-    toolProgress: off
+    toolProgress: new
     showReasoning: false
     toolPreviewLength: 80
     progressThrottleMs: 1500
