@@ -181,7 +181,8 @@ public class ContextConfiguration {
                                                      SessionRepository sessionRepository,
                                                      MemoryService memoryService,
                                                      LocalSkillService localSkillService,
-                                                     CheckpointService checkpointService) {
-        return new AsyncSkillLearningService(appConfig, sessionRepository, memoryService, localSkillService, checkpointService);
+                                                     CheckpointService checkpointService,
+                                                     LlmGateway llmGateway) {
+        return new AsyncSkillLearningService(appConfig, sessionRepository, memoryService, localSkillService, checkpointService, llmGateway);
     }
 }

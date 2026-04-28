@@ -4,7 +4,9 @@ import com.jimuqu.agent.context.FileContextService;
 import com.jimuqu.agent.context.AsyncSkillLearningService;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
+import com.jimuqu.agent.core.model.LlmResult;
 import com.jimuqu.agent.core.model.SessionRecord;
+import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.tool.runtime.SkillTools;
 import com.jimuqu.agent.tool.runtime.MemoryTools;
 import com.jimuqu.agent.support.FakeLlmGateway;
@@ -14,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.noear.solon.ai.chat.message.ChatMessage;
 
 import java.io.File;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -107,7 +110,8 @@ public class MemoryAndSkillsTest {
                 env.sessionRepository,
                 env.memoryService,
                 env.localSkillService,
-                env.checkpointService
+                env.checkpointService,
+                env.llmGateway
         );
         GatewayMessage message = env.message("room", "user", "确认最终验证步骤");
         GatewayReply reply = GatewayReply.ok("done");
@@ -118,19 +122,98 @@ public class MemoryAndSkillsTest {
         assertThat(content).contains("当前任务验证点");
     }
 
+    @Test
+    void shouldAutoWriteModelSummarizedSkillWithoutConfirmation() throws Exception {
+        TestEnvironment env = TestEnvironment.withLlm(new SkillSummaryGateway());
+        env.appConfig.getLearning().setToolCallThreshold(1);
+
+        SessionRecord session = env.sessionRepository.bindNewSession("MEMORY:room:user");
+        session.setTitle("model skill task");
+        session.setCompressedSummary("已经完成发布前检查、补丁提交和 Maven 验证。");
+        session.setNdjson(MessageSupport.toNdjson(java.util.Collections.singletonList(
+                ChatMessage.ofTool("mvn -q test passed", "shell", "1")
+        )));
+        env.sessionRepository.save(session);
+
+        AsyncSkillLearningService learningService = new AsyncSkillLearningService(
+                env.appConfig,
+                env.sessionRepository,
+                env.memoryService,
+                env.localSkillService,
+                env.checkpointService,
+                env.llmGateway
+        );
+        learningService.schedulePostReplyLearning(
+                session,
+                env.message("room", "user", "把发布步骤沉淀为 skill"),
+                GatewayReply.ok("done")
+        );
+
+        String content = waitSkillContent(env, "model-skill-task", "模型总结出的发布流程");
+        assertThat(content).contains("name: model-skill-task");
+        assertThat(content).contains("模型总结出的发布流程");
+        assertThat(content).contains("不需要人工确认");
+        assertThat(content).doesNotContain("参考下述已验证流程");
+        assertThat(content).doesNotContain("```");
+    }
+
     private String waitSkillContent(TestEnvironment env, String name) throws Exception {
+        return waitSkillContent(env, name, "当前任务验证点");
+    }
+
+    private String waitSkillContent(TestEnvironment env, String name, String expected) throws Exception {
         long deadline = System.currentTimeMillis() + 2000L;
+        String content = "";
         while (System.currentTimeMillis() < deadline) {
-            String content = env.localSkillService.viewSkill(name, null).getContent();
-            if (content.contains("当前任务验证点")) {
-                return content;
+            try {
+                content = env.localSkillService.viewSkill(name, null).getContent();
+                if (content.contains(expected)) {
+                    return content;
+                }
+            } catch (Exception ignored) {
+                // 异步学习尚未创建 skill。
             }
             Thread.sleep(50L);
+        }
+        if (content.length() > 0) {
+            return content;
         }
         return env.localSkillService.viewSkill(name, null).getContent();
     }
 
     private String skill(String name, String description) {
         return "---\nname: " + name + "\ndescription: " + description + "\n---\n\n# Steps\n- example\n";
+    }
+
+    private static class SkillSummaryGateway implements LlmGateway {
+        @Override
+        public LlmResult chat(SessionRecord session, String systemPrompt, String userMessage, List<Object> toolObjects) throws Exception {
+            String content = "---\n"
+                    + "name: ignored\n"
+                    + "description: ignored\n"
+                    + "---\n\n"
+                    + "# 触发条件\n"
+                    + "- 遇到需要把已验证工程流程沉淀为 skill 的任务时使用。\n\n"
+                    + "# 执行步骤\n"
+                    + "1. 读取会话摘要和工具结果。\n"
+                    + "2. 提炼模型总结出的发布流程。\n"
+                    + "3. 直接写入 SKILL.md，不需要人工确认。\n\n"
+                    + "# 已验证流程\n"
+                    + "- 模型总结出的发布流程包含测试、提交和后续 UI 删除入口。\n\n"
+                    + "# Pitfalls\n"
+                    + "- 不要把一次性寒暄或完整提示词写进 skill。\n\n"
+                    + "# Verification\n"
+                    + "- 检查 SKILL.md 没有代码围栏，且包含可复用步骤。\n";
+            LlmResult result = new LlmResult();
+            result.setAssistantMessage(ChatMessage.ofAssistant(content));
+            result.setRawResponse(content);
+            result.setNdjson("");
+            return result;
+        }
+
+        @Override
+        public LlmResult resume(SessionRecord session, String systemPrompt, List<Object> toolObjects) throws Exception {
+            return chat(session, systemPrompt, "", toolObjects);
+        }
     }
 }

@@ -4,17 +4,22 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
+import com.jimuqu.agent.core.model.LlmResult;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.model.SkillDescriptor;
 import com.jimuqu.agent.core.model.SkillView;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
+import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.core.service.MemoryService;
 import com.jimuqu.agent.core.service.SkillLearningService;
 import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.BoundedExecutorFactory;
+import com.jimuqu.agent.support.SecretRedactor;
 import lombok.RequiredArgsConstructor;
+import org.noear.solon.ai.chat.message.AssistantMessage;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
@@ -28,6 +33,7 @@ public class AsyncSkillLearningService implements SkillLearningService {
     private final MemoryService memoryService;
     private final LocalSkillService localSkillService;
     private final CheckpointService checkpointService;
+    private final LlmGateway llmGateway;
     private final ExecutorService executorService = BoundedExecutorFactory.fixed("async-skill-learning", 1, 64);
 
     public void shutdown() {
@@ -68,17 +74,23 @@ public class AsyncSkillLearningService implements SkillLearningService {
                              int toolMessages,
                              boolean hasRecentCheckpoint) throws Exception {
         if (toolMessages >= appConfig.getLearning().getToolCallThreshold()) {
-            String skillName = inferSkillName(session);
-            SkillDescriptor descriptor = findSkill(skillName);
-            if (descriptor == null) {
-                localSkillService.createSkill(skillName, null, buildSkillContent(session, message, hasRecentCheckpoint));
-            } else {
-                patchExistingSkill(skillName, session, message, hasRecentCheckpoint);
-            }
+            learnSkill(session, message, hasRecentCheckpoint);
+        } else if (hasRecentCheckpoint) {
+            learnSkill(session, message, true);
         }
 
         session.setLastLearningAt(System.currentTimeMillis());
         sessionRepository.save(session);
+    }
+
+    private void learnSkill(SessionRecord session, GatewayMessage message, boolean hasRecentCheckpoint) throws Exception {
+        String skillName = inferSkillName(session);
+        SkillDescriptor descriptor = findSkill(skillName);
+        if (descriptor == null) {
+            localSkillService.createSkill(skillName, null, buildSkillContent(session, message, hasRecentCheckpoint));
+        } else {
+            patchExistingSkill(skillName, session, message, hasRecentCheckpoint);
+        }
     }
 
     private int countToolMessages(SessionRecord session) throws Exception {
@@ -113,10 +125,18 @@ public class AsyncSkillLearningService implements SkillLearningService {
     }
 
     private String buildSkillContent(SessionRecord session, GatewayMessage message, boolean hasRecentCheckpoint) {
+        String modelContent = summarizeSkillWithModel(session, message, hasRecentCheckpoint, null);
+        if (StrUtil.isNotBlank(modelContent)) {
+            return modelContent;
+        }
+        return buildFallbackSkillContent(session, message, hasRecentCheckpoint);
+    }
+
+    private String buildFallbackSkillContent(SessionRecord session, GatewayMessage message, boolean hasRecentCheckpoint) {
         String name = inferSkillName(session);
         String description = StrUtil.blankToDefault(session.getTitle(), "从复杂任务中沉淀出的可复用流程。");
         String progress = StrUtil.blankToDefault(session.getCompressedSummary(), replySafeExcerpt(session.getNdjson()));
-        String nextStep = StrUtil.blankToDefault(message.getText(), "参考当前任务上下文继续执行。");
+        String nextStep = StrUtil.blankToDefault(message == null ? "" : message.getText(), "参考当前任务上下文继续执行。");
 
         StringBuilder buffer = new StringBuilder();
         buffer.append("---\n");
@@ -146,6 +166,12 @@ public class AsyncSkillLearningService implements SkillLearningService {
                                     GatewayMessage message,
                                     boolean hasRecentCheckpoint) throws Exception {
         SkillView view = localSkillService.viewSkill(skillName, null);
+        String modelContent = summarizeSkillWithModel(session, message, hasRecentCheckpoint, view.getContent());
+        if (StrUtil.isNotBlank(modelContent)) {
+            localSkillService.editSkill(skillName, modelContent);
+            return;
+        }
+
         String content = view.getContent();
         String progressBullet = "- " + StrUtil.blankToDefault(session.getCompressedSummary(), replySafeExcerpt(session.getNdjson()));
         String pitfallBullet = "- 当上下文与历史流程不完全一致时，先重新核对输入条件与依赖。";
@@ -211,11 +237,143 @@ public class AsyncSkillLearningService implements SkillLearningService {
         return hasRecentCheckpoint && session != null && StrUtil.isNotBlank(session.getTitle());
     }
 
-    private String replySafeExcerpt(String ndjson) {
-        String normalized = StrUtil.nullToEmpty(ndjson).replace('\n', ' ').trim();
-        if (normalized.length() <= 400) {
-            return normalized;
+    private String summarizeSkillWithModel(SessionRecord session,
+                                           GatewayMessage message,
+                                           boolean hasRecentCheckpoint,
+                                           String existingContent) {
+        if (llmGateway == null) {
+            return null;
         }
-        return normalized.substring(0, 400) + "...";
+        try {
+            String skillName = inferSkillName(session);
+            String description = StrUtil.blankToDefault(session.getTitle(), "从复杂任务中沉淀出的可复用流程。");
+            SessionRecord learningSession = new SessionRecord();
+            learningSession.setSessionId("skill-learning-" + StrUtil.blankToDefault(session.getSessionId(), "session") + "-" + System.currentTimeMillis());
+            learningSession.setSourceKey(session.getSourceKey());
+
+            LlmResult result = llmGateway.chat(
+                    learningSession,
+                    "你是 Jimuqu Agent 的技能沉淀器。只输出可直接写入 SKILL.md 的 Markdown，不要寒暄。",
+                    buildLearningPrompt(session, message, hasRecentCheckpoint, existingContent, skillName, description),
+                    Collections.emptyList()
+            );
+            String raw = extractAssistantText(result);
+            return normalizeModelSkillContent(raw, skillName, description);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String buildLearningPrompt(SessionRecord session,
+                                       GatewayMessage message,
+                                       boolean hasRecentCheckpoint,
+                                       String existingContent,
+                                       String skillName,
+                                       String description) {
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("请把这次任务沉淀成一个可复用 skill。要求：\n");
+        prompt.append("- 输出完整 SKILL.md。\n");
+        prompt.append("- frontmatter 必须包含 name 和 description。\n");
+        prompt.append("- name 固定为：").append(skillName).append("\n");
+        prompt.append("- description 使用一句中文业务描述。\n");
+        prompt.append("- 正文必须包含：# 触发条件、# 执行步骤、# 已验证流程、# Pitfalls、# Verification。\n");
+        prompt.append("- 内容要总结可复用流程，不要记录一次性聊天寒暄。\n");
+        prompt.append("- 如涉及文件、命令、工具、checkpoint，要保留具体经验和注意事项。\n");
+        prompt.append("- 不要输出代码围栏，不要输出解释文字。\n\n");
+        if (StrUtil.isNotBlank(existingContent)) {
+            prompt.append("现有 SKILL.md，需要基于新任务更新而不是丢失旧经验：\n");
+            prompt.append(SecretRedactor.redact(existingContent, 6000)).append("\n\n");
+        }
+        prompt.append("建议描述：").append(description).append("\n");
+        prompt.append("本轮用户请求：").append(StrUtil.blankToDefault(message == null ? "" : message.getText(), "")).append("\n");
+        prompt.append("是否涉及 checkpoint：").append(hasRecentCheckpoint).append("\n\n");
+        prompt.append("会话压缩摘要：\n");
+        prompt.append(SecretRedactor.redact(StrUtil.blankToDefault(session.getCompressedSummary(), "无"), 6000)).append("\n\n");
+        prompt.append("会话消息摘录：\n");
+        prompt.append(replySafeExcerpt(session.getNdjson(), 6000));
+        return prompt.toString();
+    }
+
+    private String normalizeModelSkillContent(String raw, String skillName, String description) {
+        String content = stripMarkdownFence(StrUtil.nullToEmpty(raw).trim());
+        if (StrUtil.isBlank(content)) {
+            return null;
+        }
+
+        String body = content;
+        if (content.startsWith("---")) {
+            int end = content.indexOf("\n---", 3);
+            if (end >= 0) {
+                body = content.substring(end + "\n---".length()).trim();
+            }
+        }
+        if (StrUtil.isBlank(body)) {
+            return null;
+        }
+        if (!isStructuredSkillBody(body)) {
+            return null;
+        }
+
+        StringBuilder normalized = new StringBuilder();
+        normalized.append("---\n");
+        normalized.append("name: ").append(skillName).append("\n");
+        normalized.append("description: ").append(StrUtil.blankToDefault(description, "从复杂任务中沉淀出的可复用流程。").replace('\n', ' ')).append("\n");
+        normalized.append("---\n\n");
+        normalized.append(body);
+        if (!body.endsWith("\n")) {
+            normalized.append('\n');
+        }
+        return SecretRedactor.redact(normalized.toString(), 20000);
+    }
+
+    private boolean isStructuredSkillBody(String body) {
+        String normalized = "\n" + StrUtil.nullToEmpty(body).replace("\r\n", "\n").trim() + "\n";
+        return normalized.contains("\n# 触发条件\n")
+                && normalized.contains("\n# 执行步骤\n")
+                && normalized.contains("\n# 已验证流程\n")
+                && normalized.contains("\n# Pitfalls\n")
+                && normalized.contains("\n# Verification\n");
+    }
+
+    private String stripMarkdownFence(String content) {
+        String value = StrUtil.nullToEmpty(content).trim();
+        if (!value.startsWith("```")) {
+            return value;
+        }
+        int firstLineEnd = value.indexOf('\n');
+        int lastFence = value.lastIndexOf("```");
+        if (firstLineEnd >= 0 && lastFence > firstLineEnd) {
+            return value.substring(firstLineEnd + 1, lastFence).trim();
+        }
+        return value;
+    }
+
+    private String extractAssistantText(LlmResult result) {
+        if (result == null) {
+            return "";
+        }
+        AssistantMessage message = result.getAssistantMessage();
+        if (message == null) {
+            return StrUtil.nullToEmpty(result.getRawResponse());
+        }
+        if (StrUtil.isNotBlank(message.getResultContent())) {
+            return message.getResultContent();
+        }
+        if (StrUtil.isNotBlank(message.getContent())) {
+            return message.getContent();
+        }
+        return StrUtil.nullToEmpty(result.getRawResponse());
+    }
+
+    private String replySafeExcerpt(String ndjson) {
+        return replySafeExcerpt(ndjson, 400);
+    }
+
+    private String replySafeExcerpt(String ndjson, int limit) {
+        String normalized = StrUtil.nullToEmpty(ndjson).replace('\n', ' ').trim();
+        if (normalized.length() <= limit) {
+            return SecretRedactor.redact(normalized, limit);
+        }
+        return SecretRedactor.redact(normalized.substring(0, limit) + "...", limit);
     }
 }
