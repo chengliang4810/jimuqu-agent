@@ -51,7 +51,7 @@ async function handleToggle(category: string, skillName: string, newEnabled: boo
   togglingSkills.value.add(skillName)
 
   try {
-    await toggleSkill(skillName, newEnabled)
+    await toggleSkill(category, skillName, newEnabled)
     // Update local state
     const cat = props.categories.find(c => c.name === category)
     const skill = cat?.skills.find(s => s.name === skillName)
