@@ -2,6 +2,7 @@ import { request } from '../client'
 
 export interface SkillInfo {
   name: string
+  canonicalName: string
   description: string
   enabled?: boolean
 }
@@ -52,6 +53,11 @@ function displayCategory(name: string): string {
   return name || 'general'
 }
 
+function bareSkillName(name: string, category: string): string {
+  const prefix = category && category !== 'general' ? `${category}/` : ''
+  return prefix && name.startsWith(prefix) ? name.slice(prefix.length) : name
+}
+
 export async function fetchSkills(): Promise<SkillCategory[]> {
   const skills = await request<DashboardSkill[]>('/api/skills')
   const groups = new Map<string, SkillInfo[]>()
@@ -60,7 +66,8 @@ export async function fetchSkills(): Promise<SkillCategory[]> {
     const key = displayCategory(skill.category)
     if (!groups.has(key)) groups.set(key, [])
     groups.get(key)!.push({
-      name: skill.name,
+      name: bareSkillName(skill.name, key),
+      canonicalName: skill.name,
       description: skill.description,
       enabled: skill.enabled,
     })
@@ -74,6 +81,7 @@ export async function fetchSkills(): Promise<SkillCategory[]> {
 }
 
 function canonicalSkillName(category: string, skill: string): string {
+  if (skill.includes('/')) return skill
   return category && category !== 'general' ? `${category}/${skill}` : skill
 }
 
@@ -118,9 +126,9 @@ export async function saveMemory(section: 'memory' | 'user' | 'soul', content: s
   })
 }
 
-export async function toggleSkill(name: string, enabled: boolean): Promise<void> {
+export async function toggleSkill(category: string, skill: string, enabled: boolean): Promise<void> {
   await request('/api/skills/toggle', {
     method: 'PUT',
-    body: JSON.stringify({ name, enabled }),
+    body: JSON.stringify({ name: canonicalSkillName(category, skill), enabled }),
   })
 }

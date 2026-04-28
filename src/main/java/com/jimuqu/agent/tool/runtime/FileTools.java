@@ -11,6 +11,8 @@ import org.noear.solon.annotation.Param;
 import org.noear.solon.ai.annotation.ToolMapping;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.List;
 
@@ -140,16 +142,26 @@ public class FileTools {
             if (file.isDirectory()) {
                 continue;
             }
+            if (!file.isFile()) {
+                continue;
+            }
             if (++scanned > 2000 || file.length() > 1024L * 1024L) {
                 continue;
             }
 
-            String text = FileUtil.readUtf8String(file);
-            if (text.contains(pattern)) {
-                if (buffer.length() > 0) {
-                    buffer.append('\n');
+            try {
+                if (!Files.isRegularFile(file.toPath())) {
+                    continue;
                 }
-                buffer.append(file.getAbsolutePath());
+                String text = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+                if (text.contains(pattern)) {
+                    if (buffer.length() > 0) {
+                        buffer.append('\n');
+                    }
+                    buffer.append(file.getAbsolutePath());
+                }
+            } catch (Exception ignored) {
+                continue;
             }
         }
 
