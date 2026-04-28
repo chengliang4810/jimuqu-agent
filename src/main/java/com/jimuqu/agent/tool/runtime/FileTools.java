@@ -140,6 +140,9 @@ public class FileTools {
             if (file.isDirectory()) {
                 continue;
             }
+            if (!file.isFile()) {
+                continue;
+            }
             if (++scanned > 2000 || file.length() > 1024L * 1024L) {
                 continue;
             }
