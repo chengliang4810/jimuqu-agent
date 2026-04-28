@@ -33,6 +33,26 @@ public class DashboardSessionController {
         return DashboardResponse.ok(sessionService.getSessionMessages(id));
     }
 
+    @Mapping(value = "/api/sessions/{id}/tree", method = MethodType.GET)
+    public Map<String, Object> tree(String id) throws Exception {
+        return DashboardResponse.ok(sessionService.sessionTree(id));
+    }
+
+    @Mapping(value = "/api/sessions/{id}/checkpoints", method = MethodType.GET)
+    public Map<String, Object> checkpoints(String id) throws Exception {
+        return DashboardResponse.ok(sessionService.checkpoints(id));
+    }
+
+    @Mapping(value = "/api/checkpoints/{id}/preview", method = MethodType.GET)
+    public Map<String, Object> checkpointPreview(String id) throws Exception {
+        return DashboardResponse.ok(sessionService.checkpointPreview(id));
+    }
+
+    @Mapping(value = "/api/checkpoints/{id}/rollback", method = MethodType.POST)
+    public Map<String, Object> rollbackCheckpoint(String id) throws Exception {
+        return DashboardResponse.ok(sessionService.rollbackCheckpoint(id));
+    }
+
     @Mapping(value = "/api/sessions/{id}", method = MethodType.DELETE)
     public Map<String, Object> delete(String id) throws Exception {
         return DashboardResponse.ok(sessionService.deleteSession(id));

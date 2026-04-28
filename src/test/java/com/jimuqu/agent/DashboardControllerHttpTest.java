@@ -161,6 +161,22 @@ public class DashboardControllerHttpTest {
         assertThat(sessions.status).isEqualTo(200);
         assertThat(sessions.body).contains("\"total\"");
 
+        HttpResult runs = request("GET", "/api/sessions/dashboard-chat/runs", null, token);
+        assertThat(runs.status).isEqualTo(200);
+        assertThat(runs.body).contains("\"runs\"");
+
+        HttpResult tree = request("GET", "/api/sessions/dashboard-chat/tree", null, token);
+        assertThat(tree.status).isEqualTo(200);
+        assertThat(tree.body).contains("\"nodes\"");
+
+        HttpResult checkpoints = request("GET", "/api/sessions/dashboard-chat/checkpoints", null, token);
+        assertThat(checkpoints.status).isEqualTo(200);
+        assertThat(checkpoints.body).contains("\"checkpoints\"");
+
+        HttpResult diagnostics = request("GET", "/api/diagnostics", null, token);
+        assertThat(diagnostics.status).isEqualTo(200);
+        assertThat(diagnostics.body).contains("\"providers\"").contains("\"channels\"");
+
         HttpResult skills = request("GET", "/api/skills", null, token);
         assertThat(skills.status).isEqualTo(200);
         assertThat(skills.body).contains("sample-skill");

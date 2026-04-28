@@ -4,8 +4,11 @@ import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.context.PersonaWorkspaceService;
 import com.jimuqu.agent.core.repository.CronJobRepository;
+import com.jimuqu.agent.core.repository.AgentRunRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.DeliveryService;
+import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.agent.scheduler.DefaultCronScheduler;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
@@ -18,6 +21,8 @@ import com.jimuqu.agent.web.DashboardAnalyticsService;
 import com.jimuqu.agent.web.DashboardConfigService;
 import com.jimuqu.agent.web.DashboardCronService;
 import com.jimuqu.agent.web.DashboardRuntimeConfigService;
+import com.jimuqu.agent.web.DashboardRunService;
+import com.jimuqu.agent.web.DashboardDiagnosticsService;
 import com.jimuqu.agent.web.DashboardGatewayDoctorService;
 import com.jimuqu.agent.web.DashboardLogsService;
 import com.jimuqu.agent.web.DashboardProviderService;
@@ -57,8 +62,22 @@ public class DashboardConfiguration {
     }
 
     @Bean
-    public DashboardSessionService dashboardSessionService(SessionRepository sessionRepository) {
-        return new DashboardSessionService(sessionRepository);
+    public DashboardSessionService dashboardSessionService(SessionRepository sessionRepository,
+                                                           CheckpointService checkpointService) {
+        return new DashboardSessionService(sessionRepository, checkpointService);
+    }
+
+    @Bean
+    public DashboardRunService dashboardRunService(AgentRunRepository agentRunRepository) {
+        return new DashboardRunService(agentRunRepository);
+    }
+
+    @Bean
+    public DashboardDiagnosticsService dashboardDiagnosticsService(AppConfig appConfig,
+                                                                   DeliveryService deliveryService,
+                                                                   LlmProviderService llmProviderService,
+                                                                   ToolRegistry toolRegistry) {
+        return new DashboardDiagnosticsService(appConfig, deliveryService, llmProviderService, toolRegistry);
     }
 
     @Bean

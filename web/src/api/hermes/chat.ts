@@ -39,6 +39,18 @@ export interface RunEvent {
   preview?: string
   timestamp?: number
   error?: string
+  agent_run_id?: string
+  attempt_no?: number
+  provider?: string
+  model?: string
+  status?: string
+  reason?: string
+  compressed?: boolean
+  estimated_tokens?: number
+  threshold_tokens?: number
+  recovery_type?: string
+  from_provider?: string
+  to_provider?: string
   usage?: {
     input_tokens: number
     output_tokens: number

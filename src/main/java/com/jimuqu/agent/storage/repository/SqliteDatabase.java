@@ -349,6 +349,38 @@ public class SqliteDatabase {
                     "restored_at integer not null default 0" +
                     ")");
             statement.execute("create index if not exists idx_checkpoints_source_created on checkpoints(source_key, created_at desc)");
+            statement.execute("create table if not exists agent_runs (" +
+                    "run_id text primary key," +
+                    "session_id text not null," +
+                    "source_key text," +
+                    "status text not null," +
+                    "input_preview text," +
+                    "final_reply_preview text," +
+                    "provider text," +
+                    "model text," +
+                    "attempts integer not null default 0," +
+                    "input_tokens integer not null default 0," +
+                    "output_tokens integer not null default 0," +
+                    "total_tokens integer not null default 0," +
+                    "started_at integer not null," +
+                    "finished_at integer not null default 0," +
+                    "error text" +
+                    ")");
+            statement.execute("create index if not exists idx_agent_runs_session_started on agent_runs(session_id, started_at desc)");
+            statement.execute("create table if not exists agent_run_events (" +
+                    "event_id text primary key," +
+                    "run_id text not null," +
+                    "session_id text," +
+                    "source_key text," +
+                    "event_type text not null," +
+                    "attempt_no integer not null default 0," +
+                    "provider text," +
+                    "model text," +
+                    "summary text," +
+                    "metadata_json text," +
+                    "created_at integer not null" +
+                    ")");
+            statement.execute("create index if not exists idx_agent_run_events_run_time on agent_run_events(run_id, created_at asc)");
             statement.execute("create table if not exists channel_states (" +
                     "platform text not null," +
                     "scope_key text not null," +

@@ -34,7 +34,10 @@ public class DelegateTools {
     public String delegateTask(@Param(name = "mode", description = "委托模式：single 或 batch", required = false) String mode,
                                @Param(name = "prompt", description = "单任务模式下的委托目标", required = false) String prompt,
                                @Param(name = "tasks", description = "批量模式下的任务 JSON 数组", required = false) String tasks,
-                               @Param(name = "context", description = "委托补充上下文", required = false) String context) throws Exception {
+                               @Param(name = "context", description = "委托补充上下文", required = false) String context,
+                               @Param(name = "allowedTools", description = "允许子代理使用的工具名 JSON 数组", required = false) String allowedTools,
+                               @Param(name = "expectedOutput", description = "期望输出格式", required = false) String expectedOutput,
+                               @Param(name = "writeScope", description = "可写入范围", required = false) String writeScope) throws Exception {
         if (delegationService == null) {
             return "Delegate tool is not ready";
         }
@@ -45,7 +48,14 @@ public class DelegateTools {
             return ONode.serialize(results);
         }
 
-        DelegationResult result = delegationService.delegateSingle(sourceKey, prompt, context);
+        DelegationTask task = new DelegationTask();
+        task.setName("delegate");
+        task.setPrompt(prompt);
+        task.setContext(context);
+        task.setAllowedTools(parseStringArray(allowedTools));
+        task.setExpectedOutput(expectedOutput);
+        task.setWriteScope(writeScope);
+        DelegationResult result = delegationService.delegateSingle(sourceKey, task);
         return result.getContent();
     }
 
@@ -67,8 +77,29 @@ public class DelegateTools {
             task.setName(item.get("name").getString());
             task.setPrompt(item.get("prompt").getString());
             task.setContext(item.get("context").getString());
+            task.setExpectedOutput(item.get("expectedOutput").getString());
+            task.setWriteScope(item.get("writeScope").getString());
+            task.setAllowedTools(parseStringArray(item.get("allowedTools").toJson()));
             items.add(task);
         }
         return items;
+    }
+
+    private List<String> parseStringArray(String json) {
+        List<String> values = new ArrayList<String>();
+        if (StrUtil.isBlank(json)) {
+            return values;
+        }
+        ONode node = ONode.ofJson(json);
+        if (!node.isArray()) {
+            return values;
+        }
+        for (int i = 0; i < node.size(); i++) {
+            String value = node.get(i).getString();
+            if (StrUtil.isNotBlank(value)) {
+                values.add(value.trim());
+            }
+        }
+        return values;
     }
 }

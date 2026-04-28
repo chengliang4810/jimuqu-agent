@@ -25,4 +25,19 @@ public class DelegationTask {
      * 可选短上下文。
      */
     private String context;
+
+    /**
+     * 允许子代理使用的工具名列表。
+     */
+    private java.util.List<String> allowedTools;
+
+    /**
+     * 期望输出格式说明。
+     */
+    private String expectedOutput;
+
+    /**
+     * 可写入范围说明。
+     */
+    private String writeScope;
 }

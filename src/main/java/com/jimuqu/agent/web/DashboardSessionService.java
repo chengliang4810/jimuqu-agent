@@ -2,7 +2,9 @@ package com.jimuqu.agent.web;
 
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.core.model.SessionRecord;
+import com.jimuqu.agent.core.model.CheckpointRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.SecretRedactor;
 import com.jimuqu.agent.support.SourceKeySupport;
@@ -25,9 +27,15 @@ import java.util.Map;
  */
 public class DashboardSessionService {
     private final SessionRepository sessionRepository;
+    private final CheckpointService checkpointService;
 
     public DashboardSessionService(SessionRepository sessionRepository) {
+        this(sessionRepository, null);
+    }
+
+    public DashboardSessionService(SessionRepository sessionRepository, CheckpointService checkpointService) {
         this.sessionRepository = sessionRepository;
+        this.checkpointService = checkpointService;
     }
 
     public Map<String, Object> getSessions(int limit, int offset) throws Exception {
@@ -131,6 +139,60 @@ public class DashboardSessionService {
         return Collections.singletonMap("ok", true);
     }
 
+    public Map<String, Object> sessionTree(String sessionId) throws Exception {
+        SessionRecord root = sessionRepository.findById(sessionId);
+        if (root == null) {
+            return Collections.singletonMap("nodes", Collections.emptyList());
+        }
+        String sourceKey = root.getSourceKey();
+        List<Map<String, Object>> nodes = new ArrayList<Map<String, Object>>();
+        for (SessionRecord record : sessionRepository.listRecent(200)) {
+            if (!StrUtil.equals(sourceKey, record.getSourceKey())
+                    && !StrUtil.equals(sessionId, record.getSessionId())
+                    && !StrUtil.equals(sessionId, record.getParentSessionId())) {
+                continue;
+            }
+            Map<String, Object> node = toSessionInfo(record);
+            node.put("parent_session_id", record.getParentSessionId());
+            node.put("branch_name", record.getBranchName());
+            nodes.add(node);
+        }
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("root_session_id", sessionId);
+        result.put("nodes", nodes);
+        return result;
+    }
+
+    public Map<String, Object> checkpoints(String sessionId) throws Exception {
+        if (checkpointService == null) {
+            return Collections.singletonMap("checkpoints", Collections.emptyList());
+        }
+        SessionRecord record = sessionRepository.findById(sessionId);
+        if (record == null) {
+            return Collections.singletonMap("checkpoints", Collections.emptyList());
+        }
+        List<Map<String, Object>> checkpoints = new ArrayList<Map<String, Object>>();
+        for (CheckpointRecord checkpoint : checkpointService.listRecent(record.getSourceKey(), 50)) {
+            checkpoints.add(toCheckpoint(checkpoint));
+        }
+        return Collections.singletonMap("checkpoints", checkpoints);
+    }
+
+    public Map<String, Object> checkpointPreview(String checkpointId) throws Exception {
+        if (checkpointService == null) {
+            return Collections.emptyMap();
+        }
+        return checkpointService.preview(checkpointId);
+    }
+
+    public Map<String, Object> rollbackCheckpoint(String checkpointId) throws Exception {
+        if (checkpointService == null) {
+            throw new IllegalStateException("checkpoint service is not configured");
+        }
+        CheckpointRecord record = checkpointService.rollback(checkpointId);
+        return toCheckpoint(record);
+    }
+
     private Map<String, Object> toSessionInfo(SessionRecord record) throws Exception {
         List<ChatMessage> messages = MessageSupport.loadMessages(record.getNdjson());
         int toolCallCount = 0;
@@ -164,6 +226,16 @@ public class DashboardSessionService {
         result.put("last_usage_at", record.getLastUsageAt());
         result.put("preview", trim(StrUtil.blankToDefault(MessageSupport.getLastUserMessage(record.getNdjson()), record.getCompressedSummary()), 160));
         return result;
+    }
+
+    private Map<String, Object> toCheckpoint(CheckpointRecord checkpoint) {
+        Map<String, Object> item = new LinkedHashMap<String, Object>();
+        item.put("checkpoint_id", checkpoint.getCheckpointId());
+        item.put("source_key", checkpoint.getSourceKey());
+        item.put("session_id", checkpoint.getSessionId());
+        item.put("created_at", checkpoint.getCreatedAt());
+        item.put("restored_at", checkpoint.getRestoredAt());
+        return item;
     }
 
     private String buildSnippet(SessionRecord record, String query) throws Exception {

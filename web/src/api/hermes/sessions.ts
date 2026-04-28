@@ -260,6 +260,23 @@ export async function fetchSessionUsageSingle(id: string): Promise<{ input_token
   }
 }
 
+export async function fetchSessionTree(id: string): Promise<any> {
+  return request(`/api/sessions/${id}/tree`)
+}
+
+export async function fetchSessionCheckpoints(id: string): Promise<any[]> {
+  const res = await request<{ checkpoints: any[] }>(`/api/sessions/${id}/checkpoints`)
+  return res.checkpoints || []
+}
+
+export async function fetchCheckpointPreview(id: string): Promise<any> {
+  return request(`/api/checkpoints/${id}/preview`)
+}
+
+export async function rollbackCheckpoint(id: string): Promise<any> {
+  return request(`/api/checkpoints/${id}/rollback`, { method: 'POST' })
+}
+
 export async function fetchContextLength(_profile?: string): Promise<number> {
   const res = await request<{ effective_context_length?: number; config_context_length?: number }>('/api/model/info')
   return res.effective_context_length || res.config_context_length || 128000

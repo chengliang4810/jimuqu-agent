@@ -14,7 +14,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 默认文件快照服务。
@@ -187,6 +189,35 @@ public class DefaultCheckpointService implements CheckpointService {
             connection.close();
         }
         return results;
+    }
+
+    @Override
+    public Map<String, Object> preview(String checkpointId) throws Exception {
+        CheckpointRecord record = findById(checkpointId);
+        if (record == null) {
+            throw new IllegalStateException("未找到 checkpoint：" + checkpointId);
+        }
+
+        ONode manifest = ONode.ofJson(FileUtil.readUtf8String(FileUtil.file(record.getManifestPath())));
+        List<Map<String, Object>> files = new ArrayList<Map<String, Object>>();
+        ONode filesNode = manifest.get("files");
+        for (int i = 0; i < filesNode.size(); i++) {
+            ONode item = filesNode.get(i);
+            Map<String, Object> file = new LinkedHashMap<String, Object>();
+            file.put("path", item.get("path").getString());
+            file.put("exists", item.get("exists").getBoolean());
+            file.put("snapshot", item.get("snapshot").getString());
+            files.add(file);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("checkpoint_id", record.getCheckpointId());
+        result.put("source_key", record.getSourceKey());
+        result.put("session_id", record.getSessionId());
+        result.put("created_at", record.getCreatedAt());
+        result.put("restored_at", record.getRestoredAt());
+        result.put("files", files);
+        return result;
     }
 
     /**

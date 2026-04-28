@@ -804,6 +804,48 @@ export const useChatStore = defineStore('chat', () => {
             case 'run.started':
               break
 
+            case 'attempt.started':
+              addMessage(sid, {
+                id: uid(),
+                role: 'system',
+                content: `开始第 ${evt.attempt_no || 1} 次尝试：${evt.provider || '-'} / ${evt.model || '-'}`,
+                timestamp: Date.now(),
+              })
+              schedulePersist()
+              break
+
+            case 'compression.decision':
+              if (evt.compressed) {
+                addMessage(sid, {
+                  id: uid(),
+                  role: 'system',
+                  content: `已压缩上下文：${evt.estimated_tokens || 0} / ${evt.threshold_tokens || 0} tokens`,
+                  timestamp: Date.now(),
+                })
+                schedulePersist()
+              }
+              break
+
+            case 'fallback':
+              addMessage(sid, {
+                id: uid(),
+                role: 'system',
+                content: `模型切换：${evt.from_provider || '-'} -> ${evt.to_provider || '-'}`,
+                timestamp: Date.now(),
+              })
+              schedulePersist()
+              break
+
+            case 'recovery.started':
+              addMessage(sid, {
+                id: uid(),
+                role: 'system',
+                content: evt.recovery_type === 'max_steps' ? '达到步数上限，正在收敛总结' : '工具已完成，正在恢复最终答复',
+                timestamp: Date.now(),
+              })
+              schedulePersist()
+              break
+
             case 'message.delta': {
               const msgs = getSessionMsgs(sid)
               const last = msgs[msgs.length - 1]

@@ -15,6 +15,7 @@ import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.ContextCompressionService;
+import com.jimuqu.agent.core.service.ContextBudgetService;
 import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.core.service.MemoryManager;
 import com.jimuqu.agent.core.service.MemoryProvider;
@@ -25,6 +26,7 @@ import com.jimuqu.agent.core.service.SkillHubService;
 import com.jimuqu.agent.core.service.SkillImportService;
 import com.jimuqu.agent.core.service.SkillLearningService;
 import com.jimuqu.agent.engine.DefaultContextCompressionService;
+import com.jimuqu.agent.engine.DefaultContextBudgetService;
 import com.jimuqu.agent.engine.DefaultSessionSearchService;
 import com.jimuqu.agent.project.repository.ProjectRepository;
 import com.jimuqu.agent.project.service.ProjectService;
@@ -161,6 +163,11 @@ public class ContextConfiguration {
     @Bean
     public ContextCompressionService contextCompressionService(AppConfig appConfig) {
         return new DefaultContextCompressionService(appConfig);
+    }
+
+    @Bean
+    public ContextBudgetService contextBudgetService(AppConfig appConfig) {
+        return new DefaultContextBudgetService(appConfig);
     }
 
     @Bean

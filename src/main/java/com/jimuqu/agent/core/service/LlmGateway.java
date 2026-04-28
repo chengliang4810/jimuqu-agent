@@ -1,5 +1,7 @@
 package com.jimuqu.agent.core.service;
 
+import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.core.model.AgentRunContext;
 import com.jimuqu.agent.gateway.feedback.ConversationFeedbackSink;
 import com.jimuqu.agent.core.model.LlmResult;
 import com.jimuqu.agent.core.model.SessionRecord;
@@ -73,5 +75,23 @@ public interface LlmGateway {
                              ConversationFeedbackSink feedbackSink,
                              ConversationEventSink eventSink) throws Exception {
         return resume(session, systemPrompt, toolObjects, feedbackSink);
+    }
+
+    /**
+     * 执行一次已解析 provider 的 ReAct 调用，不在网关内做 fallback。
+     */
+    default LlmResult executeOnce(SessionRecord session,
+                                  String systemPrompt,
+                                  String userMessage,
+                                  List<Object> toolObjects,
+                                  ConversationFeedbackSink feedbackSink,
+                                  ConversationEventSink eventSink,
+                                  boolean resume,
+                                  AppConfig.LlmConfig resolved,
+                                  AgentRunContext runContext) throws Exception {
+        if (resume) {
+            return resume(session, systemPrompt, toolObjects, feedbackSink, eventSink);
+        }
+        return chat(session, systemPrompt, userMessage, toolObjects, feedbackSink, eventSink);
     }
 }

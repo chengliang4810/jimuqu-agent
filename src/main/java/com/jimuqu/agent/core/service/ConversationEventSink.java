@@ -17,6 +17,24 @@ public interface ConversationEventSink {
     default void onRunStarted(String sessionId) {
     }
 
+    default void onAttemptStarted(String runId, int attemptNo, String provider, String model) {
+    }
+
+    default void onAttemptCompleted(String runId, int attemptNo, String status, String reason) {
+    }
+
+    default void onCompressionDecision(String runId, boolean compressed, String reason, int estimatedTokens, int thresholdTokens) {
+    }
+
+    default void onRecoveryStarted(String runId, String recoveryType) {
+    }
+
+    default void onFallback(String runId, String fromProvider, String toProvider, String reason) {
+    }
+
+    default void onDeliveryEvent(String runId, String status, String detail) {
+    }
+
     /**
      * assistant 文本增量。
      */

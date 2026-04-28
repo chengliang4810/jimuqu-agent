@@ -4,6 +4,7 @@ import com.jimuqu.agent.core.model.CheckpointRecord;
 
 import java.io.File;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 文件快照服务接口。
@@ -33,4 +34,9 @@ public interface CheckpointService {
      * 列出来源键最近的 checkpoints。
      */
     List<CheckpointRecord> listRecent(String sourceKey, int limit) throws Exception;
+
+    /**
+     * 预览指定 checkpoint 的文件清单。
+     */
+    Map<String, Object> preview(String checkpointId) throws Exception;
 }

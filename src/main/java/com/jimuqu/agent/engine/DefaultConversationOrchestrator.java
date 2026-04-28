@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
+import com.jimuqu.agent.core.model.AgentRunOutcome;
 import com.jimuqu.agent.core.model.LlmResult;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
@@ -68,6 +69,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     private final DisplaySettingsService displaySettingsService;
     private final RuntimeSettingsService runtimeSettingsService;
     private final DangerousCommandApprovalService dangerousCommandApprovalService;
+    private final AgentRunSupervisor agentRunSupervisor;
     private final ConcurrentMap<String, Object> sourceLocks = new ConcurrentHashMap<String, Object>();
 
     public GatewayReply handleIncoming(GatewayMessage message) throws Exception {
@@ -118,41 +120,12 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
                 + runtimeSettingsService.buildAgentRuntimePrompt(sourceKey, session, enabledToolNames);
         session.setSystemPromptSnapshot(systemPrompt);
 
-        String previousNdjson = session.getNdjson();
         GatewayMessage feedbackTarget = messageFromSourceKey(sourceKey);
         ConversationFeedbackSink feedbackSink = feedbackSinkFor(feedbackTarget);
-        LlmResult result = llmGateway.resume(session, systemPrompt, enabledTools, feedbackSink, eventSink);
-        String replyText = extractText(result.getAssistantMessage());
-        if (StrUtil.isBlank(replyText) && hasRecentToolActivity(previousNdjson, result.getNdjson())) {
-            session.setNdjson(result.getNdjson());
-            LlmResult recovered = tryRecoverEmptyReply(session, systemPrompt);
-            if (recovered != null) {
-                mergeUsage(result, recovered);
-                result = recovered;
-                replyText = extractText(recovered.getAssistantMessage());
-            }
-        }
-
-        if (isMaxStepsReply(replyText)) {
-            session.setNdjson(result.getNdjson());
-            LlmResult recovered = tryRecoverMaxStepsReply(session, systemPrompt);
-            if (hasUsableRecoveryReply(recovered)) {
-                mergeUsage(result, recovered);
-                result = recovered;
-                replyText = extractText(recovered.getAssistantMessage());
-            } else {
-                replyText = MAX_STEPS_RECOVERY_FALLBACK;
-            }
-        }
-
-        session.setNdjson(result.getNdjson());
-        applyUsage(session, result);
-        session.setUpdatedAt(System.currentTimeMillis());
-        sessionRepository.save(session);
-
-        String finalReply = StrUtil.blankToDefault(replyText, EMPTY_REPLY_FALLBACK);
+        AgentRunOutcome outcome = agentRunSupervisor.run(session, systemPrompt, null, enabledTools, feedbackSink, eventSink, true);
+        String finalReply = StrUtil.blankToDefault(outcome.getFinalReply(), EMPTY_REPLY_FALLBACK);
         feedbackSink.onFinalReply(finalReply);
-        eventSink.onRunCompleted(session.getSessionId(), finalReply, result);
+        eventSink.onRunCompleted(session.getSessionId(), finalReply, outcome.getResult());
         GatewayReply reply = GatewayReply.ok(finalReply);
         reply.setSessionId(session.getSessionId());
         reply.setBranchName(session.getBranchName());
@@ -184,44 +157,14 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
                 + runtimeSettingsService.buildAgentRuntimePrompt(message.sourceKey(), session, enabledToolNames);
         session.setSystemPromptSnapshot(systemPrompt);
 
-        session = contextCompressionService.compressIfNeeded(session, systemPrompt, effectiveUserText);
-        String previousNdjson = session.getNdjson();
         ConversationFeedbackSink feedbackSink = feedbackSinkFor(message);
-        LlmResult result = llmGateway.chat(session, systemPrompt, effectiveUserText, enabledTools, feedbackSink, eventSink);
-        String replyText = extractText(result.getAssistantMessage());
-        if (StrUtil.isBlank(replyText) && hasRecentToolActivity(previousNdjson, result.getNdjson())) {
-            session.setNdjson(result.getNdjson());
-            LlmResult recovered = tryRecoverEmptyReply(session, systemPrompt);
-            if (recovered != null) {
-                mergeUsage(result, recovered);
-                result = recovered;
-                replyText = extractText(recovered.getAssistantMessage());
-            }
-        }
-
-        if (isMaxStepsReply(replyText)) {
-            session.setNdjson(result.getNdjson());
-            LlmResult recovered = tryRecoverMaxStepsReply(session, systemPrompt);
-            if (hasUsableRecoveryReply(recovered)) {
-                mergeUsage(result, recovered);
-                result = recovered;
-                replyText = extractText(recovered.getAssistantMessage());
-            } else {
-                replyText = MAX_STEPS_RECOVERY_FALLBACK;
-            }
-        }
-
-        session.setNdjson(result.getNdjson());
-        applyUsage(session, result);
-        session.setUpdatedAt(System.currentTimeMillis());
-        sessionRepository.save(session);
-
-        String finalReply = StrUtil.blankToDefault(replyText, EMPTY_REPLY_FALLBACK);
+        AgentRunOutcome outcome = agentRunSupervisor.run(session, systemPrompt, effectiveUserText, enabledTools, feedbackSink, eventSink, false);
+        String finalReply = StrUtil.blankToDefault(outcome.getFinalReply(), EMPTY_REPLY_FALLBACK);
         if (MessageDeliveryTracker.consumeDuplicateFinalReply(message.sourceKey(), finalReply)) {
             finalReply = "";
         }
         feedbackSink.onFinalReply(finalReply);
-        eventSink.onRunCompleted(session.getSessionId(), finalReply, result);
+        eventSink.onRunCompleted(session.getSessionId(), finalReply, outcome.getResult());
         GatewayReply reply = GatewayReply.ok(finalReply);
         reply.setSessionId(session.getSessionId());
         reply.setBranchName(session.getBranchName());

@@ -106,6 +106,16 @@ public class AppConfig {
     private ReActConfig react = new ReActConfig();
 
     /**
+     * Agent run 追踪配置。
+     */
+    private TraceConfig trace = new TraceConfig();
+
+    /**
+     * MCP 工具适配配置。
+     */
+    private McpConfig mcp = new McpConfig();
+
+    /**
      * 从 Solon Props 构建应用配置。
      *
      * @param props Solon 启动时加载的配置源
@@ -1558,6 +1568,36 @@ public class AppConfig {
          * ReAct 摘要守卫触发的 token 阈值。
          */
         private int summarizationMaxTokens = 32000;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class TraceConfig {
+        /**
+         * 运行轨迹保留天数。
+         */
+        private int retentionDays = 14;
+
+        /**
+         * 每个 run 最大外层 attempt 数。
+         */
+        private int maxAttempts = 2;
+
+        /**
+         * 工具结果预览最大长度。
+         */
+        private int toolPreviewLength = 1200;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class McpConfig {
+        /**
+         * MCP 工具适配默认关闭。
+         */
+        private boolean enabled = false;
     }
 
     /**

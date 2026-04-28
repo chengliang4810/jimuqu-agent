@@ -14,6 +14,10 @@ public interface DelegationService {
      */
     DelegationResult delegateSingle(String sourceKey, String prompt, String context) throws Exception;
 
+    default DelegationResult delegateSingle(String sourceKey, DelegationTask task) throws Exception {
+        return delegateSingle(sourceKey, task == null ? null : task.getPrompt(), task == null ? null : task.getContext());
+    }
+
     /**
      * 批量并行委托。
      */

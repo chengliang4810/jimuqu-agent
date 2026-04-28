@@ -422,6 +422,55 @@ public class DashboardChatService {
         }
 
         @Override
+        public void onAttemptStarted(String runId, int attemptNo, String provider, String model) {
+            Map<String, Object> payload = new LinkedHashMap<String, Object>();
+            payload.put("agent_run_id", runId);
+            payload.put("attempt_no", attemptNo);
+            payload.put("provider", provider);
+            payload.put("model", model);
+            enqueue(state, "attempt.started", payload);
+        }
+
+        @Override
+        public void onAttemptCompleted(String runId, int attemptNo, String status, String reason) {
+            Map<String, Object> payload = new LinkedHashMap<String, Object>();
+            payload.put("agent_run_id", runId);
+            payload.put("attempt_no", attemptNo);
+            payload.put("status", status);
+            payload.put("reason", reason);
+            enqueue(state, "attempt.completed", payload);
+        }
+
+        @Override
+        public void onCompressionDecision(String runId, boolean compressed, String reason, int estimatedTokens, int thresholdTokens) {
+            Map<String, Object> payload = new LinkedHashMap<String, Object>();
+            payload.put("agent_run_id", runId);
+            payload.put("compressed", compressed);
+            payload.put("reason", reason);
+            payload.put("estimated_tokens", estimatedTokens);
+            payload.put("threshold_tokens", thresholdTokens);
+            enqueue(state, "compression.decision", payload);
+        }
+
+        @Override
+        public void onRecoveryStarted(String runId, String recoveryType) {
+            Map<String, Object> payload = new LinkedHashMap<String, Object>();
+            payload.put("agent_run_id", runId);
+            payload.put("recovery_type", recoveryType);
+            enqueue(state, "recovery.started", payload);
+        }
+
+        @Override
+        public void onFallback(String runId, String fromProvider, String toProvider, String reason) {
+            Map<String, Object> payload = new LinkedHashMap<String, Object>();
+            payload.put("agent_run_id", runId);
+            payload.put("from_provider", fromProvider);
+            payload.put("to_provider", toProvider);
+            payload.put("reason", reason);
+            enqueue(state, "fallback", payload);
+        }
+
+        @Override
         public void onRunCompleted(String sessionId, String finalReply, LlmResult result) {
             state.sessionId = StrUtil.blankToDefault(sessionId, state.sessionId);
             state.status = "completed";

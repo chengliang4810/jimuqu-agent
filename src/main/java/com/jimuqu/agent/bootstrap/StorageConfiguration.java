@@ -4,6 +4,7 @@ import com.jimuqu.agent.agent.AgentProfileRepository;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.repository.CronJobRepository;
 import com.jimuqu.agent.core.repository.ChannelStateRepository;
+import com.jimuqu.agent.core.repository.AgentRunRepository;
 import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.repository.GatewayPolicyRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
@@ -11,6 +12,7 @@ import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.project.repository.ProjectRepository;
 import com.jimuqu.agent.storage.repository.SqliteCronJobRepository;
 import com.jimuqu.agent.storage.repository.SqliteAgentProfileRepository;
+import com.jimuqu.agent.storage.repository.SqliteAgentRunRepository;
 import com.jimuqu.agent.storage.repository.SqliteChannelStateRepository;
 import com.jimuqu.agent.storage.repository.SqliteDatabase;
 import com.jimuqu.agent.storage.repository.SqliteGlobalSettingRepository;
@@ -45,6 +47,11 @@ public class StorageConfiguration {
     @Bean
     public CronJobRepository cronJobRepository(SqliteDatabase sqliteDatabase) {
         return new SqliteCronJobRepository(sqliteDatabase);
+    }
+
+    @Bean
+    public AgentRunRepository agentRunRepository(SqliteDatabase sqliteDatabase) {
+        return new SqliteAgentRunRepository(sqliteDatabase);
     }
 
     @Bean

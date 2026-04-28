@@ -3,6 +3,7 @@ package com.jimuqu.agent.llm;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.config.RuntimeConfigResolver;
+import com.jimuqu.agent.core.model.AgentRunContext;
 import com.jimuqu.agent.core.model.LlmResult;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
@@ -29,6 +30,7 @@ import org.noear.solon.ai.agent.react.intercept.summarize.CompositeSummarization
 import org.noear.solon.ai.agent.react.intercept.summarize.HierarchicalSummarizationStrategy;
 import org.noear.solon.ai.agent.react.intercept.summarize.KeyInfoExtractionStrategy;
 import org.noear.solon.ai.chat.ChatModel;
+import org.noear.solon.ai.chat.ChatRequestDesc;
 import org.noear.solon.ai.chat.ChatResponse;
 import org.noear.solon.ai.chat.dialect.ChatDialectManager;
 import org.noear.solon.ai.chat.message.ChatMessage;
@@ -135,6 +137,19 @@ public class SolonAiLlmGateway implements LlmGateway {
         return executeWithFailover(session, systemPrompt, null, toolObjects, feedbackSink, eventSink, true);
     }
 
+    @Override
+    public LlmResult executeOnce(SessionRecord session,
+                                 String systemPrompt,
+                                 String userMessage,
+                                 List<Object> toolObjects,
+                                 ConversationFeedbackSink feedbackSink,
+                                 ConversationEventSink eventSink,
+                                 boolean resume,
+                                 AppConfig.LlmConfig resolved,
+                                 AgentRunContext runContext) throws Exception {
+        return executeSingle(session, systemPrompt, userMessage, toolObjects, feedbackSink, eventSink, resume, resolved, runContext);
+    }
+
     private LlmResult executeWithFailover(SessionRecord session,
                                           String systemPrompt,
                                           String userMessage,
@@ -198,6 +213,18 @@ public class SolonAiLlmGateway implements LlmGateway {
                                       ConversationEventSink eventSink,
                                       boolean resume,
                                       AppConfig.LlmConfig resolved) throws Exception {
+        return executeSingle(session, systemPrompt, userMessage, toolObjects, feedbackSink, eventSink, resume, resolved, null);
+    }
+
+    protected LlmResult executeSingle(SessionRecord session,
+                                      String systemPrompt,
+                                      String userMessage,
+                                      List<Object> toolObjects,
+                                      ConversationFeedbackSink feedbackSink,
+                                      ConversationEventSink eventSink,
+                                      boolean resume,
+                                      AppConfig.LlmConfig resolved,
+                                      AgentRunContext runContext) throws Exception {
         validate(resolved);
         log.info("LLM {}: provider={}, dialect={}, model={}, sessionId={}, stream={}, sessionOverride={}",
                 resume ? "resume" : "request",
@@ -209,7 +236,7 @@ public class SolonAiLlmGateway implements LlmGateway {
                 session != null && StrUtil.isNotBlank(session.getModelOverride()));
         SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
         ChatModel chatModel = buildChatModel(resolved);
-        ReActAgent agent = buildReActAgent(chatModel, resolved, systemPrompt, toolObjects, agentSession, feedbackSink);
+        ReActAgent agent = buildReActAgent(chatModel, resolved, systemPrompt, toolObjects, agentSession, feedbackSink, runContext);
         if (eventSink != null && eventSink != ConversationEventSink.noop()) {
             return callAgentStream(agent, agentSession, session, userMessage, resume, resolved, eventSink);
         }
@@ -349,6 +376,13 @@ public class SolonAiLlmGateway implements LlmGateway {
     private List<AppConfig.LlmConfig> buildCandidateConfigs(SessionRecord session) {
         List<AppConfig.LlmConfig> candidates = new java.util.ArrayList<AppConfig.LlmConfig>();
         java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<String>();
+
+        if (appConfig.getProviders() == null
+                || appConfig.getProviders().isEmpty()
+                || StrUtil.isBlank(appConfig.getModel().getProviderKey())) {
+            candidates.add(copyLlmConfig(appConfig.getLlm()));
+            return candidates;
+        }
 
         AppConfig.LlmConfig primary = toLlmConfig(llmProviderService.resolveEffectiveProvider(session));
         candidates.add(primary);
@@ -512,7 +546,8 @@ public class SolonAiLlmGateway implements LlmGateway {
                                        final String systemPrompt,
                                        List<Object> toolObjects,
                                        SqliteAgentSession agentSession,
-                                       ConversationFeedbackSink feedbackSink) {
+                                       ConversationFeedbackSink feedbackSink,
+                                       AgentRunContext runContext) {
         boolean delegateSession = isDelegateSession(agentSession);
         int maxSteps = delegateSession ? appConfig.getReact().getDelegateMaxSteps() : appConfig.getReact().getMaxSteps();
         int retryMax = delegateSession ? appConfig.getReact().getDelegateRetryMax() : appConfig.getReact().getRetryMax();
@@ -547,6 +582,9 @@ public class SolonAiLlmGateway implements LlmGateway {
         }
         if (feedbackSink != null && feedbackSink != ConversationFeedbackSink.noop()) {
             builder.defaultInterceptorAdd(new FeedbackInterceptor(feedbackSink, dangerousCommandApprovalService));
+        }
+        if (runContext != null) {
+            builder.defaultInterceptorAdd(new TracingReActInterceptor(runContext, appConfig.getTrace().getToolPreviewLength()));
         }
 
         for (Object toolObject : toolObjects) {
@@ -757,6 +795,46 @@ public class SolonAiLlmGateway implements LlmGateway {
         @Override
         public void onObservation(ReActTrace trace, String toolName, String result, long durationMs) {
             feedbackSink.onToolFinished(toolName, result, durationMs);
+        }
+    }
+
+    /**
+     * 将 ReAct 生命周期写入持久化 run 轨迹。
+     */
+    private static class TracingReActInterceptor implements ReActInterceptor {
+        private final AgentRunContext runContext;
+        private final int previewLength;
+
+        private TracingReActInterceptor(AgentRunContext runContext, int previewLength) {
+            this.runContext = runContext;
+            this.previewLength = Math.max(200, previewLength);
+        }
+
+        @Override
+        public void onModelStart(ReActTrace trace, ChatRequestDesc req) {
+            runContext.event("model.start", "开始请求模型");
+        }
+
+        @Override
+        public void onModelEnd(ReActTrace trace, ChatResponse resp) {
+            runContext.event("model.end", "模型响应完成");
+        }
+
+        @Override
+        public void onAction(ReActTrace trace, String toolName, Map<String, Object> args) {
+            Map<String, Object> metadata = new java.util.LinkedHashMap<String, Object>();
+            metadata.put("tool", toolName);
+            metadata.put("args", args);
+            runContext.event("tool.start", "调用工具：" + toolName, metadata);
+        }
+
+        @Override
+        public void onObservation(ReActTrace trace, String toolName, String result, long durationMs) {
+            Map<String, Object> metadata = new java.util.LinkedHashMap<String, Object>();
+            metadata.put("tool", toolName);
+            metadata.put("durationMs", durationMs);
+            metadata.put("preview", AgentRunContext.safe(result, previewLength));
+            runContext.event("tool.end", "工具完成：" + toolName + "（" + durationMs + "ms）", metadata);
         }
     }
 }

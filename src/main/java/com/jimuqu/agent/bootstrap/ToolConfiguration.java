@@ -4,11 +4,13 @@ import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.context.FileContextService;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.core.repository.CronJobRepository;
+import com.jimuqu.agent.core.repository.AgentRunRepository;
 import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.core.service.ContextCompressionService;
+import com.jimuqu.agent.core.service.ContextBudgetService;
 import com.jimuqu.agent.core.service.DeliveryService;
 import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.core.service.MemoryService;
@@ -17,6 +19,7 @@ import com.jimuqu.agent.core.service.SessionSearchService;
 import com.jimuqu.agent.core.service.SkillHubService;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.engine.DefaultDelegationService;
+import com.jimuqu.agent.engine.AgentRunSupervisor;
 import com.jimuqu.agent.engine.DefaultConversationOrchestrator;
 import com.jimuqu.agent.llm.SolonAiLlmGateway;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
@@ -135,6 +138,25 @@ public class ToolConfiguration {
     }
 
     @Bean
+    public AgentRunSupervisor agentRunSupervisor(AppConfig appConfig,
+                                                 SessionRepository sessionRepository,
+                                                 AgentRunRepository agentRunRepository,
+                                                 ContextCompressionService contextCompressionService,
+                                                 ContextBudgetService contextBudgetService,
+                                                 LlmGateway llmGateway,
+                                                 LlmProviderService llmProviderService) {
+        return new AgentRunSupervisor(
+                appConfig,
+                sessionRepository,
+                agentRunRepository,
+                contextCompressionService,
+                contextBudgetService,
+                llmGateway,
+                llmProviderService
+        );
+    }
+
+    @Bean
     public ConversationOrchestrator conversationOrchestrator(SessionRepository sessionRepository,
                                                              FileContextService contextService,
                                                              ContextCompressionService contextCompressionService,
@@ -144,7 +166,8 @@ public class ToolConfiguration {
                                                              DisplaySettingsService displaySettingsService,
                                                              ConversationOrchestratorHolder holder,
                                                              RuntimeSettingsService runtimeSettingsService,
-                                                             DangerousCommandApprovalService dangerousCommandApprovalService) {
+                                                             DangerousCommandApprovalService dangerousCommandApprovalService,
+                                                             AgentRunSupervisor agentRunSupervisor) {
         ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(
                 sessionRepository,
                 contextService,
@@ -154,7 +177,8 @@ public class ToolConfiguration {
                 deliveryService,
                 displaySettingsService,
                 runtimeSettingsService,
-                dangerousCommandApprovalService
+                dangerousCommandApprovalService,
+                agentRunSupervisor
         );
         holder.set(orchestrator);
         return orchestrator;
