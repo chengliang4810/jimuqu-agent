@@ -3,6 +3,7 @@ package com.jimuqu.agent;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.llm.SolonAiLlmGateway;
+import com.jimuqu.agent.llm.dialect.LoggingOpenaiChatDialect;
 import com.jimuqu.agent.llm.dialect.LoggingOpenaiResponsesDialect;
 import org.junit.jupiter.api.Test;
 import org.noear.solon.ai.chat.ChatModel;
@@ -63,5 +64,22 @@ public class SolonAiLlmGatewayConfigTest {
         ChatModel chatModel = (ChatModel) buildChatModel.invoke(gateway, config.getLlm());
 
         assertThat(chatModel.getDialect()).isInstanceOf(LoggingOpenaiResponsesDialect.class);
+    }
+
+    @Test
+    void shouldUseLoggingDialectForOpenaiProvider() throws Exception {
+        AppConfig config = new AppConfig();
+        config.getLlm().setProvider("openai");
+        config.getLlm().setDialect("openai");
+        config.getLlm().setApiUrl("https://example.com/v1/chat/completions");
+        config.getLlm().setModel("gpt-5.4");
+
+        SolonAiLlmGateway gateway = new SolonAiLlmGateway(config);
+        Method buildChatModel = SolonAiLlmGateway.class.getDeclaredMethod("buildChatModel", AppConfig.LlmConfig.class);
+        buildChatModel.setAccessible(true);
+
+        ChatModel chatModel = (ChatModel) buildChatModel.invoke(gateway, config.getLlm());
+
+        assertThat(chatModel.getDialect()).isInstanceOf(LoggingOpenaiChatDialect.class);
     }
 }

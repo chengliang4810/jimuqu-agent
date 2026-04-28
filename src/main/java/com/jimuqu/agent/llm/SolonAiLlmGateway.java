@@ -11,6 +11,7 @@ import com.jimuqu.agent.core.service.ConversationEventSink;
 import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.gateway.feedback.ConversationFeedbackSink;
 import com.jimuqu.agent.gateway.feedback.ToolPreviewSupport;
+import com.jimuqu.agent.llm.dialect.LoggingOpenaiChatDialect;
 import com.jimuqu.agent.llm.dialect.LoggingOpenaiResponsesDialect;
 import com.jimuqu.agent.storage.session.SqliteAgentSession;
 import com.jimuqu.agent.support.LlmProviderService;
@@ -59,7 +60,7 @@ public class SolonAiLlmGateway implements LlmGateway {
      * LLM 网关日志器。
      */
     private static final Logger log = LoggerFactory.getLogger(SolonAiLlmGateway.class);
-    private static final AtomicBoolean OPENAI_RESPONSES_DIALECT_REGISTERED = new AtomicBoolean(false);
+    private static final AtomicBoolean CUSTOM_DIALECTS_REGISTERED = new AtomicBoolean(false);
 
     private final AppConfig appConfig;
     private final SessionRepository sessionRepository;
@@ -536,7 +537,8 @@ public class SolonAiLlmGateway implements LlmGateway {
     }
 
     private void ensureCustomDialectsRegistered() {
-        if (OPENAI_RESPONSES_DIALECT_REGISTERED.compareAndSet(false, true)) {
+        if (CUSTOM_DIALECTS_REGISTERED.compareAndSet(false, true)) {
+            ChatDialectManager.register(new LoggingOpenaiChatDialect(), -100);
             ChatDialectManager.register(new LoggingOpenaiResponsesDialect(), -100);
         }
     }
