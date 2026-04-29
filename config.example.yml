@@ -162,7 +162,7 @@ jimuqu:
       groupPolicy: disabled
       groupAllowedUsers: []
       splitMultilineMessages: false
-      sendChunkDelaySeconds: 0.35
+      sendChunkDelaySeconds: 1.5
       sendChunkRetries: 2
       sendChunkRetryDelaySeconds: 1.0
       toolProgress: all

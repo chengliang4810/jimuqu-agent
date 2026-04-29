@@ -69,6 +69,8 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     private final AttachmentCacheService attachmentCacheService;
     private final ConcurrentMap<String, Long> recentMessageIds = new ConcurrentHashMap<String, Long>();
     private final ConcurrentMap<String, TypingTicketState> typingTickets = new ConcurrentHashMap<String, TypingTicketState>();
+    private final ConcurrentMap<String, Long> lastTextSendAtByChat = new ConcurrentHashMap<String, Long>();
+    private final ConcurrentMap<String, Object> textSendLocks = new ConcurrentHashMap<String, Object>();
     private volatile ExecutorService pollExecutor;
     private volatile ExecutorService inboundExecutor;
     private volatile boolean polling;
@@ -152,11 +154,39 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
 
     private void sendText(String chatId, String text) {
         List<String> chunks = splitTextForDelivery(text);
-        for (int i = 0; i < chunks.size(); i++) {
-            sendTextChunk(chatId, chunks.get(i));
-            if (i + 1 < chunks.size()) {
-                sleepQuietlyMillis((long) (config.getSendChunkDelaySeconds() * 1000L));
+        Object lock = textSendLock(chatId);
+        synchronized (lock) {
+            for (String chunk : chunks) {
+                waitBeforeTextSend(chatId);
+                sendTextChunk(chatId, chunk);
+                lastTextSendAtByChat.put(chatId, System.currentTimeMillis());
             }
+        }
+    }
+
+    private Object textSendLock(String chatId) {
+        String key = StrUtil.blankToDefault(chatId, "__default__");
+        Object existing = textSendLocks.get(key);
+        if (existing != null) {
+            return existing;
+        }
+        Object created = new Object();
+        Object previous = textSendLocks.putIfAbsent(key, created);
+        return previous == null ? created : previous;
+    }
+
+    private void waitBeforeTextSend(String chatId) {
+        long minIntervalMs = Math.max(0L, (long) (config.getSendChunkDelaySeconds() * 1000L));
+        if (minIntervalMs <= 0) {
+            return;
+        }
+        Long lastSentAt = lastTextSendAtByChat.get(chatId);
+        if (lastSentAt == null) {
+            return;
+        }
+        long waitMs = minIntervalMs - (System.currentTimeMillis() - lastSentAt);
+        if (waitMs > 0) {
+            sleepQuietlyMillis(waitMs);
         }
     }
 

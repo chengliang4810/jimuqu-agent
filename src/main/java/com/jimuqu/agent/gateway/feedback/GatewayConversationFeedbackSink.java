@@ -25,6 +25,7 @@ public class GatewayConversationFeedbackSink implements ConversationFeedbackSink
     private String lastToolName;
     private String lastReasoning;
     private long lastReasoningAt;
+    private long lastToolProgressAt;
     private int toolStartedCount;
     private int toolFinishedCount;
     private String dingtalkCardBizId;
@@ -54,6 +55,9 @@ public class GatewayConversationFeedbackSink implements ConversationFeedbackSink
         if (!emit) {
             return;
         }
+        if (shouldThrottleToolProgress()) {
+            return;
+        }
 
         String preview = ToolPreviewSupport.buildPreview(
                 toolName,
@@ -71,6 +75,22 @@ public class GatewayConversationFeedbackSink implements ConversationFeedbackSink
         }
 
         sendText(buildToolProgressText(toolName, preview));
+    }
+
+    private boolean shouldThrottleToolProgress() {
+        if (message.getPlatform() != PlatformType.WEIXIN) {
+            return false;
+        }
+        int throttleMs = displaySettingsService.progressThrottleMs();
+        if (throttleMs <= 0) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        if (lastToolProgressAt > 0 && now - lastToolProgressAt < throttleMs) {
+            return true;
+        }
+        lastToolProgressAt = now;
+        return false;
     }
 
     @Override

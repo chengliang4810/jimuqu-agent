@@ -277,7 +277,7 @@ public class AppConfig {
         config.getChannels().getWeixin().setCdnBaseUrl(resolveConfigString("JIMUQU_WEIXIN_CDN_BASE_URL", readString(props, overrides, "jimuqu.channels.weixin.cdnBaseUrl", "")));
         config.getChannels().getWeixin().setLongPollUrl(resolveConfigString("JIMUQU_WEIXIN_LONG_POLL_URL", readString(props, overrides, "jimuqu.channels.weixin.longPollUrl", "")));
         config.getChannels().getWeixin().setSplitMultilineMessages(resolveBoolean("JIMUQU_WEIXIN_SPLIT_MULTILINE_MESSAGES", readBoolean(props, overrides, "jimuqu.channels.weixin.splitMultilineMessages", false)));
-        config.getChannels().getWeixin().setSendChunkDelaySeconds(resolveDouble("JIMUQU_WEIXIN_SEND_CHUNK_DELAY_SECONDS", readDouble(props, overrides, "jimuqu.channels.weixin.sendChunkDelaySeconds", 0.35D)));
+        config.getChannels().getWeixin().setSendChunkDelaySeconds(resolveDouble("JIMUQU_WEIXIN_SEND_CHUNK_DELAY_SECONDS", readDouble(props, overrides, "jimuqu.channels.weixin.sendChunkDelaySeconds", 1.5D)));
         config.getChannels().getWeixin().setSendChunkRetries(resolveInt("JIMUQU_WEIXIN_SEND_CHUNK_RETRIES", readInt(props, overrides, "jimuqu.channels.weixin.sendChunkRetries", 2)));
         config.getChannels().getWeixin().setSendChunkRetryDelaySeconds(resolveDouble("JIMUQU_WEIXIN_SEND_CHUNK_RETRY_DELAY_SECONDS", readDouble(props, overrides, "jimuqu.channels.weixin.sendChunkRetryDelaySeconds", 1.0D)));
         config.getChannels().getWeixin().setToolProgress(resolveConfigString("JIMUQU_WEIXIN_TOOL_PROGRESS", readString(props, overrides, "jimuqu.channels.weixin.toolProgress", "all")));
@@ -1801,9 +1801,9 @@ public class AppConfig {
         private boolean splitMultilineMessages;
 
         /**
-         * 微信分片发送间隔。
+         * 微信文本发送最小间隔。
          */
-        private double sendChunkDelaySeconds = 0.35D;
+        private double sendChunkDelaySeconds = 1.5D;
 
         /**
          * 微信分片重试次数。
