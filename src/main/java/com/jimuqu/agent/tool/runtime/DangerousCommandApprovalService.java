@@ -108,7 +108,12 @@ public class DangerousCommandApprovalService {
             if (!(parsed instanceof Map)) {
                 return null;
             }
-            return toPendingApproval(((Map<?, ?>) parsed).get(CONTEXT_PENDING_APPROVAL));
+            Map<?, ?> snapshot = (Map<?, ?>) parsed;
+            Object pending = snapshot.get(CONTEXT_PENDING_APPROVAL);
+            if (pending == null && snapshot.get("vars") instanceof Map) {
+                pending = ((Map<?, ?>) snapshot.get("vars")).get(CONTEXT_PENDING_APPROVAL);
+            }
+            return toPendingApproval(pending);
         } catch (Exception ignored) {
             return null;
         }
@@ -288,7 +293,6 @@ public class DangerousCommandApprovalService {
         String code = args == null || args.get("code") == null ? null : String.valueOf(args.get("code"));
         DetectionResult detection = detect(toolName, code);
         if (detection == null) {
-            trace.getContext().remove(CONTEXT_PENDING_APPROVAL);
             persistTraceSnapshot(trace);
             return null;
         }
@@ -306,7 +310,9 @@ public class DangerousCommandApprovalService {
         }
 
         if (isApproved(trace.getContext(), approvalKey)) {
-            trace.getContext().remove(CONTEXT_PENDING_APPROVAL);
+            if (pending != null && approvalKey.equals(pending.approvalKey())) {
+                trace.getContext().remove(CONTEXT_PENDING_APPROVAL);
+            }
             persistTraceSnapshot(trace);
             return null;
         }

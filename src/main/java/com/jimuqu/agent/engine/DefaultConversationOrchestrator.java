@@ -145,6 +145,19 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     }
 
     private GatewayReply runOnSession(SessionRecord session, GatewayMessage message, ConversationEventSink eventSink) throws Exception {
+        DangerousCommandApprovalService.PendingApproval pendingApproval = dangerousCommandApprovalService == null
+                ? null
+                : dangerousCommandApprovalService.getPendingApproval(session);
+        if (pendingApproval != null) {
+            GatewayReply reply = GatewayReply.error(formatPendingApprovalBlock(pendingApproval));
+            reply.setSessionId(session.getSessionId());
+            reply.setBranchName(session.getBranchName());
+            if (message != null && message.getPlatform() != null) {
+                reply.getChannelExtras().putAll(dangerousCommandApprovalService.buildDeliveryExtras(message.getPlatform(), pendingApproval));
+            }
+            return reply;
+        }
+
         String effectiveUserText = MessageAttachmentSupport.composeEffectiveUserText(message);
         message.setText(effectiveUserText);
         if (!message.isHeartbeat() && StrUtil.isBlank(session.getTitle()) && StrUtil.isNotBlank(effectiveUserText)) {
@@ -170,6 +183,15 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         reply.setBranchName(session.getBranchName());
         applyApprovalCardIfNeeded(reply, message.getPlatform(), session);
         return reply;
+    }
+
+    private String formatPendingApprovalBlock(DangerousCommandApprovalService.PendingApproval pending) {
+        StringBuilder buffer = new StringBuilder();
+        buffer.append("当前会话有待审批的危险命令，本次请求已跳过，避免覆盖审批状态。\n");
+        buffer.append("工具：").append(StrUtil.blankToDefault(pending.getToolName(), "unknown")).append('\n');
+        buffer.append("原因：").append(StrUtil.blankToDefault(pending.getDescription(), "危险命令")).append("\n\n");
+        buffer.append("请先回复 `/approve` 执行一次，`/approve session` 记住当前会话，`/approve always` 永久记住，或 `/deny` 取消。");
+        return buffer.toString();
     }
 
     private ConversationFeedbackSink feedbackSinkFor(GatewayMessage message) {

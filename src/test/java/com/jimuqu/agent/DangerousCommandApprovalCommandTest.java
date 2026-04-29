@@ -61,6 +61,36 @@ public class DangerousCommandApprovalCommandTest {
     }
 
     @Test
+    void shouldSkipNewRunWhenDangerousApprovalIsPending() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.gatewayService.handle(env.message("room-4", "user-4", "hello"));
+        env.gatewayAuthorizationService.claimAdmin(env.message("room-4", "user-4", "/pairing claim-admin"));
+
+        SessionRecord session = env.sessionRepository.bindNewSession("MEMORY:room-4:user-4");
+        SqliteAgentSession agentSession = new SqliteAgentSession(session, env.sessionRepository);
+        env.dangerousCommandApprovalService.storePendingApproval(
+                agentSession,
+                "execute_shell",
+                "git_reset_hard",
+                "git reset --hard (destroys uncommitted changes)",
+                "git reset --hard origin/main"
+        );
+
+        GatewayReply blocked = env.conversationOrchestrator.runScheduled(env.message("room-4", "user-4", "执行日志巡检"));
+        SessionRecord afterBlockedRun = env.sessionRepository.getBoundSession("MEMORY:room-4:user-4");
+        SqliteAgentSession afterBlockedAgentSession = new SqliteAgentSession(afterBlockedRun, env.sessionRepository);
+
+        assertThat(blocked.getContent()).contains("待审批的危险命令");
+        assertThat(blocked.getContent()).contains("本次请求已跳过");
+        assertThat(afterBlockedRun.getNdjson()).doesNotContain("执行日志巡检");
+        assertThat(env.dangerousCommandApprovalService.getPendingApproval(afterBlockedAgentSession)).isNotNull();
+
+        GatewayReply approved = env.send("room-4", "user-4", "/approve always");
+        assertThat(approved.getContent()).isEqualTo("echo:resume");
+        assertThat(env.dangerousCommandApprovalService.isAlwaysApproved("execute_shell", "git_reset_hard", "git reset --hard origin/main")).isTrue();
+    }
+
+    @Test
     void shouldReturnChineseMessageWhenApproveHasNoPendingCommand() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         env.gatewayService.handle(env.message("room-3", "user-3", "hello"));
