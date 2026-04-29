@@ -499,6 +499,12 @@ public class GatewayAuthorizationService {
         if (platform == PlatformType.WEIXIN) {
             return appConfig.getChannels().getWeixin();
         }
+        if (platform == PlatformType.QQBOT) {
+            return appConfig.getChannels().getQqbot();
+        }
+        if (platform == PlatformType.YUANBAO) {
+            return appConfig.getChannels().getYuanbao();
+        }
         return null;
     }
 

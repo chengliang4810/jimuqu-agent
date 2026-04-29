@@ -167,7 +167,7 @@ public final class LlmErrorClassifier {
         if (containsAny(message, TRANSPORT_PATTERNS)) {
             return result(FailoverReason.TIMEOUT, status, true, true, false, message);
         }
-        return result(FailoverReason.UNKNOWN, status, true, true, false, message);
+        return result(FailoverReason.UNKNOWN, status, false, true, false, message);
     }
 
     private static ClassifiedError result(FailoverReason reason,

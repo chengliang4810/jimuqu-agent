@@ -37,4 +37,28 @@ public class LlmErrorClassifierTest {
         assertThat(result.getReason()).isEqualTo(LlmErrorClassifier.FailoverReason.CONTEXT_OVERFLOW);
         assertThat(result.isShouldCompress()).isTrue();
     }
+
+    @Test
+    void shouldNotRetryDeterministicBadRequestErrors() {
+        LlmErrorClassifier.ClassifiedError result = LlmErrorClassifier.classify(
+                new IllegalArgumentException("HTTP 400 invalid_request: unsupported parameter 'reasoning'")
+        );
+
+        assertThat(result.getReason()).isEqualTo(LlmErrorClassifier.FailoverReason.UNKNOWN);
+        assertThat(result.isRetryable()).isFalse();
+        assertThat(result.isShouldFallback()).isTrue();
+    }
+
+    @Test
+    void shouldOnlyRetryUnknownErrorsWhenTransientPatternMatches() {
+        LlmErrorClassifier.ClassifiedError unknown = LlmErrorClassifier.classify(
+                new IllegalStateException("provider rejected request")
+        );
+        LlmErrorClassifier.ClassifiedError transientError = LlmErrorClassifier.classify(
+                new IllegalStateException("connection reset by peer")
+        );
+
+        assertThat(unknown.isRetryable()).isFalse();
+        assertThat(transientError.isRetryable()).isTrue();
+    }
 }
