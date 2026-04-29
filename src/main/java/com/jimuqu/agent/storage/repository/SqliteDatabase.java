@@ -254,7 +254,21 @@ public class SqliteDatabase {
             } catch (Exception ignored) {
             }
             statement.execute("create index if not exists idx_sessions_source on sessions(source_key)");
-            statement.execute("create virtual table if not exists sessions_fts using fts5(session_id, title, compressed_summary, ndjson)");
+            try {
+                ResultSetMetaSupport.close(statement.executeQuery("select tool_names from sessions_fts limit 1"));
+            } catch (Exception ignored) {
+                try {
+                    statement.execute("drop table if exists sessions_fts");
+                } catch (Exception ignoredDrop) {
+                }
+            }
+            statement.execute("create virtual table if not exists sessions_fts using fts5(session_id, title, compressed_summary, ndjson, tool_names, tool_calls)");
+            try {
+                statement.execute("insert into sessions_fts (session_id, title, compressed_summary, ndjson, tool_names, tool_calls) " +
+                        "select s.session_id, s.title, s.compressed_summary, s.ndjson, '', '' from sessions s " +
+                        "where not exists (select 1 from sessions_fts f where f.session_id = s.session_id)");
+            } catch (Exception ignored) {
+            }
             statement.execute("create table if not exists bindings (" +
                     "source_key text primary key," +
                     "session_id text not null" +
@@ -409,6 +423,18 @@ public class SqliteDatabase {
             statement.close();
         } finally {
             connection.close();
+        }
+    }
+
+    private static class ResultSetMetaSupport {
+        private static void close(java.sql.ResultSet resultSet) {
+            if (resultSet == null) {
+                return;
+            }
+            try {
+                resultSet.close();
+            } catch (Exception ignored) {
+            }
         }
     }
 }

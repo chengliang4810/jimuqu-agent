@@ -135,6 +135,8 @@ model:
 | 钉钉 | `jimuqu.channels.dingtalk.*` | stream mode | 建设中 |
 | 企业微信 | `jimuqu.channels.wecom.*` | websocket / 平台能力 | 建设中 |
 | 微信 | `jimuqu.channels.weixin.*` | iLink long-poll | 建设中 |
+| QQBot | `jimuqu.channels.qqbot.*` | websocket / REST | 建设中 |
+| 腾讯元宝 | `jimuqu.channels.yuanbao.*` | websocket / REST | 建设中 |
 
 Dashboard 提供渠道状态与 doctor 入口，建议优先通过 Dashboard 完成接入、诊断和排错。默认渠道示例仅开启微信：
 

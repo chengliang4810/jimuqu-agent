@@ -40,6 +40,14 @@ public class RuntimeSettingsService {
             "display.showReasoning",
             "display.toolPreviewLength",
             "display.progressThrottleMs",
+            "display.runtimeFooter.enabled",
+            "display.runtimeFooter.fields",
+            "display.platforms.feishu.runtimeFooter.enabled",
+            "display.platforms.dingtalk.runtimeFooter.enabled",
+            "display.platforms.wecom.runtimeFooter.enabled",
+            "display.platforms.weixin.runtimeFooter.enabled",
+            "display.platforms.qqbot.runtimeFooter.enabled",
+            "display.platforms.yuanbao.runtimeFooter.enabled",
             "scheduler.enabled",
             "scheduler.tickSeconds",
             "compression.enabled",
@@ -49,6 +57,11 @@ public class RuntimeSettingsService {
             "compression.tailRatio",
             "learning.enabled",
             "learning.toolCallThreshold",
+            "skills.curator.enabled",
+            "skills.curator.intervalHours",
+            "skills.curator.minIdleHours",
+            "skills.curator.staleAfterDays",
+            "skills.curator.archiveAfterDays",
             "agent.heartbeat.intervalMinutes",
             "rollback.enabled",
             "rollback.maxCheckpointsPerSource",
@@ -88,6 +101,12 @@ public class RuntimeSettingsService {
             ".sendChunkRetryDelaySeconds",
             ".toolProgress",
             ".progressCardTemplateId",
+            ".runtimeFooter.enabled",
+            ".comment.enabled",
+            ".comment.pairingFile",
+            ".aiCardStreaming.enabled",
+            ".apiDomain",
+            ".markdownSupport",
             ".botOpenId",
             ".botUserId",
             ".botName"
@@ -224,7 +243,8 @@ public class RuntimeSettingsService {
             return;
         }
         if (key != null && (key.startsWith("channels.feishu.") || key.startsWith("channels.dingtalk.")
-                || key.startsWith("channels.wecom.") || key.startsWith("channels.weixin."))) {
+                || key.startsWith("channels.wecom.") || key.startsWith("channels.weixin.")
+                || key.startsWith("channels.qqbot.") || key.startsWith("channels.yuanbao."))) {
             for (String suffix : CHANNEL_KEY_SUFFIX_WHITELIST) {
                 if (key.endsWith(suffix)) {
                     return;
@@ -239,12 +259,18 @@ public class RuntimeSettingsService {
         if (key.endsWith(".enabled")
                 || key.endsWith(".allowAllUsers")
                 || key.endsWith(".splitMultilineMessages")
+                || key.endsWith(".comment.enabled")
+                || key.endsWith(".aiCardStreaming.enabled")
+                || key.endsWith(".markdownSupport")
+                || key.endsWith(".runtimeFooter.enabled")
                 || "llm.stream".equals(key)
                 || "display.showReasoning".equals(key)
+                || "display.runtimeFooter.enabled".equals(key)
                 || "scheduler.enabled".equals(key)
                 || "compression.enabled".equals(key)
                 || "learning.enabled".equals(key)
                 || "rollback.enabled".equals(key)
+                || "skills.curator.enabled".equals(key)
                 || "gateway.allowAllUsers".equals(key)) {
             return "true".equalsIgnoreCase(value) || "1".equals(value) || "yes".equalsIgnoreCase(value);
         }
@@ -262,6 +288,9 @@ public class RuntimeSettingsService {
                 || "react.summarizationMaxMessages".equals(key)
                 || "react.summarizationMaxTokens".equals(key)
                 || "compression.protectHeadMessages".equals(key)
+                || "skills.curator.intervalHours".equals(key)
+                || "skills.curator.staleAfterDays".equals(key)
+                || "skills.curator.archiveAfterDays".equals(key)
                 || "display.toolPreviewLength".equals(key)
                 || "display.progressThrottleMs".equals(key)
                 || "llm.maxTokens".equals(key)
@@ -277,11 +306,13 @@ public class RuntimeSettingsService {
                 || key.endsWith("sendChunkRetryDelaySeconds")
                 || "llm.temperature".equals(key)
                 || "compression.thresholdPercent".equals(key)
-                || "compression.tailRatio".equals(key)) {
+                || "compression.tailRatio".equals(key)
+                || "skills.curator.minIdleHours".equals(key)) {
             return Double.valueOf(value);
         }
         if (key.endsWith("allowedUsers")
                 || key.endsWith("groupAllowedUsers")
+                || "display.runtimeFooter.fields".equals(key)
                 || "gateway.allowedUsers".equals(key)) {
             List<String> values = new ArrayList<String>();
             if (value.length() == 0) {

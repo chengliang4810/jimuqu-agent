@@ -109,6 +109,20 @@ jimuqu:
     # 触发自动学习所需的最少工具调用数。
     toolCallThreshold: 5
 
+  # 技能后台维护配置。
+  skills:
+    curator:
+      # 是否启用 Curator 后台巡检。
+      enabled: true
+      # 巡检周期，单位小时。
+      intervalHours: 168
+      # Agent 空闲多久后才允许运行，单位小时。
+      minIdleHours: 2
+      # 多久未触达后标记 stale。
+      staleAfterDays: 30
+      # 多久未触达后标记 archived；不会自动删除。
+      archiveAfterDays: 90
+
   # checkpoint 回滚配置。
   rollback:
     # 是否启用 checkpoint 回滚。
@@ -126,6 +140,35 @@ jimuqu:
     toolPreviewLength: 80
     # 中间态消息节流间隔，单位毫秒。
     progressThrottleMs: 1500
+    # 最终 agent 回复 runtime metadata footer；默认关闭，避免污染普通聊天。
+    runtimeFooter:
+      # 是否追加 runtime footer。
+      enabled: false
+      # footer 字段，可选 model、provider、context_pct、cwd、tokens。
+      fields:
+        - model
+        - context_pct
+        - cwd
+    # 渠道级 footer 覆盖；未配置时继承全局开关。
+    platforms:
+      feishu:
+        runtimeFooter:
+          enabled: false
+      dingtalk:
+        runtimeFooter:
+          enabled: false
+      wecom:
+        runtimeFooter:
+          enabled: false
+      weixin:
+        runtimeFooter:
+          enabled: false
+      qqbot:
+        runtimeFooter:
+          enabled: false
+      yuanbao:
+        runtimeFooter:
+          enabled: false
 
   # ReAct 推理控制配置。
   react:
@@ -211,6 +254,11 @@ jimuqu:
       botName: ""
       # 飞书工具进度模式：off、new、all、verbose。
       toolProgress: all
+      # 飞书文档评论智能回复；启用后会监听 drive.notice.comment_add_v1。
+      comment:
+        enabled: false
+        # 可选配对文件，JSON 形如 {"docx:file_token":["open_id"], "*":["open_id"]}。
+        pairingFile: runtime/feishu_comment_pairing.json
 
     # 钉钉渠道配置。
     dingtalk:
@@ -242,6 +290,9 @@ jimuqu:
       toolProgress: all
       # 钉钉长任务进度卡片模板 ID；留空时使用文本消息。
       progressCardTemplateId: ""
+      # AI Card 增量更新开关；关闭后 update 请求会回退为普通文本投递。
+      aiCardStreaming:
+        enabled: true
 
     # 企业微信渠道配置。
     wecom:
@@ -310,6 +361,64 @@ jimuqu:
       sendChunkRetryDelaySeconds: 1.0
       # 微信工具进度模式；默认 off，避免向微信频繁发送工具调用中间态。
       toolProgress: off
+
+    # QQBot 渠道配置。
+    qqbot:
+      # 是否启用 QQBot 渠道。
+      enabled: false
+      # QQBot App ID。
+      appId: ""
+      # QQBot Client Secret。
+      clientSecret: ""
+      # QQBot REST API 域名。
+      apiDomain: https://api.sgroup.qq.com
+      # QQBot websocket 地址；留空时从 /gateway 获取。
+      websocketUrl: ""
+      # 是否使用 QQBot Markdown 消息。
+      markdownSupport: true
+      # QQBot 允许访问的用户 ID 列表。
+      allowedUsers: []
+      # QQBot 是否允许所有用户访问。
+      allowAllUsers: false
+      # 未授权私聊用户的处理方式：pair 配对，ignore 忽略。
+      unauthorizedDmBehavior: pair
+      # QQBot 私聊策略：open、allowlist、disabled、pairing。
+      dmPolicy: open
+      # QQBot 群聊策略：open、allowlist、disabled。
+      groupPolicy: open
+      # QQBot 允许访问的群 ID 列表。
+      groupAllowedUsers: []
+      # QQBot 工具进度模式：off、new、all、verbose。
+      toolProgress: all
+
+    # 腾讯元宝渠道配置。
+    yuanbao:
+      # 是否启用腾讯元宝渠道。
+      enabled: false
+      # 元宝 App ID。
+      appId: ""
+      # 元宝 App Secret。
+      appSecret: ""
+      # 元宝 Bot ID。
+      botId: ""
+      # 元宝 REST API 域名。
+      apiDomain: https://bot.yuanbao.tencent.com
+      # 元宝 websocket 地址。
+      websocketUrl: wss://bot-wss.yuanbao.tencent.com/wss/connection
+      # 元宝允许访问的用户 ID 列表。
+      allowedUsers: []
+      # 元宝是否允许所有用户访问。
+      allowAllUsers: false
+      # 未授权私聊用户的处理方式：pair 配对，ignore 忽略。
+      unauthorizedDmBehavior: pair
+      # 元宝私聊策略：open、allowlist、disabled、pairing。
+      dmPolicy: open
+      # 元宝群聊策略：open、allowlist、disabled。
+      groupPolicy: open
+      # 元宝允许访问的群 ID 列表。
+      groupAllowedUsers: []
+      # 元宝工具进度模式：off、new、all、verbose。
+      toolProgress: all
 
   # 网关通用授权与注入配置。
   gateway:

@@ -14,4 +14,10 @@ public class AgentRunOutcome {
     private String finalReply;
     private LlmResult result;
     private AgentRunRecord runRecord;
+    private String compressionWarning;
+    private String provider;
+    private String model;
+    private int contextEstimateTokens;
+    private int contextWindowTokens;
+    private String cwd;
 }

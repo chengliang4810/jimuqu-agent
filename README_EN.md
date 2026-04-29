@@ -138,6 +138,8 @@ Supported and prioritized channels:
 | DingTalk | `jimuqu.channels.dingtalk.*` | stream mode | In progress |
 | WeCom | `jimuqu.channels.wecom.*` | websocket / platform capabilities | In progress |
 | Weixin | `jimuqu.channels.weixin.*` | iLink long-poll | In progress |
+| QQBot | `jimuqu.channels.qqbot.*` | websocket / REST | In progress |
+| Yuanbao | `jimuqu.channels.yuanbao.*` | websocket / REST | In progress |
 
 The Dashboard includes channel status and doctor endpoints. Prefer the Dashboard for setup, diagnostics, and troubleshooting.
 

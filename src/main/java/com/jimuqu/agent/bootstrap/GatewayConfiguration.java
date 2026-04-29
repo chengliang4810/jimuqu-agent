@@ -28,8 +28,10 @@ import com.jimuqu.agent.gateway.command.DefaultCommandService;
 import com.jimuqu.agent.gateway.delivery.AdapterBackedDeliveryService;
 import com.jimuqu.agent.gateway.platform.dingtalk.DingTalkChannelAdapter;
 import com.jimuqu.agent.gateway.platform.feishu.FeishuChannelAdapter;
+import com.jimuqu.agent.gateway.platform.qqbot.QQBotChannelAdapter;
 import com.jimuqu.agent.gateway.platform.wecom.WeComChannelAdapter;
 import com.jimuqu.agent.gateway.platform.weixin.WeiXinChannelAdapter;
+import com.jimuqu.agent.gateway.platform.yuanbao.YuanbaoChannelAdapter;
 import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.agent.gateway.service.ChannelConnectionManager;
 import com.jimuqu.agent.gateway.service.DefaultGatewayService;
@@ -64,6 +66,8 @@ public class GatewayConfiguration {
         adapters.put(PlatformType.DINGTALK, new DingTalkChannelAdapter(appConfig.getChannels().getDingtalk(), channelStateRepository, attachmentCacheService));
         adapters.put(PlatformType.WECOM, new WeComChannelAdapter(appConfig.getChannels().getWecom(), attachmentCacheService));
         adapters.put(PlatformType.WEIXIN, new WeiXinChannelAdapter(appConfig.getChannels().getWeixin(), channelStateRepository, attachmentCacheService));
+        adapters.put(PlatformType.QQBOT, new QQBotChannelAdapter(appConfig.getChannels().getQqbot(), attachmentCacheService));
+        adapters.put(PlatformType.YUANBAO, new YuanbaoChannelAdapter(appConfig.getChannels().getYuanbao()));
         return adapters;
     }
 

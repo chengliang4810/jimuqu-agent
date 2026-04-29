@@ -25,6 +25,7 @@ import org.noear.solon.ai.agent.react.ReActInterceptor;
 import org.noear.solon.ai.agent.react.ReActResponse;
 import org.noear.solon.ai.agent.react.ReActTrace;
 import org.noear.solon.ai.agent.react.intercept.SummarizationInterceptor;
+import org.noear.solon.ai.agent.react.intercept.SummarizationStrategy;
 import org.noear.solon.ai.agent.react.intercept.ToolRetryInterceptor;
 import org.noear.solon.ai.agent.react.intercept.ToolSanitizerInterceptor;
 import org.noear.solon.ai.agent.react.intercept.summarize.CompositeSummarizationStrategy;
@@ -51,7 +52,6 @@ import java.io.InputStream;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -183,8 +183,8 @@ public class SolonAiLlmGateway implements LlmGateway {
                     lastError = new IllegalStateException("LLM returned empty assistant content");
                 } catch (Exception e) {
                     lastError = e;
-                    FailureMode failureMode = classifyFailure(e);
-                    if (failureMode.retryable && attempt < maxAttempts) {
+                    LlmErrorClassifier.ClassifiedError classified = LlmErrorClassifier.classify(e);
+                    if (classified.isRetryable() && attempt < maxAttempts) {
                         log.warn("LLM request failed, retrying same provider: provider={}, dialect={}, model={}, attempt={}, message={}",
                                 resolved.getProvider(), resolved.getDialect(), resolved.getModel(), attempt, e.getMessage());
                         continue;
@@ -563,59 +563,6 @@ public class SolonAiLlmGateway implements LlmGateway {
         }
     }
 
-    private FailureMode classifyFailure(Throwable error) {
-        String message = collectErrorText(error).toLowerCase(Locale.ROOT);
-        int status = extractStatusCode(message);
-        if (status == 401 || status == 403 || status == 404) {
-            return FailureMode.FALLBACK_NOW;
-        }
-        if (status == 429 || status == 500 || status == 502 || status == 503) {
-            return FailureMode.RETRY_THEN_FALLBACK;
-        }
-        if (message.contains("timeout")
-                || message.contains("timed out")
-                || message.contains("connection reset")
-                || message.contains("connection refused")
-                || message.contains("connection aborted")
-                || message.contains("broken pipe")
-                || message.contains("eof")
-                || message.contains("unreachable")
-                || message.contains("network")) {
-            return FailureMode.RETRY_THEN_FALLBACK;
-        }
-        return FailureMode.FALLBACK_NOW;
-    }
-
-    private String collectErrorText(Throwable error) {
-        StringBuilder buffer = new StringBuilder();
-        Throwable current = error;
-        while (current != null) {
-            if (current.getMessage() != null && current.getMessage().trim().length() > 0) {
-                if (buffer.length() > 0) {
-                    buffer.append(" | ");
-                }
-                buffer.append(current.getMessage());
-            }
-            current = current.getCause();
-        }
-        return buffer.toString();
-    }
-
-    private int extractStatusCode(String message) {
-        String[] candidates = {"401", "403", "404", "429", "500", "502", "503"};
-        for (String candidate : candidates) {
-            if (message.contains(" " + candidate + " ")
-                    || message.contains("http " + candidate)
-                    || message.contains("status=" + candidate)
-                    || message.contains("code=" + candidate)
-                    || message.contains("[" + candidate + "]")
-                    || message.endsWith(candidate)) {
-                return Integer.parseInt(candidate);
-            }
-        }
-        return 0;
-    }
-
     /**
      * 校验 provider 与 URL 配置，避免隐式降级到错误协议。
      */
@@ -747,10 +694,30 @@ public class SolonAiLlmGateway implements LlmGateway {
             return new NoopSummarizationInterceptor();
         }
 
+        ChatModel primaryChatModel = chatConfig.toChatModel();
         ChatModel summaryChatModel = buildSummaryChatModel(resolved, chatConfig);
-        CompositeSummarizationStrategy strategy = new CompositeSummarizationStrategy()
-                .addStrategy(new KeyInfoExtractionStrategy(summaryChatModel))
-                .addStrategy(new HierarchicalSummarizationStrategy(summaryChatModel));
+        String summaryModel = StrUtil.nullToEmpty(appConfig.getCompression().getSummaryModel()).trim();
+        boolean auxSummaryModel = StrUtil.isNotBlank(summaryModel) && !StrUtil.equals(summaryModel, resolved.getModel());
+        CompositeSummarizationStrategy strategy = new CompositeSummarizationStrategy();
+        if (auxSummaryModel) {
+            strategy.addStrategy(new SummaryFallbackStrategy(
+                    "key_info",
+                    new KeyInfoExtractionStrategy(summaryChatModel),
+                    new KeyInfoExtractionStrategy(primaryChatModel),
+                    summaryModel,
+                    resolved.getModel()
+            ));
+            strategy.addStrategy(new SummaryFallbackStrategy(
+                    "hierarchical",
+                    new HierarchicalSummarizationStrategy(summaryChatModel),
+                    new HierarchicalSummarizationStrategy(primaryChatModel),
+                    summaryModel,
+                    resolved.getModel()
+            ));
+        } else {
+            strategy.addStrategy(new KeyInfoExtractionStrategy(summaryChatModel))
+                    .addStrategy(new HierarchicalSummarizationStrategy(summaryChatModel));
+        }
 
         return new SummarizationInterceptor(
                 Math.max(10, appConfig.getReact().getSummarizationMaxMessages()),
@@ -814,17 +781,6 @@ public class SolonAiLlmGateway implements LlmGateway {
                 result.getTotalTokens());
     }
 
-    private enum FailureMode {
-        RETRY_THEN_FALLBACK(true),
-        FALLBACK_NOW(false);
-
-        private final boolean retryable;
-
-        FailureMode(boolean retryable) {
-            this.retryable = retryable;
-        }
-    }
-
     private boolean isDelegateSession(SqliteAgentSession agentSession) {
         Object sourceKey = agentSession.getContext().get("source_key");
         if (sourceKey != null && String.valueOf(sourceKey).contains(":delegate:")) {
@@ -860,6 +816,45 @@ public class SolonAiLlmGateway implements LlmGateway {
         @Override
         public void onObservation(ReActTrace trace, String toolName, String result, long durationMs) {
             // no-op
+        }
+    }
+
+    /**
+     * 摘要 aux 模型无结果或异常时回退当前主模型，避免摘要失败中断主推理。
+     */
+    private static class SummaryFallbackStrategy implements SummarizationStrategy {
+        private final String name;
+        private final SummarizationStrategy aux;
+        private final SummarizationStrategy primary;
+        private final String auxModel;
+        private final String primaryModel;
+
+        private SummaryFallbackStrategy(String name,
+                                        SummarizationStrategy aux,
+                                        SummarizationStrategy primary,
+                                        String auxModel,
+                                        String primaryModel) {
+            this.name = name;
+            this.aux = aux;
+            this.primary = primary;
+            this.auxModel = auxModel;
+            this.primaryModel = primaryModel;
+        }
+
+        @Override
+        public ChatMessage summarize(ReActTrace trace, List<ChatMessage> messagesToSummarize) {
+            try {
+                ChatMessage result = aux.summarize(trace, messagesToSummarize);
+                if (result != null && StrUtil.isNotBlank(result.getContent())) {
+                    return result;
+                }
+                log.warn("Aux summary model returned empty result, fallback to primary model: strategy={}, auxModel={}, primaryModel={}",
+                        name, auxModel, primaryModel);
+            } catch (Throwable e) {
+                log.warn("Aux summary model failed, fallback to primary model: strategy={}, auxModel={}, primaryModel={}",
+                        name, auxModel, primaryModel, e);
+            }
+            return primary.summarize(trace, messagesToSummarize);
         }
     }
 

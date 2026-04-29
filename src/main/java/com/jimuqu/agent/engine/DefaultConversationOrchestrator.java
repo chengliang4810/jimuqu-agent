@@ -19,6 +19,7 @@ import com.jimuqu.agent.gateway.feedback.ConversationFeedbackSink;
 import com.jimuqu.agent.gateway.feedback.GatewayConversationFeedbackSink;
 import com.jimuqu.agent.support.DisplaySettingsService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
+import com.jimuqu.agent.support.RuntimeFooterService;
 import com.jimuqu.agent.support.MessageAttachmentSupport;
 import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.SourceKeySupport;
@@ -70,6 +71,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     private final RuntimeSettingsService runtimeSettingsService;
     private final DangerousCommandApprovalService dangerousCommandApprovalService;
     private final AgentRunSupervisor agentRunSupervisor;
+    private final RuntimeFooterService runtimeFooterService;
     private final ConcurrentMap<String, Object> sourceLocks = new ConcurrentHashMap<String, Object>();
 
     public GatewayReply handleIncoming(GatewayMessage message) throws Exception {
@@ -124,11 +126,13 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         ConversationFeedbackSink feedbackSink = feedbackSinkFor(feedbackTarget);
         AgentRunOutcome outcome = agentRunSupervisor.run(session, systemPrompt, null, enabledTools, feedbackSink, eventSink, true);
         String finalReply = StrUtil.blankToDefault(outcome.getFinalReply(), EMPTY_REPLY_FALLBACK);
+        finalReply = decorateFinalReply(finalReply, feedbackTarget.getPlatform(), outcome);
         feedbackSink.onFinalReply(finalReply);
         eventSink.onRunCompleted(session.getSessionId(), finalReply, outcome.getResult());
         GatewayReply reply = GatewayReply.ok(finalReply);
         reply.setSessionId(session.getSessionId());
         reply.setBranchName(session.getBranchName());
+        applyRuntimeMetadata(reply, outcome);
         return reply;
         }
     }
@@ -175,14 +179,46 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         String finalReply = StrUtil.blankToDefault(outcome.getFinalReply(), EMPTY_REPLY_FALLBACK);
         if (MessageDeliveryTracker.consumeDuplicateFinalReply(message.sourceKey(), finalReply)) {
             finalReply = "";
+        } else {
+            finalReply = decorateFinalReply(finalReply, message.getPlatform(), outcome);
         }
         feedbackSink.onFinalReply(finalReply);
         eventSink.onRunCompleted(session.getSessionId(), finalReply, outcome.getResult());
         GatewayReply reply = GatewayReply.ok(finalReply);
         reply.setSessionId(session.getSessionId());
         reply.setBranchName(session.getBranchName());
+        applyRuntimeMetadata(reply, outcome);
         applyApprovalCardIfNeeded(reply, message.getPlatform(), session);
         return reply;
+    }
+
+    private String decorateFinalReply(String finalReply, PlatformType platform, AgentRunOutcome outcome) {
+        String result = StrUtil.nullToEmpty(finalReply);
+        if (outcome != null && StrUtil.isNotBlank(outcome.getCompressionWarning())) {
+            result = result.trim() + "\n\n提示：" + outcome.getCompressionWarning();
+        }
+        return runtimeFooterService.appendFooter(result, platform, outcome);
+    }
+
+    private void applyRuntimeMetadata(GatewayReply reply, AgentRunOutcome outcome) {
+        if (reply == null || outcome == null || reply.isError() || reply.isCommandHandled()) {
+            return;
+        }
+        if (StrUtil.isNotBlank(outcome.getProvider())) {
+            reply.getRuntimeMetadata().put("provider", outcome.getProvider());
+        }
+        if (StrUtil.isNotBlank(outcome.getModel())) {
+            reply.getRuntimeMetadata().put("model", outcome.getModel());
+        }
+        if (outcome.getContextEstimateTokens() > 0) {
+            reply.getRuntimeMetadata().put("contextEstimateTokens", outcome.getContextEstimateTokens());
+        }
+        if (outcome.getContextWindowTokens() > 0) {
+            reply.getRuntimeMetadata().put("contextWindowTokens", outcome.getContextWindowTokens());
+        }
+        if (StrUtil.isNotBlank(outcome.getCwd())) {
+            reply.getRuntimeMetadata().put("cwd", outcome.getCwd());
+        }
     }
 
     private String formatPendingApprovalBlock(DangerousCommandApprovalService.PendingApproval pending) {

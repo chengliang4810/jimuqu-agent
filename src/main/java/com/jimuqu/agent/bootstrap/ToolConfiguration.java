@@ -28,6 +28,7 @@ import com.jimuqu.agent.support.AttachmentCacheService;
 import com.jimuqu.agent.support.DisplaySettingsService;
 import com.jimuqu.agent.support.LlmProviderService;
 import com.jimuqu.agent.support.RuntimePathGuard;
+import com.jimuqu.agent.support.RuntimeFooterService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.update.AppUpdateService;
 import com.jimuqu.agent.support.update.AppVersionService;
@@ -107,6 +108,11 @@ public class ToolConfiguration {
     }
 
     @Bean
+    public RuntimeFooterService runtimeFooterService(AppConfig appConfig) {
+        return new RuntimeFooterService(appConfig);
+    }
+
+    @Bean
     public AppVersionService appVersionService(AppConfig appConfig) {
         return new AppVersionService(appConfig);
     }
@@ -165,7 +171,8 @@ public class ToolConfiguration {
                                                              ConversationOrchestratorHolder holder,
                                                              RuntimeSettingsService runtimeSettingsService,
                                                              DangerousCommandApprovalService dangerousCommandApprovalService,
-                                                             AgentRunSupervisor agentRunSupervisor) {
+                                                             AgentRunSupervisor agentRunSupervisor,
+                                                             RuntimeFooterService runtimeFooterService) {
         ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(
                 sessionRepository,
                 contextService,
@@ -176,7 +183,8 @@ public class ToolConfiguration {
                 displaySettingsService,
                 runtimeSettingsService,
                 dangerousCommandApprovalService,
-                agentRunSupervisor
+                agentRunSupervisor,
+                runtimeFooterService
         );
         holder.set(orchestrator);
         return orchestrator;

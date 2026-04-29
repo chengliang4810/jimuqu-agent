@@ -10,7 +10,9 @@ import com.lark.oapi.event.cardcallback.model.CallBackOperator;
 import com.lark.oapi.event.cardcallback.model.P2CardActionTrigger;
 import com.lark.oapi.event.cardcallback.model.P2CardActionTriggerData;
 import com.lark.oapi.event.cardcallback.model.P2CardActionTriggerResponse;
+import com.lark.oapi.event.CustomEventHandler;
 import com.lark.oapi.event.EventDispatcher;
+import com.lark.oapi.core.request.EventReq;
 import com.lark.oapi.service.application.v6.model.GetApplicationReq;
 import com.lark.oapi.service.application.v6.model.GetApplicationResp;
 import com.lark.oapi.service.im.ImService;
@@ -54,6 +56,9 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
     private static final String FILE_UPLOAD_URL = "https://open.feishu.cn/open-apis/im/v1/files";
     private static final String MESSAGE_RESOURCE_URL = "https://open.feishu.cn/open-apis/im/v1/messages/%s/resources/%s?type=%s";
     private static final String BOT_INFO_URL = "https://open.feishu.cn/open-apis/bot/v3/info";
+    private static final String COMMENT_REPLY_TARGET_PREFIX = "comment|";
+    private static final String COMMENT_REPLY_URL = "https://open.feishu.cn/open-apis/drive/v1/files/%s/comments/%s/replies?file_type=%s";
+    private static final String COMMENT_ADD_URL = "https://open.feishu.cn/open-apis/drive/v1/files/%s/new_comments";
 
     private final AppConfig.ChannelConfig config;
     private final AttachmentCacheService attachmentCacheService;
@@ -136,6 +141,12 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
                             return new P2CardActionTriggerResponse();
                         }
                     })
+                    .onCustomizedEvent("drive.notice.comment_add_v1", new CustomEventHandler() {
+                        @Override
+                        public void handle(EventReq event) throws Exception {
+                            handleDriveCommentEvent(event);
+                        }
+                    })
                     .build();
             wsClient = new com.lark.oapi.ws.Client.Builder(config.getAppId(), config.getAppSecret())
                     .eventHandler(dispatcher)
@@ -175,6 +186,10 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
         }
         try {
             refreshTenantTokenIfNecessary();
+            if (isCommentReplyTarget(request.getChatId())) {
+                sendCommentReply(request.getChatId(), request.getText());
+                return;
+            }
             if (isApprovalCardRequest(request)) {
                 sendDangerousApprovalCard(request);
                 return;
@@ -255,6 +270,190 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
         } catch (Exception e) {
             throw new IllegalStateException("Feishu card action handle failed", e);
         }
+    }
+
+    private void handleDriveCommentEvent(final EventReq req) {
+        if (!config.isCommentEnabled() || inboundMessageHandler() == null) {
+            return;
+        }
+        if (inboundExecutor == null) {
+            inboundExecutor = Executors.newSingleThreadExecutor();
+        }
+        inboundExecutor.submit(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    GatewayMessage message = toCommentGatewayMessage(req);
+                    if (message != null) {
+                        inboundMessageHandler().handle(message);
+                    }
+                } catch (Exception e) {
+                    log.warn("[FEISHU-COMMENT] dispatch failed: {}", e.getMessage(), e);
+                }
+            }
+        });
+    }
+
+    protected GatewayMessage toCommentGatewayMessage(EventReq req) {
+        ONode root = ONode.ofJson(readEventBody(req));
+        ONode event = root.get("event");
+        if (event == null || event.isNull()) {
+            event = root;
+        }
+        ONode notice = event.get("notice_meta");
+        String noticeType = notice.get("notice_type").getString();
+        if (StrUtil.isNotBlank(noticeType)
+                && !"add_comment".equalsIgnoreCase(noticeType)
+                && !"add_reply".equalsIgnoreCase(noticeType)) {
+            return null;
+        }
+        String fileToken = notice.get("file_token").getString();
+        String fileType = notice.get("file_type").getString();
+        String commentId = event.get("comment_id").getString();
+        String replyId = event.get("reply_id").getString();
+        String userId = firstNonBlank(
+                notice.get("from_user_id").get("open_id").getString(),
+                notice.get("from_user_id").get("user_id").getString(),
+                event.get("operator_id").get("open_id").getString()
+        );
+        if (StrUtil.isBlank(fileToken) || StrUtil.isBlank(fileType) || !allowCommentUser(userId, fileType, fileToken)) {
+            return null;
+        }
+        String text = firstNonBlank(
+                extractCommentText(event.get("reply_content")),
+                extractCommentText(event.get("comment_content")),
+                event.get("text").getString(),
+                event.get("content").getString()
+        );
+        if (StrUtil.isBlank(text)) {
+            text = "飞书文档评论事件：file_type=" + fileType + " file_token=" + fileToken + " comment_id=" + commentId;
+        }
+        boolean whole = StrUtil.isBlank(commentId);
+        String chatId = COMMENT_REPLY_TARGET_PREFIX
+                + escapeTarget(fileType) + "|"
+                + escapeTarget(fileToken) + "|"
+                + escapeTarget(commentId) + "|"
+                + escapeTarget(replyId) + "|"
+                + String.valueOf(whole);
+        GatewayMessage message = new GatewayMessage(PlatformType.FEISHU, chatId, userId, text);
+        message.setChatType(GatewayBehaviorConstants.CHAT_TYPE_DM);
+        message.setChatName("飞书文档评论");
+        message.setUserName(userId);
+        message.setThreadId(StrUtil.blankToDefault(replyId, commentId));
+        message.setSourceKeyOverride("FEISHU_COMMENT:" + fileType + ":" + fileToken + ":" + StrUtil.blankToDefault(commentId, "whole"));
+        return message;
+    }
+
+    private String readEventBody(EventReq req) {
+        if (req == null) {
+            return "{}";
+        }
+        if (StrUtil.isNotBlank(req.getPlain())) {
+            return req.getPlain();
+        }
+        byte[] body = req.getBody();
+        return body == null ? "{}" : new String(body, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private String extractCommentText(ONode content) {
+        if (content == null || content.isNull()) {
+            return "";
+        }
+        if (!content.isObject() && !content.isArray()) {
+            return content.getString();
+        }
+        StringBuilder buffer = new StringBuilder();
+        collectCommentText(content, buffer);
+        return buffer.toString().trim();
+    }
+
+    private void collectCommentText(ONode node, StringBuilder buffer) {
+        if (node == null || node.isNull()) {
+            return;
+        }
+        if (node.isArray()) {
+            for (int i = 0; i < node.size(); i++) {
+                collectCommentText(node.get(i), buffer);
+            }
+            return;
+        }
+        if (!node.isObject()) {
+            appendText(buffer, node.getString());
+            return;
+        }
+        String type = firstNonBlank(node.get("type").getString(), node.get("tag").getString());
+        if ("text_run".equalsIgnoreCase(type)) {
+            appendText(buffer, node.get("text_run").get("text").getString());
+        } else if ("text".equalsIgnoreCase(type)) {
+            appendText(buffer, firstNonBlank(node.get("text").getString(), node.get("content").getString()));
+        } else if ("docs_link".equalsIgnoreCase(type) || "link".equalsIgnoreCase(type)) {
+            appendText(buffer, firstNonBlank(node.get("docs_link").get("url").getString(), node.get("link").get("url").getString()));
+        }
+        Map<?, ?> values = ONode.deserialize(node.toJson(), LinkedHashMap.class);
+        for (Map.Entry<?, ?> entry : values.entrySet()) {
+            String key = String.valueOf(entry.getKey());
+            if ("type".equals(key) || "tag".equals(key) || "text_run".equals(key)
+                    || "docs_link".equals(key) || "link".equals(key)) {
+                continue;
+            }
+            collectCommentText(node.get(key), buffer);
+        }
+    }
+
+    private boolean allowCommentUser(String userId, String fileType, String fileToken) {
+        if (!config.isCommentEnabled()) {
+            return false;
+        }
+        if (config.isAllowAllUsers() || contains(config.getAllowedUsers(), userId)) {
+            return true;
+        }
+        Map<String, List<String>> pairings = loadCommentPairings();
+        if (pairings.isEmpty() && (config.getAllowedUsers() == null || config.getAllowedUsers().isEmpty())) {
+            return true;
+        }
+        String key = fileType + ":" + fileToken;
+        return contains(pairings.get(key), userId) || contains(pairings.get("*"), userId);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, List<String>> loadCommentPairings() {
+        if (StrUtil.isBlank(config.getCommentPairingFile())) {
+            return new LinkedHashMap<String, List<String>>();
+        }
+        try {
+            File file = new File(config.getCommentPairingFile());
+            if (!file.isFile()) {
+                return new LinkedHashMap<String, List<String>>();
+            }
+            Object parsed = ONode.deserialize(cn.hutool.core.io.FileUtil.readUtf8String(file), Object.class);
+            if (parsed instanceof Map) {
+                Map<String, List<String>> result = new LinkedHashMap<String, List<String>>();
+                for (Map.Entry<?, ?> entry : ((Map<?, ?>) parsed).entrySet()) {
+                    List<String> values = new ArrayList<String>();
+                    Object raw = entry.getValue();
+                    if (raw instanceof List) {
+                        for (Object item : (List<?>) raw) {
+                            if (item != null && StrUtil.isNotBlank(String.valueOf(item))) {
+                                values.add(String.valueOf(item).trim());
+                            }
+                        }
+                    }
+                    result.put(String.valueOf(entry.getKey()), values);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.debug("[FEISHU-COMMENT] pairing file load failed: {}", e.getMessage(), e);
+        }
+        return new LinkedHashMap<String, List<String>>();
+    }
+
+    private String escapeTarget(String value) {
+        return StrUtil.nullToEmpty(value).replace("|", "%7C");
+    }
+
+    private String unescapeTarget(String value) {
+        return StrUtil.nullToEmpty(value).replace("%7C", "|");
     }
 
     private GatewayMessage toGatewayMessage(EventMessage messageNode,
@@ -652,6 +851,12 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
     }
 
     private void sendText(String chatId, String text) {
+        for (String chunk : splitOutboundText(text, 5000)) {
+            sendTextChunk(chatId, chunk);
+        }
+    }
+
+    private void sendTextChunk(String chatId, String text) {
         String content = ONode.serialize(new FeishuTextMessage(text));
         String body = new ONode()
                 .set("receive_id", chatId)
@@ -660,6 +865,113 @@ public class FeishuChannelAdapter extends AbstractConfigurableChannelAdapter {
                 .toJson();
         ensureOk(postJson(SEND_URL, body), "Feishu text send failed");
         log.info("[FEISHU:{}] {}", chatId, text);
+    }
+
+    protected List<String> splitOutboundText(String text, int maxChars) {
+        List<String> chunks = new ArrayList<String>();
+        String remaining = StrUtil.nullToEmpty(text);
+        int safeMax = Math.max(500, maxChars);
+        while (remaining.length() > safeMax) {
+            int split = findFenceAwareSplit(remaining, safeMax);
+            String head = remaining.substring(0, split).trim();
+            if (StrUtil.isNotBlank(head)) {
+                chunks.add(closeFenceIfNeeded(head));
+            }
+            remaining = reopenFenceIfNeeded(head) + remaining.substring(split).trim();
+        }
+        if (StrUtil.isNotBlank(remaining)) {
+            chunks.add(closeFenceIfNeeded(remaining));
+        }
+        if (chunks.isEmpty()) {
+            chunks.add("");
+        }
+        return chunks;
+    }
+
+    private int findFenceAwareSplit(String text, int maxChars) {
+        int split = text.lastIndexOf("\n\n", maxChars);
+        if (split < maxChars / 2) {
+            split = text.lastIndexOf('\n', maxChars);
+        }
+        if (split < maxChars / 2) {
+            split = maxChars;
+        }
+        return Math.max(1, split);
+    }
+
+    private String closeFenceIfNeeded(String chunk) {
+        return hasUnclosedFence(chunk) ? chunk + "\n```" : chunk;
+    }
+
+    private String reopenFenceIfNeeded(String previousChunk) {
+        return hasUnclosedFence(previousChunk) ? "```\n" : "";
+    }
+
+    private boolean hasUnclosedFence(String text) {
+        boolean open = false;
+        String[] lines = StrUtil.nullToEmpty(text).split("\\R", -1);
+        for (String line : lines) {
+            if (line.trim().startsWith("```")) {
+                open = !open;
+            }
+        }
+        return open;
+    }
+
+    private boolean isCommentReplyTarget(String chatId) {
+        return StrUtil.startWith(chatId, COMMENT_REPLY_TARGET_PREFIX);
+    }
+
+    private void sendCommentReply(String chatId, String text) {
+        String[] parts = chatId.split("\\|", -1);
+        if (parts.length < 6) {
+            throw new IllegalArgumentException("Invalid Feishu comment target");
+        }
+        String fileType = unescapeTarget(parts[1]);
+        String fileToken = unescapeTarget(parts[2]);
+        String commentId = unescapeTarget(parts[3]);
+        boolean whole = Boolean.parseBoolean(parts[5]) || StrUtil.isBlank(commentId);
+        for (String chunk : splitOutboundText(StrUtil.blankToDefault(text, "收到。"), 1800)) {
+            ONode body = buildCommentBody(chunk, whole, fileType);
+            String url = whole
+                    ? String.format(COMMENT_ADD_URL, fileToken)
+                    : String.format(COMMENT_REPLY_URL, fileToken, commentId, fileType);
+            ONode response = ONode.ofJson(postJson(url, body.toJson()));
+            int code = response.get("code").getInt(0);
+            if (!whole && code == 1069302) {
+                ensureOk(postJson(String.format(COMMENT_ADD_URL, fileToken), buildCommentBody(chunk, true, fileType).toJson()),
+                        "Feishu whole comment fallback failed");
+            } else if (code != 0) {
+                throw new IllegalStateException("Feishu comment reply failed: " + response.get("msg").getString());
+            }
+        }
+    }
+
+    private ONode buildCommentBody(String text, boolean whole, String fileType) {
+        String sanitized = StrUtil.nullToEmpty(text)
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
+        if (whole) {
+            return new ONode()
+                    .set("file_type", fileType)
+                    .getOrNew("reply_elements")
+                    .asArray()
+                    .add(new ONode().set("type", "text").set("text", sanitized).toData())
+                    .parent();
+        }
+        return new ONode()
+                .getOrNew("content")
+                .getOrNew("elements")
+                .asArray()
+                .add(new ONode()
+                        .set("type", "text_run")
+                        .getOrNew("text_run")
+                        .set("text", sanitized)
+                        .parent()
+                        .toData())
+                .parent()
+                .parent();
     }
 
     private void sendAttachment(String chatId, MessageAttachment attachment) {

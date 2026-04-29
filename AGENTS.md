@@ -52,7 +52,7 @@ git -C D:\projects\hermes-agent status --short --branch
 
 - 仅保留中国国内消息渠道支持。
 - 海外或非目标渠道默认不做，包括但不限于：Telegram、Discord、Slack、WhatsApp、Signal、Matrix、Mattermost、BlueBubbles、Home Assistant、Email。
-- Hermes 当前代码中与国内场景相关、可作为参考候选的渠道适配器，仅保留：`feishu`、`dingtalk`、`wecom`、`weixin`。
+- Hermes 当前代码中与国内场景相关、可作为参考候选的渠道适配器，仅保留：`feishu`、`dingtalk`、`wecom`、`weixin`、`qqbot`、`yuanbao`。
 - 明确不做：`sms`、`webhook`。
 - 在你确认最终渠道清单之前，后续任务只允许建设“国内渠道抽象和适配能力”，不要投入任何海外渠道实现。
 
@@ -137,7 +137,7 @@ git -C D:\projects\hermes-agent status --short --branch
 - home channel / 状态同步 / 跨端连续会话
 - 计划任务向渠道投递结果
 - 独立 `send_message` 能力
-- 仅保留：`feishu`、`dingtalk`、`wecom`、`weixin`
+- 仅保留：`feishu`、`dingtalk`、`wecom`、`weixin`、`qqbot`、`yuanbao`
 - 不做：`sms`、`webhook`
 
 ### D. 模型与协议层
@@ -240,7 +240,7 @@ git -C D:\projects\hermes-agent status --short --branch
 ## 当前已确认保留
 
 - 对话内 slash commands 命令语义
-- `feishu`、`dingtalk`、`wecom`、`weixin`
+- `feishu`、`dingtalk`、`wecom`、`weixin`、`qqbot`、`yuanbao`
 - 国内渠道附件/媒体传输与附件感知主链
 - dashboard-first setup / doctor
 - websocket-first 国内渠道接入（微信除外）

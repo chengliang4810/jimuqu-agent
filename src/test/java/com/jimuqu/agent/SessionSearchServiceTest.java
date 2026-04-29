@@ -5,10 +5,14 @@ import com.jimuqu.agent.core.model.SessionSearchEntry;
 import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.TestEnvironment;
 import org.junit.jupiter.api.Test;
+import org.noear.solon.ai.chat.message.AssistantMessage;
 import org.noear.solon.ai.chat.message.ChatMessage;
 
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -76,5 +80,66 @@ public class SessionSearchServiceTest {
         assertThat(entries.get(0).getSummary()).isNotBlank();
         assertThat(env.sessionRepository.findById(parent.getSessionId()).getNdjson()).isEqualTo(parentNdjson);
         assertThat(env.sessionRepository.findById(child.getSessionId()).getNdjson()).isEqualTo(childNdjson);
+    }
+
+    @Test
+    void shouldSearchToolNamesAndToolCalls() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+
+        SessionRecord current = env.sessionRepository.bindNewSession("MEMORY:current-room:user");
+        current.setTitle("current");
+        current.setNdjson(MessageSupport.toNdjson(Arrays.asList(ChatMessage.ofUser("current"))));
+        env.sessionRepository.save(current);
+
+        SessionRecord previous = env.sessionRepository.bindNewSession("MEMORY:history-room:user");
+        previous.setTitle("tool session");
+        previous.setNdjson(MessageSupport.toNdjson(Arrays.asList(
+                ChatMessage.ofUser("run command"),
+                assistantWithToolCall("execute_shell", "{\"command\":\"git status\"}")
+        )));
+        env.sessionRepository.save(previous);
+
+        List<SessionSearchEntry> entries = env.sessionSearchService.search("MEMORY:current-room:user", "execute_shell", 3);
+
+        assertThat(entries).extracting(SessionSearchEntry::getTitle).contains("tool session");
+    }
+
+    @Test
+    void shouldExcludeCurrentLineageRootAndChildrenFromRecent() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+
+        SessionRecord root = env.sessionRepository.bindNewSession("MEMORY:room:user");
+        root.setTitle("root current");
+        root.setNdjson(MessageSupport.toNdjson(Arrays.asList(ChatMessage.ofUser("root"))));
+        env.sessionRepository.save(root);
+
+        SessionRecord child = env.sessionRepository.cloneSession("MEMORY:room:user", root.getSessionId(), "child");
+        child.setTitle("child current");
+        child.setNdjson(MessageSupport.toNdjson(Arrays.asList(ChatMessage.ofUser("child"))));
+        env.sessionRepository.save(child);
+        env.sessionRepository.bindSource("MEMORY:room:user", child.getSessionId());
+
+        SessionRecord other = env.sessionRepository.bindNewSession("MEMORY:other:user");
+        other.setTitle("other");
+        other.setNdjson(MessageSupport.toNdjson(Arrays.asList(ChatMessage.ofUser("other"))));
+        env.sessionRepository.save(other);
+
+        List<SessionSearchEntry> entries = env.sessionSearchService.search("MEMORY:room:user", "", 5);
+
+        assertThat(entries).extracting(SessionSearchEntry::getTitle).contains("other");
+        assertThat(entries).extracting(SessionSearchEntry::getTitle).doesNotContain("root current", "child current");
+    }
+
+    private AssistantMessage assistantWithToolCall(String name, String arguments) {
+        Map<String, Object> function = new LinkedHashMap<String, Object>();
+        function.put("name", name);
+        function.put("arguments", arguments);
+        Map<String, Object> raw = new LinkedHashMap<String, Object>();
+        raw.put("id", "call-1");
+        raw.put("type", "function");
+        raw.put("function", function);
+        List<Map> rawCalls = new ArrayList<Map>();
+        rawCalls.add(raw);
+        return new AssistantMessage("", false, rawCalls);
     }
 }

@@ -493,6 +493,9 @@ public class DingTalkChannelAdapter extends AbstractConfigurableChannelAdapter {
         if (extras == null || extras.isEmpty()) {
             return false;
         }
+        if (!config.isAiCardStreamingEnabled() && isAiCardUpdateRequest(extras)) {
+            return false;
+        }
         String mode = stringValue(extras.get("mode"));
         return "ai_card".equalsIgnoreCase(mode) || "dingtalk_ai_card".equalsIgnoreCase(mode)
                 || StrUtil.isNotBlank(stringValue(extras.get("cardTemplateId")));

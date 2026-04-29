@@ -71,6 +71,20 @@ public class RuntimeConfigResolver {
     }
 
     /**
+     * 按环境变量键或 jimuqu.* 路径读取原始配置值，保留 List/Map 类型。
+     */
+    public static Object getRawValue(String key) {
+        return getInstance().getRaw(key);
+    }
+
+    /**
+     * Hermes cfg_get 对齐入口：按嵌套路径读取 runtime/config.yml 的原始值。
+     */
+    public static Object cfgGet(String path, Object defaultValue) {
+        return getInstance().getByPath(path, defaultValue);
+    }
+
+    /**
      * 返回 runtime/config.yml 文件路径。
      */
     public File configFile() {
@@ -86,6 +100,30 @@ public class RuntimeConfigResolver {
             return null;
         }
         return stringify(fileValues.get(path));
+    }
+
+    /**
+     * 读取指定键的原始文件值。
+     */
+    public Object getRaw(String key) {
+        reloadIfNeeded();
+        String path = resolvePath(key);
+        if (StrUtil.isBlank(path)) {
+            return null;
+        }
+        return fileValues.get(path);
+    }
+
+    /**
+     * 读取指定嵌套路径的原始文件值。
+     */
+    public Object getByPath(String path, Object defaultValue) {
+        reloadIfNeeded();
+        if (StrUtil.isBlank(path)) {
+            return defaultValue;
+        }
+        Object value = fileValues.get(path);
+        return value == null ? defaultValue : value;
     }
 
     /**
@@ -386,6 +424,12 @@ public class RuntimeConfigResolver {
         add(mappings, "JIMUQU_LEARNING_ENABLED", "jimuqu.learning.enabled");
         add(mappings, "JIMUQU_LEARNING_TOOL_CALL_THRESHOLD", "jimuqu.learning.toolCallThreshold");
 
+        add(mappings, "JIMUQU_SKILLS_CURATOR_ENABLED", "jimuqu.skills.curator.enabled");
+        add(mappings, "JIMUQU_SKILLS_CURATOR_INTERVAL_HOURS", "jimuqu.skills.curator.intervalHours");
+        add(mappings, "JIMUQU_SKILLS_CURATOR_MIN_IDLE_HOURS", "jimuqu.skills.curator.minIdleHours");
+        add(mappings, "JIMUQU_SKILLS_CURATOR_STALE_AFTER_DAYS", "jimuqu.skills.curator.staleAfterDays");
+        add(mappings, "JIMUQU_SKILLS_CURATOR_ARCHIVE_AFTER_DAYS", "jimuqu.skills.curator.archiveAfterDays");
+
         add(mappings, "JIMUQU_ROLLBACK_ENABLED", "jimuqu.rollback.enabled");
         add(mappings, "JIMUQU_ROLLBACK_MAX_CHECKPOINTS_PER_SOURCE", "jimuqu.rollback.maxCheckpointsPerSource");
 
@@ -393,6 +437,8 @@ public class RuntimeConfigResolver {
         add(mappings, "JIMUQU_DISPLAY_SHOW_REASONING", "jimuqu.display.showReasoning");
         add(mappings, "JIMUQU_DISPLAY_TOOL_PREVIEW_LENGTH", "jimuqu.display.toolPreviewLength");
         add(mappings, "JIMUQU_DISPLAY_PROGRESS_THROTTLE_MS", "jimuqu.display.progressThrottleMs");
+        add(mappings, "JIMUQU_DISPLAY_RUNTIME_FOOTER_ENABLED", "jimuqu.display.runtimeFooter.enabled");
+        add(mappings, "JIMUQU_DISPLAY_RUNTIME_FOOTER_FIELDS", "jimuqu.display.runtimeFooter.fields");
 
         add(mappings, "JIMUQU_GATEWAY_ALLOWED_USERS", "jimuqu.gateway.allowedUsers");
         add(mappings, "JIMUQU_GATEWAY_ALLOW_ALL_USERS", "jimuqu.gateway.allowAllUsers");
@@ -415,14 +461,27 @@ public class RuntimeConfigResolver {
 
         addChannelMappings(mappings, "FEISHU", "feishu",
                 "appId", "appSecret", "websocketUrl", "botOpenId", "botUserId", "botName", "toolProgress");
+        add(mappings, "JIMUQU_FEISHU_COMMENT_ENABLED", "jimuqu.channels.feishu.comment.enabled");
+        add(mappings, "JIMUQU_FEISHU_COMMENT_PAIRING_FILE", "jimuqu.channels.feishu.comment.pairingFile");
+        add(mappings, "JIMUQU_FEISHU_RUNTIME_FOOTER_ENABLED", "jimuqu.display.platforms.feishu.runtimeFooter.enabled");
         addChannelMappings(mappings, "DINGTALK", "dingtalk",
                 "clientId", "clientSecret", "robotCode", "coolAppCode", "streamUrl", "toolProgress", "progressCardTemplateId");
+        add(mappings, "JIMUQU_DINGTALK_AI_CARD_STREAMING_ENABLED", "jimuqu.channels.dingtalk.aiCardStreaming.enabled");
+        add(mappings, "JIMUQU_DINGTALK_RUNTIME_FOOTER_ENABLED", "jimuqu.display.platforms.dingtalk.runtimeFooter.enabled");
         addChannelMappings(mappings, "WECOM", "wecom",
                 "botId", "secret", "websocketUrl", "toolProgress");
         add(mappings, "JIMUQU_WECOM_GROUP_MEMBER_ALLOW_MAP_JSON", "jimuqu.channels.wecom.groupMemberAllowedUsers");
+        add(mappings, "JIMUQU_WECOM_RUNTIME_FOOTER_ENABLED", "jimuqu.display.platforms.wecom.runtimeFooter.enabled");
         addChannelMappings(mappings, "WEIXIN", "weixin",
                 "token", "accountId", "baseUrl", "cdnBaseUrl", "longPollUrl", "splitMultilineMessages",
                 "sendChunkDelaySeconds", "sendChunkRetries", "sendChunkRetryDelaySeconds", "toolProgress");
+        add(mappings, "JIMUQU_WEIXIN_RUNTIME_FOOTER_ENABLED", "jimuqu.display.platforms.weixin.runtimeFooter.enabled");
+        addChannelMappings(mappings, "QQBOT", "qqbot",
+                "appId", "clientSecret", "apiDomain", "websocketUrl", "markdownSupport", "toolProgress");
+        add(mappings, "JIMUQU_QQBOT_RUNTIME_FOOTER_ENABLED", "jimuqu.display.platforms.qqbot.runtimeFooter.enabled");
+        addChannelMappings(mappings, "YUANBAO", "yuanbao",
+                "appId", "appSecret", "botId", "apiDomain", "websocketUrl", "toolProgress");
+        add(mappings, "JIMUQU_YUANBAO_RUNTIME_FOOTER_ENABLED", "jimuqu.display.platforms.yuanbao.runtimeFooter.enabled");
 
         add(mappings, "JIMUQU_UPDATE_REPO", "jimuqu.update.repo");
         add(mappings, "JIMUQU_UPDATE_RELEASE_API_URL", "jimuqu.update.releaseApiUrl");

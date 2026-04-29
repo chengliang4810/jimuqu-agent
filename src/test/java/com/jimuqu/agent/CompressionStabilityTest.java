@@ -1,13 +1,16 @@
 package com.jimuqu.agent;
 
 import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.core.model.CompressionOutcome;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.engine.DefaultContextCompressionService;
 import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.constants.CompressionConstants;
 import org.junit.jupiter.api.Test;
 import org.noear.solon.ai.chat.message.ChatMessage;
+import org.noear.snack4.ONode;
 
+import java.lang.reflect.Method;
 import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -144,6 +147,59 @@ public class CompressionStabilityTest {
 
         assertThat(compressed.getCompressedSummary()).contains(CompressionConstants.SUMMARY_PREFIX);
         assertThat(compressed.getLastCompressionInputTokens()).isGreaterThanOrEqualTo(1600);
+    }
+
+    @Test
+    void shouldReturnWarningOutcomeWhenCompressionFails() throws Exception {
+        DefaultContextCompressionService service = new DefaultContextCompressionService(config());
+        SessionRecord session = new SessionRecord();
+        session.setSessionId("s-fail");
+        session.setNdjson("{not-valid-json");
+
+        CompressionOutcome outcome = service.compressNowWithOutcome(session, "system", "focus");
+
+        assertThat(outcome.isFailed()).isTrue();
+        assertThat(outcome.getWarning()).contains("压缩摘要生成失败");
+        assertThat(outcome.getSession()).isSameAs(session);
+        assertThat(session.getCompressionFailureCount()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldAlwaysProtectLatestUserMessage() throws Exception {
+        AppConfig config = config();
+        config.getCompression().setProtectHeadMessages(1);
+        config.getCompression().setTailRatio(0.01D);
+        DefaultContextCompressionService service = new DefaultContextCompressionService(config);
+        SessionRecord session = new SessionRecord();
+        session.setSessionId("s-last-user");
+        session.setNdjson(MessageSupport.toNdjson(Arrays.asList(
+                ChatMessage.ofSystem("system"),
+                ChatMessage.ofUser("old goal"),
+                ChatMessage.ofAssistant(repeat("middle", 500)),
+                ChatMessage.ofUser("必须保留的最后用户消息"),
+                ChatMessage.ofAssistant("处理中")
+        )));
+
+        SessionRecord compressed = service.compressNow(session, "system");
+
+        assertThat(compressed.getNdjson()).contains("必须保留的最后用户消息");
+    }
+
+    @Test
+    void shouldShrinkToolArgumentsWithoutBreakingJson() throws Exception {
+        DefaultContextCompressionService service = new DefaultContextCompressionService(config());
+        Method method = DefaultContextCompressionService.class.getDeclaredMethod("shrinkToolArgumentsJson", String.class, int.class);
+        method.setAccessible(true);
+
+        String raw = new ONode()
+                .set("path", "demo.txt")
+                .set("content", repeat("x", 500))
+                .toJson();
+        String shrunk = (String) method.invoke(service, raw, 32);
+
+        ONode parsed = ONode.ofJson(shrunk);
+        assertThat(parsed.get("path").getString()).isEqualTo("demo.txt");
+        assertThat(parsed.get("content").getString()).endsWith("...[truncated]");
     }
 
     private AppConfig config() {

@@ -15,4 +15,18 @@ public interface AgentRunControlService {
      * Whether the gateway source currently has an active run.
      */
     boolean isRunning(String sourceKey);
+
+    /**
+     * Whether any source currently has an active run.
+     */
+    default boolean hasRunningRuns() {
+        return false;
+    }
+
+    /**
+     * Last time any run finished. A zero value means no completed run is known.
+     */
+    default long lastRunFinishedAt() {
+        return 0L;
+    }
 }

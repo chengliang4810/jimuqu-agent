@@ -42,12 +42,13 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
     private static final int VIDEO_MAX_BYTES = 10 * 1024 * 1024;
     private static final int VOICE_MAX_BYTES = 2 * 1024 * 1024;
     private static final int FILE_MAX_BYTES = 20 * 1024 * 1024;
+    private static final long REPLY_REQ_ID_TTL_MILLIS = 5L * 60L * 1000L;
 
     private final AppConfig.ChannelConfig config;
     private final AttachmentCacheService attachmentCacheService;
     private final OkHttpClient client;
     private final ConcurrentMap<String, CompletableFuture<ONode>> pendingResponses = new ConcurrentHashMap<String, CompletableFuture<ONode>>();
-    private final ConcurrentMap<String, String> replyReqIds = new ConcurrentHashMap<String, String>();
+    private final ConcurrentMap<String, TimedReqId> replyReqIds = new ConcurrentHashMap<String, TimedReqId>();
     private volatile WebSocket webSocket;
     private ExecutorService callbackExecutor;
 
@@ -215,10 +216,7 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
 
         @Override
         public void onFailure(WebSocket webSocket, Throwable t, Response response) {
-            for (CompletableFuture<ONode> future : pendingResponses.values()) {
-                future.completeExceptionally(t);
-            }
-            pendingResponses.clear();
+            failPending(t == null ? new IllegalStateException("WeCom websocket failure") : t);
             WeComChannelAdapter.this.webSocket = null;
             setConnected(false);
             setSetupState("error");
@@ -230,7 +228,7 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
 
         @Override
         public void onClosed(WebSocket webSocket, int code, String reason) {
-            pendingResponses.clear();
+            failPending(new IllegalStateException("WeCom websocket closed: " + code + " " + reason));
             WeComChannelAdapter.this.webSocket = null;
             setConnected(false);
             setSetupState("disconnected");
@@ -453,12 +451,13 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
     }
 
     private void rememberReplyReqId(String messageId, String reqId) {
+        cleanupReplyReqIds();
         String normalizedMessageId = StrUtil.nullToEmpty(messageId).trim();
         String normalizedReqId = StrUtil.nullToEmpty(reqId).trim();
         if (normalizedMessageId.length() == 0 || normalizedReqId.length() == 0) {
             return;
         }
-        replyReqIds.put(normalizedMessageId, normalizedReqId);
+        replyReqIds.put(normalizedMessageId, new TimedReqId(normalizedReqId, System.currentTimeMillis() + REPLY_REQ_ID_TTL_MILLIS));
         while (replyReqIds.size() > 1000) {
             String firstKey = replyReqIds.keySet().iterator().next();
             replyReqIds.remove(firstKey);
@@ -466,8 +465,34 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
     }
 
     private String replyReqIdForMessage(String messageId) {
+        cleanupReplyReqIds();
         String normalized = StrUtil.nullToEmpty(messageId).trim();
-        return normalized.length() == 0 ? null : replyReqIds.get(normalized);
+        if (normalized.length() == 0) {
+            return null;
+        }
+        TimedReqId value = replyReqIds.get(normalized);
+        if (value == null || value.isExpired()) {
+            replyReqIds.remove(normalized);
+            return null;
+        }
+        return value.reqId;
+    }
+
+    private void cleanupReplyReqIds() {
+        long now = System.currentTimeMillis();
+        for (Map.Entry<String, TimedReqId> entry : replyReqIds.entrySet()) {
+            TimedReqId value = entry.getValue();
+            if (value == null || value.expiresAt <= now) {
+                replyReqIds.remove(entry.getKey(), value);
+            }
+        }
+    }
+
+    private void failPending(Throwable throwable) {
+        for (CompletableFuture<ONode> future : pendingResponses.values()) {
+            future.completeExceptionally(throwable);
+        }
+        pendingResponses.clear();
     }
 
     private boolean allowChat(String chatType, String chatId, String userId) {
@@ -601,5 +626,19 @@ public class WeComChannelAdapter extends AbstractConfigurableChannelAdapter {
         Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
         cipher.init(Cipher.DECRYPT_MODE, secretKeySpec, iv);
         return cipher.doFinal(encryptedData);
+    }
+
+    private static class TimedReqId {
+        private final String reqId;
+        private final long expiresAt;
+
+        private TimedReqId(String reqId, long expiresAt) {
+            this.reqId = reqId;
+            this.expiresAt = expiresAt;
+        }
+
+        private boolean isExpired() {
+            return expiresAt <= System.currentTimeMillis();
+        }
     }
 }

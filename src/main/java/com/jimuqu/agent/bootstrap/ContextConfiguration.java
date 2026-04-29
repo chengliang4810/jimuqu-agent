@@ -11,6 +11,7 @@ import com.jimuqu.agent.context.FileMemoryService;
 import com.jimuqu.agent.context.FileContextService;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.context.PersonaWorkspaceService;
+import com.jimuqu.agent.context.SkillCuratorService;
 import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
@@ -58,6 +59,12 @@ public class ContextConfiguration {
     @Bean
     public PersonaWorkspaceService personaWorkspaceService(AppConfig appConfig) {
         return new PersonaWorkspaceService(appConfig);
+    }
+
+    @Bean
+    public SkillCuratorService skillCuratorService(AppConfig appConfig,
+                                                   LocalSkillService localSkillService) {
+        return new SkillCuratorService(appConfig, localSkillService);
     }
 
     @Bean

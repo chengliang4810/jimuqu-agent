@@ -111,11 +111,24 @@ public class DashboardConfigService {
         addField(new FieldDefinition("display.showReasoning", "boolean", "general", "默认允许 reasoning 进入聊天窗口"));
         addField(new FieldDefinition("display.toolPreviewLength", "number", "general", "工具参数预览长度"));
         addField(new FieldDefinition("display.progressThrottleMs", "number", "general", "reasoning/进度消息节流毫秒"));
+        addField(new FieldDefinition("display.runtimeFooter.enabled", "boolean", "general", "最终回复 runtime footer 开关"));
+        addField(new FieldDefinition("display.runtimeFooter.fields", "list", "general", "runtime footer 字段列表"));
+        addField(new FieldDefinition("display.platforms.feishu.runtimeFooter.enabled", "boolean", "messaging", "飞书 runtime footer 覆盖开关"));
+        addField(new FieldDefinition("display.platforms.dingtalk.runtimeFooter.enabled", "boolean", "messaging", "钉钉 runtime footer 覆盖开关"));
+        addField(new FieldDefinition("display.platforms.wecom.runtimeFooter.enabled", "boolean", "messaging", "企微 runtime footer 覆盖开关"));
+        addField(new FieldDefinition("display.platforms.weixin.runtimeFooter.enabled", "boolean", "messaging", "微信 runtime footer 覆盖开关"));
+        addField(new FieldDefinition("display.platforms.qqbot.runtimeFooter.enabled", "boolean", "messaging", "QQBot runtime footer 覆盖开关"));
+        addField(new FieldDefinition("display.platforms.yuanbao.runtimeFooter.enabled", "boolean", "messaging", "元宝 runtime footer 覆盖开关"));
         addField(new FieldDefinition("scheduler.enabled", "boolean", "general", "启用定时调度"));
         addField(new FieldDefinition("scheduler.tickSeconds", "number", "general", "调度轮询周期（秒）"));
 
         addField(new FieldDefinition("learning.enabled", "boolean", "agent", "启用主回复后的自动学习"));
         addField(new FieldDefinition("learning.toolCallThreshold", "number", "agent", "触发学习所需的最少工具调用数"));
+        addField(new FieldDefinition("skills.curator.enabled", "boolean", "agent", "启用技能后台维护 Curator"));
+        addField(new FieldDefinition("skills.curator.intervalHours", "number", "agent", "Curator 巡检周期（小时）"));
+        addField(new FieldDefinition("skills.curator.minIdleHours", "number", "agent", "Curator 最小空闲窗口（小时）"));
+        addField(new FieldDefinition("skills.curator.staleAfterDays", "number", "agent", "技能多久未使用后标记 stale"));
+        addField(new FieldDefinition("skills.curator.archiveAfterDays", "number", "agent", "技能多久未使用后归档"));
         addField(new FieldDefinition("agent.heartbeat.intervalMinutes", "number", "agent", "heartbeat 轮询间隔（分钟，0 表示关闭）"));
         addField(new FieldDefinition("rollback.enabled", "boolean", "agent", "启用 checkpoint 回滚"));
         addField(new FieldDefinition("rollback.maxCheckpointsPerSource", "number", "agent", "每个来源保留的最大 checkpoint 数"));
@@ -159,6 +172,8 @@ public class DashboardConfigService {
         addField(new FieldDefinition("channels.feishu.botName", "string", "messaging", "飞书 bot 展示名"));
         addField(new FieldDefinition("channels.feishu.toolProgress", "select", "messaging", "飞书工具进度模式")
                 .options("off", "new", "all", "verbose"));
+        addField(new FieldDefinition("channels.feishu.comment.enabled", "boolean", "messaging", "飞书文档评论智能回复开关"));
+        addField(new FieldDefinition("channels.feishu.comment.pairingFile", "string", "messaging", "飞书评论配对文件"));
 
         addChannelFields("dingtalk", "JIMUQU_DINGTALK_ENABLED", "JIMUQU_DINGTALK_ALLOWED_USERS", "JIMUQU_DINGTALK_ALLOW_ALL_USERS", "JIMUQU_DINGTALK_UNAUTHORIZED_DM_BEHAVIOR");
         addField(new FieldDefinition("channels.dingtalk.coolAppCode", "string", "messaging", "可选钉钉 Cool App 编码"));
@@ -169,6 +184,7 @@ public class DashboardConfigService {
         addField(new FieldDefinition("channels.dingtalk.dmPolicy", "select", "messaging", "钉钉私聊策略").options("open", "allowlist", "disabled", "pairing"));
         addField(new FieldDefinition("channels.dingtalk.groupPolicy", "select", "messaging", "钉钉群聊策略").options("open", "allowlist", "disabled"));
         addField(new FieldDefinition("channels.dingtalk.groupAllowedUsers", "list", "messaging", "钉钉群聊 allowlist"));
+        addField(new FieldDefinition("channels.dingtalk.aiCardStreaming.enabled", "boolean", "messaging", "钉钉 AI Card 增量更新开关"));
 
         addChannelFields("wecom", "JIMUQU_WECOM_ENABLED", "JIMUQU_WECOM_ALLOWED_USERS", "JIMUQU_WECOM_ALLOW_ALL_USERS", "JIMUQU_WECOM_UNAUTHORIZED_DM_BEHAVIOR");
         addField(new FieldDefinition("channels.wecom.websocketUrl", "string", "messaging", "企微 websocket 地址"));
@@ -192,6 +208,25 @@ public class DashboardConfigService {
         addField(new FieldDefinition("channels.weixin.sendChunkDelaySeconds", "number", "messaging", "微信分片发送间隔（秒）"));
         addField(new FieldDefinition("channels.weixin.sendChunkRetries", "number", "messaging", "微信分片重试次数"));
         addField(new FieldDefinition("channels.weixin.sendChunkRetryDelaySeconds", "number", "messaging", "微信分片重试间隔（秒）"));
+
+        addChannelFields("qqbot", "JIMUQU_QQBOT_ENABLED", "JIMUQU_QQBOT_ALLOWED_USERS", "JIMUQU_QQBOT_ALLOW_ALL_USERS", "JIMUQU_QQBOT_UNAUTHORIZED_DM_BEHAVIOR");
+        addField(new FieldDefinition("channels.qqbot.apiDomain", "string", "messaging", "QQBot API 域名"));
+        addField(new FieldDefinition("channels.qqbot.websocketUrl", "string", "messaging", "QQBot websocket 地址"));
+        addField(new FieldDefinition("channels.qqbot.markdownSupport", "boolean", "messaging", "QQBot Markdown 消息开关"));
+        addField(new FieldDefinition("channels.qqbot.toolProgress", "select", "messaging", "QQBot 工具进度模式")
+                .options("off", "new", "all", "verbose"));
+        addField(new FieldDefinition("channels.qqbot.dmPolicy", "select", "messaging", "QQBot 私聊策略").options("open", "allowlist", "disabled", "pairing"));
+        addField(new FieldDefinition("channels.qqbot.groupPolicy", "select", "messaging", "QQBot 群聊策略").options("open", "allowlist", "disabled"));
+        addField(new FieldDefinition("channels.qqbot.groupAllowedUsers", "list", "messaging", "QQBot 群聊 allowlist"));
+
+        addChannelFields("yuanbao", "JIMUQU_YUANBAO_ENABLED", "JIMUQU_YUANBAO_ALLOWED_USERS", "JIMUQU_YUANBAO_ALLOW_ALL_USERS", "JIMUQU_YUANBAO_UNAUTHORIZED_DM_BEHAVIOR");
+        addField(new FieldDefinition("channels.yuanbao.apiDomain", "string", "messaging", "腾讯元宝 API 域名"));
+        addField(new FieldDefinition("channels.yuanbao.websocketUrl", "string", "messaging", "腾讯元宝 websocket 地址"));
+        addField(new FieldDefinition("channels.yuanbao.toolProgress", "select", "messaging", "腾讯元宝工具进度模式")
+                .options("off", "new", "all", "verbose"));
+        addField(new FieldDefinition("channels.yuanbao.dmPolicy", "select", "messaging", "腾讯元宝私聊策略").options("open", "allowlist", "disabled", "pairing"));
+        addField(new FieldDefinition("channels.yuanbao.groupPolicy", "select", "messaging", "腾讯元宝群聊策略").options("open", "allowlist", "disabled"));
+        addField(new FieldDefinition("channels.yuanbao.groupAllowedUsers", "list", "messaging", "腾讯元宝群聊 allowlist"));
     }
 
     private void addChannelFields(String name, String enabledKey, String allowedUsersKey, String allowAllKey, String behaviorKey) {
@@ -215,6 +250,12 @@ public class DashboardConfigService {
         }
         if ("weixin".equals(name)) {
             return "微信";
+        }
+        if ("qqbot".equals(name)) {
+            return "QQBot";
+        }
+        if ("yuanbao".equals(name)) {
+            return "腾讯元宝";
         }
         return name;
     }

@@ -27,7 +27,17 @@ public enum PlatformType {
     /**
      * 微信平台。
      */
-    WEIXIN;
+    WEIXIN,
+
+    /**
+     * QQ Bot 平台。
+     */
+    QQBOT,
+
+    /**
+     * 腾讯元宝平台。
+     */
+    YUANBAO;
 
     /**
      * 按名称解析平台，无法识别时返回 null。

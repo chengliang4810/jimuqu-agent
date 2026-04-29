@@ -71,6 +71,11 @@ public class AppConfig {
     private LearningConfig learning = new LearningConfig();
 
     /**
+     * 技能后台维护配置。
+     */
+    private CuratorConfig curator = new CuratorConfig();
+
+    /**
      * 文件快照与回滚配置。
      */
     private RollbackConfig rollback = new RollbackConfig();
@@ -178,6 +183,11 @@ public class AppConfig {
 
         config.getLearning().setEnabled(resolveBoolean("JIMUQU_LEARNING_ENABLED", readBoolean(props, overrides, "jimuqu.learning.enabled", true)));
         config.getLearning().setToolCallThreshold(resolveInt("JIMUQU_LEARNING_TOOL_CALL_THRESHOLD", readInt(props, overrides, "jimuqu.learning.toolCallThreshold", 5)));
+        config.getCurator().setEnabled(resolveBoolean("JIMUQU_SKILLS_CURATOR_ENABLED", readBoolean(props, overrides, "jimuqu.skills.curator.enabled", true)));
+        config.getCurator().setIntervalHours(resolveInt("JIMUQU_SKILLS_CURATOR_INTERVAL_HOURS", readInt(props, overrides, "jimuqu.skills.curator.intervalHours", 168)));
+        config.getCurator().setMinIdleHours(resolveDouble("JIMUQU_SKILLS_CURATOR_MIN_IDLE_HOURS", readDouble(props, overrides, "jimuqu.skills.curator.minIdleHours", 2.0D)));
+        config.getCurator().setStaleAfterDays(resolveInt("JIMUQU_SKILLS_CURATOR_STALE_AFTER_DAYS", readInt(props, overrides, "jimuqu.skills.curator.staleAfterDays", 30)));
+        config.getCurator().setArchiveAfterDays(resolveInt("JIMUQU_SKILLS_CURATOR_ARCHIVE_AFTER_DAYS", readInt(props, overrides, "jimuqu.skills.curator.archiveAfterDays", 90)));
 
         config.getRollback().setEnabled(resolveBoolean("JIMUQU_ROLLBACK_ENABLED", readBoolean(props, overrides, "jimuqu.rollback.enabled", true)));
         config.getRollback().setMaxCheckpointsPerSource(resolveInt("JIMUQU_ROLLBACK_MAX_CHECKPOINTS_PER_SOURCE", readInt(props, overrides, "jimuqu.rollback.maxCheckpointsPerSource", CheckpointConstants.DEFAULT_MAX_CHECKPOINTS_PER_SOURCE)));
@@ -186,6 +196,8 @@ public class AppConfig {
         config.getDisplay().setShowReasoning(resolveBoolean("JIMUQU_DISPLAY_SHOW_REASONING", readBoolean(props, overrides, "jimuqu.display.showReasoning", false)));
         config.getDisplay().setToolPreviewLength(resolveInt("JIMUQU_DISPLAY_TOOL_PREVIEW_LENGTH", readInt(props, overrides, "jimuqu.display.toolPreviewLength", 80)));
         config.getDisplay().setProgressThrottleMs(resolveInt("JIMUQU_DISPLAY_PROGRESS_THROTTLE_MS", readInt(props, overrides, "jimuqu.display.progressThrottleMs", 1500)));
+        config.getDisplay().getRuntimeFooter().setEnabled(resolveBoolean("JIMUQU_DISPLAY_RUNTIME_FOOTER_ENABLED", readBoolean(props, overrides, "jimuqu.display.runtimeFooter.enabled", false)));
+        config.getDisplay().getRuntimeFooter().setFields(resolveList("JIMUQU_DISPLAY_RUNTIME_FOOTER_FIELDS", readRaw(props, overrides, "jimuqu.display.runtimeFooter.fields", "model,context_pct,cwd")));
 
         applyChannelConfig(
                 config.getChannels().getFeishu(),
@@ -209,6 +221,9 @@ public class AppConfig {
         config.getChannels().getFeishu().setBotUserId(resolveSecret("JIMUQU_FEISHU_BOT_USER_ID", props.get("jimuqu.channels.feishu.botUserId", "")));
         config.getChannels().getFeishu().setBotName(resolveConfigString("JIMUQU_FEISHU_BOT_NAME", readString(props, overrides, "jimuqu.channels.feishu.botName", "")));
         config.getChannels().getFeishu().setToolProgress(resolveConfigString("JIMUQU_FEISHU_TOOL_PROGRESS", readString(props, overrides, "jimuqu.channels.feishu.toolProgress", "all")));
+        config.getChannels().getFeishu().setCommentEnabled(resolveBoolean("JIMUQU_FEISHU_COMMENT_ENABLED", readBoolean(props, overrides, "jimuqu.channels.feishu.comment.enabled", false)));
+        config.getChannels().getFeishu().setCommentPairingFile(resolveConfigString("JIMUQU_FEISHU_COMMENT_PAIRING_FILE", readString(props, overrides, "jimuqu.channels.feishu.comment.pairingFile", "")));
+        config.getChannels().getFeishu().setRuntimeFooterEnabled(resolveOptionalBoolean("JIMUQU_FEISHU_RUNTIME_FOOTER_ENABLED", readRaw(props, overrides, "jimuqu.display.platforms.feishu.runtimeFooter.enabled", null)));
 
         applyChannelConfig(
                 config.getChannels().getDingtalk(),
@@ -232,6 +247,8 @@ public class AppConfig {
         config.getChannels().getDingtalk().setStreamUrl(resolveConfigString("JIMUQU_DINGTALK_STREAM_URL", readString(props, overrides, "jimuqu.channels.dingtalk.streamUrl", "")));
         config.getChannels().getDingtalk().setToolProgress(resolveConfigString("JIMUQU_DINGTALK_TOOL_PROGRESS", readString(props, overrides, "jimuqu.channels.dingtalk.toolProgress", "all")));
         config.getChannels().getDingtalk().setProgressCardTemplateId(resolveConfigString("JIMUQU_DINGTALK_PROGRESS_CARD_TEMPLATE_ID", readString(props, overrides, "jimuqu.channels.dingtalk.progressCardTemplateId", "")));
+        config.getChannels().getDingtalk().setAiCardStreamingEnabled(resolveBoolean("JIMUQU_DINGTALK_AI_CARD_STREAMING_ENABLED", readBoolean(props, overrides, "jimuqu.channels.dingtalk.aiCardStreaming.enabled", true)));
+        config.getChannels().getDingtalk().setRuntimeFooterEnabled(resolveOptionalBoolean("JIMUQU_DINGTALK_RUNTIME_FOOTER_ENABLED", readRaw(props, overrides, "jimuqu.display.platforms.dingtalk.runtimeFooter.enabled", null)));
 
         applyChannelConfig(
                 config.getChannels().getWecom(),
@@ -255,6 +272,7 @@ public class AppConfig {
         config.getChannels().getWecom().setGroupMemberAllowedUsers(
                 collectGroupAllowMap(props, overrides, "jimuqu.channels.wecom.groups.", "JIMUQU_WECOM_GROUP_MEMBER_ALLOW_MAP_JSON")
         );
+        config.getChannels().getWecom().setRuntimeFooterEnabled(resolveOptionalBoolean("JIMUQU_WECOM_RUNTIME_FOOTER_ENABLED", readRaw(props, overrides, "jimuqu.display.platforms.wecom.runtimeFooter.enabled", null)));
 
         applyChannelConfig(
                 config.getChannels().getWeixin(),
@@ -281,6 +299,53 @@ public class AppConfig {
         config.getChannels().getWeixin().setSendChunkRetries(resolveInt("JIMUQU_WEIXIN_SEND_CHUNK_RETRIES", readInt(props, overrides, "jimuqu.channels.weixin.sendChunkRetries", 2)));
         config.getChannels().getWeixin().setSendChunkRetryDelaySeconds(resolveDouble("JIMUQU_WEIXIN_SEND_CHUNK_RETRY_DELAY_SECONDS", readDouble(props, overrides, "jimuqu.channels.weixin.sendChunkRetryDelaySeconds", 1.0D)));
         config.getChannels().getWeixin().setToolProgress(resolveConfigString("JIMUQU_WEIXIN_TOOL_PROGRESS", readString(props, overrides, "jimuqu.channels.weixin.toolProgress", "off")));
+        config.getChannels().getWeixin().setRuntimeFooterEnabled(resolveOptionalBoolean("JIMUQU_WEIXIN_RUNTIME_FOOTER_ENABLED", readRaw(props, overrides, "jimuqu.display.platforms.weixin.runtimeFooter.enabled", null)));
+
+        applyChannelConfig(
+                config.getChannels().getQqbot(),
+                props,
+                overrides,
+                "qqbot",
+                "JIMUQU_QQBOT_ALLOWED_USERS",
+                "JIMUQU_QQBOT_ALLOW_ALL_USERS",
+                "JIMUQU_QQBOT_UNAUTHORIZED_DM_BEHAVIOR",
+                "JIMUQU_QQBOT_DM_POLICY",
+                GatewayBehaviorConstants.DM_POLICY_OPEN,
+                "JIMUQU_QQBOT_GROUP_POLICY",
+                GatewayBehaviorConstants.GROUP_POLICY_OPEN,
+                "JIMUQU_QQBOT_GROUP_ALLOWED_USERS"
+        );
+        config.getChannels().getQqbot().setEnabled(resolveBoolean("JIMUQU_QQBOT_ENABLED", readBoolean(props, overrides, "jimuqu.channels.qqbot.enabled", false)));
+        config.getChannels().getQqbot().setAppId(resolveSecret("JIMUQU_QQBOT_APP_ID", readString(props, overrides, "jimuqu.channels.qqbot.appId", "")));
+        config.getChannels().getQqbot().setClientSecret(resolveSecret("JIMUQU_QQBOT_CLIENT_SECRET", readString(props, overrides, "jimuqu.channels.qqbot.clientSecret", "")));
+        config.getChannels().getQqbot().setApiDomain(resolveConfigString("JIMUQU_QQBOT_API_DOMAIN", readString(props, overrides, "jimuqu.channels.qqbot.apiDomain", "")));
+        config.getChannels().getQqbot().setWebsocketUrl(resolveConfigString("JIMUQU_QQBOT_WEBSOCKET_URL", readString(props, overrides, "jimuqu.channels.qqbot.websocketUrl", "")));
+        config.getChannels().getQqbot().setMarkdownSupport(resolveBoolean("JIMUQU_QQBOT_MARKDOWN_SUPPORT", readBoolean(props, overrides, "jimuqu.channels.qqbot.markdownSupport", true)));
+        config.getChannels().getQqbot().setToolProgress(resolveConfigString("JIMUQU_QQBOT_TOOL_PROGRESS", readString(props, overrides, "jimuqu.channels.qqbot.toolProgress", "all")));
+        config.getChannels().getQqbot().setRuntimeFooterEnabled(resolveOptionalBoolean("JIMUQU_QQBOT_RUNTIME_FOOTER_ENABLED", readRaw(props, overrides, "jimuqu.display.platforms.qqbot.runtimeFooter.enabled", null)));
+
+        applyChannelConfig(
+                config.getChannels().getYuanbao(),
+                props,
+                overrides,
+                "yuanbao",
+                "JIMUQU_YUANBAO_ALLOWED_USERS",
+                "JIMUQU_YUANBAO_ALLOW_ALL_USERS",
+                "JIMUQU_YUANBAO_UNAUTHORIZED_DM_BEHAVIOR",
+                "JIMUQU_YUANBAO_DM_POLICY",
+                GatewayBehaviorConstants.DM_POLICY_OPEN,
+                "JIMUQU_YUANBAO_GROUP_POLICY",
+                GatewayBehaviorConstants.GROUP_POLICY_OPEN,
+                "JIMUQU_YUANBAO_GROUP_ALLOWED_USERS"
+        );
+        config.getChannels().getYuanbao().setEnabled(resolveBoolean("JIMUQU_YUANBAO_ENABLED", readBoolean(props, overrides, "jimuqu.channels.yuanbao.enabled", false)));
+        config.getChannels().getYuanbao().setAppId(resolveSecret("JIMUQU_YUANBAO_APP_ID", readString(props, overrides, "jimuqu.channels.yuanbao.appId", "")));
+        config.getChannels().getYuanbao().setAppSecret(resolveSecret("JIMUQU_YUANBAO_APP_SECRET", readString(props, overrides, "jimuqu.channels.yuanbao.appSecret", "")));
+        config.getChannels().getYuanbao().setBotId(resolveSecret("JIMUQU_YUANBAO_BOT_ID", readString(props, overrides, "jimuqu.channels.yuanbao.botId", "")));
+        config.getChannels().getYuanbao().setApiDomain(resolveConfigString("JIMUQU_YUANBAO_API_DOMAIN", readString(props, overrides, "jimuqu.channels.yuanbao.apiDomain", "")));
+        config.getChannels().getYuanbao().setWebsocketUrl(resolveConfigString("JIMUQU_YUANBAO_WEBSOCKET_URL", readString(props, overrides, "jimuqu.channels.yuanbao.websocketUrl", "")));
+        config.getChannels().getYuanbao().setToolProgress(resolveConfigString("JIMUQU_YUANBAO_TOOL_PROGRESS", readString(props, overrides, "jimuqu.channels.yuanbao.toolProgress", "all")));
+        config.getChannels().getYuanbao().setRuntimeFooterEnabled(resolveOptionalBoolean("JIMUQU_YUANBAO_RUNTIME_FOOTER_ENABLED", readRaw(props, overrides, "jimuqu.display.platforms.yuanbao.runtimeFooter.enabled", null)));
 
         config.getGateway().setAllowedUsers(resolveList("JIMUQU_GATEWAY_ALLOWED_USERS", readRaw(props, overrides, "jimuqu.gateway.allowedUsers", "")));
         config.getGateway().setAllowAllUsers(resolveBoolean("JIMUQU_GATEWAY_ALLOW_ALL_USERS", readBoolean(props, overrides, "jimuqu.gateway.allowAllUsers", false)));
@@ -339,6 +404,7 @@ public class AppConfig {
         copyScheduler(other.getScheduler());
         copyCompression(other.getCompression());
         copyLearning(other.getLearning());
+        copyCurator(other.getCurator());
         copyRollback(other.getRollback());
         copyDisplay(other.getDisplay());
         copyReact(other.getReact());
@@ -346,6 +412,8 @@ public class AppConfig {
         copyChannel(this.channels.getDingtalk(), other.getChannels().getDingtalk());
         copyChannel(this.channels.getWecom(), other.getChannels().getWecom());
         copyChannel(this.channels.getWeixin(), other.getChannels().getWeixin());
+        copyChannel(this.channels.getQqbot(), other.getChannels().getQqbot());
+        copyChannel(this.channels.getYuanbao(), other.getChannels().getYuanbao());
         this.gateway.setAllowedUsers(new ArrayList<String>(other.getGateway().getAllowedUsers()));
         this.gateway.setAllowAllUsers(other.getGateway().isAllowAllUsers());
         this.gateway.setInjectionSecret(other.getGateway().getInjectionSecret());
@@ -442,6 +510,14 @@ public class AppConfig {
         this.learning.setToolCallThreshold(other.getToolCallThreshold());
     }
 
+    private void copyCurator(CuratorConfig other) {
+        this.curator.setEnabled(other.isEnabled());
+        this.curator.setIntervalHours(other.getIntervalHours());
+        this.curator.setMinIdleHours(other.getMinIdleHours());
+        this.curator.setStaleAfterDays(other.getStaleAfterDays());
+        this.curator.setArchiveAfterDays(other.getArchiveAfterDays());
+    }
+
     private void copyRollback(RollbackConfig other) {
         this.rollback.setEnabled(other.isEnabled());
         this.rollback.setMaxCheckpointsPerSource(other.getMaxCheckpointsPerSource());
@@ -452,6 +528,8 @@ public class AppConfig {
         this.display.setShowReasoning(other.isShowReasoning());
         this.display.setToolPreviewLength(other.getToolPreviewLength());
         this.display.setProgressThrottleMs(other.getProgressThrottleMs());
+        this.display.getRuntimeFooter().setEnabled(other.getRuntimeFooter().isEnabled());
+        this.display.getRuntimeFooter().setFields(new ArrayList<String>(other.getRuntimeFooter().getFields()));
     }
 
     private void copyReact(ReActConfig other) {
@@ -499,6 +577,12 @@ public class AppConfig {
         target.setSendChunkRetryDelaySeconds(source.getSendChunkRetryDelaySeconds());
         target.setToolProgress(source.getToolProgress());
         target.setProgressCardTemplateId(source.getProgressCardTemplateId());
+        target.setRuntimeFooterEnabled(source.getRuntimeFooterEnabled());
+        target.setCommentEnabled(source.isCommentEnabled());
+        target.setCommentPairingFile(source.getCommentPairingFile());
+        target.setAiCardStreamingEnabled(source.isAiCardStreamingEnabled());
+        target.setApiDomain(source.getApiDomain());
+        target.setMarkdownSupport(source.isMarkdownSupport());
     }
 
     private Map<String, PersonalityConfig> clonePersonalities(Map<String, PersonalityConfig> source) {
@@ -610,6 +694,44 @@ public class AppConfig {
         return "true".equalsIgnoreCase(normalized)
                 || "1".equals(normalized)
                 || "yes".equalsIgnoreCase(normalized);
+    }
+
+    /**
+     * 支持三态布尔配置，未配置时保留 null 表示走全局默认。
+     */
+    private static Boolean resolveOptionalBoolean(String configKey, Object fallback) {
+        String configValue = RuntimeConfigResolver.getValue(configKey);
+        if (StrUtil.isNotBlank(configValue)) {
+            return Boolean.valueOf(parseBooleanText(configValue, false));
+        }
+        if (fallback == null) {
+            return null;
+        }
+        String raw = String.valueOf(fallback).trim();
+        if (raw.length() == 0) {
+            return null;
+        }
+        return Boolean.valueOf(parseBooleanText(raw, false));
+    }
+
+    private static boolean parseBooleanText(String raw, boolean fallback) {
+        if (raw == null) {
+            return fallback;
+        }
+        String normalized = raw.trim();
+        if ("true".equalsIgnoreCase(normalized)
+                || "1".equals(normalized)
+                || "yes".equalsIgnoreCase(normalized)
+                || "on".equalsIgnoreCase(normalized)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(normalized)
+                || "0".equals(normalized)
+                || "no".equalsIgnoreCase(normalized)
+                || "off".equalsIgnoreCase(normalized)) {
+            return false;
+        }
+        return fallback;
     }
 
     /**
@@ -1420,6 +1542,39 @@ public class AppConfig {
     }
 
     /**
+     * 技能后台维护配置。
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class CuratorConfig {
+        /**
+         * 是否启用技能后台维护。
+         */
+        private boolean enabled = true;
+
+        /**
+         * 后台巡检周期，单位小时。
+         */
+        private int intervalHours = 168;
+
+        /**
+         * 最小空闲窗口，单位小时。
+         */
+        private double minIdleHours = 2.0D;
+
+        /**
+         * 多久未使用后标记为 stale。
+         */
+        private int staleAfterDays = 30;
+
+        /**
+         * 多久未使用后归档。
+         */
+        private int archiveAfterDays = 90;
+    }
+
+    /**
      * 文件快照与回滚配置。
      */
     @Getter
@@ -1435,6 +1590,24 @@ public class AppConfig {
          * 单来源键保留的最大 checkpoint 数。
          */
         private int maxCheckpointsPerSource = CheckpointConstants.DEFAULT_MAX_CHECKPOINTS_PER_SOURCE;
+    }
+
+    /**
+     * 最终回复运行态 footer 配置。
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class RuntimeFooterConfig {
+        /**
+         * 默认关闭，避免污染现有渠道回复。
+         */
+        private boolean enabled = false;
+
+        /**
+         * footer 字段顺序。
+         */
+        private List<String> fields = new ArrayList<String>(Arrays.asList("model", "context_pct", "cwd"));
     }
 
     /**
@@ -1463,6 +1636,11 @@ public class AppConfig {
          * reasoning/进度消息节流毫秒数。
          */
         private int progressThrottleMs = 1500;
+
+        /**
+         * 最终回复运行态 footer。
+         */
+        private RuntimeFooterConfig runtimeFooter = new RuntimeFooterConfig();
     }
 
     /**
@@ -1656,6 +1834,16 @@ public class AppConfig {
          * 微信渠道配置。
          */
         private ChannelConfig weixin = new ChannelConfig();
+
+        /**
+         * QQ Bot 渠道配置。
+         */
+        private ChannelConfig qqbot = new ChannelConfig();
+
+        /**
+         * 腾讯元宝渠道配置。
+         */
+        private ChannelConfig yuanbao = new ChannelConfig();
     }
 
     /**
@@ -1824,6 +2012,36 @@ public class AppConfig {
          * 钉钉长任务进度卡模板 ID。
          */
         private String progressCardTemplateId;
+
+        /**
+         * 渠道级 runtime footer 开关，null 表示继承全局。
+         */
+        private Boolean runtimeFooterEnabled;
+
+        /**
+         * 飞书文档评论智能回复开关。
+         */
+        private boolean commentEnabled;
+
+        /**
+         * 飞书评论与会话绑定文件。
+         */
+        private String commentPairingFile;
+
+        /**
+         * 钉钉 AI Card 是否使用增量流式更新。
+         */
+        private boolean aiCardStreamingEnabled = true;
+
+        /**
+         * 渠道 REST API 域名。
+         */
+        private String apiDomain;
+
+        /**
+         * 渠道是否支持 Markdown 文本。
+         */
+        private boolean markdownSupport = true;
     }
 
     /**

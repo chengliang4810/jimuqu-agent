@@ -2,16 +2,21 @@ package com.jimuqu.agent.engine;
 
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.core.model.CompressionOutcome;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.service.ContextCompressionService;
 import com.jimuqu.agent.support.constants.CompressionConstants;
 import com.jimuqu.agent.support.MessageSupport;
 import lombok.RequiredArgsConstructor;
+import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.ChatRole;
+import org.noear.solon.ai.chat.message.AssistantMessage;
 import org.noear.solon.ai.chat.message.ChatMessage;
+import org.noear.solon.ai.chat.tool.ToolCall;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 默认上下文压缩服务。
@@ -25,25 +30,30 @@ public class DefaultContextCompressionService implements ContextCompressionServi
 
     @Override
     public SessionRecord compressIfNeeded(SessionRecord session, String systemPrompt, String userMessage) throws Exception {
+        return compressIfNeededWithOutcome(session, systemPrompt, userMessage).getSession();
+    }
+
+    @Override
+    public CompressionOutcome compressIfNeededWithOutcome(SessionRecord session, String systemPrompt, String userMessage) throws Exception {
         if (!appConfig.getCompression().isEnabled()) {
-            return session;
+            return CompressionOutcome.skipped(session);
         }
 
         int contextWindow = Math.max(1024, appConfig.getLlm().getContextWindowTokens());
         int threshold = (int) (contextWindow * appConfig.getCompression().getThresholdPercent());
         int estimatedTokens = estimateRequestTokens(session, systemPrompt, userMessage);
         if (shouldSkipForFailureCooldown(session)) {
-            return session;
+            return withBudget(CompressionOutcome.skipped(session), estimatedTokens, threshold);
         }
         if (estimatedTokens < threshold) {
-            return session;
+            return withBudget(CompressionOutcome.skipped(session), estimatedTokens, threshold);
         }
         if (shouldSkipForThrashing(session, estimatedTokens)) {
-            return session;
+            return withBudget(CompressionOutcome.skipped(session), estimatedTokens, threshold);
         }
 
         session.setLastCompressionInputTokens(estimatedTokens);
-        return compressNow(session, systemPrompt, null);
+        return withBudget(compressNowWithOutcome(session, systemPrompt, null), estimatedTokens, threshold);
     }
 
     @Override
@@ -53,10 +63,16 @@ public class DefaultContextCompressionService implements ContextCompressionServi
 
     @Override
     public SessionRecord compressNow(SessionRecord session, String systemPrompt, String focus) throws Exception {
+        return compressNowWithOutcome(session, systemPrompt, focus).getSession();
+    }
+
+    @Override
+    public CompressionOutcome compressNowWithOutcome(SessionRecord session, String systemPrompt, String focus) throws Exception {
+        String beforeNdjson = session == null ? "" : session.getNdjson();
         try {
             List<ChatMessage> history = MessageSupport.loadMessages(session.getNdjson());
             if (history.size() <= appConfig.getCompression().getProtectHeadMessages() + 1) {
-                return session;
+                return CompressionOutcome.skipped(session);
             }
 
             List<ChatMessage> normalized = new ArrayList<ChatMessage>();
@@ -73,16 +89,23 @@ public class DefaultContextCompressionService implements ContextCompressionServi
             }
 
             if (normalized.size() <= appConfig.getCompression().getProtectHeadMessages() + 1) {
-                return session;
+                return CompressionOutcome.skipped(session);
             }
 
             List<ChatMessage> pruned = pruneOldToolResults(normalized);
             int protectHead = resolveProtectHeadCount(pruned, StrUtil.isNotBlank(previousSummary));
             int protectTailStart = findTailStart(pruned);
+            int lastUserIndex = findLastUserIndex(pruned);
+            if (lastUserIndex >= protectHead && lastUserIndex < protectTailStart) {
+                protectTailStart = lastUserIndex;
+            }
             if (protectTailStart <= protectHead) {
                 protectTailStart = Math.max(protectHead + 1, pruned.size() - 1);
+                if (lastUserIndex >= protectHead && lastUserIndex < protectTailStart) {
+                    protectTailStart = lastUserIndex;
+                }
                 if (protectTailStart <= protectHead) {
-                    return session;
+                    return CompressionOutcome.skipped(session);
                 }
             }
 
@@ -91,7 +114,7 @@ public class DefaultContextCompressionService implements ContextCompressionServi
             List<ChatMessage> tail = new ArrayList<ChatMessage>(pruned.subList(protectTailStart, pruned.size()));
 
             if (middle.isEmpty() || shouldSkipMiddleCompression(middle)) {
-                return session;
+                return CompressionOutcome.skipped(session);
             }
 
             String summaryBody = buildStructuredSummary(session, systemPrompt, middle, tail, previousSummary, focus);
@@ -108,12 +131,20 @@ public class DefaultContextCompressionService implements ContextCompressionServi
             session.setCompressionFailureCount(0);
             session.setLastCompressionFailedAt(0L);
             session.setUpdatedAt(System.currentTimeMillis());
-            return session;
+            return CompressionOutcome.success(session, !StrUtil.equals(beforeNdjson, session.getNdjson()));
         } catch (Exception e) {
             session.setCompressionFailureCount(session.getCompressionFailureCount() + 1);
             session.setLastCompressionFailedAt(System.currentTimeMillis());
-            return session;
+            return CompressionOutcome.failed(session, e);
         }
+    }
+
+    private CompressionOutcome withBudget(CompressionOutcome outcome, int estimatedTokens, int thresholdTokens) {
+        if (outcome != null) {
+            outcome.setEstimatedTokens(estimatedTokens);
+            outcome.setThresholdTokens(thresholdTokens);
+        }
+        return outcome;
     }
 
     /**
@@ -134,10 +165,76 @@ public class DefaultContextCompressionService implements ContextCompressionServi
                         "compacted-" + i
                 ));
             } else {
+                if (i < tailStart && message instanceof AssistantMessage) {
+                    pruneAssistantToolArguments((AssistantMessage) message);
+                }
                 result.add(message);
             }
         }
         return result;
+    }
+
+    /**
+     * 对旧 assistant tool_calls 的 arguments 做 JSON 内部裁剪，避免截断成非法 JSON。
+     */
+    @SuppressWarnings("unchecked")
+    private void pruneAssistantToolArguments(AssistantMessage message) {
+        if (message == null) {
+            return;
+        }
+        if (message.getToolCallsRaw() != null) {
+            for (Map raw : message.getToolCallsRaw()) {
+                Object function = raw == null ? null : raw.get("function");
+                if (function instanceof Map) {
+                    Map functionMap = (Map) function;
+                    Object arguments = functionMap.get("arguments");
+                    if (arguments instanceof String && ((String) arguments).length() > 400) {
+                        functionMap.put("arguments", shrinkToolArgumentsJson((String) arguments, 200));
+                    }
+                }
+            }
+        }
+        if (message.getToolCalls() != null) {
+            for (ToolCall toolCall : message.getToolCalls()) {
+                Map<String, Object> arguments = toolCall == null ? null : toolCall.getArguments();
+                if (arguments == null || arguments.isEmpty()) {
+                    continue;
+                }
+                shrinkToolArgumentObject(arguments, 200);
+            }
+        }
+    }
+
+    private String shrinkToolArgumentsJson(String raw, int headChars) {
+        if (StrUtil.isBlank(raw)) {
+            return raw;
+        }
+        try {
+            Object parsed = ONode.deserialize(raw, Object.class);
+            shrinkToolArgumentObject(parsed, headChars);
+            return ONode.serialize(parsed);
+        } catch (Exception ignored) {
+            return raw;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void shrinkToolArgumentObject(Object value, int headChars) {
+        if (value instanceof Map) {
+            Map<Object, Object> map = (Map<Object, Object>) value;
+            for (Map.Entry<Object, Object> entry : map.entrySet()) {
+                Object item = entry.getValue();
+                if (item instanceof String && ((String) item).length() > headChars) {
+                    entry.setValue(((String) item).substring(0, headChars) + "...[truncated]");
+                } else {
+                    shrinkToolArgumentObject(item, headChars);
+                }
+            }
+        } else if (value instanceof List) {
+            for (Object item : (List<?>) value) {
+                shrinkToolArgumentObject(item, headChars);
+            }
+        }
     }
 
     /**
@@ -157,6 +254,19 @@ public class DefaultContextCompressionService implements ContextCompressionServi
             start = i;
         }
         return start;
+    }
+
+    /**
+     * Hermes 对齐：最后一条用户消息永远不能被压进摘要。
+     */
+    private int findLastUserIndex(List<ChatMessage> messages) {
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            ChatMessage message = messages.get(i);
+            if (message.getRole() == ChatRole.USER) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**

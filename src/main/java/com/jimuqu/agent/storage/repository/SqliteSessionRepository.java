@@ -3,13 +3,19 @@ package com.jimuqu.agent.storage.repository;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.support.IdSupport;
+import com.jimuqu.agent.support.MessageSupport;
 import lombok.RequiredArgsConstructor;
+import org.noear.snack4.ONode;
+import org.noear.solon.ai.chat.message.AssistantMessage;
+import org.noear.solon.ai.chat.message.ChatMessage;
+import org.noear.solon.ai.chat.tool.ToolCall;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * SQLite 会话仓储实现。
@@ -357,14 +363,77 @@ public class SqliteSessionRepository implements SessionRepository {
         delete.close();
 
         PreparedStatement insert = connection.prepareStatement(
-                "insert into sessions_fts (session_id, title, compressed_summary, ndjson) values (?, ?, ?, ?)"
+                "insert into sessions_fts (session_id, title, compressed_summary, ndjson, tool_names, tool_calls) values (?, ?, ?, ?, ?, ?)"
         );
+        ToolIndex toolIndex = buildToolIndex(sessionRecord.getNdjson());
         insert.setString(1, sessionRecord.getSessionId());
         insert.setString(2, sessionRecord.getTitle());
         insert.setString(3, sessionRecord.getCompressedSummary());
         insert.setString(4, sessionRecord.getNdjson());
+        insert.setString(5, toolIndex.names);
+        insert.setString(6, toolIndex.calls);
         insert.executeUpdate();
         insert.close();
+    }
+
+    @SuppressWarnings("unchecked")
+    private ToolIndex buildToolIndex(String ndjson) {
+        StringBuilder names = new StringBuilder();
+        StringBuilder calls = new StringBuilder();
+        try {
+            List<ChatMessage> messages = MessageSupport.loadMessages(ndjson);
+            for (ChatMessage message : messages) {
+                if (!(message instanceof AssistantMessage)) {
+                    continue;
+                }
+                AssistantMessage assistant = (AssistantMessage) message;
+                if (assistant.getToolCalls() != null) {
+                    for (ToolCall toolCall : assistant.getToolCalls()) {
+                        append(names, toolCall == null ? "" : toolCall.getName());
+                        if (toolCall != null) {
+                            append(calls, toolCall.getName());
+                            append(calls, toolCall.getArgumentsStr());
+                            append(calls, ONode.serialize(toolCall.getArguments()));
+                        }
+                    }
+                }
+                if (assistant.getToolCallsRaw() != null) {
+                    for (Map raw : assistant.getToolCallsRaw()) {
+                        Object function = raw == null ? null : raw.get("function");
+                        if (function instanceof Map) {
+                            Map functionMap = (Map) function;
+                            append(names, String.valueOf(functionMap.get("name")));
+                            append(calls, String.valueOf(functionMap.get("name")));
+                            append(calls, String.valueOf(functionMap.get("arguments")));
+                        } else {
+                            append(calls, ONode.serialize(raw));
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return new ToolIndex(names.toString(), calls.toString());
+    }
+
+    private void append(StringBuilder buffer, String value) {
+        if (value == null || value.trim().length() == 0 || "null".equals(value)) {
+            return;
+        }
+        if (buffer.length() > 0) {
+            buffer.append('\n');
+        }
+        buffer.append(value.trim());
+    }
+
+    private static class ToolIndex {
+        private final String names;
+        private final String calls;
+
+        private ToolIndex(String names, String calls) {
+            this.names = names;
+            this.calls = calls;
+        }
     }
 
     /**

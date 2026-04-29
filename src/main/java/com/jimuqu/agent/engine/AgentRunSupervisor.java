@@ -6,6 +6,7 @@ import com.jimuqu.agent.core.model.AgentRunContext;
 import com.jimuqu.agent.core.model.AgentRunOutcome;
 import com.jimuqu.agent.core.model.AgentRunRecord;
 import com.jimuqu.agent.core.model.AgentRunStopResult;
+import com.jimuqu.agent.core.model.CompressionOutcome;
 import com.jimuqu.agent.core.model.ContextBudgetDecision;
 import com.jimuqu.agent.core.model.LlmResult;
 import com.jimuqu.agent.core.model.SessionRecord;
@@ -18,6 +19,7 @@ import com.jimuqu.agent.core.service.ContextCompressionService;
 import com.jimuqu.agent.core.service.ConversationEventSink;
 import com.jimuqu.agent.core.service.LlmGateway;
 import com.jimuqu.agent.gateway.feedback.ConversationFeedbackSink;
+import com.jimuqu.agent.llm.LlmErrorClassifier;
 import com.jimuqu.agent.llm.LlmProviderSupport;
 import com.jimuqu.agent.support.IdSupport;
 import com.jimuqu.agent.support.LlmProviderService;
@@ -57,6 +59,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
     private final LlmGateway llmGateway;
     private final LlmProviderService llmProviderService;
     private final ConcurrentMap<String, RunHandle> runningRuns = new ConcurrentHashMap<String, RunHandle>();
+    private volatile long lastRunFinishedAt;
 
     @Override
     public AgentRunStopResult stop(String sourceKey) {
@@ -78,6 +81,16 @@ public class AgentRunSupervisor implements AgentRunControlService {
     public boolean isRunning(String sourceKey) {
         RunHandle handle = runningRuns.get(normalizeSourceKey(sourceKey));
         return handle != null && !handle.cancelled.get();
+    }
+
+    @Override
+    public boolean hasRunningRuns() {
+        return !runningRuns.isEmpty();
+    }
+
+    @Override
+    public long lastRunFinishedAt() {
+        return lastRunFinishedAt;
     }
 
     public AgentRunOutcome run(SessionRecord session,
@@ -111,6 +124,9 @@ public class AgentRunSupervisor implements AgentRunControlService {
             String replyText = "";
             String previousProvider = null;
             int attemptNo = 0;
+            String compressionWarning = "";
+            int contextEstimateTokens = 0;
+            int contextWindowTokens = 0;
 
             for (int candidateIndex = 0; candidateIndex < candidates.size(); candidateIndex++) {
                 checkCancellation(session.getSourceKey());
@@ -128,7 +144,15 @@ public class AgentRunSupervisor implements AgentRunControlService {
                     runContext.event("attempt.start", "开始第 " + attemptNo + " 次尝试：" + resolved.getProvider() + "/" + resolved.getModel());
 
                     try {
-                        session = compressBeforeAttempt(session, systemPrompt, userMessage, resolved, runContext, eventSink, runRecord.getRunId());
+                        CompressionOutcome compression = compressBeforeAttempt(session, systemPrompt, userMessage, resolved, runContext, eventSink, runRecord.getRunId());
+                        session = compression.getSession();
+                        if (StrUtil.isBlank(compressionWarning) && StrUtil.isNotBlank(compression.getWarning())) {
+                            compressionWarning = compression.getWarning();
+                        }
+                        if (compression.getEstimatedTokens() > 0) {
+                            contextEstimateTokens = compression.getEstimatedTokens();
+                        }
+                        contextWindowTokens = Math.max(1024, resolved.getContextWindowTokens());
                         checkCancellation(session.getSourceKey());
                         String previousNdjson = session.getNdjson();
                         LlmResult result = llmGateway.executeOnce(session, systemPrompt, userMessage, tools, feedbackSink, eventSink, resume, resolved, runContext);
@@ -235,6 +259,12 @@ public class AgentRunSupervisor implements AgentRunControlService {
             outcome.setFinalReply(replyText);
             outcome.setResult(finalResult);
             outcome.setRunRecord(runRecord);
+            outcome.setCompressionWarning(compressionWarning);
+            outcome.setModel(finalResult.getModel());
+            outcome.setProvider(finalResult.getProvider());
+            outcome.setContextEstimateTokens(contextEstimateTokens);
+            outcome.setContextWindowTokens(contextWindowTokens);
+            outcome.setCwd(System.getProperty("user.dir"));
             return outcome;
         } catch (AgentRunCancelledException e) {
             runRecord.setStatus("cancelled");
@@ -251,29 +281,36 @@ public class AgentRunSupervisor implements AgentRunControlService {
         }
     }
 
-    private SessionRecord compressBeforeAttempt(SessionRecord session,
-                                                String systemPrompt,
-                                                String userMessage,
-                                                AppConfig.LlmConfig resolved,
-                                                AgentRunContext runContext,
-                                                ConversationEventSink eventSink,
-                                                String runId) throws Exception {
+    private CompressionOutcome compressBeforeAttempt(SessionRecord session,
+                                                     String systemPrompt,
+                                                     String userMessage,
+                                                     AppConfig.LlmConfig resolved,
+                                                     AgentRunContext runContext,
+                                                     ConversationEventSink eventSink,
+                                                     String runId) throws Exception {
         ContextBudgetDecision decision = contextBudgetService.decide(session, systemPrompt, userMessage, resolved);
         if (!decision.isShouldCompress()) {
             eventSink.onCompressionDecision(runId, false, decision.getReason(), decision.getEstimatedTokens(), decision.getThresholdTokens());
             runContext.event("compression.skip", decision.getReason(), runContext.metadata("estimatedTokens", decision.getEstimatedTokens()));
-            return session;
+            CompressionOutcome skipped = CompressionOutcome.skipped(session);
+            skipped.setEstimatedTokens(decision.getEstimatedTokens());
+            skipped.setThresholdTokens(decision.getThresholdTokens());
+            return skipped;
         }
 
         SessionRecord before = cloneSessionState(session);
-        SessionRecord compressed = contextCompressionService.compressNow(session, systemPrompt, userMessage);
+        CompressionOutcome outcome = contextCompressionService.compressNowWithOutcome(session, systemPrompt, userMessage);
+        SessionRecord compressed = outcome.getSession();
         boolean changed = !StrUtil.equals(before.getNdjson(), compressed.getNdjson());
         eventSink.onCompressionDecision(runId, changed, decision.getReason(), decision.getEstimatedTokens(), decision.getThresholdTokens());
-        runContext.event(changed ? "compression.done" : "compression.unchanged", decision.getReason(), runContext.metadata("estimatedTokens", decision.getEstimatedTokens()));
+        String eventType = outcome.isFailed() ? "compression.failed" : (changed ? "compression.done" : "compression.unchanged");
+        runContext.event(eventType, outcome.isFailed() ? outcome.getErrorMessage() : decision.getReason(), runContext.metadata("estimatedTokens", decision.getEstimatedTokens()));
         if (changed) {
             sessionRepository.save(compressed);
         }
-        return compressed;
+        outcome.setEstimatedTokens(decision.getEstimatedTokens());
+        outcome.setThresholdTokens(decision.getThresholdTokens());
+        return outcome;
     }
 
     private SessionRecord cloneSessionState(SessionRecord source) {
@@ -411,31 +448,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
     }
 
     private boolean classifyRetryable(Throwable error) {
-        String message = collectErrorText(error).toLowerCase(Locale.ROOT);
-        return message.contains("timeout")
-                || message.contains("timed out")
-                || message.contains("connection reset")
-                || message.contains("connection refused")
-                || message.contains("429")
-                || message.contains("500")
-                || message.contains("502")
-                || message.contains("503")
-                || message.contains("network");
-    }
-
-    private String collectErrorText(Throwable error) {
-        StringBuilder buffer = new StringBuilder();
-        Throwable current = error;
-        while (current != null) {
-            if (StrUtil.isNotBlank(current.getMessage())) {
-                if (buffer.length() > 0) {
-                    buffer.append(" | ");
-                }
-                buffer.append(current.getMessage());
-            }
-            current = current.getCause();
-        }
-        return buffer.toString();
+        return LlmErrorClassifier.classify(error).isRetryable();
     }
 
     private void applyUsage(SessionRecord session, LlmResult result) {
@@ -485,6 +498,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
             return;
         }
         runningRuns.remove(normalizeSourceKey(sourceKey), handle);
+        lastRunFinishedAt = System.currentTimeMillis();
     }
 
     private void checkCancellation(String sourceKey) {

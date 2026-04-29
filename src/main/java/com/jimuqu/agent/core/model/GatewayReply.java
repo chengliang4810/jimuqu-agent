@@ -35,6 +35,11 @@ public class GatewayReply {
     private Map<String, Object> channelExtras = new LinkedHashMap<String, Object>();
 
     /**
+     * 最终回复运行态元数据，不参与命令/错误回复。
+     */
+    private Map<String, Object> runtimeMetadata = new LinkedHashMap<String, Object>();
+
+    /**
      * 是否由命令处理链生成。
      */
     private boolean commandHandled;

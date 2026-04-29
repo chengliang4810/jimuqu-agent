@@ -3,6 +3,8 @@ package com.jimuqu.agent.gateway.feedback;
 import cn.hutool.core.util.StrUtil;
 import org.noear.snack4.ONode;
 
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -28,7 +30,46 @@ public final class ToolPreviewSupport {
         if (preview.length() <= maxLen) {
             return preview;
         }
+        if (verbose) {
+            return buildJsonSafePreview(args, maxLen);
+        }
         return preview.substring(0, Math.max(0, maxLen - 3)) + "...";
+    }
+
+    private static String buildJsonSafePreview(Map<String, Object> args, int maxLen) {
+        try {
+            Object copy = ONode.deserialize(ONode.serialize(args), Object.class);
+            shrinkJsonStrings(copy, Math.max(24, maxLen / 3));
+            String serialized = normalize(ONode.serialize(copy));
+            if (serialized.length() <= maxLen) {
+                return serialized;
+            }
+        } catch (Exception ignored) {
+            // fall through
+        }
+        Map<String, Object> fallback = new LinkedHashMap<String, Object>();
+        fallback.put("truncated", Boolean.TRUE);
+        fallback.put("preview", normalize(ONode.serialize(args)).substring(0, Math.max(0, maxLen - 32)));
+        return normalize(ONode.serialize(fallback));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void shrinkJsonStrings(Object value, int maxStringLength) {
+        if (value instanceof Map) {
+            Map<Object, Object> map = (Map<Object, Object>) value;
+            for (Map.Entry<Object, Object> entry : map.entrySet()) {
+                Object item = entry.getValue();
+                if (item instanceof String && ((String) item).length() > maxStringLength) {
+                    entry.setValue(((String) item).substring(0, maxStringLength) + "...[truncated]");
+                } else {
+                    shrinkJsonStrings(item, maxStringLength);
+                }
+            }
+        } else if (value instanceof List) {
+            for (Object item : (List<?>) value) {
+                shrinkJsonStrings(item, maxStringLength);
+            }
+        }
     }
 
     private static String pickPrimaryValue(String toolName, Map<String, Object> args) {

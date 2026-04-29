@@ -73,6 +73,7 @@ import com.jimuqu.agent.support.AttachmentCacheService;
 import com.jimuqu.agent.support.LlmProviderService;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.support.DisplaySettingsService;
+import com.jimuqu.agent.support.RuntimeFooterService;
 import com.jimuqu.agent.support.update.AppUpdateService;
 import com.jimuqu.agent.support.update.AppVersionService;
 import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
@@ -189,6 +190,7 @@ public class TestEnvironment {
         DashboardProviderService dashboardProviderService = new DashboardProviderService(config, refreshService, llmProviderService);
         RuntimeSettingsService runtimeSettingsService = new RuntimeSettingsService(config, globalSettingRepository, deliveryService, dashboardConfigService, dashboardRuntimeConfigService, appVersionService, llmProviderService, dashboardProviderService);
         DisplaySettingsService displaySettingsService = new DisplaySettingsService(config, globalSettingRepository);
+        RuntimeFooterService runtimeFooterService = new RuntimeFooterService(config);
         AppUpdateService appUpdateService = new AppUpdateService(config, appVersionService);
         DelegationService delegationService = new DefaultDelegationService(holder, preferenceStore, sessionRepository);
         SessionSearchService sessionSearchService = new DefaultSessionSearchService(sessionRepository, llmGateway);
@@ -197,7 +199,7 @@ public class TestEnvironment {
         ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, memoryService, sessionSearchService, localSkillService, skillHubService, checkpointService, delegationService, attachmentCacheService, runtimeSettingsService);
         ContextBudgetService contextBudgetService = new DefaultContextBudgetService(config);
         AgentRunSupervisor agentRunSupervisor = new AgentRunSupervisor(config, sessionRepository, agentRunRepository, contextCompressionService, contextBudgetService, llmGateway, llmProviderService);
-        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, deliveryService, displaySettingsService, runtimeSettingsService, dangerousCommandApprovalService, agentRunSupervisor);
+        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, deliveryService, displaySettingsService, runtimeSettingsService, dangerousCommandApprovalService, agentRunSupervisor, runtimeFooterService);
         holder.set(orchestrator);
         SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService, llmGateway);
         CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService, displaySettingsService, appUpdateService, dangerousCommandApprovalService, agentRunSupervisor, agentProfileService);
