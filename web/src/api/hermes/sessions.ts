@@ -26,6 +26,7 @@ export interface SessionSummary {
   last_compression_at?: number
   last_compression_input_tokens?: number
   compression_failure_count?: number
+  active_agent_name?: string | null
 }
 
 export interface SessionDetail extends SessionSummary {
@@ -75,6 +76,7 @@ interface DashboardSessionSummary {
   last_compression_at?: number
   last_compression_input_tokens?: number
   compression_failure_count?: number
+  active_agent_name?: string | null
 }
 
 interface DashboardSessionDetail {
@@ -92,6 +94,7 @@ interface DashboardSessionDetail {
   last_compression_at?: number
   last_compression_input_tokens?: number
   compression_failure_count?: number
+  active_agent_name?: string | null
   parent_session_id?: string | null
   branch_name?: string | null
   messages: Array<{
@@ -135,6 +138,7 @@ function mapSummary(s: DashboardSessionSummary): SessionSummary {
     last_compression_at: s.last_compression_at || 0,
     last_compression_input_tokens: s.last_compression_input_tokens || 0,
     compression_failure_count: s.compression_failure_count || 0,
+    active_agent_name: s.active_agent_name || 'default',
   }
 }
 
@@ -250,6 +254,7 @@ export async function fetchSession(id: string): Promise<SessionDetail | null> {
       last_compression_at: detail.last_compression_at || 0,
       last_compression_input_tokens: detail.last_compression_input_tokens || 0,
       compression_failure_count: detail.compression_failure_count || 0,
+      active_agent_name: detail.active_agent_name || 'default',
     }
 
     return {
@@ -314,7 +319,7 @@ export async function rollbackCheckpoint(id: string): Promise<any> {
   return request(`/api/checkpoints/${id}/rollback`, { method: 'POST' })
 }
 
-export async function fetchContextLength(_profile?: string): Promise<number> {
+export async function fetchContextLength(): Promise<number> {
   const res = await request<{ effective_context_length?: number; config_context_length?: number }>('/api/model/info')
   return res.effective_context_length || res.config_context_length || 128000
 }

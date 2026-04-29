@@ -16,6 +16,11 @@ const router = createRouter({
       component: () => import('@/views/hermes/ChatView.vue'),
     },
     {
+      path: '/hermes/agents',
+      name: 'hermes.agents',
+      component: () => import('@/views/hermes/AgentsView.vue'),
+    },
+    {
       path: '/hermes/jobs',
       name: 'hermes.jobs',
       component: () => import('@/views/hermes/JobsView.vue'),
@@ -34,11 +39,6 @@ const router = createRouter({
       path: '/hermes/persona/:key',
       name: 'hermes.persona.file',
       component: () => import('@/views/hermes/PersonaFileView.vue'),
-    },
-    {
-      path: '/hermes/profiles',
-      name: 'hermes.profiles',
-      redirect: '/hermes/settings',
     },
     {
       path: '/hermes/logs',

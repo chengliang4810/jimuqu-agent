@@ -1,6 +1,8 @@
 package com.jimuqu.agent.engine;
 
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.agent.AgentRuntimeScope;
+import com.jimuqu.agent.agent.AgentRuntimeService;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
@@ -26,7 +28,6 @@ import com.jimuqu.agent.support.SourceKeySupport;
 import com.jimuqu.agent.support.constants.CompressionConstants;
 import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
 import com.jimuqu.agent.tool.runtime.MessageDeliveryTracker;
-import lombok.RequiredArgsConstructor;
 import org.noear.solon.ai.chat.ChatRole;
 import org.noear.solon.ai.chat.message.AssistantMessage;
 import org.noear.solon.ai.chat.message.ChatMessage;
@@ -39,7 +40,6 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * DefaultConversationOrchestrator 实现。
  */
-@RequiredArgsConstructor
 public class DefaultConversationOrchestrator implements ConversationOrchestrator {
     /**
      * 当模型只完成工具调用却未生成最终文字答复时，补发的恢复提示。
@@ -72,7 +72,59 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     private final DangerousCommandApprovalService dangerousCommandApprovalService;
     private final AgentRunSupervisor agentRunSupervisor;
     private final RuntimeFooterService runtimeFooterService;
+    private final AgentRuntimeService agentRuntimeService;
     private final ConcurrentMap<String, Object> sourceLocks = new ConcurrentHashMap<String, Object>();
+
+    public DefaultConversationOrchestrator(SessionRepository sessionRepository,
+                                           ContextService contextService,
+                                           ContextCompressionService contextCompressionService,
+                                           LlmGateway llmGateway,
+                                           ToolRegistry toolRegistry,
+                                           DeliveryService deliveryService,
+                                           DisplaySettingsService displaySettingsService,
+                                           RuntimeSettingsService runtimeSettingsService,
+                                           DangerousCommandApprovalService dangerousCommandApprovalService,
+                                           AgentRunSupervisor agentRunSupervisor,
+                                           RuntimeFooterService runtimeFooterService) {
+        this(sessionRepository,
+                contextService,
+                contextCompressionService,
+                llmGateway,
+                toolRegistry,
+                deliveryService,
+                displaySettingsService,
+                runtimeSettingsService,
+                dangerousCommandApprovalService,
+                agentRunSupervisor,
+                runtimeFooterService,
+                null);
+    }
+
+    public DefaultConversationOrchestrator(SessionRepository sessionRepository,
+                                           ContextService contextService,
+                                           ContextCompressionService contextCompressionService,
+                                           LlmGateway llmGateway,
+                                           ToolRegistry toolRegistry,
+                                           DeliveryService deliveryService,
+                                           DisplaySettingsService displaySettingsService,
+                                           RuntimeSettingsService runtimeSettingsService,
+                                           DangerousCommandApprovalService dangerousCommandApprovalService,
+                                           AgentRunSupervisor agentRunSupervisor,
+                                           RuntimeFooterService runtimeFooterService,
+                                           AgentRuntimeService agentRuntimeService) {
+        this.sessionRepository = sessionRepository;
+        this.contextService = contextService;
+        this.contextCompressionService = contextCompressionService;
+        this.llmGateway = llmGateway;
+        this.toolRegistry = toolRegistry;
+        this.deliveryService = deliveryService;
+        this.displaySettingsService = displaySettingsService;
+        this.runtimeSettingsService = runtimeSettingsService;
+        this.dangerousCommandApprovalService = dangerousCommandApprovalService;
+        this.agentRunSupervisor = agentRunSupervisor;
+        this.runtimeFooterService = runtimeFooterService;
+        this.agentRuntimeService = agentRuntimeService;
+    }
 
     public GatewayReply handleIncoming(GatewayMessage message) throws Exception {
         return handleIncoming(message, ConversationEventSink.noop());
@@ -115,16 +167,17 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             return GatewayReply.error("当前来源键没有可恢复的会话。");
         }
 
-        List<String> enabledToolNames = toolRegistry.resolveEnabledToolNames(sourceKey);
-        List<Object> enabledTools = toolRegistry.resolveEnabledTools(sourceKey);
-        String systemPrompt = contextService.buildSystemPrompt(sourceKey)
+        AgentRuntimeScope agentScope = resolveAgentScope(session);
+        List<String> enabledToolNames = toolRegistry.resolveEnabledToolNames(sourceKey, agentScope);
+        List<Object> enabledTools = toolRegistry.resolveEnabledTools(sourceKey, agentScope);
+        String systemPrompt = contextService.buildSystemPrompt(sourceKey, agentScope)
                 + "\n\n"
-                + runtimeSettingsService.buildAgentRuntimePrompt(sourceKey, session, enabledToolNames);
+                + runtimeSettingsService.buildAgentRuntimePrompt(sourceKey, session, enabledToolNames, agentScope);
         session.setSystemPromptSnapshot(systemPrompt);
 
         GatewayMessage feedbackTarget = messageFromSourceKey(sourceKey);
         ConversationFeedbackSink feedbackSink = feedbackSinkFor(feedbackTarget);
-        AgentRunOutcome outcome = agentRunSupervisor.run(session, systemPrompt, null, enabledTools, feedbackSink, eventSink, true);
+        AgentRunOutcome outcome = agentRunSupervisor.run(session, systemPrompt, null, enabledTools, feedbackSink, eventSink, true, agentScope);
         String finalReply = StrUtil.blankToDefault(outcome.getFinalReply(), EMPTY_REPLY_FALLBACK);
         finalReply = decorateFinalReply(finalReply, feedbackTarget.getPlatform(), outcome);
         feedbackSink.onFinalReply(finalReply);
@@ -148,6 +201,16 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         return previous == null ? created : previous;
     }
 
+    private AgentRuntimeScope resolveAgentScope(SessionRecord session) throws Exception {
+        if (agentRuntimeService != null) {
+            return agentRuntimeService.resolve(session);
+        }
+        AgentRuntimeScope scope = new AgentRuntimeScope();
+        scope.setAgentName(AgentRuntimeScope.normalizeName(session == null ? null : session.getActiveAgentName()));
+        scope.setWorkspaceDir(System.getProperty("user.dir"));
+        return scope;
+    }
+
     private GatewayReply runOnSession(SessionRecord session, GatewayMessage message, ConversationEventSink eventSink) throws Exception {
         DangerousCommandApprovalService.PendingApproval pendingApproval = dangerousCommandApprovalService == null
                 ? null
@@ -167,15 +230,16 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         if (!message.isHeartbeat() && StrUtil.isBlank(session.getTitle()) && StrUtil.isNotBlank(effectiveUserText)) {
             session.setTitle(extractTitle(effectiveUserText));
         }
-        List<String> enabledToolNames = toolRegistry.resolveEnabledToolNames(message.sourceKey());
-        List<Object> enabledTools = toolRegistry.resolveEnabledTools(message.sourceKey());
-        String systemPrompt = contextService.buildSystemPrompt(message.sourceKey())
+        AgentRuntimeScope agentScope = resolveAgentScope(session);
+        List<String> enabledToolNames = toolRegistry.resolveEnabledToolNames(message.sourceKey(), agentScope);
+        List<Object> enabledTools = toolRegistry.resolveEnabledTools(message.sourceKey(), agentScope);
+        String systemPrompt = contextService.buildSystemPrompt(message.sourceKey(), agentScope)
                 + "\n\n"
-                + runtimeSettingsService.buildAgentRuntimePrompt(message.sourceKey(), session, enabledToolNames);
+                + runtimeSettingsService.buildAgentRuntimePrompt(message.sourceKey(), session, enabledToolNames, agentScope);
         session.setSystemPromptSnapshot(systemPrompt);
 
         ConversationFeedbackSink feedbackSink = feedbackSinkFor(message);
-        AgentRunOutcome outcome = agentRunSupervisor.run(session, systemPrompt, effectiveUserText, enabledTools, feedbackSink, eventSink, false);
+        AgentRunOutcome outcome = agentRunSupervisor.run(session, systemPrompt, effectiveUserText, enabledTools, feedbackSink, eventSink, false, agentScope);
         String finalReply = StrUtil.blankToDefault(outcome.getFinalReply(), EMPTY_REPLY_FALLBACK);
         if (MessageDeliveryTracker.consumeDuplicateFinalReply(message.sourceKey(), finalReply)) {
             finalReply = "";

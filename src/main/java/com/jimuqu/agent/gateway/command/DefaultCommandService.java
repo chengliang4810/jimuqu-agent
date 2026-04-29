@@ -176,7 +176,7 @@ public class DefaultCommandService implements CommandService {
         String args = parts.length > 1 ? parts[1].trim() : "";
 
         if (GatewayCommandConstants.COMMAND_AGENT.equals(command)) {
-            return GatewayReply.ok(agentProfileService.handleCommand(args));
+            return GatewayReply.ok(agentProfileService.handleCommand(args, sessionRepository, message.sourceKey()));
         }
 
         if (GatewayCommandConstants.COMMAND_NEW.equals(command)
@@ -253,6 +253,7 @@ public class DefaultCommandService implements CommandService {
                             + ", branch=" + session.getBranchName()
                             + ", messages=" + count
                             + ", model=" + StrUtil.nullToDefault(session.getModelOverride(), "default")
+                            + ", agent=" + StrUtil.blankToDefault(session.getActiveAgentName(), "default")
                             + ", personality=" + currentPersonalityName()
             );
             reply.setSessionId(session.getSessionId());
@@ -1084,7 +1085,7 @@ public class DefaultCommandService implements CommandService {
                 helpLine(GatewayCommandConstants.SLASH_REASONING + " [show|hide]", "查看或切换 reasoning 展示"),
                 helpLine(GatewayCommandConstants.SLASH_TOOLS + " [list|enable|disable] [name...]", "查看或管理工具开关"),
                 helpLine(GatewayCommandConstants.SLASH_SKILLS + " [list|browse|search|install|inspect|check|update|audit|uninstall|tap|enable|disable|reload]", "管理本地技能与 Skills Hub"),
-                helpLine(GatewayCommandConstants.SLASH_AGENT + " [list|create|show|model|tools|skills|memory]", "管理全局 Agent"),
+                helpLine(GatewayCommandConstants.SLASH_AGENT + " [name|list|create|show|model|tools|skills|memory]", "切换或管理当前会话 Agent"),
                 helpLine(GatewayCommandConstants.SLASH_CRON + " [list|create|pause|resume|delete|run]", "管理定时任务"),
                 helpLine(GatewayCommandConstants.SLASH_COMPRESS + " [focus]", "压缩当前会话上下文"),
                 helpLine(GatewayCommandConstants.SLASH_ROLLBACK + " [latest|checkpoint-id|number]", "回滚到指定 checkpoint"),
@@ -1106,6 +1107,7 @@ public class DefaultCommandService implements CommandService {
         StringBuilder buffer = new StringBuilder();
         buffer.append("session=").append(session.getSessionId()).append('\n');
         buffer.append("branch=").append(session.getBranchName()).append('\n');
+        buffer.append("agent=").append(StrUtil.blankToDefault(session.getActiveAgentName(), "default")).append('\n');
         buffer.append("effective_provider=").append(StrUtil.blankToDefault(resolved.getProvider(), "default")).append('\n');
         buffer.append("effective_model=").append(StrUtil.blankToDefault(resolved.getModel(), "default")).append('\n');
         buffer.append("last_provider=").append(StrUtil.blankToDefault(session.getLastResolvedProvider(), "")).append('\n');

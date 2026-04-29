@@ -86,6 +86,7 @@ export default {
 
   sidebar: {
     chat: '对话',
+    agents: 'Agents',
     search: '搜索',
     jobs: '任务',
     models: '模型',

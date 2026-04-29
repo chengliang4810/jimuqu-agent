@@ -1,6 +1,7 @@
 package com.jimuqu.agent.bootstrap;
 
 import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.agent.AgentRuntimeService;
 import com.jimuqu.agent.context.FileContextService;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.core.repository.CronJobRepository;
@@ -172,7 +173,8 @@ public class ToolConfiguration {
                                                              RuntimeSettingsService runtimeSettingsService,
                                                              DangerousCommandApprovalService dangerousCommandApprovalService,
                                                              AgentRunSupervisor agentRunSupervisor,
-                                                             RuntimeFooterService runtimeFooterService) {
+                                                             RuntimeFooterService runtimeFooterService,
+                                                             AgentRuntimeService agentRuntimeService) {
         ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(
                 sessionRepository,
                 contextService,
@@ -184,7 +186,8 @@ public class ToolConfiguration {
                 runtimeSettingsService,
                 dangerousCommandApprovalService,
                 agentRunSupervisor,
-                runtimeFooterService
+                runtimeFooterService,
+                agentRuntimeService
         );
         holder.set(orchestrator);
         return orchestrator;

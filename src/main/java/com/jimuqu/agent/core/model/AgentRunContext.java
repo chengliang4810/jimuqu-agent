@@ -16,6 +16,7 @@ public class AgentRunContext {
     private final String runId;
     private final String sessionId;
     private final String sourceKey;
+    private String workspaceDir;
     private int attemptNo;
     private String provider;
     private String model;
@@ -39,6 +40,14 @@ public class AgentRunContext {
         this.attemptNo = attemptNo;
         this.provider = provider;
         this.model = model;
+    }
+
+    public String getWorkspaceDir() {
+        return workspaceDir;
+    }
+
+    public void setWorkspaceDir(String workspaceDir) {
+        this.workspaceDir = workspaceDir;
     }
 
     public void event(String eventType, String summary) {

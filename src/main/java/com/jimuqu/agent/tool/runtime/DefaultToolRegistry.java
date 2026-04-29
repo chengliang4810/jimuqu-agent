@@ -1,5 +1,8 @@
 package com.jimuqu.agent.tool.runtime;
 
+import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.agent.AgentRuntimePolicy;
+import com.jimuqu.agent.agent.AgentRuntimeScope;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.core.repository.CronJobRepository;
@@ -172,18 +175,23 @@ public class DefaultToolRegistry implements ToolRegistry {
 
     @Override
     public List<Object> resolveEnabledTools(String sourceKey) {
+        return resolveEnabledTools(sourceKey, null);
+    }
+
+    @Override
+    public List<Object> resolveEnabledTools(String sourceKey, AgentRuntimeScope agentScope) {
         List<Object> tools = new ArrayList<Object>();
 
         MemoryTools memoryTools = new MemoryTools(memoryService);
         SessionSearchTools sessionSearchTools = new SessionSearchTools(sessionSearchService, sourceKey);
-        SkillTools skillTools = new SkillTools(localSkillService, checkpointService, sessionRepository, sourceKey);
+        SkillTools skillTools = new SkillTools(localSkillService, checkpointService, sessionRepository, sourceKey, agentScope);
         SkillHubTools skillHubTools = new SkillHubTools(skillHubService);
         MessagingTools messagingTools = new MessagingTools(deliveryService, sourceKey, attachmentCacheService, appConfig);
         CronjobTools cronjobTools = new CronjobTools(cronJobRepository, sourceKey);
         TodoTools todoTools = new TodoTools(appConfig, sourceKey);
         DelegateTools delegateTools = new DelegateTools(delegationService, sourceKey);
         ConfigTools configTools = new ConfigTools(runtimeSettingsService);
-        String sysWorkDir = appConfig.getRuntime().getHome();
+        String sysWorkDir = resolveWorkDir(agentScope);
         FileReadWriteSkill fileSkill = new FileReadWriteSkill(sysWorkDir);
         ShellSkill shellSkill = new ShellSkill(sysWorkDir);
         PythonSkill pythonSkill = new PythonSkill(sysWorkDir, defaultPythonCommand());
@@ -195,7 +203,7 @@ public class DefaultToolRegistry implements ToolRegistry {
         boolean fileSkillAdded = false;
         boolean clockSkillAdded = false;
 
-        for (String toolName : TOOL_NAMES) {
+        for (String toolName : AgentRuntimePolicy.resolveAllowedTools(agentScope, TOOL_NAMES)) {
             if (!isEnabled(sourceKey, toolName)) {
                 continue;
             }
@@ -278,8 +286,13 @@ public class DefaultToolRegistry implements ToolRegistry {
 
     @Override
     public List<String> resolveEnabledToolNames(String sourceKey) {
+        return resolveEnabledToolNames(sourceKey, null);
+    }
+
+    @Override
+    public List<String> resolveEnabledToolNames(String sourceKey, AgentRuntimeScope agentScope) {
         List<String> result = new ArrayList<String>();
-        for (String toolName : TOOL_NAMES) {
+        for (String toolName : AgentRuntimePolicy.resolveAllowedTools(agentScope, TOOL_NAMES)) {
             if (isEnabled(sourceKey, toolName)) {
                 result.add(toolName);
             }
@@ -329,6 +342,13 @@ public class DefaultToolRegistry implements ToolRegistry {
 
     private String defaultPythonCommand() {
         return isWindows() ? "python" : "python3";
+    }
+
+    private String resolveWorkDir(AgentRuntimeScope agentScope) {
+        if (agentScope != null && StrUtil.isNotBlank(agentScope.getWorkspaceDir())) {
+            return agentScope.getWorkspaceDir();
+        }
+        return appConfig.getRuntime().getHome();
     }
 
     private boolean isWindows() {

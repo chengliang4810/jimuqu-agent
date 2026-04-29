@@ -2,6 +2,7 @@ package com.jimuqu.agent.context;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.agent.AgentRuntimeScope;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.service.ContextService;
@@ -58,6 +59,11 @@ public class FileContextService implements ContextService {
      */
     @Override
     public String buildSystemPrompt(String sourceKey) {
+        return buildSystemPrompt(sourceKey, null);
+    }
+
+    @Override
+    public String buildSystemPrompt(String sourceKey, AgentRuntimeScope agentScope) {
         StringBuilder buffer = new StringBuilder();
         appendWorkspaceFile(buffer, ContextFileConstants.KEY_AGENTS, "Workspace Rules");
         appendWorkspaceFile(buffer, ContextFileConstants.KEY_SOUL, "Soul");
@@ -67,9 +73,12 @@ public class FileContextService implements ContextService {
         appendWorkspaceFile(buffer, ContextFileConstants.KEY_HEARTBEAT, "Heartbeat");
         appendPersonality(buffer);
         appendMemoryBlock(buffer, sourceKey);
+        appendAgentBlock(buffer, agentScope);
 
         try {
-            String skillPrompt = localSkillService.renderSkillIndexPrompt(sourceKey);
+            String skillPrompt = agentScope == null
+                    ? localSkillService.renderSkillIndexPrompt(sourceKey)
+                    : localSkillService.renderSkillIndexPrompt(sourceKey, agentScope);
             if (StrUtil.isNotBlank(skillPrompt)) {
                 buffer.append("\n\n").append(skillPrompt);
             }
@@ -78,6 +87,39 @@ public class FileContextService implements ContextService {
         }
 
         return buffer.toString().trim();
+    }
+
+    private void appendAgentBlock(StringBuilder buffer, AgentRuntimeScope agentScope) {
+        if (agentScope == null || agentScope.isDefaultAgentName()) {
+            return;
+        }
+        appendBlock(buffer, "Agent", "name=" + agentScope.getEffectiveName()
+                + "\nworkspace=" + StrUtil.nullToEmpty(agentScope.getWorkspaceDir()));
+        appendBlock(buffer, "Agent Role", agentScope.getRolePrompt());
+        appendBlock(buffer, "Agent File", readIfExists(agentScope.getAgentFilePath()));
+        appendBlock(buffer, "Agent Memory", joinNonBlank(agentScope.getMemory(), readIfExists(agentScope.getMemoryFilePath())));
+    }
+
+    private String readIfExists(String path) {
+        if (StrUtil.isBlank(path)) {
+            return "";
+        }
+        try {
+            java.io.File file = FileUtil.file(path);
+            return file.exists() && file.isFile() ? FileUtil.readUtf8String(file) : "";
+        } catch (Exception e) {
+            return "Failed to load file: " + e.getMessage();
+        }
+    }
+
+    private String joinNonBlank(String left, String right) {
+        if (StrUtil.isBlank(left)) {
+            return StrUtil.nullToEmpty(right);
+        }
+        if (StrUtil.isBlank(right)) {
+            return StrUtil.nullToEmpty(left);
+        }
+        return left.trim() + "\n\n" + right.trim();
     }
 
     /**

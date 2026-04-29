@@ -3,6 +3,7 @@ package com.jimuqu.agent.support;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.agent.AgentProfileRepository;
 import com.jimuqu.agent.agent.AgentProfileService;
+import com.jimuqu.agent.agent.AgentRuntimeService;
 import com.jimuqu.agent.context.AsyncSkillLearningService;
 import com.jimuqu.agent.context.BuiltinMemoryProvider;
 import com.jimuqu.agent.context.DefaultMemoryManager;
@@ -96,6 +97,7 @@ public class TestEnvironment {
     public final AppConfig appConfig;
     public final MemoryChannelAdapter memoryChannelAdapter;
     public final SessionRepository sessionRepository;
+    public final AgentRunRepository agentRunRepository;
     public final CronJobRepository cronJobRepository;
     public final LocalSkillService localSkillService;
     public final DefaultGatewayService gatewayService;
@@ -117,6 +119,7 @@ public class TestEnvironment {
     public final DangerousCommandApprovalService dangerousCommandApprovalService;
     public final AgentRunControlService agentRunControlService;
     public final AgentProfileService agentProfileService;
+    public final AgentRuntimeService agentRuntimeService;
 
     public static TestEnvironment withFakeLlm() throws Exception {
         return create(new FakeLlmGateway());
@@ -159,7 +162,8 @@ public class TestEnvironment {
         GatewayPolicyRepository gatewayPolicyRepository = new SqliteGatewayPolicyRepository(database);
         ChannelStateRepository channelStateRepository = new SqliteChannelStateRepository(database);
         AgentProfileRepository agentProfileRepository = new SqliteAgentProfileRepository(database);
-        AgentProfileService agentProfileService = new AgentProfileService(agentProfileRepository);
+        AgentRuntimeService agentRuntimeService = new AgentRuntimeService(config, agentProfileRepository);
+        AgentProfileService agentProfileService = new AgentProfileService(agentProfileRepository, agentRuntimeService);
         ConversationOrchestratorHolder holder = new ConversationOrchestratorHolder();
         SkillHubStateStore skillHubStateStore = new SkillHubStateStore(new File(config.getRuntime().getSkillsDir()));
         SkillGuardService skillGuardService = new DefaultSkillGuardService();
@@ -199,7 +203,7 @@ public class TestEnvironment {
         ToolRegistry toolRegistry = new DefaultToolRegistry(config, preferenceStore, sessionRepository, cronJobRepository, deliveryService, memoryService, sessionSearchService, localSkillService, skillHubService, checkpointService, delegationService, attachmentCacheService, runtimeSettingsService);
         ContextBudgetService contextBudgetService = new DefaultContextBudgetService(config);
         AgentRunSupervisor agentRunSupervisor = new AgentRunSupervisor(config, sessionRepository, agentRunRepository, contextCompressionService, contextBudgetService, llmGateway, llmProviderService);
-        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, deliveryService, displaySettingsService, runtimeSettingsService, dangerousCommandApprovalService, agentRunSupervisor, runtimeFooterService);
+        ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, deliveryService, displaySettingsService, runtimeSettingsService, dangerousCommandApprovalService, agentRunSupervisor, runtimeFooterService, agentRuntimeService);
         holder.set(orchestrator);
         SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService, llmGateway);
         CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService, displaySettingsService, appUpdateService, dangerousCommandApprovalService, agentRunSupervisor, agentProfileService);
@@ -208,6 +212,7 @@ public class TestEnvironment {
                 config,
                 memoryAdapter,
                 sessionRepository,
+                agentRunRepository,
                 cronJobRepository,
                 localSkillService,
                 gatewayService,
@@ -228,7 +233,8 @@ public class TestEnvironment {
                 skillHubService,
                 dangerousCommandApprovalService,
                 agentRunSupervisor,
-                agentProfileService
+                agentProfileService,
+                agentRuntimeService
         );
     }
 

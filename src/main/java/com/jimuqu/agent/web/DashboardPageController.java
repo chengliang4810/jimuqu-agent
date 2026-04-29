@@ -82,8 +82,8 @@ public class DashboardPageController {
         return renderIndex(context);
     }
 
-    @Mapping("/profiles")
-    public DownloadedFile profiles(Context context) {
+    @Mapping("/agents")
+    public DownloadedFile agents(Context context) {
         return renderIndex(context);
     }
 

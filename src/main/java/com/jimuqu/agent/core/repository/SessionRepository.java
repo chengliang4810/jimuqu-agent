@@ -72,4 +72,14 @@ public interface SessionRepository {
      * 更新会话模型覆盖配置。
      */
     void setModelOverride(String sessionId, String modelOverride) throws Exception;
+
+    /**
+     * 更新当前会话激活 Agent。
+     */
+    void setActiveAgentName(String sessionId, String agentName) throws Exception;
+
+    /**
+     * 清除所有使用指定 Agent 的会话激活状态。
+     */
+    void clearActiveAgentName(String agentName) throws Exception;
 }

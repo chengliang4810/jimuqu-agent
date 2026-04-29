@@ -37,6 +37,11 @@ public class SessionRecord {
     private String modelOverride;
 
     /**
+     * 当前会话后续消息使用的 Agent；空或 default 表示 runtime 根目录默认 Agent。
+     */
+    private String activeAgentName;
+
+    /**
      * 会话消息 NDJSON。
      */
     private String ndjson;

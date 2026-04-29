@@ -123,6 +123,7 @@ public class SqliteDatabase {
                     "branch_name text," +
                     "parent_session_id text," +
                     "model_override text," +
+                    "active_agent_name text," +
                     "ndjson text," +
                     "title text," +
                     "compressed_summary text," +
@@ -159,6 +160,10 @@ public class SqliteDatabase {
             }
             try {
                 statement.execute("alter table sessions add column model_override text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table sessions add column active_agent_name text");
             } catch (Exception ignored) {
             }
             try {
@@ -367,6 +372,8 @@ public class SqliteDatabase {
                     "run_id text primary key," +
                     "session_id text not null," +
                     "source_key text," +
+                    "agent_name text," +
+                    "agent_snapshot_json text," +
                     "status text not null," +
                     "input_preview text," +
                     "final_reply_preview text," +
@@ -380,6 +387,14 @@ public class SqliteDatabase {
                     "finished_at integer not null default 0," +
                     "error text" +
                     ")");
+            try {
+                statement.execute("alter table agent_runs add column agent_name text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table agent_runs add column agent_snapshot_json text");
+            } catch (Exception ignored) {
+            }
             statement.execute("create index if not exists idx_agent_runs_session_started on agent_runs(session_id, started_at desc)");
             statement.execute("create table if not exists agent_run_events (" +
                     "event_id text primary key," +
@@ -406,14 +421,43 @@ public class SqliteDatabase {
             statement.execute("create index if not exists idx_channel_states_platform_scope on channel_states(platform, scope_key)");
             statement.execute("create table if not exists agent_profiles (" +
                     "agent_name text primary key," +
+                    "display_name text," +
+                    "description text," +
                     "role_prompt text," +
+                    "default_model text," +
                     "model text," +
                     "allowed_tools_json text," +
                     "skills_json text," +
                     "memory text," +
+                    "enabled integer not null default 1," +
+                    "last_used_at integer not null default 0," +
                     "created_at integer not null," +
                     "updated_at integer not null" +
                     ")");
+            try {
+                statement.execute("alter table agent_profiles add column display_name text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table agent_profiles add column description text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table agent_profiles add column default_model text");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table agent_profiles add column enabled integer not null default 1");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("alter table agent_profiles add column last_used_at integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute("update agent_profiles set default_model = model where (default_model is null or default_model = '') and model is not null");
+            } catch (Exception ignored) {
+            }
             statement.execute("drop table if exists project_events");
             statement.execute("drop table if exists project_questions");
             statement.execute("drop table if exists project_runs");

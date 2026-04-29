@@ -3,6 +3,7 @@ package com.jimuqu.agent.bootstrap;
 import cn.hutool.core.io.FileUtil;
 import com.jimuqu.agent.agent.AgentProfileRepository;
 import com.jimuqu.agent.agent.AgentProfileService;
+import com.jimuqu.agent.agent.AgentRuntimeService;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.context.AsyncSkillLearningService;
 import com.jimuqu.agent.context.BuiltinMemoryProvider;
@@ -68,8 +69,15 @@ public class ContextConfiguration {
     }
 
     @Bean
-    public AgentProfileService agentProfileService(AgentProfileRepository agentProfileRepository) {
-        return new AgentProfileService(agentProfileRepository);
+    public AgentRuntimeService agentRuntimeService(AppConfig appConfig,
+                                                   AgentProfileRepository agentProfileRepository) {
+        return new AgentRuntimeService(appConfig, agentProfileRepository);
+    }
+
+    @Bean
+    public AgentProfileService agentProfileService(AgentProfileRepository agentProfileRepository,
+                                                   AgentRuntimeService agentRuntimeService) {
+        return new AgentProfileService(agentProfileRepository, agentRuntimeService);
     }
 
     @Bean

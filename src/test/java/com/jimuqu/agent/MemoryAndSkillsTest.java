@@ -1,6 +1,7 @@
 package com.jimuqu.agent;
 
-import com.jimuqu.agent.context.FileContextService;
+import cn.hutool.core.io.FileUtil;
+import com.jimuqu.agent.agent.AgentRuntimeScope;
 import com.jimuqu.agent.context.AsyncSkillLearningService;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
@@ -74,6 +75,33 @@ public class MemoryAndSkillsTest {
         assertThat(missingSkill).contains("Skill not found");
         assertThat(invalidPath).contains("\"success\":false");
         assertThat(invalidPath).contains("Invalid skill file path");
+    }
+
+    @Test
+    void shouldFilterPromptAndSkillToolsByAgentSkills() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.localSkillService.createSkill("global-skill", null, skill("global-skill", "global"));
+        File agentSkillDir = FileUtil.file(env.appConfig.getRuntime().getHome(), "agents", "coder", "skills", "agent-only");
+        FileUtil.mkdir(agentSkillDir);
+        FileUtil.writeUtf8String(skill("agent-only", "agent local"), FileUtil.file(agentSkillDir, "SKILL.md"));
+
+        env.agentProfileService.createAgent("coder", "你是代码助手。");
+        env.send("skill-room", "skill-user", "hello");
+        env.send("skill-room", "skill-user", "/pairing claim-admin");
+        env.send("skill-room", "skill-user", "/agent skills coder agent-only");
+        env.send("skill-room", "skill-user", "/agent coder");
+        AgentRuntimeScope scope = env.agentRuntimeService.resolve(env.sessionRepository.getBoundSession("MEMORY:skill-room:skill-user"));
+
+        String prompt = env.localSkillService.renderSkillIndexPrompt("MEMORY:skill-room:skill-user", scope);
+        SkillTools tools = new SkillTools(env.localSkillService, env.checkpointService, env.sessionRepository, "MEMORY:skill-room:skill-user", scope);
+        String listed = tools.skillsList(null);
+        String viewed = tools.skillView("agent-only", null);
+        String hidden = tools.skillView("global-skill", null);
+
+        assertThat(prompt).contains("agent-only").doesNotContain("global-skill");
+        assertThat(listed).contains("agent-only").doesNotContain("global-skill");
+        assertThat(viewed).contains("agent local");
+        assertThat(hidden).contains("\"success\":false").contains("Skill not found");
     }
 
     @Test

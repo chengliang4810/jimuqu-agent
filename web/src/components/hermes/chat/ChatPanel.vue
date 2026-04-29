@@ -7,6 +7,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getSourceLabel } from '@/shared/session-display'
 import { copyToClipboard } from '@/utils/clipboard'
+import AgentSelector from '@/components/layout/AgentSelector.vue'
 import ChatInput from './ChatInput.vue'
 import ConversationMonitorPane from './ConversationMonitorPane.vue'
 import MessageList from './MessageList.vue'
@@ -360,6 +361,7 @@ async function handleRenameConfirm() {
           <span v-if="activeSessionSource" class="source-badge">{{ getSourceLabel(activeSessionSource) }}</span>
         </div>
         <div class="header-actions">
+          <AgentSelector v-if="currentMode === 'chat'" :session-id="chatStore.activeSessionId" />
           <div class="chat-mode-toggle">
             <NButton
               size="small"

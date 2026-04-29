@@ -9,6 +9,8 @@ export interface AgentRun {
   final_reply_preview?: string
   provider?: string
   model?: string
+  agent_name?: string
+  agent_snapshot?: Record<string, unknown>
   attempts: number
   input_tokens: number
   output_tokens: number

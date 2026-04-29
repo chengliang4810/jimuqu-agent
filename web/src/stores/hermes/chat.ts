@@ -3,7 +3,6 @@ import { deleteSession as deleteSessionApi, fetchSession, fetchSessions, fetchSe
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAppStore } from './app'
-import { useProfilesStore } from './profiles'
 
 export interface Attachment {
   id: string
@@ -43,6 +42,7 @@ export interface Session {
   outputTokens?: number
   endedAt?: number | null
   lastActiveAt?: number
+  activeAgentName?: string
 }
 
 function uid(): string {
@@ -144,35 +144,24 @@ function mapHermesSession(s: SessionSummary): Session {
     messageCount: s.message_count,
     endedAt: s.ended_at != null ? Math.round(s.ended_at * 1000) : null,
     lastActiveAt: s.last_active != null ? Math.round(s.last_active * 1000) : undefined,
+    activeAgentName: s.active_agent_name || 'default',
   }
 }
 
 // Cache keys for stale-while-revalidate loading of sessions / messages.
-// All keys include the active profile name to isolate cache between profiles.
 // Rendering from cache on boot avoids the multi-round-trip wait the user sees
 // every time they open the page (esp. noticeable on mobile).
-const STORAGE_KEY_PREFIX = 'hermes_active_session_'
-const SESSIONS_CACHE_KEY_PREFIX = 'hermes_sessions_cache_v1_'
+const STORAGE_KEY = 'hermes_active_session'
+const SESSIONS_CACHE_KEY = 'hermes_sessions_cache_v1'
 const IN_FLIGHT_TTL_MS = 15 * 60 * 1000 // Give up after 15 minutes
 const POLL_INTERVAL_MS = 2000
 const POLL_STABLE_EXITS = 3 // 3 × 2s = 6s of no change → assume run finished
 const LIVE_BADGE_WINDOW_MS = 5 * 60 * 1000
 
-// 获取当前 profile 名称，用于隔离缓存。
-// 从 profiles store 的 activeProfileName（同步 localStorage）读取，
-// 避免异步加载导致 chat store 初始化时拿到 null。
-function getProfileName(): string {
-  try {
-    return useProfilesStore().activeProfileName || 'default'
-  } catch {
-    return 'default'
-  }
-}
-
-function storageKey(): string { return STORAGE_KEY_PREFIX + getProfileName() }
-function sessionsCacheKey(): string { return SESSIONS_CACHE_KEY_PREFIX + getProfileName() }
-function msgsCacheKey(sid: string): string { return `hermes_session_msgs_v1_${getProfileName()}_${sid}_` }
-function inFlightKey(sid: string): string { return `hermes_in_flight_v1_${getProfileName()}_${sid}` }
+function storageKey(): string { return STORAGE_KEY }
+function sessionsCacheKey(): string { return SESSIONS_CACHE_KEY }
+function msgsCacheKey(sid: string): string { return `hermes_session_msgs_v1_${sid}_` }
+function inFlightKey(sid: string): string { return `hermes_in_flight_v1_${sid}` }
 
 interface InFlightRun {
   runId: string
@@ -198,8 +187,8 @@ function recoverStorageQuota() {
   try {
     const prefixes = [
       sessionsCacheKey(),
-      `hermes_session_msgs_v1_${getProfileName()}_`,
-      `hermes_in_flight_v1_${getProfileName()}_`,
+      'hermes_session_msgs_v1_',
+      'hermes_in_flight_v1_',
     ]
     const keysToRemove: string[] = []
     for (let i = 0; i < localStorage.length; i++) {
@@ -418,7 +407,7 @@ export const useChatStore = defineStore('chat', () => {
   async function loadSessions() {
     isLoadingSessions.value = true
     try {
-      // 从 profile 对应的缓存中恢复，实现 instant render
+      // 从会话维度缓存中恢复，实现 instant render
       const cachedSessions = loadJson<Session[]>(sessionsCacheKey())
       if (cachedSessions?.length) {
         sessions.value = cachedSessions

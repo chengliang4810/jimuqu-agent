@@ -16,7 +16,9 @@ public class AgentRuntimePromptTest {
         FakeLlmGateway fake = (FakeLlmGateway) env.llmGateway;
         assertThat(fake.lastSystemPrompt)
                 .contains("[Agent Runtime]")
-                .contains("agent_name=Jimuqu Agent")
+                .contains("agent_name=default")
+                .contains("agent_display_name=默认 Agent")
+                .contains("agent_workspace=" + env.appConfig.getRuntime().getHome())
                 .contains("platform=MEMORY")
                 .contains("chat_id=chat-a")
                 .contains("user_id=user-a")

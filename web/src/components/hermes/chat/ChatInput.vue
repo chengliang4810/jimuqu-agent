@@ -2,7 +2,6 @@
 import type { Attachment } from '@/stores/hermes/chat'
 import { useChatStore } from '@/stores/hermes/chat'
 import { useAppStore } from '@/stores/hermes/app'
-import { useProfilesStore } from '@/stores/hermes/profiles'
 import { fetchContextLength } from '@/api/hermes/sessions'
 import { NButton, NTooltip } from 'naive-ui'
 import { computed, ref, onMounted, watch } from 'vue'
@@ -27,15 +26,13 @@ const FALLBACK_CONTEXT = 200000
 
 async function loadContextLength() {
   try {
-    const profile = useProfilesStore().activeProfileName || undefined
-    contextLength.value = await fetchContextLength(profile)
+    contextLength.value = await fetchContextLength()
   } catch {
     contextLength.value = FALLBACK_CONTEXT
   }
 }
 
 onMounted(loadContextLength)
-watch(() => useProfilesStore().activeProfileName, loadContextLength)
 watch(() => useAppStore().selectedModel, loadContextLength)
 
 const totalTokens = computed(() => {

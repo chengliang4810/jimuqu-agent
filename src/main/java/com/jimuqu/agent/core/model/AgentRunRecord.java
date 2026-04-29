@@ -14,6 +14,8 @@ public class AgentRunRecord {
     private String runId;
     private String sessionId;
     private String sourceKey;
+    private String agentName;
+    private String agentSnapshotJson;
     private String status;
     private String inputPreview;
     private String finalReplyPreview;

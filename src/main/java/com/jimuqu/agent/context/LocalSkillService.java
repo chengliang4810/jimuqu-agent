@@ -2,6 +2,8 @@ package com.jimuqu.agent.context;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.agent.AgentRuntimePolicy;
+import com.jimuqu.agent.agent.AgentRuntimeScope;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.SkillDescriptor;
 import com.jimuqu.agent.core.model.SkillView;
@@ -120,25 +122,38 @@ public class LocalSkillService implements SkillCatalogService {
     @Override
     public List<SkillDescriptor> listSkills(String category) throws Exception {
         processPendingImportsQuietly();
-        File root = FileUtil.file(appConfig.getRuntime().getSkillsDir());
+        return listSkillsFromRoot(FileUtil.file(appConfig.getRuntime().getSkillsDir()), category);
+    }
+
+    public List<SkillDescriptor> listSkills(String category, AgentRuntimeScope agentScope) throws Exception {
+        processPendingImportsQuietly();
+        List<SkillDescriptor> skills = new ArrayList<SkillDescriptor>();
+        skills.addAll(listSkillsFromRoot(FileUtil.file(appConfig.getRuntime().getSkillsDir()), null));
+        if (agentScope != null && !agentScope.isDefaultAgentName() && StrUtil.isNotBlank(agentScope.getSkillsDir())) {
+            skills.addAll(listSkillsFromRoot(FileUtil.file(agentScope.getSkillsDir()), null));
+        }
+        Collections.sort(skills, skillComparator());
+        skills = filterAgentSkills(skills, agentScope);
+        if (StrUtil.isBlank(category)) {
+            return skills;
+        }
+        List<SkillDescriptor> filtered = new ArrayList<SkillDescriptor>();
+        for (SkillDescriptor descriptor : skills) {
+            if (category.equals(descriptor.getCategory())) {
+                filtered.add(descriptor);
+            }
+        }
+        return filtered;
+    }
+
+    private List<SkillDescriptor> listSkillsFromRoot(File root, String category) throws Exception {
         if (!root.exists()) {
             return Collections.emptyList();
         }
 
         List<SkillDescriptor> skills = new ArrayList<SkillDescriptor>();
         collectSkills(root, skills);
-        Collections.sort(skills, new Comparator<SkillDescriptor>() {
-            @Override
-            public int compare(SkillDescriptor left, SkillDescriptor right) {
-                String leftCategory = StrUtil.nullToDefault(left.getCategory(), "");
-                String rightCategory = StrUtil.nullToDefault(right.getCategory(), "");
-                int result = leftCategory.compareTo(rightCategory);
-                if (result != 0) {
-                    return result;
-                }
-                return left.getName().compareTo(right.getName());
-            }
-        });
+        Collections.sort(skills, skillComparator());
 
         if (StrUtil.isBlank(category)) {
             return skills;
@@ -153,10 +168,29 @@ public class LocalSkillService implements SkillCatalogService {
         return filtered;
     }
 
+    private Comparator<SkillDescriptor> skillComparator() {
+        return new Comparator<SkillDescriptor>() {
+            @Override
+            public int compare(SkillDescriptor left, SkillDescriptor right) {
+                String leftCategory = StrUtil.nullToDefault(left.getCategory(), "");
+                String rightCategory = StrUtil.nullToDefault(right.getCategory(), "");
+                int result = leftCategory.compareTo(rightCategory);
+                if (result != 0) {
+                    return result;
+                }
+                return left.getName().compareTo(right.getName());
+            }
+        };
+    }
+
     @Override
     public SkillView viewSkill(String nameOrPath, String filePath) throws Exception {
+        return viewSkill(nameOrPath, filePath, null);
+    }
+
+    public SkillView viewSkill(String nameOrPath, String filePath, AgentRuntimeScope agentScope) throws Exception {
         processPendingImportsQuietly();
-        SkillDescriptor descriptor = findDescriptor(nameOrPath);
+        SkillDescriptor descriptor = findDescriptor(nameOrPath, agentScope);
         if (descriptor == null) {
             throw new IllegalStateException("Skill not found: " + nameOrPath);
         }
@@ -176,14 +210,18 @@ public class LocalSkillService implements SkillCatalogService {
 
     @Override
     public String renderSkillIndexPrompt(String sourceKey) throws Exception {
+        return renderSkillIndexPrompt(sourceKey, null);
+    }
+
+    public String renderSkillIndexPrompt(String sourceKey, AgentRuntimeScope agentScope) throws Exception {
         processPendingImportsQuietly();
-        List<SkillDescriptor> skills = listSkills(null);
+        List<SkillDescriptor> skills = listSkills(null, agentScope);
         Map<String, List<SkillDescriptor>> grouped = new LinkedHashMap<String, List<SkillDescriptor>>();
         for (SkillDescriptor descriptor : skills) {
             if (!isVisible(sourceKey, descriptor.canonicalName())) {
                 continue;
             }
-            if (!isRuntimeVisible(sourceKey, descriptor)) {
+            if (!isRuntimeVisible(sourceKey, descriptor, agentScope)) {
                 continue;
             }
             String category = StrUtil.blankToDefault(descriptor.getCategory(), SkillConstants.DEFAULT_CATEGORY);
@@ -391,12 +429,29 @@ public class LocalSkillService implements SkillCatalogService {
      * 通过规范名或路径定位技能。
      */
     private SkillDescriptor findDescriptor(String nameOrPath) throws Exception {
-        for (SkillDescriptor descriptor : listSkills(null)) {
+        return findDescriptor(nameOrPath, null);
+    }
+
+    private SkillDescriptor findDescriptor(String nameOrPath, AgentRuntimeScope agentScope) throws Exception {
+        for (SkillDescriptor descriptor : listSkills(null, agentScope)) {
             if (descriptor.canonicalName().equals(nameOrPath) || descriptor.getName().equals(nameOrPath)) {
                 return descriptor;
             }
         }
         return null;
+    }
+
+    private List<SkillDescriptor> filterAgentSkills(List<SkillDescriptor> skills, AgentRuntimeScope agentScope) {
+        if (AgentRuntimePolicy.resolveAllowedSkills(agentScope).isEmpty()) {
+            return skills;
+        }
+        List<SkillDescriptor> filtered = new ArrayList<SkillDescriptor>();
+        for (SkillDescriptor descriptor : skills) {
+            if (AgentRuntimePolicy.isSkillAllowed(agentScope, descriptor)) {
+                filtered.add(descriptor);
+            }
+        }
+        return filtered;
     }
 
     /**
@@ -595,77 +650,77 @@ public class LocalSkillService implements SkillCatalogService {
         }
     }
 
-    private boolean isRuntimeVisible(String sourceKey, SkillDescriptor descriptor) {
+    private boolean isRuntimeVisible(String sourceKey, SkillDescriptor descriptor, AgentRuntimeScope agentScope) {
         if (SkillSetupState.UNSUPPORTED.name().equals(descriptor.getSetupState())) {
             return false;
         }
         Map<String, Object> hermes = SkillFrontmatterSupport.getHermesMetadata(descriptor.getMetadata());
-        if (!checkRequiresTools(sourceKey, SkillFrontmatterSupport.parseStringList(hermes.get("requires_tools")))) {
+        if (!checkRequiresTools(sourceKey, SkillFrontmatterSupport.parseStringList(hermes.get("requires_tools")), agentScope)) {
             return false;
         }
-        if (!checkRequiresToolsets(sourceKey, SkillFrontmatterSupport.parseStringList(hermes.get("requires_toolsets")))) {
+        if (!checkRequiresToolsets(sourceKey, SkillFrontmatterSupport.parseStringList(hermes.get("requires_toolsets")), agentScope)) {
             return false;
         }
-        if (!checkFallbackTools(sourceKey, SkillFrontmatterSupport.parseStringList(hermes.get("fallback_for_tools")))) {
+        if (!checkFallbackTools(sourceKey, SkillFrontmatterSupport.parseStringList(hermes.get("fallback_for_tools")), agentScope)) {
             return false;
         }
-        return checkFallbackToolsets(sourceKey, SkillFrontmatterSupport.parseStringList(hermes.get("fallback_for_toolsets")));
+        return checkFallbackToolsets(sourceKey, SkillFrontmatterSupport.parseStringList(hermes.get("fallback_for_toolsets")), agentScope);
     }
 
-    private boolean checkRequiresTools(String sourceKey, List<String> tools) {
+    private boolean checkRequiresTools(String sourceKey, List<String> tools, AgentRuntimeScope agentScope) {
         if (tools.isEmpty()) {
             return true;
         }
         for (String tool : tools) {
-            if (!isToolEnabled(sourceKey, tool)) {
+            if (!isToolEnabled(sourceKey, tool, agentScope)) {
                 return false;
             }
         }
         return true;
     }
 
-    private boolean checkRequiresToolsets(String sourceKey, List<String> toolsets) {
+    private boolean checkRequiresToolsets(String sourceKey, List<String> toolsets, AgentRuntimeScope agentScope) {
         if (toolsets.isEmpty()) {
             return true;
         }
         for (String toolset : toolsets) {
-            if (!isAnyToolEnabled(sourceKey, toolNamesForToolset(toolset))) {
+            if (!isAnyToolEnabled(sourceKey, toolNamesForToolset(toolset), agentScope)) {
                 return false;
             }
         }
         return true;
     }
 
-    private boolean checkFallbackTools(String sourceKey, List<String> tools) {
+    private boolean checkFallbackTools(String sourceKey, List<String> tools, AgentRuntimeScope agentScope) {
         if (tools.isEmpty()) {
             return true;
         }
         for (String tool : tools) {
-            if (isToolEnabled(sourceKey, tool)) {
+            if (isToolEnabled(sourceKey, tool, agentScope)) {
                 return false;
             }
         }
         return true;
     }
 
-    private boolean checkFallbackToolsets(String sourceKey, List<String> toolsets) {
+    private boolean checkFallbackToolsets(String sourceKey, List<String> toolsets, AgentRuntimeScope agentScope) {
         if (toolsets.isEmpty()) {
             return true;
         }
         for (String toolset : toolsets) {
-            if (isAnyToolEnabled(sourceKey, toolNamesForToolset(toolset))) {
+            if (isAnyToolEnabled(sourceKey, toolNamesForToolset(toolset), agentScope)) {
                 return false;
             }
         }
         return true;
     }
 
-    private boolean isAnyToolEnabled(String sourceKey, List<String> tools) {
+    private boolean isAnyToolEnabled(String sourceKey, List<String> tools, AgentRuntimeScope agentScope) {
         if (tools.isEmpty()) {
             return false;
         }
         for (String tool : tools) {
-            if (isToolEnabled(sourceKey, tool)) {
+            if (isToolEnabled(sourceKey, tool, agentScope)) {
                 return true;
             }
         }
@@ -673,6 +728,13 @@ public class LocalSkillService implements SkillCatalogService {
     }
 
     private boolean isToolEnabled(String sourceKey, String toolName) {
+        return isToolEnabled(sourceKey, toolName, null);
+    }
+
+    private boolean isToolEnabled(String sourceKey, String toolName, AgentRuntimeScope agentScope) {
+        if (!AgentRuntimePolicy.isToolAllowed(agentScope, toolName)) {
+            return false;
+        }
         try {
             return preferenceStore.isToolEnabled(sourceKey, toolName);
         } catch (Exception e) {

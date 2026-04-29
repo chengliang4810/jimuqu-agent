@@ -1,6 +1,7 @@
 package com.jimuqu.agent.support;
 
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.agent.AgentRuntimeScope;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.enums.PlatformType;
 import com.jimuqu.agent.core.model.ChannelStatus;
@@ -140,16 +141,30 @@ public class RuntimeSettingsService {
     }
 
     public ResolvedModel resolveEffectiveModel(SessionRecord session) {
+        return resolveEffectiveModel(session, null);
+    }
+
+    public ResolvedModel resolveEffectiveModel(SessionRecord session, AgentRuntimeScope agentScope) {
         String override = session == null ? "" : StrUtil.nullToEmpty(session.getModelOverride()).trim();
-        LlmProviderService.ResolvedProvider resolved = llmProviderService.resolveEffectiveProvider(session);
+        LlmProviderService.ResolvedProvider resolved = llmProviderService.resolveEffectiveProvider(
+                session,
+                agentScope == null ? null : agentScope.getDefaultModel()
+        );
         return new ResolvedModel(resolved.getProviderKey(), resolved.getDialect(), resolved.getModel(), override.length() > 0);
     }
 
     public String buildAgentRuntimePrompt(String sourceKey,
                                           SessionRecord session,
                                           List<String> enabledToolNames) {
+        return buildAgentRuntimePrompt(sourceKey, session, enabledToolNames, null);
+    }
+
+    public String buildAgentRuntimePrompt(String sourceKey,
+                                          SessionRecord session,
+                                          List<String> enabledToolNames,
+                                          AgentRuntimeScope agentScope) {
         String[] parts = SourceKeySupport.split(sourceKey);
-        ResolvedModel resolved = resolveEffectiveModel(session);
+        ResolvedModel resolved = resolveEffectiveModel(session, agentScope);
         List<String> channelStates = new ArrayList<String>();
         try {
             for (ChannelStatus status : deliveryService.statuses()) {
@@ -177,7 +192,9 @@ public class RuntimeSettingsService {
         StringBuilder buffer = new StringBuilder();
         LlmProviderService.ResolvedProvider globalResolved = llmProviderService.resolveEffectiveProvider(null);
         buffer.append("[Agent Runtime]\n");
-        buffer.append("agent_name=Jimuqu Agent\n");
+        buffer.append("agent_name=").append(agentScope == null ? "default" : agentScope.getEffectiveName()).append('\n');
+        buffer.append("agent_display_name=").append(agentScope == null ? "默认 Agent" : StrUtil.nullToEmpty(agentScope.getDisplayName())).append('\n');
+        buffer.append("agent_workspace=").append(agentScope == null ? StrUtil.nullToEmpty(appConfig.getRuntime().getHome()) : StrUtil.nullToEmpty(agentScope.getWorkspaceDir())).append('\n');
         buffer.append("source_key=").append(StrUtil.nullToEmpty(sourceKey)).append('\n');
         buffer.append("platform=").append(StrUtil.nullToEmpty(parts[0])).append('\n');
         buffer.append("chat_id=").append(StrUtil.nullToEmpty(parts[1])).append('\n');
@@ -187,6 +204,7 @@ public class RuntimeSettingsService {
         buffer.append("active_personality=").append(activePersonality).append('\n');
         buffer.append("default_provider=").append(StrUtil.nullToEmpty(appConfig.getModel().getProviderKey())).append('\n');
         buffer.append("default_model=").append(StrUtil.nullToEmpty(globalResolved.getModel())).append('\n');
+        buffer.append("agent_default_model=").append(agentScope == null ? "" : StrUtil.nullToEmpty(agentScope.getDefaultModel())).append('\n');
         buffer.append("effective_provider=").append(StrUtil.nullToEmpty(resolved.provider)).append('\n');
         buffer.append("effective_dialect=").append(StrUtil.nullToEmpty(resolved.dialect)).append('\n');
         buffer.append("effective_model=").append(StrUtil.nullToEmpty(resolved.model)).append('\n');

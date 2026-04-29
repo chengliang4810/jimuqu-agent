@@ -47,6 +47,8 @@ public class DashboardRunService {
         map.put("run_id", record.getRunId());
         map.put("session_id", record.getSessionId());
         map.put("source_key", record.getSourceKey());
+        map.put("agent_name", record.getAgentName());
+        map.put("agent_snapshot", record.getAgentSnapshotJson() == null ? null : ONode.deserialize(record.getAgentSnapshotJson(), Object.class));
         map.put("status", record.getStatus());
         map.put("input_preview", record.getInputPreview());
         map.put("final_reply_preview", record.getFinalReplyPreview());

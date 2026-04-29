@@ -1,5 +1,7 @@
 package com.jimuqu.agent.core.service;
 
+import com.jimuqu.agent.agent.AgentRuntimeScope;
+
 import java.util.List;
 
 /**
@@ -16,10 +18,18 @@ public interface ToolRegistry {
      */
     List<Object> resolveEnabledTools(String sourceKey);
 
+    default List<Object> resolveEnabledTools(String sourceKey, AgentRuntimeScope agentScope) {
+        return resolveEnabledTools(sourceKey);
+    }
+
     /**
      * 列出某个来源键当前启用的工具名。
      */
     List<String> resolveEnabledToolNames(String sourceKey);
+
+    default List<String> resolveEnabledToolNames(String sourceKey, AgentRuntimeScope agentScope) {
+        return resolveEnabledToolNames(sourceKey);
+    }
 
     /**
      * 启用指定工具。

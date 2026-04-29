@@ -104,6 +104,7 @@ public class DashboardSessionService {
         result.put("session_id", sessionId);
         result.put("model", StrUtil.blankToDefault(record.getLastResolvedModel(), StrUtil.blankToDefault(record.getModelOverride(), null)));
         result.put("provider", StrUtil.blankToDefault(record.getLastResolvedProvider(), null));
+        result.put("active_agent_name", StrUtil.blankToDefault(record.getActiveAgentName(), "default"));
         result.put("input_tokens", record.getCumulativeInputTokens());
         result.put("output_tokens", record.getCumulativeOutputTokens());
         result.put("reasoning_tokens", record.getCumulativeReasoningTokens());
@@ -257,6 +258,7 @@ public class DashboardSessionService {
         result.put("source", parseSource(record.getSourceKey()));
         result.put("model", StrUtil.blankToDefault(record.getLastResolvedModel(), StrUtil.blankToDefault(record.getModelOverride(), null)));
         result.put("provider", StrUtil.blankToDefault(record.getLastResolvedProvider(), null));
+        result.put("active_agent_name", StrUtil.blankToDefault(record.getActiveAgentName(), "default"));
         result.put("title", record.getTitle());
         result.put("started_at", record.getCreatedAt());
         result.put("ended_at", null);

@@ -1,6 +1,8 @@
 package com.jimuqu.agent.bootstrap;
 
 import com.jimuqu.agent.config.AppConfig;
+import com.jimuqu.agent.agent.AgentProfileService;
+import com.jimuqu.agent.agent.AgentRuntimeService;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.context.PersonaWorkspaceService;
 import com.jimuqu.agent.core.repository.CronJobRepository;
@@ -17,6 +19,7 @@ import com.jimuqu.agent.support.update.AppUpdateService;
 import com.jimuqu.agent.support.update.AppVersionService;
 import com.jimuqu.agent.web.DashboardAuthFilter;
 import com.jimuqu.agent.web.DashboardAuthService;
+import com.jimuqu.agent.web.DashboardAgentService;
 import com.jimuqu.agent.web.DashboardAnalyticsService;
 import com.jimuqu.agent.web.DashboardConfigService;
 import com.jimuqu.agent.web.DashboardCronService;
@@ -70,6 +73,14 @@ public class DashboardConfiguration {
     @Bean
     public DashboardRunService dashboardRunService(AgentRunRepository agentRunRepository) {
         return new DashboardRunService(agentRunRepository);
+    }
+
+    @Bean
+    public DashboardAgentService dashboardAgentService(AgentProfileService agentProfileService,
+                                                       AgentRuntimeService agentRuntimeService,
+                                                       SessionRepository sessionRepository,
+                                                       AgentRunRepository agentRunRepository) {
+        return new DashboardAgentService(agentProfileService, agentRuntimeService, sessionRepository, agentRunRepository);
     }
 
     @Bean

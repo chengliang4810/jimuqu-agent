@@ -21,6 +21,10 @@ public class LlmProviderService {
     }
 
     public ResolvedProvider resolveEffectiveProvider(SessionRecord session) {
+        return resolveEffectiveProvider(session, null);
+    }
+
+    public ResolvedProvider resolveEffectiveProvider(SessionRecord session, String agentDefaultModel) {
         String providerKey = StrUtil.nullToEmpty(appConfig.getModel().getProviderKey()).trim();
         String model = "";
         String override = session == null ? "" : StrUtil.nullToEmpty(session.getModelOverride()).trim();
@@ -32,6 +36,8 @@ public class LlmProviderService {
             } else {
                 model = override;
             }
+        } else if (StrUtil.isNotBlank(agentDefaultModel)) {
+            model = agentDefaultModel.trim();
         }
         return resolveProvider(providerKey, model);
     }

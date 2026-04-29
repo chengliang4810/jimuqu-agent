@@ -642,7 +642,7 @@ public class SolonAiLlmGateway implements LlmGateway {
         long retryDelayMs = delegateSession ? appConfig.getReact().getDelegateRetryDelayMs() : appConfig.getReact().getRetryDelayMs();
 
         HarnessProperties harnessProperties = new HarnessProperties(".jimuqu-harness");
-        harnessProperties.setWorkspace(appConfig.getRuntime().getHome());
+        harnessProperties.setWorkspace(resolveWorkspace(runContext));
         harnessProperties.addModel(chatConfig);
         harnessProperties.setMaxSteps(maxSteps);
         harnessProperties.setMaxStepsAutoExtensible(false);
@@ -724,6 +724,13 @@ public class SolonAiLlmGateway implements LlmGateway {
                 Math.max(8000, appConfig.getReact().getSummarizationMaxTokens()),
                 strategy
         );
+    }
+
+    private String resolveWorkspace(AgentRunContext runContext) {
+        if (runContext != null && StrUtil.isNotBlank(runContext.getWorkspaceDir())) {
+            return runContext.getWorkspaceDir();
+        }
+        return appConfig.getRuntime().getHome();
     }
 
     private ChatModel buildSummaryChatModel(AppConfig.LlmConfig resolved, ChatConfig chatConfig) {

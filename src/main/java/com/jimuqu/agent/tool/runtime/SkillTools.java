@@ -2,6 +2,7 @@ package com.jimuqu.agent.tool.runtime;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.agent.AgentRuntimeScope;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.model.SkillDescriptor;
@@ -44,10 +45,22 @@ public class SkillTools {
      */
     private final String sourceKey;
 
+    /**
+     * 当前运行冻结的 Agent scope。
+     */
+    private final AgentRuntimeScope agentScope;
+
+    public SkillTools(LocalSkillService localSkillService,
+                      CheckpointService checkpointService,
+                      SessionRepository sessionRepository,
+                      String sourceKey) {
+        this(localSkillService, checkpointService, sessionRepository, sourceKey, null);
+    }
+
     @ToolMapping(name = "skills_list", description = "List available skills. Optional category filter.")
     public String skillsList(@Param(name = "category", description = "可选分类名", required = false) String category) throws Exception {
         try {
-            List<SkillDescriptor> skills = localSkillService.listSkills(category);
+            List<SkillDescriptor> skills = localSkillService.listSkills(category, agentScope);
             List<SkillDescriptor> visible = new ArrayList<SkillDescriptor>();
             for (SkillDescriptor descriptor : skills) {
                 if (localSkillService.isVisible(sourceKey, descriptor.canonicalName())) {
@@ -64,7 +77,7 @@ public class SkillTools {
     public String skillView(@Param(name = "name", description = "技能名或 category/name") String name,
                             @Param(name = "filePath", description = "可选支持文件相对路径", required = false) String filePath) throws Exception {
         try {
-            SkillView view = localSkillService.viewSkill(name, filePath);
+            SkillView view = localSkillService.viewSkill(name, filePath, agentScope);
             return ONode.serialize(view);
         } catch (Exception e) {
             return toolError(e.getMessage());
@@ -115,7 +128,7 @@ public class SkillTools {
      * 收集技能目录中的全部文件，用于 checkpoint。
      */
     private List<File> skillFiles(String nameOrPath) throws Exception {
-        SkillView view = localSkillService.viewSkill(nameOrPath, null);
+        SkillView view = localSkillService.viewSkill(nameOrPath, null, agentScope);
         File skillDir = FileUtil.file(view.getDescriptor().getSkillDir());
         List<File> files = FileUtil.loopFiles(skillDir);
         if (files.isEmpty()) {

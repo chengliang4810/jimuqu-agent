@@ -23,23 +23,25 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
         Connection connection = database.openConnection();
         try {
             PreparedStatement statement = connection.prepareStatement(
-                    "insert or replace into agent_runs (run_id, session_id, source_key, status, input_preview, final_reply_preview, provider, model, attempts, input_tokens, output_tokens, total_tokens, started_at, finished_at, error) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    "insert or replace into agent_runs (run_id, session_id, source_key, agent_name, agent_snapshot_json, status, input_preview, final_reply_preview, provider, model, attempts, input_tokens, output_tokens, total_tokens, started_at, finished_at, error) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             statement.setString(1, record.getRunId());
             statement.setString(2, record.getSessionId());
             statement.setString(3, record.getSourceKey());
-            statement.setString(4, record.getStatus());
-            statement.setString(5, record.getInputPreview());
-            statement.setString(6, record.getFinalReplyPreview());
-            statement.setString(7, record.getProvider());
-            statement.setString(8, record.getModel());
-            statement.setInt(9, record.getAttempts());
-            statement.setLong(10, record.getInputTokens());
-            statement.setLong(11, record.getOutputTokens());
-            statement.setLong(12, record.getTotalTokens());
-            statement.setLong(13, record.getStartedAt());
-            statement.setLong(14, record.getFinishedAt());
-            statement.setString(15, record.getError());
+            statement.setString(4, record.getAgentName());
+            statement.setString(5, record.getAgentSnapshotJson());
+            statement.setString(6, record.getStatus());
+            statement.setString(7, record.getInputPreview());
+            statement.setString(8, record.getFinalReplyPreview());
+            statement.setString(9, record.getProvider());
+            statement.setString(10, record.getModel());
+            statement.setInt(11, record.getAttempts());
+            statement.setLong(12, record.getInputTokens());
+            statement.setLong(13, record.getOutputTokens());
+            statement.setLong(14, record.getTotalTokens());
+            statement.setLong(15, record.getStartedAt());
+            statement.setLong(16, record.getFinishedAt());
+            statement.setString(17, record.getError());
             statement.executeUpdate();
             statement.close();
         } finally {
@@ -158,6 +160,8 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
         record.setRunId(resultSet.getString("run_id"));
         record.setSessionId(resultSet.getString("session_id"));
         record.setSourceKey(resultSet.getString("source_key"));
+        record.setAgentName(resultSet.getString("agent_name"));
+        record.setAgentSnapshotJson(resultSet.getString("agent_snapshot_json"));
         record.setStatus(resultSet.getString("status"));
         record.setInputPreview(resultSet.getString("input_preview"));
         record.setFinalReplyPreview(resultSet.getString("final_reply_preview"));

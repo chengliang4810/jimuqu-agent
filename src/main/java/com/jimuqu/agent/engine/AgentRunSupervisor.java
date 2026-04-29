@@ -1,6 +1,7 @@
 package com.jimuqu.agent.engine;
 
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.agent.agent.AgentRuntimeScope;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.AgentRunContext;
 import com.jimuqu.agent.core.model.AgentRunOutcome;
@@ -100,17 +101,38 @@ public class AgentRunSupervisor implements AgentRunControlService {
                                ConversationFeedbackSink feedbackSink,
                                ConversationEventSink eventSink,
                                boolean resume) throws Exception {
+        return run(session, systemPrompt, userMessage, tools, feedbackSink, eventSink, resume, null);
+    }
+
+    public AgentRunOutcome run(SessionRecord session,
+                               String systemPrompt,
+                               String userMessage,
+                               List<Object> tools,
+                               ConversationFeedbackSink feedbackSink,
+                               ConversationEventSink eventSink,
+                               boolean resume,
+                               AgentRuntimeScope agentScope) throws Exception {
+        if (agentScope == null) {
+            agentScope = new AgentRuntimeScope();
+            agentScope.setAgentName(AgentRuntimeScope.normalizeName(session == null ? null : session.getActiveAgentName()));
+            agentScope.setWorkspaceDir(appConfig.getRuntime().getHome());
+            agentScope.setSkillsDir(appConfig.getRuntime().getSkillsDir());
+            agentScope.setCacheDir(appConfig.getRuntime().getCacheDir());
+        }
         long now = System.currentTimeMillis();
         AgentRunRecord runRecord = new AgentRunRecord();
         runRecord.setRunId(IdSupport.newId());
         runRecord.setSessionId(session.getSessionId());
         runRecord.setSourceKey(session.getSourceKey());
+        runRecord.setAgentName(agentScope.getEffectiveName());
+        runRecord.setAgentSnapshotJson(agentScope.getSnapshotJson());
         runRecord.setStatus("running");
         runRecord.setInputPreview(AgentRunContext.safe(userMessage, 1000));
         runRecord.setStartedAt(now);
         agentRunRepository.saveRun(runRecord);
 
         AgentRunContext runContext = new AgentRunContext(agentRunRepository, runRecord.getRunId(), session.getSessionId(), session.getSourceKey());
+        runContext.setWorkspaceDir(agentScope.getWorkspaceDir());
         RunHandle runHandle = registerRun(session.getSourceKey(), runRecord.getRunId(), session.getSessionId(), now);
         try {
             pruneOldRuns();
@@ -118,7 +140,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
             runContext.event("run.start", resume ? "恢复挂起会话" : "开始执行用户请求");
             eventSink.onRunStarted(session.getSessionId());
 
-            List<AppConfig.LlmConfig> candidates = buildCandidateConfigs(session);
+            List<AppConfig.LlmConfig> candidates = buildCandidateConfigs(session, agentScope);
             Throwable lastError = null;
             LlmResult finalResult = null;
             String replyText = "";
@@ -264,7 +286,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
             outcome.setProvider(finalResult.getProvider());
             outcome.setContextEstimateTokens(contextEstimateTokens);
             outcome.setContextWindowTokens(contextWindowTokens);
-            outcome.setCwd(System.getProperty("user.dir"));
+            outcome.setCwd(StrUtil.blankToDefault(agentScope.getWorkspaceDir(), System.getProperty("user.dir")));
             return outcome;
         } catch (AgentRunCancelledException e) {
             runRecord.setStatus("cancelled");
@@ -335,10 +357,13 @@ public class AgentRunSupervisor implements AgentRunControlService {
         }
     }
 
-    private List<AppConfig.LlmConfig> buildCandidateConfigs(SessionRecord session) {
+    private List<AppConfig.LlmConfig> buildCandidateConfigs(SessionRecord session, AgentRuntimeScope agentScope) {
         List<AppConfig.LlmConfig> candidates = new java.util.ArrayList<AppConfig.LlmConfig>();
         LinkedHashSet<String> seen = new LinkedHashSet<String>();
-        AppConfig.LlmConfig primary = toLlmConfig(llmProviderService.resolveEffectiveProvider(session));
+        AppConfig.LlmConfig primary = toLlmConfig(llmProviderService.resolveEffectiveProvider(
+                session,
+                agentScope == null ? null : agentScope.getDefaultModel()
+        ));
         candidates.add(primary);
         seen.add(providerSignature(primary));
         for (LlmProviderService.ResolvedProvider fallback : llmProviderService.resolveFallbackProviders()) {

@@ -91,6 +91,7 @@ public class SqliteSessionRepository implements SessionRepository {
         clone.setParentSessionId(source.getSessionId());
         clone.setBranchName(branchName);
         clone.setModelOverride(source.getModelOverride());
+        clone.setActiveAgentName(source.getActiveAgentName());
         clone.setNdjson(source.getNdjson());
         clone.setTitle(source.getTitle());
         clone.setCompressedSummary(source.getCompressedSummary());
@@ -114,7 +115,7 @@ public class SqliteSessionRepository implements SessionRepository {
         Connection connection = database.openConnection();
         try {
             PreparedStatement statement = connection.prepareStatement(
-                    "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, agent_snapshot_json, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, last_input_tokens, last_output_tokens, last_reasoning_tokens, last_cache_read_tokens, last_total_tokens, cumulative_input_tokens, cumulative_output_tokens, cumulative_reasoning_tokens, cumulative_cache_read_tokens, cumulative_total_tokens, last_usage_at, last_resolved_provider, last_resolved_model, created_at, updated_at from sessions where session_id = ?"
+                    "select session_id, source_key, branch_name, parent_session_id, model_override, active_agent_name, ndjson, title, compressed_summary, system_prompt_snapshot, agent_snapshot_json, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, last_input_tokens, last_output_tokens, last_reasoning_tokens, last_cache_read_tokens, last_total_tokens, cumulative_input_tokens, cumulative_output_tokens, cumulative_reasoning_tokens, cumulative_cache_read_tokens, cumulative_total_tokens, last_usage_at, last_resolved_provider, last_resolved_model, created_at, updated_at from sessions where session_id = ?"
             );
             statement.setString(1, sessionId);
             ResultSet resultSet = statement.executeQuery();
@@ -137,7 +138,7 @@ public class SqliteSessionRepository implements SessionRepository {
         Connection connection = database.openConnection();
         try {
             PreparedStatement statement = connection.prepareStatement(
-                    "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, agent_snapshot_json, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, last_input_tokens, last_output_tokens, last_reasoning_tokens, last_cache_read_tokens, last_total_tokens, cumulative_input_tokens, cumulative_output_tokens, cumulative_reasoning_tokens, cumulative_cache_read_tokens, cumulative_total_tokens, last_usage_at, last_resolved_provider, last_resolved_model, created_at, updated_at from sessions where source_key = ? and branch_name = ? order by updated_at desc limit 1"
+                    "select session_id, source_key, branch_name, parent_session_id, model_override, active_agent_name, ndjson, title, compressed_summary, system_prompt_snapshot, agent_snapshot_json, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, last_input_tokens, last_output_tokens, last_reasoning_tokens, last_cache_read_tokens, last_total_tokens, cumulative_input_tokens, cumulative_output_tokens, cumulative_reasoning_tokens, cumulative_cache_read_tokens, cumulative_total_tokens, last_usage_at, last_resolved_provider, last_resolved_model, created_at, updated_at from sessions where source_key = ? and branch_name = ? order by updated_at desc limit 1"
             );
             statement.setString(1, sourceKey);
             statement.setString(2, branchName);
@@ -165,38 +166,39 @@ public class SqliteSessionRepository implements SessionRepository {
         try {
             connection.setAutoCommit(false);
             PreparedStatement statement = connection.prepareStatement(
-                    "insert or replace into sessions (session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, agent_snapshot_json, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, last_input_tokens, last_output_tokens, last_reasoning_tokens, last_cache_read_tokens, last_total_tokens, cumulative_input_tokens, cumulative_output_tokens, cumulative_reasoning_tokens, cumulative_cache_read_tokens, cumulative_total_tokens, last_usage_at, last_resolved_provider, last_resolved_model, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    "insert or replace into sessions (session_id, source_key, branch_name, parent_session_id, model_override, active_agent_name, ndjson, title, compressed_summary, system_prompt_snapshot, agent_snapshot_json, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, last_input_tokens, last_output_tokens, last_reasoning_tokens, last_cache_read_tokens, last_total_tokens, cumulative_input_tokens, cumulative_output_tokens, cumulative_reasoning_tokens, cumulative_cache_read_tokens, cumulative_total_tokens, last_usage_at, last_resolved_provider, last_resolved_model, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             statement.setString(1, sessionRecord.getSessionId());
             statement.setString(2, sessionRecord.getSourceKey());
             statement.setString(3, sessionRecord.getBranchName());
             statement.setString(4, sessionRecord.getParentSessionId());
             statement.setString(5, sessionRecord.getModelOverride());
-            statement.setString(6, sessionRecord.getNdjson());
-            statement.setString(7, sessionRecord.getTitle());
-            statement.setString(8, sessionRecord.getCompressedSummary());
-            statement.setString(9, sessionRecord.getSystemPromptSnapshot());
-            statement.setString(10, sessionRecord.getAgentSnapshotJson());
-            statement.setLong(11, sessionRecord.getLastLearningAt());
-            statement.setLong(12, sessionRecord.getLastCompressionAt());
-            statement.setInt(13, sessionRecord.getLastCompressionInputTokens());
-            statement.setInt(14, sessionRecord.getCompressionFailureCount());
-            statement.setLong(15, sessionRecord.getLastCompressionFailedAt());
-            statement.setLong(16, sessionRecord.getLastInputTokens());
-            statement.setLong(17, sessionRecord.getLastOutputTokens());
-            statement.setLong(18, sessionRecord.getLastReasoningTokens());
-            statement.setLong(19, sessionRecord.getLastCacheReadTokens());
-            statement.setLong(20, sessionRecord.getLastTotalTokens());
-            statement.setLong(21, sessionRecord.getCumulativeInputTokens());
-            statement.setLong(22, sessionRecord.getCumulativeOutputTokens());
-            statement.setLong(23, sessionRecord.getCumulativeReasoningTokens());
-            statement.setLong(24, sessionRecord.getCumulativeCacheReadTokens());
-            statement.setLong(25, sessionRecord.getCumulativeTotalTokens());
-            statement.setLong(26, sessionRecord.getLastUsageAt());
-            statement.setString(27, sessionRecord.getLastResolvedProvider());
-            statement.setString(28, sessionRecord.getLastResolvedModel());
-            statement.setLong(29, createdAt);
-            statement.setLong(30, updatedAt);
+            statement.setString(6, sessionRecord.getActiveAgentName());
+            statement.setString(7, sessionRecord.getNdjson());
+            statement.setString(8, sessionRecord.getTitle());
+            statement.setString(9, sessionRecord.getCompressedSummary());
+            statement.setString(10, sessionRecord.getSystemPromptSnapshot());
+            statement.setString(11, sessionRecord.getAgentSnapshotJson());
+            statement.setLong(12, sessionRecord.getLastLearningAt());
+            statement.setLong(13, sessionRecord.getLastCompressionAt());
+            statement.setInt(14, sessionRecord.getLastCompressionInputTokens());
+            statement.setInt(15, sessionRecord.getCompressionFailureCount());
+            statement.setLong(16, sessionRecord.getLastCompressionFailedAt());
+            statement.setLong(17, sessionRecord.getLastInputTokens());
+            statement.setLong(18, sessionRecord.getLastOutputTokens());
+            statement.setLong(19, sessionRecord.getLastReasoningTokens());
+            statement.setLong(20, sessionRecord.getLastCacheReadTokens());
+            statement.setLong(21, sessionRecord.getLastTotalTokens());
+            statement.setLong(22, sessionRecord.getCumulativeInputTokens());
+            statement.setLong(23, sessionRecord.getCumulativeOutputTokens());
+            statement.setLong(24, sessionRecord.getCumulativeReasoningTokens());
+            statement.setLong(25, sessionRecord.getCumulativeCacheReadTokens());
+            statement.setLong(26, sessionRecord.getCumulativeTotalTokens());
+            statement.setLong(27, sessionRecord.getLastUsageAt());
+            statement.setString(28, sessionRecord.getLastResolvedProvider());
+            statement.setString(29, sessionRecord.getLastResolvedModel());
+            statement.setLong(30, createdAt);
+            statement.setLong(31, updatedAt);
             statement.executeUpdate();
             statement.close();
 
@@ -220,7 +222,7 @@ public class SqliteSessionRepository implements SessionRepository {
         try {
             try {
                 PreparedStatement statement = connection.prepareStatement(
-                        "select s.session_id, s.source_key, s.branch_name, s.parent_session_id, s.model_override, s.ndjson, s.title, s.compressed_summary, s.system_prompt_snapshot, s.agent_snapshot_json, s.last_learning_at, s.last_compression_at, s.last_compression_input_tokens, s.compression_failure_count, s.last_compression_failed_at, s.last_input_tokens, s.last_output_tokens, s.last_reasoning_tokens, s.last_cache_read_tokens, s.last_total_tokens, s.cumulative_input_tokens, s.cumulative_output_tokens, s.cumulative_reasoning_tokens, s.cumulative_cache_read_tokens, s.cumulative_total_tokens, s.last_usage_at, s.last_resolved_provider, s.last_resolved_model, s.created_at, s.updated_at " +
+                        "select s.session_id, s.source_key, s.branch_name, s.parent_session_id, s.model_override, s.active_agent_name, s.ndjson, s.title, s.compressed_summary, s.system_prompt_snapshot, s.agent_snapshot_json, s.last_learning_at, s.last_compression_at, s.last_compression_input_tokens, s.compression_failure_count, s.last_compression_failed_at, s.last_input_tokens, s.last_output_tokens, s.last_reasoning_tokens, s.last_cache_read_tokens, s.last_total_tokens, s.cumulative_input_tokens, s.cumulative_output_tokens, s.cumulative_reasoning_tokens, s.cumulative_cache_read_tokens, s.cumulative_total_tokens, s.last_usage_at, s.last_resolved_provider, s.last_resolved_model, s.created_at, s.updated_at " +
                                 "from sessions_fts f join sessions s on s.session_id = f.session_id " +
                                 "where sessions_fts match ? order by bm25(sessions_fts), s.updated_at desc limit ?"
                 );
@@ -237,7 +239,7 @@ public class SqliteSessionRepository implements SessionRepository {
                 }
             } catch (Exception e) {
                 PreparedStatement fallback = connection.prepareStatement(
-                        "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, agent_snapshot_json, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, last_input_tokens, last_output_tokens, last_reasoning_tokens, last_cache_read_tokens, last_total_tokens, cumulative_input_tokens, cumulative_output_tokens, cumulative_reasoning_tokens, cumulative_cache_read_tokens, cumulative_total_tokens, last_usage_at, last_resolved_provider, last_resolved_model, created_at, updated_at " +
+                        "select session_id, source_key, branch_name, parent_session_id, model_override, active_agent_name, ndjson, title, compressed_summary, system_prompt_snapshot, agent_snapshot_json, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, last_input_tokens, last_output_tokens, last_reasoning_tokens, last_cache_read_tokens, last_total_tokens, cumulative_input_tokens, cumulative_output_tokens, cumulative_reasoning_tokens, cumulative_cache_read_tokens, cumulative_total_tokens, last_usage_at, last_resolved_provider, last_resolved_model, created_at, updated_at " +
                                 "from sessions where ndjson like ? or compressed_summary like ? or title like ? order by updated_at desc limit ?"
                 );
                 String like = "%" + keyword + "%";
@@ -272,7 +274,7 @@ public class SqliteSessionRepository implements SessionRepository {
         Connection connection = database.openConnection();
         try {
             PreparedStatement statement = connection.prepareStatement(
-                    "select session_id, source_key, branch_name, parent_session_id, model_override, ndjson, title, compressed_summary, system_prompt_snapshot, agent_snapshot_json, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, last_input_tokens, last_output_tokens, last_reasoning_tokens, last_cache_read_tokens, last_total_tokens, cumulative_input_tokens, cumulative_output_tokens, cumulative_reasoning_tokens, cumulative_cache_read_tokens, cumulative_total_tokens, last_usage_at, last_resolved_provider, last_resolved_model, created_at, updated_at " +
+                    "select session_id, source_key, branch_name, parent_session_id, model_override, active_agent_name, ndjson, title, compressed_summary, system_prompt_snapshot, agent_snapshot_json, last_learning_at, last_compression_at, last_compression_input_tokens, compression_failure_count, last_compression_failed_at, last_input_tokens, last_output_tokens, last_reasoning_tokens, last_cache_read_tokens, last_total_tokens, cumulative_input_tokens, cumulative_output_tokens, cumulative_reasoning_tokens, cumulative_cache_read_tokens, cumulative_total_tokens, last_usage_at, last_resolved_provider, last_resolved_model, created_at, updated_at " +
                             "from sessions order by updated_at desc limit ? offset ?"
             );
             statement.setInt(1, limit);
@@ -346,6 +348,35 @@ public class SqliteSessionRepository implements SessionRepository {
             statement.setString(1, modelOverride);
             statement.setLong(2, System.currentTimeMillis());
             statement.setString(3, sessionId);
+            statement.executeUpdate();
+            statement.close();
+        } finally {
+            connection.close();
+        }
+    }
+
+    @Override
+    public void setActiveAgentName(String sessionId, String agentName) throws Exception {
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement("update sessions set active_agent_name = ?, updated_at = ? where session_id = ?");
+            statement.setString(1, agentName);
+            statement.setLong(2, System.currentTimeMillis());
+            statement.setString(3, sessionId);
+            statement.executeUpdate();
+            statement.close();
+        } finally {
+            connection.close();
+        }
+    }
+
+    @Override
+    public void clearActiveAgentName(String agentName) throws Exception {
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement = connection.prepareStatement("update sessions set active_agent_name = null, updated_at = ? where active_agent_name = ?");
+            statement.setLong(1, System.currentTimeMillis());
+            statement.setString(2, agentName);
             statement.executeUpdate();
             statement.close();
         } finally {
@@ -446,6 +477,7 @@ public class SqliteSessionRepository implements SessionRepository {
         record.setBranchName(resultSet.getString("branch_name"));
         record.setParentSessionId(resultSet.getString("parent_session_id"));
         record.setModelOverride(resultSet.getString("model_override"));
+        record.setActiveAgentName(resultSet.getString("active_agent_name"));
         record.setNdjson(resultSet.getString("ndjson"));
         record.setTitle(resultSet.getString("title"));
         record.setCompressedSummary(resultSet.getString("compressed_summary"));

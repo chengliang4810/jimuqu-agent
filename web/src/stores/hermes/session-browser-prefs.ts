@@ -1,25 +1,8 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
-import { useProfilesStore } from './profiles'
+import { ref } from 'vue'
 
-const PIN_KEY_PREFIX = 'hermes_session_pins_v1_'
-const HUMAN_ONLY_KEY_PREFIX = 'hermes_human_only_v1_'
-
-function currentProfileName(): string {
-  try {
-    return useProfilesStore().activeProfileName || localStorage.getItem('hermes_active_profile_name') || 'default'
-  } catch {
-    return localStorage.getItem('hermes_active_profile_name') || 'default'
-  }
-}
-
-function pinsKey(profileName: string): string {
-  return `${PIN_KEY_PREFIX}${profileName}`
-}
-
-function humanOnlyKey(profileName: string): string {
-  return `${HUMAN_ONLY_KEY_PREFIX}${profileName}`
-}
+const PIN_KEY = 'hermes_session_pins_v1'
+const HUMAN_ONLY_KEY = 'hermes_human_only_v1'
 
 function loadJson<T>(key: string, fallback: T): T {
   try {
@@ -43,22 +26,20 @@ function sameIds(a: string[], b: string[]): boolean {
 }
 
 export const useSessionBrowserPrefsStore = defineStore('session-browser-prefs', () => {
-  const profileName = ref(currentProfileName())
-  const pinnedIds = ref<string[]>(loadJson<string[]>(pinsKey(profileName.value), []))
-  const humanOnly = ref<boolean>(loadJson<boolean>(humanOnlyKey(profileName.value), true))
+  const pinnedIds = ref<string[]>(loadJson<string[]>(PIN_KEY, []))
+  const humanOnly = ref<boolean>(loadJson<boolean>(HUMAN_ONLY_KEY, true))
 
   function reload() {
-    profileName.value = currentProfileName()
-    pinnedIds.value = loadJson<string[]>(pinsKey(profileName.value), [])
-    humanOnly.value = loadJson<boolean>(humanOnlyKey(profileName.value), true)
+    pinnedIds.value = loadJson<string[]>(PIN_KEY, [])
+    humanOnly.value = loadJson<boolean>(HUMAN_ONLY_KEY, true)
   }
 
   function persistPins() {
-    saveJson(pinsKey(profileName.value), pinnedIds.value)
+    saveJson(PIN_KEY, pinnedIds.value)
   }
 
   function persistHumanOnly() {
-    saveJson(humanOnlyKey(profileName.value), humanOnly.value)
+    saveJson(HUMAN_ONLY_KEY, humanOnly.value)
   }
 
   function isPinned(sessionId: string): boolean {
@@ -97,13 +78,7 @@ export const useSessionBrowserPrefsStore = defineStore('session-browser-prefs', 
     return true
   }
 
-  watch(
-    () => useProfilesStore().activeProfileName,
-    () => reload(),
-  )
-
   return {
-    profileName,
     pinnedIds,
     humanOnly,
     reload,
