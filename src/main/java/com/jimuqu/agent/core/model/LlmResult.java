@@ -48,6 +48,11 @@ public class LlmResult {
     private long reasoningTokens;
 
     /**
+     * 本轮可展示的 reasoning 文本。
+     */
+    private String reasoningText;
+
+    /**
      * 本轮累计 cache read token。
      */
     private long cacheReadTokens;

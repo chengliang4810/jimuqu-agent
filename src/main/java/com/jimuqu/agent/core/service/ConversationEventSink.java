@@ -42,6 +42,12 @@ public interface ConversationEventSink {
     }
 
     /**
+     * assistant reasoning 文本增量。
+     */
+    default void onReasoningDelta(String delta) {
+    }
+
+    /**
      * 工具开始。
      */
     default void onToolStarted(String toolName, Map<String, Object> args) {

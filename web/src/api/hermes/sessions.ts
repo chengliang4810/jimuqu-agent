@@ -20,6 +20,12 @@ export interface SessionSummary {
   estimated_cost_usd: number
   actual_cost_usd: number | null
   cost_status: string
+  parent_session_id?: string | null
+  branch_name?: string | null
+  compressed_summary?: string | null
+  last_compression_at?: number
+  last_compression_input_tokens?: number
+  compression_failure_count?: number
 }
 
 export interface SessionDetail extends SessionSummary {
@@ -63,6 +69,12 @@ interface DashboardSessionSummary {
   cache_read_tokens?: number
   total_tokens?: number
   preview: string | null
+  parent_session_id?: string | null
+  branch_name?: string | null
+  compressed_summary?: string | null
+  last_compression_at?: number
+  last_compression_input_tokens?: number
+  compression_failure_count?: number
 }
 
 interface DashboardSessionDetail {
@@ -76,9 +88,16 @@ interface DashboardSessionDetail {
   total_tokens: number
   last_total_tokens: number
   last_usage_at: number
+  compressed_summary?: string | null
+  last_compression_at?: number
+  last_compression_input_tokens?: number
+  compression_failure_count?: number
+  parent_session_id?: string | null
+  branch_name?: string | null
   messages: Array<{
     role: 'user' | 'assistant' | 'system' | 'tool'
     content: string | null
+    reasoning?: string | null
     tool_calls?: Array<{
       id: string
       function: { name: string; arguments: string }
@@ -110,6 +129,12 @@ function mapSummary(s: DashboardSessionSummary): SessionSummary {
     estimated_cost_usd: 0,
     actual_cost_usd: null,
     cost_status: 'unavailable',
+    parent_session_id: s.parent_session_id || null,
+    branch_name: s.branch_name || null,
+    compressed_summary: s.compressed_summary || null,
+    last_compression_at: s.last_compression_at || 0,
+    last_compression_input_tokens: s.last_compression_input_tokens || 0,
+    compression_failure_count: s.compression_failure_count || 0,
   }
 }
 
@@ -125,7 +150,7 @@ function mapMessages(sessionId: string, messages: DashboardSessionDetail['messag
     timestamp: msg.timestamp || 0,
     token_count: null,
     finish_reason: null,
-    reasoning: null,
+    reasoning: msg.reasoning || null,
   }))
 }
 
@@ -178,6 +203,12 @@ export async function searchSessions(q: string, source?: string, limit?: number)
           estimated_cost_usd: 0,
           actual_cost_usd: null,
           cost_status: 'unavailable',
+          parent_session_id: null,
+          branch_name: null,
+          compressed_summary: null,
+          last_compression_at: 0,
+          last_compression_input_tokens: 0,
+          compression_failure_count: 0,
         }),
         matched_message_id: null,
         snippet: item.snippet,
@@ -213,6 +244,12 @@ export async function fetchSession(id: string): Promise<SessionDetail | null> {
       estimated_cost_usd: 0,
       actual_cost_usd: null,
       cost_status: 'unavailable',
+      parent_session_id: detail.parent_session_id || null,
+      branch_name: detail.branch_name || null,
+      compressed_summary: detail.compressed_summary || null,
+      last_compression_at: detail.last_compression_at || 0,
+      last_compression_input_tokens: detail.last_compression_input_tokens || 0,
+      compression_failure_count: detail.compression_failure_count || 0,
     }
 
     return {

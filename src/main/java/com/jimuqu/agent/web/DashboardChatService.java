@@ -397,6 +397,16 @@ public class DashboardChatService {
         }
 
         @Override
+        public void onReasoningDelta(String delta) {
+            if (StrUtil.isBlank(delta) || state.completed || state.canceled) {
+                return;
+            }
+            Map<String, Object> payload = new LinkedHashMap<String, Object>();
+            payload.put("delta", delta);
+            enqueue(state, "reasoning.delta", payload);
+        }
+
+        @Override
         public void onToolStarted(String toolName, Map<String, Object> args) {
             if (state.completed || state.canceled) {
                 return;
@@ -482,8 +492,12 @@ public class DashboardChatService {
                 Map<String, Object> usage = new LinkedHashMap<String, Object>();
                 usage.put("input_tokens", result.getInputTokens());
                 usage.put("output_tokens", result.getOutputTokens());
+                usage.put("reasoning_tokens", result.getReasoningTokens());
                 usage.put("total_tokens", result.getTotalTokens());
                 payload.put("usage", usage);
+                if (StrUtil.isNotBlank(result.getReasoningText())) {
+                    payload.put("reasoning", result.getReasoningText());
+                }
             }
             enqueue(state, "run.completed", payload);
         }

@@ -65,11 +65,16 @@ public class DashboardSessionService {
         for (ChatMessage message : MessageSupport.loadMessages(record.getNdjson())) {
             Map<String, Object> item = new LinkedHashMap<String, Object>();
             item.put("role", message.getRole().name().toLowerCase(Locale.ROOT));
-            item.put("content", SecretRedactor.redact(message.getContent(), 8000));
+            String content = message.getContent();
+            if (message instanceof AssistantMessage) {
+                content = ((AssistantMessage) message).getResultContent();
+            }
+            item.put("content", SecretRedactor.redact(content, 8000));
             item.put("timestamp", null);
 
             if (message instanceof AssistantMessage) {
                 AssistantMessage assistant = (AssistantMessage) message;
+                item.put("reasoning", SecretRedactor.redact(assistant.getReasoning(), 8000));
                 if (assistant.getToolCalls() != null && !assistant.getToolCalls().isEmpty()) {
                     List<Map<String, Object>> toolCalls = new ArrayList<Map<String, Object>>();
                     for (ToolCall call : assistant.getToolCalls()) {
@@ -110,6 +115,12 @@ public class DashboardSessionService {
         result.put("last_cache_read_tokens", record.getLastCacheReadTokens());
         result.put("last_total_tokens", record.getLastTotalTokens());
         result.put("last_usage_at", record.getLastUsageAt());
+        result.put("compressed_summary", SecretRedactor.redact(record.getCompressedSummary(), 8000));
+        result.put("last_compression_at", record.getLastCompressionAt());
+        result.put("last_compression_input_tokens", record.getLastCompressionInputTokens());
+        result.put("compression_failure_count", record.getCompressionFailureCount());
+        result.put("parent_session_id", record.getParentSessionId());
+        result.put("branch_name", record.getBranchName());
         result.put("messages", messages);
         return result;
     }
@@ -144,14 +155,9 @@ public class DashboardSessionService {
         if (root == null) {
             return Collections.singletonMap("nodes", Collections.emptyList());
         }
-        String sourceKey = root.getSourceKey();
+        List<SessionRecord> lineage = lineageRecords(root);
         List<Map<String, Object>> nodes = new ArrayList<Map<String, Object>>();
-        for (SessionRecord record : sessionRepository.listRecent(200)) {
-            if (!StrUtil.equals(sourceKey, record.getSourceKey())
-                    && !StrUtil.equals(sessionId, record.getSessionId())
-                    && !StrUtil.equals(sessionId, record.getParentSessionId())) {
-                continue;
-            }
+        for (SessionRecord record : lineage) {
             Map<String, Object> node = toSessionInfo(record);
             node.put("parent_session_id", record.getParentSessionId());
             node.put("branch_name", record.getBranchName());
@@ -160,6 +166,47 @@ public class DashboardSessionService {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("root_session_id", sessionId);
         result.put("nodes", nodes);
+        return result;
+    }
+
+    private List<SessionRecord> lineageRecords(SessionRecord root) throws Exception {
+        int total = Math.max(sessionRepository.countAll(), 1);
+        List<SessionRecord> records = sessionRepository.listRecent(Math.min(Math.max(total, 200), 5000), 0);
+        Map<String, SessionRecord> byId = new LinkedHashMap<String, SessionRecord>();
+        for (SessionRecord record : records) {
+            byId.put(record.getSessionId(), record);
+        }
+        if (!byId.containsKey(root.getSessionId())) {
+            byId.put(root.getSessionId(), root);
+        }
+
+        java.util.LinkedHashSet<String> selected = new java.util.LinkedHashSet<String>();
+        String cursor = root.getSessionId();
+        while (StrUtil.isNotBlank(cursor) && selected.add(cursor)) {
+            SessionRecord current = byId.get(cursor);
+            if (current == null) {
+                break;
+            }
+            cursor = current.getParentSessionId();
+        }
+
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (SessionRecord record : byId.values()) {
+                String parent = record.getParentSessionId();
+                if (StrUtil.isNotBlank(parent) && selected.contains(parent) && selected.add(record.getSessionId())) {
+                    changed = true;
+                }
+            }
+        }
+
+        List<SessionRecord> result = new ArrayList<SessionRecord>();
+        for (SessionRecord record : byId.values()) {
+            if (selected.contains(record.getSessionId())) {
+                result.add(record);
+            }
+        }
         return result;
     }
 
@@ -224,6 +271,12 @@ public class DashboardSessionService {
         result.put("total_tokens", record.getCumulativeTotalTokens());
         result.put("last_total_tokens", record.getLastTotalTokens());
         result.put("last_usage_at", record.getLastUsageAt());
+        result.put("parent_session_id", record.getParentSessionId());
+        result.put("branch_name", record.getBranchName());
+        result.put("compressed_summary", SecretRedactor.redact(record.getCompressedSummary(), 8000));
+        result.put("last_compression_at", record.getLastCompressionAt());
+        result.put("last_compression_input_tokens", record.getLastCompressionInputTokens());
+        result.put("compression_failure_count", record.getCompressionFailureCount());
         result.put("preview", trim(StrUtil.blankToDefault(MessageSupport.getLastUserMessage(record.getNdjson()), record.getCompressedSummary()), 160));
         return result;
     }

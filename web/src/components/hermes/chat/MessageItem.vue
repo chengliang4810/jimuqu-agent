@@ -19,6 +19,8 @@ const toast = useMessage();
 
 const isSystem = computed(() => props.message.role === "system");
 const toolExpanded = ref(false);
+const reasoningExpanded = ref(false);
+const hasReasoning = computed(() => !!props.message.reasoning?.trim());
 
 const timeStr = computed(() => {
   const d = new Date(props.message.timestamp);
@@ -275,6 +277,30 @@ const renderedToolResult = computed(() => {
                 </template>
               </div>
             </div>
+            <div v-if="hasReasoning" class="reasoning-block">
+              <button
+                type="button"
+                class="reasoning-toggle"
+                @click="reasoningExpanded = !reasoningExpanded"
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  class="reasoning-chevron"
+                  :class="{ rotated: reasoningExpanded }"
+                >
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+                <span>思考过程</span>
+              </button>
+              <div v-if="reasoningExpanded" class="reasoning-content">
+                <MarkdownRenderer :content="message.reasoning || ''" />
+              </div>
+            </div>
             <MarkdownRenderer
               v-if="message.content"
               :content="message.content"
@@ -378,6 +404,39 @@ const renderedToolResult = computed(() => {
   line-height: 1.65;
   word-break: break-word;
   border-radius: 10px;
+}
+
+.reasoning-block {
+  margin-bottom: 8px;
+  border-left: 2px solid $border-color;
+  padding-left: 8px;
+}
+
+.reasoning-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: $text-muted;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.reasoning-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+
+  &.rotated {
+    transform: rotate(90deg);
+  }
+}
+
+.reasoning-content {
+  margin-top: 6px;
+  color: $text-secondary;
+  font-size: 13px;
 }
 
 .msg-attachments {

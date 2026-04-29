@@ -51,9 +51,11 @@ export interface RunEvent {
   recovery_type?: string
   from_provider?: string
   to_provider?: string
+  reasoning?: string
   usage?: {
     input_tokens: number
     output_tokens: number
+    reasoning_tokens?: number
     total_tokens: number
   }
 }

@@ -24,6 +24,7 @@ export interface Message {
   toolArgs?: string
   toolResult?: string
   toolStatus?: 'running' | 'done' | 'error'
+  reasoning?: string
   isStreaming?: boolean
   attachments?: Attachment[]
 }
@@ -123,6 +124,7 @@ function mapHermesMessages(msgs: HermesMessage[]): Message[] {
       id: String(msg.id),
       role: msg.role,
       content: msg.content || '',
+      reasoning: msg.reasoning || undefined,
       timestamp: Math.round(msg.timestamp * 1000),
     })
   }
@@ -864,6 +866,25 @@ export const useChatStore = defineStore('chat', () => {
               break
             }
 
+            case 'reasoning.delta': {
+              const msgs = getSessionMsgs(sid)
+              const last = msgs[msgs.length - 1]
+              if (last?.role === 'assistant' && last.isStreaming) {
+                last.reasoning = (last.reasoning || '') + (evt.delta || '')
+              } else {
+                addMessage(sid, {
+                  id: uid(),
+                  role: 'assistant',
+                  content: '',
+                  reasoning: evt.delta || '',
+                  timestamp: Date.now(),
+                  isStreaming: true,
+                })
+              }
+              schedulePersist()
+              break
+            }
+
             case 'tool.started': {
               const msgs = getSessionMsgs(sid)
               const last = msgs[msgs.length - 1]
@@ -908,6 +929,12 @@ export const useChatStore = defineStore('chat', () => {
                 if (target) {
                   target.inputTokens = evt.usage.input_tokens
                   target.outputTokens = evt.usage.output_tokens
+                }
+              }
+              if (evt.reasoning) {
+                const assistant = [...msgs].reverse().find(m => m.role === 'assistant')
+                if (assistant && !assistant.reasoning) {
+                  assistant.reasoning = evt.reasoning
                 }
               }
               cleanup()

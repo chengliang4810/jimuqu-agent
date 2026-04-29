@@ -244,7 +244,7 @@ public class SolonAiLlmGateway implements LlmGateway {
         ChatConfig chatConfig = buildChatConfig(resolved);
         ReActAgent agent = buildHarnessReActAgent(chatConfig, resolved, systemPrompt, toolObjects, agentSession, feedbackSink, runContext);
         if (eventSink != null && eventSink != ConversationEventSink.noop()) {
-            return callAgentStream(agent, agentSession, session, userMessage, resume, resolved, eventSink);
+            return callAgentStream(agent, agentSession, session, userMessage, resume, resolved, feedbackSink, eventSink);
         }
         ReActResponse response = callAgent(agent, agentSession, userMessage, resume);
 
@@ -254,6 +254,7 @@ public class SolonAiLlmGateway implements LlmGateway {
         result.setNdjson(ChatMessage.toNdjson(agentSession.getMessages()));
         result.setStreamed(resolved.isStream());
         result.setRawResponse(response.getContent());
+        result.setReasoningText(extractReasoning(assistantMessage));
         result.setProvider(resolved.getProvider());
         result.setModel(StrUtil.blankToDefault(resolved.getModel(), ""));
         applyMetrics(result, response.getMetrics());
@@ -288,23 +289,25 @@ public class SolonAiLlmGateway implements LlmGateway {
                                       String userMessage,
                                       boolean resume,
                                       AppConfig.LlmConfig resolved,
+                                      ConversationFeedbackSink feedbackSink,
                                       ConversationEventSink eventSink) throws Exception {
         final StringBuilder emittedText = new StringBuilder();
         final ReActResponse[] finalResponse = new ReActResponse[1];
+        final ThinkingStreamSplitter thinkingSplitter = new ThinkingStreamSplitter();
 
         try {
             if (resume) {
                 agent.prompt()
                         .session(agentSession)
                         .stream()
-                        .doOnNext(chunk -> handleStreamChunk(chunk, emittedText, eventSink, finalResponse))
+                        .doOnNext(chunk -> handleStreamChunk(chunk, emittedText, thinkingSplitter, eventSink, feedbackSink, finalResponse))
                         .blockLast();
             } else {
                 agent.prompt(Prompt.of(userMessage))
                         .session(agentSession)
                         .options(options -> options.toolContextPut("user_message", userMessage))
                         .stream()
-                        .doOnNext(chunk -> handleStreamChunk(chunk, emittedText, eventSink, finalResponse))
+                        .doOnNext(chunk -> handleStreamChunk(chunk, emittedText, thinkingSplitter, eventSink, feedbackSink, finalResponse))
                         .blockLast();
             }
         } catch (Throwable e) {
@@ -313,6 +316,7 @@ public class SolonAiLlmGateway implements LlmGateway {
             }
             throw new IllegalStateException("ReActAgent stream failed", e);
         }
+        emitThinking(thinkingSplitter.flushPending(), emittedText, eventSink, feedbackSink);
 
         AssistantMessage assistantMessage = finalResponse[0] == null ? ChatMessage.ofAssistant(emittedText.toString()) : finalResponse[0].getMessage();
         String finalText = extractText(assistantMessage);
@@ -331,6 +335,7 @@ public class SolonAiLlmGateway implements LlmGateway {
         result.setNdjson(ChatMessage.toNdjson(agentSession.getMessages()));
         result.setStreamed(true);
         result.setRawResponse(finalText);
+        result.setReasoningText(StrUtil.blankToDefault(thinkingSplitter.reasoningText(), extractReasoning(assistantMessage)));
         result.setProvider(resolved.getProvider());
         result.setModel(StrUtil.blankToDefault(resolved.getModel(), ""));
         if (finalResponse[0] != null) {
@@ -342,7 +347,9 @@ public class SolonAiLlmGateway implements LlmGateway {
 
     private void handleStreamChunk(org.noear.solon.ai.agent.AgentChunk chunk,
                                    StringBuilder emittedText,
+                                   ThinkingStreamSplitter thinkingSplitter,
                                    ConversationEventSink eventSink,
+                                   ConversationFeedbackSink feedbackSink,
                                    ReActResponse[] finalResponse) {
         if (chunk instanceof org.noear.solon.ai.agent.react.task.ReasonChunk) {
             org.noear.solon.ai.agent.react.task.ReasonChunk reasonChunk = (org.noear.solon.ai.agent.react.task.ReasonChunk) chunk;
@@ -356,8 +363,7 @@ public class SolonAiLlmGateway implements LlmGateway {
                 return;
             }
 
-            emittedText.append(delta);
-            eventSink.onAssistantDelta(delta);
+            emitThinking(thinkingSplitter.accept(delta, message.isThinking()), emittedText, eventSink, feedbackSink);
             return;
         }
 
@@ -376,6 +382,25 @@ public class SolonAiLlmGateway implements LlmGateway {
 
         if (chunk instanceof org.noear.solon.ai.agent.react.ReActChunk) {
             finalResponse[0] = ((org.noear.solon.ai.agent.react.ReActChunk) chunk).getResponse();
+        }
+    }
+
+    private void emitThinking(ThinkingStreamSplitter.Delta delta,
+                              StringBuilder emittedText,
+                              ConversationEventSink eventSink,
+                              ConversationFeedbackSink feedbackSink) {
+        if (delta == null) {
+            return;
+        }
+        if (StrUtil.isNotBlank(delta.reasoning)) {
+            eventSink.onReasoningDelta(delta.reasoning);
+            if (feedbackSink != null) {
+                feedbackSink.onReasoning(delta.reasoning);
+            }
+        }
+        if (StrUtil.isNotBlank(delta.visible)) {
+            emittedText.append(delta.visible);
+            eventSink.onAssistantDelta(delta.visible);
         }
     }
 
@@ -430,6 +455,112 @@ public class SolonAiLlmGateway implements LlmGateway {
             return assistantMessage.getContent().trim();
         }
         return String.valueOf(assistantMessage).trim();
+    }
+
+    private String extractReasoning(AssistantMessage assistantMessage) {
+        if (assistantMessage == null) {
+            return "";
+        }
+        return StrUtil.nullToEmpty(assistantMessage.getReasoning()).trim();
+    }
+
+    /**
+     * 将流式 <think>...</think> 内容拆成 reasoning 和可见答复。
+     */
+    private static class ThinkingStreamSplitter {
+        private static final String THINK_OPEN = "<think>";
+        private static final String THINK_CLOSE = "</think>";
+
+        private final StringBuilder visible = new StringBuilder();
+        private final StringBuilder reasoning = new StringBuilder();
+        private final StringBuilder pendingTag = new StringBuilder();
+        private boolean thinking;
+
+        Delta accept(String text, boolean thinkingOnly) {
+            if (StrUtil.isBlank(text)) {
+                return Delta.empty();
+            }
+            if (thinkingOnly) {
+                reasoning.append(text);
+                return new Delta("", text);
+            }
+
+            StringBuilder visibleDelta = new StringBuilder();
+            StringBuilder reasoningDelta = new StringBuilder();
+            for (int i = 0; i < text.length(); i++) {
+                char ch = text.charAt(i);
+                if (pendingTag.length() > 0 || ch == '<') {
+                    pendingTag.append(ch);
+                    String pending = pendingTag.toString();
+                    if (THINK_OPEN.equals(pending)) {
+                        thinking = true;
+                        pendingTag.setLength(0);
+                        continue;
+                    }
+                    if (THINK_CLOSE.equals(pending)) {
+                        thinking = false;
+                        pendingTag.setLength(0);
+                        continue;
+                    }
+                    if (THINK_OPEN.startsWith(pending) || THINK_CLOSE.startsWith(pending)) {
+                        continue;
+                    }
+                    appendCurrent(pending, visibleDelta, reasoningDelta);
+                    pendingTag.setLength(0);
+                    continue;
+                }
+                appendCurrent(String.valueOf(ch), visibleDelta, reasoningDelta);
+            }
+            return buildDelta(visibleDelta, reasoningDelta);
+        }
+
+        Delta flushPending() {
+            if (pendingTag.length() == 0) {
+                return Delta.empty();
+            }
+            StringBuilder visibleDelta = new StringBuilder();
+            StringBuilder reasoningDelta = new StringBuilder();
+            appendCurrent(pendingTag.toString(), visibleDelta, reasoningDelta);
+            pendingTag.setLength(0);
+            return buildDelta(visibleDelta, reasoningDelta);
+        }
+
+        String reasoningText() {
+            return reasoning.toString().trim();
+        }
+
+        private Delta buildDelta(StringBuilder visibleDelta, StringBuilder reasoningDelta) {
+            if (visibleDelta.length() > 0) {
+                visible.append(visibleDelta);
+            }
+            if (reasoningDelta.length() > 0) {
+                reasoning.append(reasoningDelta);
+            }
+            return new Delta(visibleDelta.toString(), reasoningDelta.toString());
+        }
+
+        private void appendCurrent(String value, StringBuilder visibleDelta, StringBuilder reasoningDelta) {
+            if (thinking) {
+                reasoningDelta.append(value);
+            } else {
+                visibleDelta.append(value);
+            }
+        }
+
+        private static class Delta {
+            private static final Delta EMPTY = new Delta("", "");
+            private final String visible;
+            private final String reasoning;
+
+            private Delta(String visible, String reasoning) {
+                this.visible = visible;
+                this.reasoning = reasoning;
+            }
+
+            private static Delta empty() {
+                return EMPTY;
+            }
+        }
     }
 
     private FailureMode classifyFailure(Throwable error) {
