@@ -4,6 +4,17 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag, for example v0.0.1"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark this release as a prerelease"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -11,9 +22,21 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+(\.[0-9]+){1,2}([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag must look like v0.0.1, got: $RELEASE_TAG"
+            exit 1
+          fi
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -30,29 +53,70 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Build release artifact
-        run: mvn -DskipTests package
+        run: mvn -B -DskipTests package
 
-      - name: Resolve artifact path
+      - name: Prepare release files
         id: artifact
         shell: bash
         run: |
-          VERSION="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
-          JAR_PATH="target/jimuqu-agent-${VERSION}.jar"
-          if [ ! -f "$JAR_PATH" ]; then
-            JAR_PATH="$(find target -maxdepth 1 -type f -name 'jimuqu-agent-*.jar' ! -name 'original-*' | head -n 1)"
+          VERSION="$(mvn -B -q -DforceStdout help:evaluate "-Dexpression=project.version")"
+          JAR_PATH="$(find target -maxdepth 1 -type f -name "jimuqu-agent-${VERSION}.jar" ! -name 'original-*' -print -quit)"
+          if [ -z "$JAR_PATH" ]; then
+            JAR_PATH="$(find target -maxdepth 1 -type f -name 'jimuqu-agent-*.jar' ! -name 'original-*' -print -quit)"
           fi
-          if [ ! -f "$JAR_PATH" ]; then
+          if [ -z "$JAR_PATH" ] || [ ! -f "$JAR_PATH" ]; then
             echo "Release jar not found"
+            find target -maxdepth 1 -type f -print
             exit 1
           fi
-          sha256sum "$JAR_PATH" > "${JAR_PATH}.sha256"
-          echo "jar_path=$JAR_PATH" >> "$GITHUB_OUTPUT"
-          echo "sha_path=${JAR_PATH}.sha256" >> "$GITHUB_OUTPUT"
+
+          mkdir -p dist
+          RELEASE_JAR="dist/jimuqu-agent-${VERSION}.jar"
+          cp "$JAR_PATH" "$RELEASE_JAR"
+          (cd dist && sha256sum "$(basename "$RELEASE_JAR")" > SHA256SUMS)
+
+          cat > dist/release-notes.md <<EOF
+          ## jimuqu-agent ${RELEASE_TAG}
+
+          本次发布包含可直接通过 \`java -jar\` 运行的完整 shaded jar。
+
+          ### 下载内容
+
+          - \`jimuqu-agent-${VERSION}.jar\`：完整运行包，包含后端依赖与 Dashboard 静态资源。
+          - \`SHA256SUMS\`：发布包校验文件。
+
+          ### 快速运行
+
+          \`\`\`bash
+          java -jar jimuqu-agent-${VERSION}.jar
+          \`\`\`
+
+          服务默认监听 \`http://127.0.0.1:8080\`，运行数据会写入当前目录的 \`runtime/\`。
+          EOF
+
+          echo "jar_path=$RELEASE_JAR" >> "$GITHUB_OUTPUT"
+          echo "sha_path=dist/SHA256SUMS" >> "$GITHUB_OUTPUT"
+          echo "body_path=dist/release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jimuqu-agent-release
+          path: |
+            ${{ steps.artifact.outputs.jar_path }}
+            ${{ steps.artifact.outputs.sha_path }}
+          if-no-files-found: error
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: jimuqu-agent ${{ env.RELEASE_TAG }}
+          body_path: ${{ steps.artifact.outputs.body_path }}
           generate_release_notes: true
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
+          fail_on_unmatched_files: true
           files: |
             ${{ steps.artifact.outputs.jar_path }}
             ${{ steps.artifact.outputs.sha_path }}
