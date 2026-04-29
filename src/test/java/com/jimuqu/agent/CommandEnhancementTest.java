@@ -5,11 +5,10 @@ import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.support.FakeLlmGateway;
 import com.jimuqu.agent.support.TestEnvironment;
-import com.jimuqu.agent.support.RuntimePathGuard;
-import com.jimuqu.agent.tool.runtime.FileTools;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -55,9 +54,10 @@ public class CommandEnhancementTest {
 
         String sourceKey = "MEMORY:admin-chat:admin-user";
         File file = FileUtil.file(env.appConfig.getRuntime().getCacheDir(), "rollback-command.txt");
-        FileTools fileTools = new FileTools(env.checkpointService, env.sessionRepository, sourceKey, new RuntimePathGuard(env.appConfig));
-        fileTools.writeFile(file.getAbsolutePath(), "v1");
-        fileTools.writeFile(file.getAbsolutePath(), "v2");
+        SessionRecord session = env.sessionRepository.bindNewSession(sourceKey);
+        FileUtil.writeUtf8String("v1", file);
+        env.checkpointService.createCheckpoint(sourceKey, session.getSessionId(), Collections.singletonList(file));
+        FileUtil.writeUtf8String("v2", file);
 
         GatewayReply listReply = env.send("admin-chat", "admin-user", "/rollback");
         assertThat(listReply.getContent()).contains("1.").contains("created=");

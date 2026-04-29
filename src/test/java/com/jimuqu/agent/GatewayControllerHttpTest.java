@@ -2,7 +2,6 @@ package com.jimuqu.agent;
 
 import cn.hutool.core.io.FileUtil;
 import com.jimuqu.agent.config.AppConfig;
-import com.jimuqu.agent.support.RuntimePathGuard;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.core.model.SessionRecord;
@@ -11,7 +10,6 @@ import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.support.MessageSupport;
 import com.jimuqu.agent.support.constants.AgentSettingConstants;
-import com.jimuqu.agent.tool.runtime.FileTools;
 import com.jimuqu.agent.tool.runtime.ProcessRegistry;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -23,6 +21,7 @@ import org.noear.solon.ai.chat.message.ChatMessage;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.util.Collections;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import javax.crypto.Mac;
@@ -109,9 +108,10 @@ public class GatewayControllerHttpTest {
         sessionRepository.bindNewSession(sourceKey);
 
         File file = FileUtil.file(runtimeHome, "cache", "http-rollback.txt");
-        FileTools fileTools = new FileTools(checkpointService, sessionRepository, sourceKey, new RuntimePathGuard(bean(AppConfig.class)));
-        fileTools.writeFile(file.getAbsolutePath(), "v1");
-        fileTools.writeFile(file.getAbsolutePath(), "v2");
+        SessionRecord boundSession = sessionRepository.getBoundSession(sourceKey);
+        FileUtil.writeUtf8String("v1", file);
+        checkpointService.createCheckpoint(sourceKey, boundSession.getSessionId(), Collections.singletonList(file));
+        FileUtil.writeUtf8String("v2", file);
 
         GatewayReply listReply = postMessage("http-admin-chat", "http-admin", "/rollback");
         assertThat(listReply.getContent()).contains("1.").contains("created=");

@@ -332,7 +332,7 @@ public class RuntimeSettingsService {
             return;
         }
 
-        buffer.append("shell_probe_policy=Prefer execute_shell for environment detection. On Linux, do not rely on exists_cmd because shell builtins like command -v may be misdetected when invoked outside a shell.\n");
+        buffer.append("shell_probe_policy=Use execute_shell for environment detection.\n");
         buffer.append("shell_probe_example=Use execute_shell with commands like: command -v git >/dev/null 2>&1 && git --version || echo git_missing\n");
     }
 

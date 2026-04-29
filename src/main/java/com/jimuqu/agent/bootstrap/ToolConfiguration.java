@@ -75,8 +75,7 @@ public class ToolConfiguration {
                                      CheckpointService checkpointService,
                                      DelegationService delegationService,
                                      AttachmentCacheService attachmentCacheService,
-                                     RuntimeSettingsService runtimeSettingsService,
-                                     RuntimePathGuard runtimePathGuard) {
+                                     RuntimeSettingsService runtimeSettingsService) {
         return new DefaultToolRegistry(
                 appConfig,
                 preferenceStore,
@@ -90,8 +89,7 @@ public class ToolConfiguration {
                 checkpointService,
                 delegationService,
                 attachmentCacheService,
-                runtimeSettingsService,
-                runtimePathGuard
+                runtimeSettingsService
         );
     }
 

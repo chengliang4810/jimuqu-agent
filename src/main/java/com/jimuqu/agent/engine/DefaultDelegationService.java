@@ -56,12 +56,10 @@ public class DefaultDelegationService implements DelegationService {
      * 当前系统已知工具清单。
      */
     private static final List<String> ALL_TOOLS = Arrays.asList(
-            ToolNameConstants.READ_FILE,
-            ToolNameConstants.WRITE_FILE,
-            ToolNameConstants.PATCH,
-            ToolNameConstants.SEARCH_FILES,
-            ToolNameConstants.EXISTS_CMD,
-            ToolNameConstants.LIST_FILES,
+            ToolNameConstants.FILE_READ,
+            ToolNameConstants.FILE_WRITE,
+            ToolNameConstants.FILE_LIST,
+            ToolNameConstants.FILE_DELETE,
             ToolNameConstants.EXECUTE_SHELL,
             ToolNameConstants.EXECUTE_PYTHON,
             ToolNameConstants.EXECUTE_JS,

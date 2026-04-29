@@ -23,7 +23,6 @@ import org.noear.solon.ai.agent.react.ReActAgent;
 import org.noear.solon.ai.agent.react.ReActInterceptor;
 import org.noear.solon.ai.agent.react.ReActResponse;
 import org.noear.solon.ai.agent.react.ReActTrace;
-import org.noear.solon.ai.agent.react.intercept.StopLoopInterceptor;
 import org.noear.solon.ai.agent.react.intercept.SummarizationInterceptor;
 import org.noear.solon.ai.agent.react.intercept.ToolRetryInterceptor;
 import org.noear.solon.ai.agent.react.intercept.ToolSanitizerInterceptor;
@@ -573,8 +572,7 @@ public class SolonAiLlmGateway implements LlmGateway {
                 .retryConfig(retryMax, retryDelayMs)
                 .maxSteps(maxSteps)
                 .defaultInterceptorAdd(new ToolRetryInterceptor())
-                .defaultInterceptorAdd(new ToolSanitizerInterceptor())
-                .defaultInterceptorAdd(new StopLoopInterceptor());
+                .defaultInterceptorAdd(new ToolSanitizerInterceptor());
 
         if (summarizationInterceptor != null) {
             builder.defaultInterceptorAdd(summarizationInterceptor);

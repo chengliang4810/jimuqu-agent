@@ -12,11 +12,10 @@ import com.jimuqu.agent.core.service.SessionSearchService;
 import com.jimuqu.agent.core.service.SkillHubService;
 import com.jimuqu.agent.core.service.ToolRegistry;
 import com.jimuqu.agent.support.AttachmentCacheService;
-import com.jimuqu.agent.support.RuntimePathGuard;
 import com.jimuqu.agent.support.RuntimeSettingsService;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.agent.support.constants.ToolNameConstants;
-import lombok.RequiredArgsConstructor;
+import org.noear.solon.ai.skills.file.FileReadWriteSkill;
 import org.noear.solon.ai.skills.sys.NodejsSkill;
 import org.noear.solon.ai.skills.sys.PythonSkill;
 import org.noear.solon.ai.skills.sys.ShellSkill;
@@ -34,18 +33,15 @@ import java.util.Locale;
 /**
  * 默认工具注册表。
  */
-@RequiredArgsConstructor
 public class DefaultToolRegistry implements ToolRegistry {
     /**
      * 默认内置工具清单。
      */
     private static final List<String> TOOL_NAMES = Arrays.asList(
-            ToolNameConstants.READ_FILE,
-            ToolNameConstants.WRITE_FILE,
-            ToolNameConstants.PATCH,
-            ToolNameConstants.SEARCH_FILES,
-            ToolNameConstants.EXISTS_CMD,
-            ToolNameConstants.LIST_FILES,
+            ToolNameConstants.FILE_READ,
+            ToolNameConstants.FILE_WRITE,
+            ToolNameConstants.FILE_LIST,
+            ToolNameConstants.FILE_DELETE,
             ToolNameConstants.EXECUTE_SHELL,
             ToolNameConstants.EXECUTE_PYTHON,
             ToolNameConstants.EXECUTE_JS,
@@ -141,8 +137,6 @@ public class DefaultToolRegistry implements ToolRegistry {
      */
     private final RuntimeSettingsService runtimeSettingsService;
 
-    private final RuntimePathGuard pathGuard;
-
     public DefaultToolRegistry(AppConfig appConfig,
                                SqlitePreferenceStore preferenceStore,
                                SessionRepository sessionRepository,
@@ -156,9 +150,19 @@ public class DefaultToolRegistry implements ToolRegistry {
                                DelegationService delegationService,
                                AttachmentCacheService attachmentCacheService,
                                RuntimeSettingsService runtimeSettingsService) {
-        this(appConfig, preferenceStore, sessionRepository, cronJobRepository, deliveryService, memoryService,
-                sessionSearchService, localSkillService, skillHubService, checkpointService, delegationService,
-                attachmentCacheService, runtimeSettingsService, new RuntimePathGuard(appConfig));
+        this.appConfig = appConfig;
+        this.preferenceStore = preferenceStore;
+        this.sessionRepository = sessionRepository;
+        this.cronJobRepository = cronJobRepository;
+        this.deliveryService = deliveryService;
+        this.memoryService = memoryService;
+        this.sessionSearchService = sessionSearchService;
+        this.localSkillService = localSkillService;
+        this.skillHubService = skillHubService;
+        this.checkpointService = checkpointService;
+        this.delegationService = delegationService;
+        this.attachmentCacheService = attachmentCacheService;
+        this.runtimeSettingsService = runtimeSettingsService;
     }
 
     @Override
@@ -170,7 +174,6 @@ public class DefaultToolRegistry implements ToolRegistry {
     public List<Object> resolveEnabledTools(String sourceKey) {
         List<Object> tools = new ArrayList<Object>();
 
-        FileTools fileTools = new FileTools(checkpointService, sessionRepository, sourceKey, pathGuard);
         TodoTools todoTools = new TodoTools(appConfig, sourceKey);
         MemoryTools memoryTools = new MemoryTools(memoryService);
         SessionSearchTools sessionSearchTools = new SessionSearchTools(sessionSearchService, sourceKey);
@@ -181,13 +184,15 @@ public class DefaultToolRegistry implements ToolRegistry {
         DelegateTools delegateTools = new DelegateTools(delegationService, sourceKey);
         ConfigTools configTools = new ConfigTools(runtimeSettingsService);
         String sysWorkDir = appConfig.getRuntime().getHome();
-        ShellSkill shellSkill = new ShellSkill(sysWorkDir, defaultShellCommand(), defaultShellExtension());
+        FileReadWriteSkill fileSkill = new FileReadWriteSkill(sysWorkDir);
+        ShellSkill shellSkill = new ShellSkill(sysWorkDir);
         PythonSkill pythonSkill = new PythonSkill(sysWorkDir, defaultPythonCommand());
         NodejsSkill nodejsSkill = new NodejsSkill(sysWorkDir);
         SystemClockSkill systemClockSkill = new SystemClockSkill();
         WebsearchTool websearchTool = WebsearchTool.getInstance();
         WebfetchTool webfetchTool = WebfetchTool.getInstance();
         CodeSearchTool codeSearchTool = CodeSearchTool.getInstance();
+        boolean fileSkillAdded = false;
         boolean clockSkillAdded = false;
 
         for (String toolName : TOOL_NAMES) {
@@ -195,24 +200,17 @@ public class DefaultToolRegistry implements ToolRegistry {
                 continue;
             }
 
-            if (ToolNameConstants.READ_FILE.equals(toolName)) {
-                tools.add(new FileTools.ReadFileTool(fileTools));
-            } else if (ToolNameConstants.WRITE_FILE.equals(toolName)) {
-                tools.add(new FileTools.WriteFileTool(fileTools));
-            } else if (ToolNameConstants.PATCH.equals(toolName)) {
-                tools.add(new FileTools.PatchTool(fileTools));
-            } else if (ToolNameConstants.SEARCH_FILES.equals(toolName)) {
-                tools.add(new FileTools.SearchFilesTool(fileTools));
-            } else if (ToolNameConstants.EXISTS_CMD.equals(toolName)) {
-                tools.add(new SystemSkillTools.ExistsCmdTool(shellSkill));
-            } else if (ToolNameConstants.LIST_FILES.equals(toolName)) {
-                tools.add(new SystemSkillTools.ListFilesTool(shellSkill));
+            if (isFileTool(toolName)) {
+                if (!fileSkillAdded) {
+                    tools.add(fileSkill);
+                    fileSkillAdded = true;
+                }
             } else if (ToolNameConstants.EXECUTE_SHELL.equals(toolName)) {
-                tools.add(new SystemSkillTools.ExecuteShellTool(shellSkill));
+                tools.add(shellSkill);
             } else if (ToolNameConstants.EXECUTE_PYTHON.equals(toolName)) {
-                tools.add(new SystemSkillTools.ExecutePythonTool(pythonSkill));
+                tools.add(pythonSkill);
             } else if (ToolNameConstants.EXECUTE_JS.equals(toolName)) {
-                tools.add(new SystemSkillTools.ExecuteJsTool(nodejsSkill));
+                tools.add(nodejsSkill);
             } else if (ToolNameConstants.GET_CURRENT_TIME.equals(toolName)) {
                 if (!clockSkillAdded) {
                     tools.add(systemClockSkill);
@@ -271,6 +269,13 @@ public class DefaultToolRegistry implements ToolRegistry {
         return tools;
     }
 
+    private boolean isFileTool(String toolName) {
+        return ToolNameConstants.FILE_READ.equals(toolName)
+                || ToolNameConstants.FILE_WRITE.equals(toolName)
+                || ToolNameConstants.FILE_LIST.equals(toolName)
+                || ToolNameConstants.FILE_DELETE.equals(toolName);
+    }
+
     @Override
     public List<String> resolveEnabledToolNames(String sourceKey) {
         List<String> result = new ArrayList<String>();
@@ -320,14 +325,6 @@ public class DefaultToolRegistry implements ToolRegistry {
         } catch (SQLException ignored) {
             // V1 忽略偏好写入失败。
         }
-    }
-
-    private String defaultShellCommand() {
-        return isWindows() ? "cmd /c" : "/bin/sh";
-    }
-
-    private String defaultShellExtension() {
-        return isWindows() ? ".bat" : ".sh";
     }
 
     private String defaultPythonCommand() {

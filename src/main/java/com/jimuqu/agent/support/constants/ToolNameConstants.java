@@ -4,12 +4,10 @@ package com.jimuqu.agent.support.constants;
  * 工具名称常量。
  */
 public interface ToolNameConstants {
-    String READ_FILE = "read_file";
-    String WRITE_FILE = "write_file";
-    String PATCH = "patch";
-    String SEARCH_FILES = "search_files";
-    String EXISTS_CMD = "exists_cmd";
-    String LIST_FILES = "list_files";
+    String FILE_READ = "file_read";
+    String FILE_WRITE = "file_write";
+    String FILE_LIST = "file_list";
+    String FILE_DELETE = "file_delete";
     String EXECUTE_SHELL = "execute_shell";
     String EXECUTE_PYTHON = "execute_python";
     String EXECUTE_JS = "execute_js";

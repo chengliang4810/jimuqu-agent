@@ -57,11 +57,11 @@ public final class ToolPreviewSupport {
     }
 
     private static String[] preferredKeys(String toolName) {
-        if ("read_file".equals(toolName) || "write_file".equals(toolName) || "patch".equals(toolName)) {
-            return new String[]{"path", "filePath"};
+        if ("file_read".equals(toolName) || "file_write".equals(toolName) || "file_delete".equals(toolName)) {
+            return new String[]{"fileName", "path", "filePath"};
         }
-        if ("search_files".equals(toolName)) {
-            return new String[]{"pattern", "path"};
+        if ("file_list".equals(toolName)) {
+            return new String[]{"dirName", "path"};
         }
         if ("execute_shell".equals(toolName) || "execute_python".equals(toolName) || "execute_js".equals(toolName)) {
             return new String[]{"command", "code"};

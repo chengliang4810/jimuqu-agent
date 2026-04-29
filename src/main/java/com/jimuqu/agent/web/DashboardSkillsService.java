@@ -64,17 +64,15 @@ public class DashboardSkillsService {
 
     public List<Map<String, Object>> getToolsets() {
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
-        result.add(toolset("code", "代码工具", "官方 Shell/Python/Node.js、文件、补丁与代码搜索能力", Arrays.asList(
-                ToolNameConstants.EXISTS_CMD,
-                ToolNameConstants.LIST_FILES,
+        result.add(toolset("code", "代码工具", "官方 Shell/Python/Node.js、文件读写与代码搜索能力", Arrays.asList(
                 ToolNameConstants.EXECUTE_SHELL,
                 ToolNameConstants.EXECUTE_PYTHON,
                 ToolNameConstants.EXECUTE_JS,
                 ToolNameConstants.GET_CURRENT_TIME,
-                ToolNameConstants.READ_FILE,
-                ToolNameConstants.WRITE_FILE,
-                ToolNameConstants.PATCH,
-                ToolNameConstants.SEARCH_FILES,
+                ToolNameConstants.FILE_READ,
+                ToolNameConstants.FILE_WRITE,
+                ToolNameConstants.FILE_LIST,
+                ToolNameConstants.FILE_DELETE,
                 ToolNameConstants.CODESEARCH
         )));
         result.add(toolset("agent", "代理工具", "委托与待办管理能力", Arrays.asList(
