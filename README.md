@@ -10,10 +10,10 @@ jimuqu-agent 是一个基于 Java、Solon 与 Solon AI 的单实例 Agent 服务
 
 - **Agent 核心循环**：多轮会话、流式/非流式模型调用、工具调用、上下文压缩、重试、回滚与会话搜索。
 - **模型协议**：支持 `openai`、`openai-responses`、`ollama`、`gemini`、`anthropic` 等通用接入面。
-- **工具系统**：内置文件读写、搜索、补丁、Shell/Python/JavaScript 执行、Todo、Memory、定时任务、Web search/fetch、消息发送等工具。
+- **工具系统**：内置文件读写、搜索、补丁、Shell/Python/JavaScript 执行、Memory、定时任务、Web search/fetch、消息发送等工具。
 - **国内消息渠道**：聚焦飞书、钉钉、企业微信、微信；优先 websocket / stream，微信保留 iLink long-poll。
-- **Dashboard-first**：提供状态查看、会话、配置、渠道诊断、运行配置、日志、技能、任务等管理入口。
-- **持久化**：使用 SQLite 保存会话、策略、定时任务、渠道状态、项目工作台等运行数据。
+- **Dashboard-first**：提供状态查看、会话、配置、渠道诊断、运行配置、日志、技能等管理入口。
+- **持久化**：使用 SQLite 保存会话、策略、定时任务、渠道状态等运行数据。
 - **技能与记忆**：支持本地 Skills、Skills Hub 导入、长期记忆、用户画像和上下文文件协作。
 - **部署方式**：支持 `java -jar` 与 Docker / Docker Compose 单实例部署。
 
@@ -156,14 +156,13 @@ jimuqu:
 - `/skills`：管理技能
 - `/cron`：管理定时任务
 - `/pairing`：渠道用户绑定与审批
-- `/project`：项目工作台与任务拆解
 - `/approve` / `/deny`：危险命令审批
 
 ## 目录结构
 
 ```text
 src/main/java/com/jimuqu/agent/
-├── agent/          # Agent profile 与项目工作台角色
+├── agent/          # Agent profile
 ├── bootstrap/      # Solon 启动、Bean 装配、HTTP 控制器
 ├── config/         # 配置加载、环境变量覆盖、路径规范化
 ├── context/        # AGENTS / MEMORY / USER / Skills 上下文
@@ -171,7 +170,6 @@ src/main/java/com/jimuqu/agent/
 ├── engine/         # Agent 主循环、上下文压缩、委托
 ├── gateway/        # 国内消息渠道、鉴权、投递和运行刷新
 ├── llm/            # 模型协议适配与 Solon AI 接入
-├── project/        # 项目工作台、Todo、运行记录与问题记录
 ├── scheduler/      # Cron 与 heartbeat 调度
 ├── skillhub/       # Skills Hub、导入、校验与来源适配
 ├── storage/        # SQLite 仓储实现
@@ -197,7 +195,7 @@ mvn -DskipTests -Dskip.web.build=true compile
 运行指定测试：
 
 ```bash
-mvn "-Dtest=ProjectWorkbenchCommandTest,DashboardControllerHttpTest" test
+mvn "-Dtest=DashboardControllerHttpTest" test
 ```
 
 > Windows PowerShell 中 `-Dtest=...` 建议加引号，避免逗号被 PowerShell 解析。

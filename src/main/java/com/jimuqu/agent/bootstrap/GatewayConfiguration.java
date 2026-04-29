@@ -33,7 +33,6 @@ import com.jimuqu.agent.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.agent.gateway.service.ChannelConnectionManager;
 import com.jimuqu.agent.gateway.service.DefaultGatewayService;
 import com.jimuqu.agent.gateway.service.GatewayInjectionAuthService;
-import com.jimuqu.agent.project.service.ProjectService;
 import com.jimuqu.agent.support.AttachmentCacheService;
 import com.jimuqu.agent.support.DisplaySettingsService;
 import com.jimuqu.agent.support.LlmProviderService;
@@ -121,8 +120,7 @@ public class GatewayConfiguration {
                                          DisplaySettingsService displaySettingsService,
                                          AppUpdateService appUpdateService,
                                          DangerousCommandApprovalService dangerousCommandApprovalService,
-                                         AgentProfileService agentProfileService,
-                                         ProjectService projectService) {
+                                         AgentProfileService agentProfileService) {
         return new DefaultCommandService(
                 sessionRepository,
                 toolRegistry,
@@ -142,8 +140,7 @@ public class GatewayConfiguration {
                 displaySettingsService,
                 appUpdateService,
                 dangerousCommandApprovalService,
-                agentProfileService,
-                projectService
+                agentProfileService
         );
     }
 

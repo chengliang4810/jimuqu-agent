@@ -400,81 +400,12 @@ public class SqliteDatabase {
                     "created_at integer not null," +
                     "updated_at integer not null" +
                     ")");
-            statement.execute("create table if not exists projects (" +
-                    "project_id text primary key," +
-                    "slug text not null unique," +
-                    "title text not null," +
-                    "goal text," +
-                    "status text not null," +
-                    "current_todo_id text," +
-                    "created_at integer not null," +
-                    "updated_at integer not null" +
-                    ")");
-            statement.execute("create index if not exists idx_projects_slug on projects(slug)");
-            statement.execute("create table if not exists project_agents (" +
-                    "project_id text not null," +
-                    "agent_name text not null," +
-                    "role_hint text," +
-                    "created_at integer not null," +
-                    "updated_at integer not null," +
-                    "primary key (project_id, agent_name)" +
-                    ")");
-            statement.execute("create table if not exists project_todos (" +
-                    "todo_id text primary key," +
-                    "project_id text not null," +
-                    "parent_todo_id text," +
-                    "todo_no text not null," +
-                    "title text not null," +
-                    "description text," +
-                    "status text not null," +
-                    "assigned_agent text," +
-                    "priority text," +
-                    "sort_order integer not null," +
-                    "created_at integer not null," +
-                    "updated_at integer not null," +
-                    "finished_at integer not null default 0" +
-                    ")");
-            statement.execute("create index if not exists idx_project_todos_project_status on project_todos(project_id, status)");
-            statement.execute("create index if not exists idx_project_todos_parent on project_todos(parent_todo_id)");
-            statement.execute("create table if not exists project_runs (" +
-                    "run_id text primary key," +
-                    "project_id text not null," +
-                    "todo_id text," +
-                    "agent_name text," +
-                    "session_id text," +
-                    "work_dir text," +
-                    "model text," +
-                    "allowed_tools_json text," +
-                    "loaded_memory_files_json text," +
-                    "status text not null," +
-                    "summary text," +
-                    "started_at integer not null," +
-                    "finished_at integer not null default 0" +
-                    ")");
-            statement.execute("create index if not exists idx_project_runs_project on project_runs(project_id, started_at desc)");
-            statement.execute("create table if not exists project_questions (" +
-                    "question_id text primary key," +
-                    "project_id text not null," +
-                    "todo_id text," +
-                    "asked_by text," +
-                    "question text not null," +
-                    "answer text," +
-                    "status text not null," +
-                    "created_at integer not null," +
-                    "answered_at integer not null default 0" +
-                    ")");
-            statement.execute("create index if not exists idx_project_questions_project_status on project_questions(project_id, status)");
-            statement.execute("create table if not exists project_events (" +
-                    "event_id text primary key," +
-                    "project_id text not null," +
-                    "todo_id text," +
-                    "event_type text not null," +
-                    "actor text," +
-                    "message text," +
-                    "metadata_json text," +
-                    "created_at integer not null" +
-                    ")");
-            statement.execute("create index if not exists idx_project_events_project_time on project_events(project_id, created_at desc)");
+            statement.execute("drop table if exists project_events");
+            statement.execute("drop table if exists project_questions");
+            statement.execute("drop table if exists project_runs");
+            statement.execute("drop table if exists project_todos");
+            statement.execute("drop table if exists project_agents");
+            statement.execute("drop table if exists projects");
             statement.close();
         } finally {
             connection.close();

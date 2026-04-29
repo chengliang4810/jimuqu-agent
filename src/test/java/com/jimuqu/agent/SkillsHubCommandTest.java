@@ -132,8 +132,7 @@ public class SkillsHubCommandTest {
                 displaySettingsService,
                 appUpdateService,
                 env.dangerousCommandApprovalService,
-                env.agentProfileService,
-                env.projectService
+                env.agentProfileService
         );
     }
 

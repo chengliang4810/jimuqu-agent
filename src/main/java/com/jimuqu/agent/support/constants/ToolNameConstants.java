@@ -13,7 +13,6 @@ public interface ToolNameConstants {
     String EXECUTE_JS = "execute_js";
     String GET_CURRENT_TIME = "get_current_time";
     String DELEGATE_TASK = "delegate_task";
-    String TODO = "todo";
     String MEMORY = "memory";
     String SESSION_SEARCH = "session_search";
     String SKILLS_LIST = "skills_list";

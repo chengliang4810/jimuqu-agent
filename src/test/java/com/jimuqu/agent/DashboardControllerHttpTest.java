@@ -267,35 +267,11 @@ public class DashboardControllerHttpTest {
     }
 
     @Test
-    void shouldReturnTodoApiResponsesAndValidateBadRequests() throws Exception {
+    void shouldNotExposeTodoApis() throws Exception {
         String token = extractToken(request("GET", "/", null, null).body);
 
-        HttpResult list = request("GET", "/api/todos", null, token);
-        assertThat(list.status).isEqualTo(200);
-        assertThat(list.body).contains("\"success\":true").contains("\"data\"").contains("\"todos\"");
-
-        HttpResult invalidWorkspace = request("POST", "/api/todos", "{\"slug\":\"bad slug!\",\"title\":\"Bad\"}", token);
-        assertThat(invalidWorkspace.status).isEqualTo(400);
-        assertThat(invalidWorkspace.body).contains("BAD_REQUEST").contains("task slug");
-
-        HttpResult create = request("POST", "/api/todos", "{\"slug\":\"http-demo\",\"title\":\"HTTP Demo\"}", token);
-        assertThat(create.status).isEqualTo(200);
-        ONode created = ONode.ofJson(create.body);
-        String projectId = created.get("data").get("id").getString();
-        assertThat(created.get("success").getBoolean()).isTrue();
-        assertThat(created.get("id").getString()).isNull();
-
-        HttpResult invalidTodo = request("POST", "/api/todos/" + projectId + "/items", "{}", token);
-        assertThat(invalidTodo.status).isEqualTo(400);
-        assertThat(invalidTodo.body).contains("todo title");
-
-        HttpResult todo = request("POST", "/api/todos/" + projectId + "/items", "{\"title\":\"Build validation\"}", token);
-        assertThat(todo.status).isEqualTo(200);
-        String todoId = ONode.ofJson(todo.body).get("data").get("id").getString();
-
-        HttpResult invalidStatus = request("POST", "/api/todos/" + projectId + "/items/" + todoId + "/status", "{\"status\":\"bad\"}", token);
-        assertThat(invalidStatus.status).isEqualTo(400);
-        assertThat(invalidStatus.body).contains("Unsupported todo status");
+        assertThat(request("GET", "/api/todos", null, token).status).isEqualTo(404);
+        assertThat(request("POST", "/api/todos", "{\"title\":\"removed\"}", token).status).isEqualTo(404);
     }
 
     @Test

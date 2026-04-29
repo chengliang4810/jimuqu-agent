@@ -96,8 +96,7 @@ public class VersionUpdateCommandTest {
                 displaySettingsService,
                 updateService,
                 env.dangerousCommandApprovalService,
-                env.agentProfileService,
-                env.projectService
+                env.agentProfileService
         );
     }
 

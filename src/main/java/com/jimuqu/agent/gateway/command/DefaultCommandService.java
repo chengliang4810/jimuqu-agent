@@ -29,7 +29,6 @@ import com.jimuqu.agent.skillhub.model.ScanResult;
 import com.jimuqu.agent.skillhub.model.SkillBrowseResult;
 import com.jimuqu.agent.skillhub.model.SkillMeta;
 import com.jimuqu.agent.skillhub.model.TapRecord;
-import com.jimuqu.agent.project.service.ProjectService;
 import com.jimuqu.agent.support.CronSupport;
 import com.jimuqu.agent.support.IdSupport;
 import com.jimuqu.agent.support.MessageSupport;
@@ -128,7 +127,6 @@ public class DefaultCommandService implements CommandService {
     private final AppUpdateService appUpdateService;
     private final DangerousCommandApprovalService dangerousCommandApprovalService;
     private final AgentProfileService agentProfileService;
-    private final ProjectService projectService;
 
     /**
      * 判断当前命令是否由默认命令服务承接。
@@ -160,7 +158,6 @@ public class DefaultCommandService implements CommandService {
                 GatewayCommandConstants.COMMAND_APPROVE,
                 GatewayCommandConstants.COMMAND_DENY,
                 GatewayCommandConstants.COMMAND_AGENT,
-                GatewayCommandConstants.COMMAND_TASK,
                 GatewayCommandConstants.COMMAND_HELP
         ).contains(commandName);
     }
@@ -177,10 +174,6 @@ public class DefaultCommandService implements CommandService {
 
         if (GatewayCommandConstants.COMMAND_AGENT.equals(command)) {
             return GatewayReply.ok(agentProfileService.handleCommand(args));
-        }
-
-        if (GatewayCommandConstants.COMMAND_TASK.equals(command)) {
-            return GatewayReply.ok(projectService.handleCommand(message.sourceKey(), args));
         }
 
         if (GatewayCommandConstants.COMMAND_NEW.equals(command)
@@ -1066,7 +1059,6 @@ public class DefaultCommandService implements CommandService {
                 helpLine(GatewayCommandConstants.SLASH_TOOLS + " [list|enable|disable] [name...]", "查看或管理工具开关"),
                 helpLine(GatewayCommandConstants.SLASH_SKILLS + " [list|browse|search|install|inspect|check|update|audit|uninstall|tap|enable|disable|reload]", "管理本地技能与 Skills Hub"),
                 helpLine(GatewayCommandConstants.SLASH_AGENT + " [list|create|show|model|tools|skills|memory]", "管理全局 Agent"),
-                helpLine(GatewayCommandConstants.SLASH_TASK + " [init|confirm|cancel|deliver|board|todo|split|assign|run|done|questions|answer]", "管理本地待办工作台"),
                 helpLine(GatewayCommandConstants.SLASH_CRON + " [list|create|pause|resume|delete|run]", "管理定时任务"),
                 helpLine(GatewayCommandConstants.SLASH_COMPRESS + " [focus]", "压缩当前会话上下文"),
                 helpLine(GatewayCommandConstants.SLASH_ROLLBACK + " [latest|checkpoint-id|number]", "回滚到指定 checkpoint"),

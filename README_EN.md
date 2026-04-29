@@ -10,10 +10,10 @@ jimuqu-agent is a single-instance Agent service built with Java, Solon, and Solo
 
 - **Agent core loop**: multi-turn sessions, streaming/non-streaming model calls, tool calls, context compression, retry, rollback, and session search.
 - **Model protocols**: supports common interfaces such as `openai`, `openai-responses`, `ollama`, `gemini`, and `anthropic`.
-- **Tool system**: built-in tools for file operations, search, patching, Shell/Python/JavaScript execution, Todo, Memory, scheduled jobs, web search/fetch, and message delivery.
+- **Tool system**: built-in tools for file operations, search, patching, Shell/Python/JavaScript execution, Memory, scheduled jobs, web search/fetch, and message delivery.
 - **Chinese messaging channels**: focuses on Feishu, DingTalk, WeCom, and Weixin; websocket / stream first, with Weixin iLink long-poll retained.
 - **Dashboard-first operations**: status, sessions, configuration, channel doctor, runtime settings, logs, skills, and scheduled jobs.
-- **Persistence**: SQLite-backed storage for sessions, policies, scheduled jobs, channel states, and project workbench data.
+- **Persistence**: SQLite-backed storage for sessions, policies, scheduled jobs, and channel states.
 - **Skills and memory**: local skills, Skills Hub imports, long-term memory, user context, and context file collaboration.
 - **Deployment**: supports `java -jar` and Docker / Docker Compose single-instance deployments.
 
@@ -152,7 +152,6 @@ Common in-conversation commands:
 - `/skills`: manage skills
 - `/cron`: manage scheduled jobs
 - `/pairing`: channel user pairing and approvals
-- `/project`: project workbench and task breakdown
 - `/approve` / `/deny`: dangerous command approval
 
 ## API Overview
@@ -166,8 +165,6 @@ Main HTTP endpoints:
 - `POST /api/chat/runs`: Dashboard chat run
 - `GET /api/config`: read configuration
 - `GET /api/runtime-config`: runtime settings
-- `GET /api/projects`: project workbench list
-- `POST /api/projects`: create project
 
 Dashboard APIs require a session token by default. Gateway injection uses HMAC signature headers.
 
@@ -175,7 +172,7 @@ Dashboard APIs require a session token by default. Gateway injection uses HMAC s
 
 ```text
 src/main/java/com/jimuqu/agent/
-├── agent/          # Agent profiles and project-workbench roles
+├── agent/          # Agent profiles
 ├── bootstrap/      # Solon startup, bean wiring, HTTP controllers
 ├── config/         # Config loading, env overrides, path normalization
 ├── context/        # AGENTS / MEMORY / USER / Skills context
@@ -183,7 +180,6 @@ src/main/java/com/jimuqu/agent/
 ├── engine/         # Agent loop, compression, delegation
 ├── gateway/        # Messaging channels, auth, delivery, runtime refresh
 ├── llm/            # Model protocol adapters and Solon AI integration
-├── project/        # Project workbench, todos, runs, questions
 ├── scheduler/      # Cron and heartbeat scheduling
 ├── skillhub/       # Skills Hub, imports, guardrails, sources
 ├── storage/        # SQLite repository implementations
@@ -209,7 +205,7 @@ mvn -DskipTests -Dskip.web.build=true compile
 Run selected tests:
 
 ```bash
-mvn "-Dtest=ProjectWorkbenchCommandTest,DashboardControllerHttpTest" test
+mvn "-Dtest=DashboardControllerHttpTest" test
 ```
 
 > In Windows PowerShell, quote `-Dtest=...` when using comma-separated test names.

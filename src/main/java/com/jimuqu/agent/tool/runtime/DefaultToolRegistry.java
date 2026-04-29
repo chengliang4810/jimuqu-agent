@@ -47,7 +47,6 @@ public class DefaultToolRegistry implements ToolRegistry {
             ToolNameConstants.EXECUTE_JS,
             ToolNameConstants.GET_CURRENT_TIME,
             ToolNameConstants.DELEGATE_TASK,
-            ToolNameConstants.TODO,
             ToolNameConstants.MEMORY,
             ToolNameConstants.SESSION_SEARCH,
             ToolNameConstants.SKILLS_LIST,
@@ -174,7 +173,6 @@ public class DefaultToolRegistry implements ToolRegistry {
     public List<Object> resolveEnabledTools(String sourceKey) {
         List<Object> tools = new ArrayList<Object>();
 
-        TodoTools todoTools = new TodoTools(appConfig, sourceKey);
         MemoryTools memoryTools = new MemoryTools(memoryService);
         SessionSearchTools sessionSearchTools = new SessionSearchTools(sessionSearchService, sourceKey);
         SkillTools skillTools = new SkillTools(localSkillService, checkpointService, sessionRepository, sourceKey);
@@ -222,8 +220,6 @@ public class DefaultToolRegistry implements ToolRegistry {
                 tools.add(new ConfigTools.ConfigSetTool(configTools));
             } else if (ToolNameConstants.CONFIG_SET_SECRET.equals(toolName)) {
                 tools.add(new ConfigTools.ConfigSetSecretTool(configTools));
-            } else if (ToolNameConstants.TODO.equals(toolName)) {
-                tools.add(todoTools);
             } else if (ToolNameConstants.MEMORY.equals(toolName)) {
                 tools.add(memoryTools);
             } else if (ToolNameConstants.SESSION_SEARCH.equals(toolName)) {

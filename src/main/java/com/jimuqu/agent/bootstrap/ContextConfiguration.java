@@ -28,8 +28,6 @@ import com.jimuqu.agent.core.service.SkillLearningService;
 import com.jimuqu.agent.engine.DefaultContextCompressionService;
 import com.jimuqu.agent.engine.DefaultContextBudgetService;
 import com.jimuqu.agent.engine.DefaultSessionSearchService;
-import com.jimuqu.agent.project.repository.ProjectRepository;
-import com.jimuqu.agent.project.service.ProjectService;
 import com.jimuqu.agent.skillhub.service.DefaultSkillGuardService;
 import com.jimuqu.agent.skillhub.service.DefaultSkillHubService;
 import com.jimuqu.agent.skillhub.service.DefaultSkillImportService;
@@ -65,15 +63,6 @@ public class ContextConfiguration {
     @Bean
     public AgentProfileService agentProfileService(AgentProfileRepository agentProfileRepository) {
         return new AgentProfileService(agentProfileRepository);
-    }
-
-    @Bean(destroyMethod = "shutdown")
-    public ProjectService projectService(AppConfig appConfig,
-                                          ProjectRepository projectRepository,
-                                          AgentProfileService agentProfileService,
-                                          GlobalSettingRepository globalSettingRepository,
-                                          ConversationOrchestratorHolder conversationOrchestratorHolder) {
-        return new ProjectService(appConfig, projectRepository, agentProfileService, globalSettingRepository, conversationOrchestratorHolder);
     }
 
     @Bean

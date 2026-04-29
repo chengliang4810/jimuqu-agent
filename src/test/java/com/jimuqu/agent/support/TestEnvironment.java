@@ -49,8 +49,6 @@ import com.jimuqu.agent.gateway.command.DefaultCommandService;
 import com.jimuqu.agent.gateway.service.DefaultGatewayService;
 import com.jimuqu.agent.llm.SolonAiLlmGateway;
 import com.jimuqu.agent.llm.LlmProviderSupport;
-import com.jimuqu.agent.project.repository.ProjectRepository;
-import com.jimuqu.agent.project.service.ProjectService;
 import com.jimuqu.agent.skillhub.service.DefaultSkillGuardService;
 import com.jimuqu.agent.skillhub.service.DefaultSkillHubService;
 import com.jimuqu.agent.skillhub.service.DefaultSkillImportService;
@@ -67,7 +65,6 @@ import com.jimuqu.agent.storage.repository.SqliteAgentRunRepository;
 import com.jimuqu.agent.storage.repository.SqliteGlobalSettingRepository;
 import com.jimuqu.agent.storage.repository.SqliteGatewayPolicyRepository;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
-import com.jimuqu.agent.storage.repository.SqliteProjectRepository;
 import com.jimuqu.agent.storage.repository.SqliteSessionRepository;
 import com.jimuqu.agent.support.ConversationOrchestratorHolder;
 import com.jimuqu.agent.support.DefaultCheckpointService;
@@ -117,7 +114,6 @@ public class TestEnvironment {
     public final SkillHubService skillHubService;
     public final DangerousCommandApprovalService dangerousCommandApprovalService;
     public final AgentProfileService agentProfileService;
-    public final ProjectService projectService;
 
     public static TestEnvironment withFakeLlm() throws Exception {
         return create(new FakeLlmGateway());
@@ -161,9 +157,7 @@ public class TestEnvironment {
         ChannelStateRepository channelStateRepository = new SqliteChannelStateRepository(database);
         AgentProfileRepository agentProfileRepository = new SqliteAgentProfileRepository(database);
         AgentProfileService agentProfileService = new AgentProfileService(agentProfileRepository);
-        ProjectRepository projectRepository = new SqliteProjectRepository(database);
         ConversationOrchestratorHolder holder = new ConversationOrchestratorHolder();
-        ProjectService projectService = new ProjectService(config, projectRepository, agentProfileService, globalSettingRepository, holder);
         SkillHubStateStore skillHubStateStore = new SkillHubStateStore(new File(config.getRuntime().getSkillsDir()));
         SkillGuardService skillGuardService = new DefaultSkillGuardService();
         SkillHubHttpClient skillHubHttpClient = new DefaultSkillHubHttpClient();
@@ -204,7 +198,7 @@ public class TestEnvironment {
         ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, deliveryService, displaySettingsService, runtimeSettingsService, dangerousCommandApprovalService, agentRunSupervisor);
         holder.set(orchestrator);
         SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService, llmGateway);
-        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService, displaySettingsService, appUpdateService, dangerousCommandApprovalService, agentProfileService, projectService);
+        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService, displaySettingsService, appUpdateService, dangerousCommandApprovalService, agentProfileService);
         DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService, sessionRepository, gatewayAuthorizationService, skillLearningService, memoryManager);
         return new TestEnvironment(
                 config,
@@ -229,8 +223,7 @@ public class TestEnvironment {
                 processRegistry,
                 skillHubService,
                 dangerousCommandApprovalService,
-                agentProfileService,
-                projectService
+                agentProfileService
         );
     }
 

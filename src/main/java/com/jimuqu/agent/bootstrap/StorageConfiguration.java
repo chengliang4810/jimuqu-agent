@@ -9,7 +9,6 @@ import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.repository.GatewayPolicyRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
 import com.jimuqu.agent.core.service.CheckpointService;
-import com.jimuqu.agent.project.repository.ProjectRepository;
 import com.jimuqu.agent.storage.repository.SqliteCronJobRepository;
 import com.jimuqu.agent.storage.repository.SqliteAgentProfileRepository;
 import com.jimuqu.agent.storage.repository.SqliteAgentRunRepository;
@@ -18,7 +17,6 @@ import com.jimuqu.agent.storage.repository.SqliteDatabase;
 import com.jimuqu.agent.storage.repository.SqliteGlobalSettingRepository;
 import com.jimuqu.agent.storage.repository.SqliteGatewayPolicyRepository;
 import com.jimuqu.agent.storage.repository.SqlitePreferenceStore;
-import com.jimuqu.agent.storage.repository.SqliteProjectRepository;
 import com.jimuqu.agent.storage.repository.SqliteSessionRepository;
 import com.jimuqu.agent.support.DefaultCheckpointService;
 import org.noear.solon.annotation.Bean;
@@ -67,11 +65,6 @@ public class StorageConfiguration {
     @Bean
     public AgentProfileRepository agentProfileRepository(SqliteDatabase sqliteDatabase) {
         return new SqliteAgentProfileRepository(sqliteDatabase);
-    }
-
-    @Bean
-    public ProjectRepository projectRepository(SqliteDatabase sqliteDatabase) {
-        return new SqliteProjectRepository(sqliteDatabase);
     }
 
     @Bean
