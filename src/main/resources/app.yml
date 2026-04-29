@@ -136,10 +136,10 @@ jimuqu.channels.weixin.cdnBaseUrl: https://novac2c.cdn.weixin.qq.com/c2c
 jimuqu.channels.weixin.longPollUrl:
 jimuqu.channels.weixin.token:
 jimuqu.channels.weixin.splitMultilineMessages: false
-jimuqu.channels.weixin.sendChunkDelaySeconds: 1.5
+jimuqu.channels.weixin.sendChunkDelaySeconds: 0.35
 jimuqu.channels.weixin.sendChunkRetries: 2
 jimuqu.channels.weixin.sendChunkRetryDelaySeconds: 1.0
-jimuqu.channels.weixin.toolProgress: all
+jimuqu.channels.weixin.toolProgress: off
 
 # 全局网关授权兜底配置
 jimuqu.gateway.allowedUsers:
