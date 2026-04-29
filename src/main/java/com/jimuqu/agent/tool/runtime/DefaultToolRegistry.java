@@ -46,6 +46,7 @@ public class DefaultToolRegistry implements ToolRegistry {
             ToolNameConstants.EXECUTE_PYTHON,
             ToolNameConstants.EXECUTE_JS,
             ToolNameConstants.GET_CURRENT_TIME,
+            ToolNameConstants.TODO,
             ToolNameConstants.DELEGATE_TASK,
             ToolNameConstants.MEMORY,
             ToolNameConstants.SESSION_SEARCH,
@@ -179,6 +180,7 @@ public class DefaultToolRegistry implements ToolRegistry {
         SkillHubTools skillHubTools = new SkillHubTools(skillHubService);
         MessagingTools messagingTools = new MessagingTools(deliveryService, sourceKey, attachmentCacheService, appConfig);
         CronjobTools cronjobTools = new CronjobTools(cronJobRepository, sourceKey);
+        TodoTools todoTools = new TodoTools(appConfig, sourceKey);
         DelegateTools delegateTools = new DelegateTools(delegationService, sourceKey);
         ConfigTools configTools = new ConfigTools(runtimeSettingsService);
         String sysWorkDir = appConfig.getRuntime().getHome();
@@ -252,6 +254,8 @@ public class DefaultToolRegistry implements ToolRegistry {
                 tools.add(messagingTools);
             } else if (ToolNameConstants.CRONJOB.equals(toolName)) {
                 tools.add(cronjobTools);
+            } else if (ToolNameConstants.TODO.equals(toolName)) {
+                tools.add(todoTools);
             } else if (ToolNameConstants.DELEGATE_TASK.equals(toolName)) {
                 tools.add(delegateTools);
             } else if (ToolNameConstants.WEBSEARCH.equals(toolName)) {

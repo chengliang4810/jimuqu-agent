@@ -75,7 +75,8 @@ public class DashboardSkillsService {
                 ToolNameConstants.FILE_DELETE,
                 ToolNameConstants.CODESEARCH
         )));
-        result.add(toolset("agent", "代理工具", "委托代理能力", Arrays.asList(
+        result.add(toolset("agent", "代理工具", "委托与任务规划能力", Arrays.asList(
+                ToolNameConstants.TODO,
                 ToolNameConstants.DELEGATE_TASK
         )));
         result.add(toolset("memory", "记忆工具", "长期记忆与会话搜索能力", Arrays.asList(

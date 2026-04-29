@@ -18,6 +18,7 @@ public class ToolRegistryExposureTest {
                 "codesearch", "websearch", "webfetch",
                 "file_read", "file_write", "file_list", "file_delete",
                 "execute_shell", "execute_python", "execute_js", "get_current_time",
+                "todo",
                 "skills_list", "skill_view", "skill_manage",
                 "skills_hub_search", "skills_hub_install", "skills_hub_tap"
         );
@@ -33,6 +34,7 @@ public class ToolRegistryExposureTest {
         assertThat(joined).contains("PythonSkill");
         assertThat(joined).contains("NodejsSkill");
         assertThat(joined).contains("SystemClockSkill");
+        assertThat(joined).contains("TodoTools");
         assertThat(joined).contains("SkillsListTool");
     }
 

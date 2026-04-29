@@ -64,6 +64,7 @@ public class DefaultDelegationService implements DelegationService {
             ToolNameConstants.EXECUTE_PYTHON,
             ToolNameConstants.EXECUTE_JS,
             ToolNameConstants.GET_CURRENT_TIME,
+            ToolNameConstants.TODO,
             ToolNameConstants.DELEGATE_TASK,
             ToolNameConstants.MEMORY,
             ToolNameConstants.SESSION_SEARCH,

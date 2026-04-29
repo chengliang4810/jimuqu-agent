@@ -708,6 +708,9 @@ public class LocalSkillService implements SkillCatalogService {
         if ("messaging".equalsIgnoreCase(toolset)) {
             return java.util.Collections.singletonList(ToolNameConstants.SEND_MESSAGE);
         }
+        if ("todo".equalsIgnoreCase(toolset)) {
+            return java.util.Collections.singletonList(ToolNameConstants.TODO);
+        }
         if ("delegate".equalsIgnoreCase(toolset)) {
             return java.util.Collections.singletonList(ToolNameConstants.DELEGATE_TASK);
         }

@@ -10,7 +10,7 @@ jimuqu-agent 是一个基于 Java、Solon 与 Solon AI 的单实例 Agent 服务
 
 - **Agent 核心循环**：多轮会话、流式/非流式模型调用、工具调用、上下文压缩、重试、回滚与会话搜索。
 - **模型协议**：支持 `openai`、`openai-responses`、`ollama`、`gemini`、`anthropic` 等通用接入面。
-- **工具系统**：内置文件读写、搜索、补丁、Shell/Python/JavaScript 执行、Memory、定时任务、Web search/fetch、消息发送等工具。
+- **工具系统**：内置文件读写、搜索、补丁、Shell/Python/JavaScript 执行、Todo 任务规划、Memory、定时任务、Web search/fetch、消息发送等工具。
 - **国内消息渠道**：聚焦飞书、钉钉、企业微信、微信；优先 websocket / stream，微信保留 iLink long-poll。
 - **Dashboard-first**：提供状态查看、会话、配置、渠道诊断、运行配置、日志、技能等管理入口。
 - **持久化**：使用 SQLite 保存会话、策略、定时任务、渠道状态等运行数据。

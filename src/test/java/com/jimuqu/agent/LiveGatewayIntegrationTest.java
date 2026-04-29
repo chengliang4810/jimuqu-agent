@@ -41,7 +41,7 @@ public class LiveGatewayIntegrationTest {
                 PlatformType.MEMORY,
                 "live-room",
                 "tester",
-                "你必须调用 todo 工具，action=add，value=集成测试；然后再次调用 todo 工具 action=list，并告诉我结果。"));
+                "你必须调用 todo 工具写入 todos=[{id:\"live-1\",content:\"集成测试\",status:\"in_progress\"}]；然后再次调用 todo 工具读取当前列表，并告诉我结果。"));
         assertThat(toolReply.getContent()).isNotBlank();
 
         SessionRecord current = env.sessionRepository.getBoundSession("MEMORY:live-room:tester");

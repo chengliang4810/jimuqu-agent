@@ -12,6 +12,7 @@ public interface ToolNameConstants {
     String EXECUTE_PYTHON = "execute_python";
     String EXECUTE_JS = "execute_js";
     String GET_CURRENT_TIME = "get_current_time";
+    String TODO = "todo";
     String DELEGATE_TASK = "delegate_task";
     String MEMORY = "memory";
     String SESSION_SEARCH = "session_search";
