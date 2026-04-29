@@ -1,5 +1,5 @@
 server.port: 8080
-solon.app.name: jimuqu-agent
+solon.app.name: solon-claw
 
 solon.logging.appender.console.level: INFO
 solon.logging.appender.console.pattern: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{48} - %msg%n%ex"
@@ -10,10 +10,10 @@ solon.logging.appender.file.maxHistory: 7
 solon.logging.logger.root.level: INFO
 
 # 运行时目录配置
-jimuqu.runtime.home: runtime
+solonclaw.runtime.home: runtime
 
 # Dashboard and API shared access token. If empty, startup generates a temporary local token.
-jimuqu.dashboard.accessToken:
+solonclaw.dashboard.accessToken:
 
 # 默认大模型配置
 providers.default.name: Default Provider
@@ -23,135 +23,135 @@ providers.default.defaultModel: gpt-5.4
 providers.default.dialect: openai-responses
 model.providerKey: default
 model.default:
-jimuqu.llm.stream: true
-jimuqu.llm.reasoningEffort: medium
-jimuqu.llm.temperature: 0.2
-jimuqu.llm.maxTokens: 4096
-jimuqu.llm.contextWindowTokens: 128000
+solonclaw.llm.stream: true
+solonclaw.llm.reasoningEffort: medium
+solonclaw.llm.temperature: 0.2
+solonclaw.llm.maxTokens: 4096
+solonclaw.llm.contextWindowTokens: 128000
 
 # 定时任务调度
-jimuqu.scheduler.enabled: true
-jimuqu.scheduler.tickSeconds: 60
+solonclaw.scheduler.enabled: true
+solonclaw.scheduler.tickSeconds: 60
 
 # 上下文压缩
-jimuqu.compression.enabled: true
-jimuqu.compression.thresholdPercent: 0.5
-jimuqu.compression.summaryModel:
-jimuqu.compression.protectHeadMessages: 3
-jimuqu.compression.tailRatio: 0.2
+solonclaw.compression.enabled: true
+solonclaw.compression.thresholdPercent: 0.5
+solonclaw.compression.summaryModel:
+solonclaw.compression.protectHeadMessages: 3
+solonclaw.compression.tailRatio: 0.2
 
 # 主回复后的自动学习
-jimuqu.learning.enabled: true
-jimuqu.learning.toolCallThreshold: 5
+solonclaw.learning.enabled: true
+solonclaw.learning.toolCallThreshold: 5
 
 # HEARTBEAT.md 周期轮询
-jimuqu.agent.heartbeat.intervalMinutes: 0
+solonclaw.agent.heartbeat.intervalMinutes: 0
 
 # 文件快照与回滚
-jimuqu.rollback.enabled: true
-jimuqu.rollback.maxCheckpointsPerSource: 20
+solonclaw.rollback.enabled: true
+solonclaw.rollback.maxCheckpointsPerSource: 20
 
 # 聊天窗口显示
-jimuqu.display.toolProgress: all
-jimuqu.display.showReasoning: false
-jimuqu.display.toolPreviewLength: 80
-jimuqu.display.progressThrottleMs: 1500
+solonclaw.display.toolProgress: all
+solonclaw.display.showReasoning: false
+solonclaw.display.toolPreviewLength: 80
+solonclaw.display.progressThrottleMs: 1500
 
 # ReAct 推理控制
-jimuqu.react.maxSteps: 12
-jimuqu.react.retryMax: 3
-jimuqu.react.retryDelayMs: 2000
-jimuqu.react.delegateMaxSteps: 18
-jimuqu.react.delegateRetryMax: 4
-jimuqu.react.delegateRetryDelayMs: 2500
-jimuqu.react.summarizationEnabled: true
-jimuqu.react.summarizationMaxMessages: 40
-jimuqu.react.summarizationMaxTokens: 32000
+solonclaw.react.maxSteps: 12
+solonclaw.react.retryMax: 3
+solonclaw.react.retryDelayMs: 2000
+solonclaw.react.delegateMaxSteps: 18
+solonclaw.react.delegateRetryMax: 4
+solonclaw.react.delegateRetryDelayMs: 2500
+solonclaw.react.summarizationEnabled: true
+solonclaw.react.summarizationMaxMessages: 40
+solonclaw.react.summarizationMaxTokens: 32000
 
 # 预定义人格
-jimuqu.agent.personalities.helpful.description: 友好、通用的默认助手
-jimuqu.agent.personalities.helpful.systemPrompt: 你是一个友好、可靠的中文技术助手，优先给出准确、可执行的答案。
-jimuqu.agent.personalities.concise.description: 简洁直接，优先最短有效答案
-jimuqu.agent.personalities.concise.systemPrompt: 你是一个非常简洁的中文技术助手，只输出解决问题所需的最少内容。
-jimuqu.agent.personalities.technical.description: 偏工程化，强调原因、边界与验证
-jimuqu.agent.personalities.technical.systemPrompt: 你是一个工程导向的中文技术助手，回答时强调约束、原因、风险和验证方式。
-jimuqu.agent.personalities.technical.tone: 冷静、直接
-jimuqu.agent.personalities.technical.style: 优先用清晰术语描述系统行为和实现边界
+solonclaw.agent.personalities.helpful.description: 友好、通用的默认助手
+solonclaw.agent.personalities.helpful.systemPrompt: 你是一个友好、可靠的中文技术助手，优先给出准确、可执行的答案。
+solonclaw.agent.personalities.concise.description: 简洁直接，优先最短有效答案
+solonclaw.agent.personalities.concise.systemPrompt: 你是一个非常简洁的中文技术助手，只输出解决问题所需的最少内容。
+solonclaw.agent.personalities.technical.description: 偏工程化，强调原因、边界与验证
+solonclaw.agent.personalities.technical.systemPrompt: 你是一个工程导向的中文技术助手，回答时强调约束、原因、风险和验证方式。
+solonclaw.agent.personalities.technical.tone: 冷静、直接
+solonclaw.agent.personalities.technical.style: 优先用清晰术语描述系统行为和实现边界
 
 # 飞书渠道
-jimuqu.channels.feishu.enabled: false
-jimuqu.channels.feishu.allowedUsers:
-jimuqu.channels.feishu.dmPolicy: open
-jimuqu.channels.feishu.groupPolicy: allowlist
-jimuqu.channels.feishu.groupAllowedUsers:
-jimuqu.channels.feishu.allowAllUsers: false
-jimuqu.channels.feishu.unauthorizedDmBehavior: pair
-jimuqu.channels.feishu.botOpenId:
-jimuqu.channels.feishu.botUserId:
-jimuqu.channels.feishu.botName:
-jimuqu.channels.feishu.websocketUrl:
-jimuqu.channels.feishu.toolProgress: all
+solonclaw.channels.feishu.enabled: false
+solonclaw.channels.feishu.allowedUsers:
+solonclaw.channels.feishu.dmPolicy: open
+solonclaw.channels.feishu.groupPolicy: allowlist
+solonclaw.channels.feishu.groupAllowedUsers:
+solonclaw.channels.feishu.allowAllUsers: false
+solonclaw.channels.feishu.unauthorizedDmBehavior: pair
+solonclaw.channels.feishu.botOpenId:
+solonclaw.channels.feishu.botUserId:
+solonclaw.channels.feishu.botName:
+solonclaw.channels.feishu.websocketUrl:
+solonclaw.channels.feishu.toolProgress: all
 
 # 钉钉渠道，仅支持 stream mode 入站与官方机器人出站
-jimuqu.channels.dingtalk.enabled: false
-jimuqu.channels.dingtalk.allowedUsers:
-jimuqu.channels.dingtalk.dmPolicy: open
-jimuqu.channels.dingtalk.groupPolicy: open
-jimuqu.channels.dingtalk.groupAllowedUsers:
-jimuqu.channels.dingtalk.allowAllUsers: false
-jimuqu.channels.dingtalk.unauthorizedDmBehavior: pair
-jimuqu.channels.dingtalk.robotCode:
-jimuqu.channels.dingtalk.coolAppCode:
-jimuqu.channels.dingtalk.streamUrl:
-jimuqu.channels.dingtalk.toolProgress: all
-jimuqu.channels.dingtalk.progressCardTemplateId:
+solonclaw.channels.dingtalk.enabled: false
+solonclaw.channels.dingtalk.allowedUsers:
+solonclaw.channels.dingtalk.dmPolicy: open
+solonclaw.channels.dingtalk.groupPolicy: open
+solonclaw.channels.dingtalk.groupAllowedUsers:
+solonclaw.channels.dingtalk.allowAllUsers: false
+solonclaw.channels.dingtalk.unauthorizedDmBehavior: pair
+solonclaw.channels.dingtalk.robotCode:
+solonclaw.channels.dingtalk.coolAppCode:
+solonclaw.channels.dingtalk.streamUrl:
+solonclaw.channels.dingtalk.toolProgress: all
+solonclaw.channels.dingtalk.progressCardTemplateId:
 
 # 企微渠道
-jimuqu.channels.wecom.enabled: false
-jimuqu.channels.wecom.allowedUsers:
-jimuqu.channels.wecom.dmPolicy: open
-jimuqu.channels.wecom.groupPolicy: open
-jimuqu.channels.wecom.groupAllowedUsers:
-jimuqu.channels.wecom.allowAllUsers: false
-jimuqu.channels.wecom.unauthorizedDmBehavior: pair
-jimuqu.channels.wecom.websocketUrl:
-jimuqu.channels.wecom.toolProgress: all
+solonclaw.channels.wecom.enabled: false
+solonclaw.channels.wecom.allowedUsers:
+solonclaw.channels.wecom.dmPolicy: open
+solonclaw.channels.wecom.groupPolicy: open
+solonclaw.channels.wecom.groupAllowedUsers:
+solonclaw.channels.wecom.allowAllUsers: false
+solonclaw.channels.wecom.unauthorizedDmBehavior: pair
+solonclaw.channels.wecom.websocketUrl:
+solonclaw.channels.wecom.toolProgress: all
 
 # 微信渠道
-jimuqu.channels.weixin.enabled: false
-jimuqu.channels.weixin.allowedUsers:
-jimuqu.channels.weixin.dmPolicy: open
-jimuqu.channels.weixin.groupPolicy: disabled
-jimuqu.channels.weixin.groupAllowedUsers:
-jimuqu.channels.weixin.allowAllUsers: false
-jimuqu.channels.weixin.unauthorizedDmBehavior: pair
-jimuqu.channels.weixin.accountId:
-jimuqu.channels.weixin.baseUrl: https://ilinkai.weixin.qq.com
-jimuqu.channels.weixin.cdnBaseUrl: https://novac2c.cdn.weixin.qq.com/c2c
-jimuqu.channels.weixin.longPollUrl:
-jimuqu.channels.weixin.token:
-jimuqu.channels.weixin.splitMultilineMessages: false
-jimuqu.channels.weixin.sendChunkDelaySeconds: 0.35
-jimuqu.channels.weixin.sendChunkRetries: 2
-jimuqu.channels.weixin.sendChunkRetryDelaySeconds: 1.0
-jimuqu.channels.weixin.toolProgress: off
+solonclaw.channels.weixin.enabled: false
+solonclaw.channels.weixin.allowedUsers:
+solonclaw.channels.weixin.dmPolicy: open
+solonclaw.channels.weixin.groupPolicy: disabled
+solonclaw.channels.weixin.groupAllowedUsers:
+solonclaw.channels.weixin.allowAllUsers: false
+solonclaw.channels.weixin.unauthorizedDmBehavior: pair
+solonclaw.channels.weixin.accountId:
+solonclaw.channels.weixin.baseUrl: https://ilinkai.weixin.qq.com
+solonclaw.channels.weixin.cdnBaseUrl: https://novac2c.cdn.weixin.qq.com/c2c
+solonclaw.channels.weixin.longPollUrl:
+solonclaw.channels.weixin.token:
+solonclaw.channels.weixin.splitMultilineMessages: false
+solonclaw.channels.weixin.sendChunkDelaySeconds: 0.35
+solonclaw.channels.weixin.sendChunkRetries: 2
+solonclaw.channels.weixin.sendChunkRetryDelaySeconds: 1.0
+solonclaw.channels.weixin.toolProgress: off
 
 # 全局网关授权兜底配置
-jimuqu.gateway.allowedUsers:
-jimuqu.gateway.allowAllUsers: false
+solonclaw.gateway.allowedUsers:
+solonclaw.gateway.allowAllUsers: false
 
 # 版本检查与更新
-jimuqu.update.repo:
-jimuqu.update.releaseApiUrl:
-jimuqu.update.tagsApiUrl:
-jimuqu.update.httpProxy:
+solonclaw.update.repo:
+solonclaw.update.releaseApiUrl:
+solonclaw.update.tagsApiUrl:
+solonclaw.update.httpProxy:
 
 # GitHub / Skills Hub 认证
-jimuqu.integrations.github.token:
-jimuqu.integrations.github.cliToken:
-jimuqu.integrations.github.appId:
-jimuqu.integrations.github.privateKeyPath:
-jimuqu.integrations.github.installationId:
+solonclaw.integrations.github.token:
+solonclaw.integrations.github.cliToken:
+solonclaw.integrations.github.appId:
+solonclaw.integrations.github.privateKeyPath:
+solonclaw.integrations.github.installationId:
 
 # PDF 渲染
-jimuqu.pdf.fontPath:
+solonclaw.pdf.fontPath:

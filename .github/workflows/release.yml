@@ -93,9 +93,9 @@ jobs:
         shell: bash
         run: |
           VERSION="$(mvn -B -q -DforceStdout help:evaluate "-Dexpression=project.version")"
-          JAR_PATH="$(find target -maxdepth 1 -type f -name "jimuqu-agent-${VERSION}.jar" ! -name 'original-*' -print -quit)"
+          JAR_PATH="$(find target -maxdepth 1 -type f -name "solon-claw-${VERSION}.jar" ! -name 'original-*' -print -quit)"
           if [ -z "$JAR_PATH" ]; then
-            JAR_PATH="$(find target -maxdepth 1 -type f -name 'jimuqu-agent-*.jar' ! -name 'original-*' -print -quit)"
+            JAR_PATH="$(find target -maxdepth 1 -type f -name 'solon-claw-*.jar' ! -name 'original-*' -print -quit)"
           fi
           if [ -z "$JAR_PATH" ] || [ ! -f "$JAR_PATH" ]; then
             echo "Release jar not found"
@@ -104,24 +104,24 @@ jobs:
           fi
 
           mkdir -p dist
-          RELEASE_JAR="dist/jimuqu-agent-${VERSION}.jar"
+          RELEASE_JAR="dist/solon-claw-${VERSION}.jar"
           cp "$JAR_PATH" "$RELEASE_JAR"
           (cd dist && sha256sum "$(basename "$RELEASE_JAR")" > SHA256SUMS)
 
           cat > dist/release-notes.md <<EOF
-          ## jimuqu-agent ${{ steps.release.outputs.tag }}
+          ## solon-claw ${{ steps.release.outputs.tag }}
 
           本次发布包含可直接通过 \`java -jar\` 运行的完整 shaded jar。
 
           ### 下载内容
 
-          - \`jimuqu-agent-${VERSION}.jar\`：完整运行包，包含后端依赖与 Dashboard 静态资源。
+          - \`solon-claw-${VERSION}.jar\`：完整运行包，包含后端依赖与 Dashboard 静态资源。
           - \`SHA256SUMS\`：发布包校验文件。
 
           ### 快速运行
 
           \`\`\`bash
-          java -jar jimuqu-agent-${VERSION}.jar
+          java -jar solon-claw-${VERSION}.jar
           \`\`\`
 
           服务默认监听 \`http://127.0.0.1:8080\`，运行数据会写入当前目录的 \`runtime/\`。
@@ -134,7 +134,7 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jimuqu-agent-release
+          name: solon-claw-release
           path: |
             ${{ steps.artifact.outputs.jar_path }}
             ${{ steps.artifact.outputs.sha_path }}
@@ -145,7 +145,7 @@ jobs:
         with:
           tag_name: ${{ steps.release.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: jimuqu-agent ${{ steps.release.outputs.tag }}
+          name: solon-claw ${{ steps.release.outputs.tag }}
           body_path: ${{ steps.artifact.outputs.body_path }}
           generate_release_notes: true
           prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}

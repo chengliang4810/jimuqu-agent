@@ -4,12 +4,12 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://www.w3.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.jimuqu.agent</groupId>
-    <artifactId>jimuqu-agent</artifactId>
+    <groupId>com.jimuqu.solon.claw</groupId>
+    <artifactId>solon-claw</artifactId>
     <version>0.0.1</version>
     <packaging>jar</packaging>
 
-    <name>jimuqu-agent</name>
+    <name>solon-claw</name>
     <description>Hermes-Agent style Java agent built with Solon and Solon AI</description>
 
     <properties>
@@ -213,6 +213,19 @@
                 </executions>
             </plugin>
             <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>2.44.0</version>
+                <configuration>
+                    <java>
+                        <googleJavaFormat>
+                            <version>1.22.0</version>
+                            <style>AOSP</style>
+                        </googleJavaFormat>
+                    </java>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-resources-plugin</artifactId>
                 <version>3.3.1</version>
@@ -268,7 +281,7 @@
                             </filters>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.jimuqu.agent.JimuquAgentApp</mainClass>
+                                    <mainClass>com.jimuqu.solon.claw.SolonClawApp</mainClass>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>

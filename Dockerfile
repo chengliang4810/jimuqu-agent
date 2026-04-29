@@ -17,7 +17,7 @@ COPY src /workspace/src
 COPY --from=frontend /workspace/web/dist /workspace/web/dist
 
 RUN mvn -DskipTests -Dskip.web.build=true package \
-    && cp "$(find target -maxdepth 1 -type f -name 'jimuqu-agent-*.jar' ! -name 'original-*' | head -n 1)" /tmp/jimuqu-agent.jar
+    && cp "$(find target -maxdepth 1 -type f -name 'solon-claw-*.jar' ! -name 'original-*' | head -n 1)" /tmp/solon-claw.jar
 
 FROM eclipse-temurin:17-jdk
 
@@ -70,16 +70,16 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /tmp/jimuqu-agent.jar /app/jimuqu-agent.jar
+COPY --from=builder /tmp/solon-claw.jar /app/solon-claw.jar
 COPY docker/entrypoint.sh /app/docker-entrypoint.sh
 
-RUN groupadd -g 10000 jimuqu \
-    && useradd -u 10000 -g jimuqu -m -d /home/jimuqu jimuqu \
+RUN groupadd -g 10000 solonclaw \
+    && useradd -u 10000 -g solonclaw -m -d /home/solonclaw solonclaw \
     && mkdir -p /app/runtime \
     && sed -i 's/\r$//' /app/docker-entrypoint.sh \
     && chmod 755 /app/docker-entrypoint.sh \
     && chmod -R a+rX /app \
-    && chown -R jimuqu:jimuqu /app/runtime
+    && chown -R solonclaw:solonclaw /app/runtime
 
 EXPOSE 8080
 

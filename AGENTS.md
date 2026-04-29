@@ -1,4 +1,4 @@
-# jimuqu-agent AGENTS.md
+# solon-claw AGENTS.md
 
 ## 项目目标
 

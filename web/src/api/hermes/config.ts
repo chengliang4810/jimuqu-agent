@@ -57,8 +57,8 @@ interface RuntimeConfigInfo {
   redacted_value?: string | null
 }
 
-function envPreview(env: Record<string, RuntimeConfigInfo>, key: string): string {
-  const item = env[key]
+function configPreview(config: Record<string, RuntimeConfigInfo>, key: string): string {
+  const item = config[key]
   if (!item || !item.is_set) return ''
   return item.redacted_value || '已设置'
 }
@@ -97,7 +97,7 @@ export async function revealRuntimeConfigItem(key: string): Promise<string> {
 }
 
 export async function fetchConfig(_sections?: string[]): Promise<AppConfig> {
-  const [data, env] = await Promise.all([
+  const [data, runtimeConfig] = await Promise.all([
     request<Record<string, any>>('/api/config'),
     request<Record<string, RuntimeConfigInfo>>('/api/runtime-config'),
   ])
@@ -127,30 +127,30 @@ export async function fetchConfig(_sections?: string[]): Promise<AppConfig> {
       feishu: {
         enabled: configBoolean(data.channels?.feishu?.enabled),
         extra: {
-          app_id: envPreview(env, 'JIMUQU_FEISHU_APP_ID'),
-          app_secret: envPreview(env, 'JIMUQU_FEISHU_APP_SECRET'),
+          app_id: configPreview(runtimeConfig, 'solonclaw.channels.feishu.appId'),
+          app_secret: configPreview(runtimeConfig, 'solonclaw.channels.feishu.appSecret'),
         },
       },
       dingtalk: {
         enabled: configBoolean(data.channels?.dingtalk?.enabled),
         extra: {
-          client_id: envPreview(env, 'JIMUQU_DINGTALK_CLIENT_ID'),
-          client_secret: envPreview(env, 'JIMUQU_DINGTALK_CLIENT_SECRET'),
-          robot_code: envPreview(env, 'JIMUQU_DINGTALK_ROBOT_CODE'),
+          client_id: configPreview(runtimeConfig, 'solonclaw.channels.dingtalk.clientId'),
+          client_secret: configPreview(runtimeConfig, 'solonclaw.channels.dingtalk.clientSecret'),
+          robot_code: configPreview(runtimeConfig, 'solonclaw.channels.dingtalk.robotCode'),
         },
       },
       wecom: {
         enabled: configBoolean(data.channels?.wecom?.enabled),
         extra: {
-          bot_id: envPreview(env, 'JIMUQU_WECOM_BOT_ID'),
-          secret: envPreview(env, 'JIMUQU_WECOM_SECRET'),
+          bot_id: configPreview(runtimeConfig, 'solonclaw.channels.wecom.botId'),
+          secret: configPreview(runtimeConfig, 'solonclaw.channels.wecom.secret'),
         },
       },
       weixin: {
         enabled: configBoolean(data.channels?.weixin?.enabled),
-        token: envPreview(env, 'JIMUQU_WEIXIN_TOKEN'),
+        token: configPreview(runtimeConfig, 'solonclaw.channels.weixin.token'),
         extra: {
-          account_id: envPreview(env, 'JIMUQU_WEIXIN_ACCOUNT_ID'),
+          account_id: configPreview(runtimeConfig, 'solonclaw.channels.weixin.accountId'),
         },
       },
     },
@@ -203,28 +203,28 @@ export async function saveCredentials(
   const entries: Array<{ key: string; value: string | boolean | null | undefined }> = []
 
   if (platform === 'feishu') {
-    if ('enabled' in values) entries.push({ key: 'JIMUQU_FEISHU_ENABLED', value: values.enabled })
-    if (values.extra?.app_id !== undefined) entries.push({ key: 'JIMUQU_FEISHU_APP_ID', value: values.extra.app_id })
-    if (values.extra?.app_secret !== undefined) entries.push({ key: 'JIMUQU_FEISHU_APP_SECRET', value: values.extra.app_secret })
+    if ('enabled' in values) entries.push({ key: 'solonclaw.channels.feishu.enabled', value: values.enabled })
+    if (values.extra?.app_id !== undefined) entries.push({ key: 'solonclaw.channels.feishu.appId', value: values.extra.app_id })
+    if (values.extra?.app_secret !== undefined) entries.push({ key: 'solonclaw.channels.feishu.appSecret', value: values.extra.app_secret })
   }
 
   if (platform === 'dingtalk') {
-    if ('enabled' in values) entries.push({ key: 'JIMUQU_DINGTALK_ENABLED', value: values.enabled })
-    if (values.extra?.client_id !== undefined) entries.push({ key: 'JIMUQU_DINGTALK_CLIENT_ID', value: values.extra.client_id })
-    if (values.extra?.client_secret !== undefined) entries.push({ key: 'JIMUQU_DINGTALK_CLIENT_SECRET', value: values.extra.client_secret })
-    if (values.extra?.robot_code !== undefined) entries.push({ key: 'JIMUQU_DINGTALK_ROBOT_CODE', value: values.extra.robot_code })
+    if ('enabled' in values) entries.push({ key: 'solonclaw.channels.dingtalk.enabled', value: values.enabled })
+    if (values.extra?.client_id !== undefined) entries.push({ key: 'solonclaw.channels.dingtalk.clientId', value: values.extra.client_id })
+    if (values.extra?.client_secret !== undefined) entries.push({ key: 'solonclaw.channels.dingtalk.clientSecret', value: values.extra.client_secret })
+    if (values.extra?.robot_code !== undefined) entries.push({ key: 'solonclaw.channels.dingtalk.robotCode', value: values.extra.robot_code })
   }
 
   if (platform === 'wecom') {
-    if ('enabled' in values) entries.push({ key: 'JIMUQU_WECOM_ENABLED', value: values.enabled })
-    if (values.extra?.bot_id !== undefined) entries.push({ key: 'JIMUQU_WECOM_BOT_ID', value: values.extra.bot_id })
-    if (values.extra?.secret !== undefined) entries.push({ key: 'JIMUQU_WECOM_SECRET', value: values.extra.secret })
+    if ('enabled' in values) entries.push({ key: 'solonclaw.channels.wecom.enabled', value: values.enabled })
+    if (values.extra?.bot_id !== undefined) entries.push({ key: 'solonclaw.channels.wecom.botId', value: values.extra.bot_id })
+    if (values.extra?.secret !== undefined) entries.push({ key: 'solonclaw.channels.wecom.secret', value: values.extra.secret })
   }
 
   if (platform === 'weixin') {
-    if ('enabled' in values) entries.push({ key: 'JIMUQU_WEIXIN_ENABLED', value: values.enabled })
-    if (values.token !== undefined) entries.push({ key: 'JIMUQU_WEIXIN_TOKEN', value: values.token })
-    if (values.extra?.account_id !== undefined) entries.push({ key: 'JIMUQU_WEIXIN_ACCOUNT_ID', value: values.extra.account_id })
+    if ('enabled' in values) entries.push({ key: 'solonclaw.channels.weixin.enabled', value: values.enabled })
+    if (values.token !== undefined) entries.push({ key: 'solonclaw.channels.weixin.token', value: values.token })
+    if (values.extra?.account_id !== undefined) entries.push({ key: 'solonclaw.channels.weixin.accountId', value: values.extra.account_id })
   }
 
   for (const entry of entries) {

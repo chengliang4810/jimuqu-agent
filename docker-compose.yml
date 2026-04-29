@@ -1,12 +1,9 @@
 services:
-  jimuqu-agent:
-    image: ghcr.io/chengliang4810/jimuqu-agent:latest
-    container_name: jimuqu-agent
+  solon-claw:
+    image: ghcr.io/chengliang4810/solon-claw:latest
+    container_name: solon-claw
     restart: unless-stopped
     ports:
       - "8080:8080"
     volumes:
       - ./runtime:/app/runtime
-    environment:
-      - JIMUQU_UID=${JIMUQU_UID:-10000}
-      - JIMUQU_GID=${JIMUQU_GID:-10000}

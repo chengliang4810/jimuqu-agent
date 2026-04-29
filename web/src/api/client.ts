@@ -2,7 +2,7 @@ import router from '@/router'
 
 declare global {
   interface Window {
-    __JIMUQU_SESSION_TOKEN__?: string
+    __APP_SESSION_TOKEN__?: string
     __LOGIN_TOKEN__?: string
   }
 }
@@ -15,7 +15,7 @@ function getBaseUrl(): string {
 }
 
 function getInjectedToken(): string {
-  return window.__LOGIN_TOKEN__ || window.__JIMUQU_SESSION_TOKEN__ || ''
+  return window.__LOGIN_TOKEN__ || window.__APP_SESSION_TOKEN__ || ''
 }
 
 export function getApiKey(): string {

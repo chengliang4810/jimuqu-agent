@@ -33,7 +33,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/chengliang4810/jimuqu-agent
+          images: ghcr.io/chengliang4810/solon-claw
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch

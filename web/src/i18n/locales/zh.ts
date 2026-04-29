@@ -72,7 +72,7 @@ export default {
 
   account: {
     dashboardAccessToken: 'Dashboard 访问令牌',
-    accessTokenDescription: '这里只配置一个运行时配置项：jimuqu.dashboard.accessToken。它用于 Dashboard 页面和 /api/* 请求的 Bearer Token。',
+    accessTokenDescription: '这里只配置一个运行时配置项：solonclaw.dashboard.accessToken。它用于 Dashboard 页面和 /api/* 请求的 Bearer Token。',
     accessTokenPlaceholder: '输入新的访问令牌',
     accessTokenRequired: '访问令牌不能为空',
     accessTokenSaved: '访问令牌已保存',
@@ -80,7 +80,7 @@ export default {
     accessTokenRevealFailed: '读取访问令牌失败',
     revealAccessToken: '显示当前值',
     clearAccessToken: '清空令牌',
-    clearAccessTokenConfirm: '确定清空 jimuqu.dashboard.accessToken 吗？清空后服务会使用启动时生成的临时令牌。',
+    clearAccessTokenConfirm: '确定清空 solonclaw.dashboard.accessToken 吗？清空后服务会使用启动时生成的临时令牌。',
     currentValue: '当前值',
   },
 

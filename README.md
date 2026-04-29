@@ -1,8 +1,8 @@
-# jimuqu-agent
+# solon-claw
 
 [English](README_EN.md) | 简体中文
 
-jimuqu-agent 是一个基于 Java、Solon 与 Solon AI 的单实例 Agent 服务。项目目标是以 Java / Solon 生态复刻 Hermes Agent 的核心行为与能力，重点覆盖 Agent 主循环、工具调用、会话/记忆、技能、定时任务、国内消息渠道接入，以及 Dashboard-first 的配置与诊断体验。
+solon-claw 是一个基于 Java、Solon 与 Solon AI 的单实例 Agent 服务。项目目标是以 Java / Solon 生态复刻 Hermes Agent 的核心行为与能力，重点覆盖 Agent 主循环、工具调用、会话/记忆、技能、定时任务、国内消息渠道接入，以及 Dashboard-first 的配置与诊断体验。
 
 > 当前项目仍处于快速迭代阶段，接口和配置项可能继续调整。欢迎试用、反馈问题和参与贡献。
 
@@ -41,8 +41,8 @@ jimuqu-agent 是一个基于 Java、Solon 与 Solon AI 的单实例 Agent 服务
 ### 克隆与构建
 
 ```bash
-git clone https://github.com/chengliang4810/jimuqu-agent.git
-cd jimuqu-agent
+git clone https://github.com/chengliang4810/solon-claw.git
+cd solon-claw
 mvn -DskipTests package
 ```
 
@@ -55,7 +55,7 @@ mvn -DskipTests -Dskip.web.build=true package
 ### 运行
 
 ```bash
-java -jar target/jimuqu-agent-0.0.1.jar
+java -jar target/solon-claw-0.0.1.jar
 ```
 
 服务默认监听：
@@ -73,11 +73,6 @@ docker compose up -d
 ```
 
 默认 Compose 会将本地 `./runtime` 挂载到容器内 `/app/runtime`，方便持久化运行数据。
-Linux 宿主机上如需让容器写出的文件归属当前用户，可指定：
-
-```bash
-JIMUQU_UID=$(id -u) JIMUQU_GID=$(id -g) docker compose up -d
-```
 
 ## 配置
 
@@ -113,16 +108,16 @@ model:
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
 | `server.port` | `8080` | HTTP 服务端口 |
-| `jimuqu.runtime.home` | `runtime` | 运行时根目录 |
+| `solonclaw.runtime.home` | `runtime` | 运行时根目录 |
 | `providers.<key>.baseUrl` | - | 模型服务基础地址 |
 | `providers.<key>.apiKey` | - | 模型服务 API Key |
 | `providers.<key>.defaultModel` | - | 该提供方默认模型 |
 | `providers.<key>.dialect` | `openai-responses` | 协议方言 |
 | `model.providerKey` | `default` | 当前默认提供方 |
 | `model.default` | 空 | 全局默认模型覆盖；为空时使用 provider 的 `defaultModel` |
-| `jimuqu.llm.stream` | `true` | 是否启用流式输出 |
-| `jimuqu.llm.reasoningEffort` | `medium` | 默认推理强度 |
-| `jimuqu.scheduler.enabled` | `true` | 是否启用定时任务调度 |
+| `solonclaw.llm.stream` | `true` | 是否启用流式输出 |
+| `solonclaw.llm.reasoningEffort` | `medium` | 默认推理强度 |
+| `solonclaw.scheduler.enabled` | `true` | 是否启用定时任务调度 |
 
 ## 消息渠道
 
@@ -130,17 +125,17 @@ model:
 
 | 渠道 | 配置前缀 | 入站方式 | 状态 |
 | --- | --- | --- | --- |
-| 飞书 | `jimuqu.channels.feishu.*` | websocket / 平台能力 | 建设中 |
-| 钉钉 | `jimuqu.channels.dingtalk.*` | stream mode | 建设中 |
-| 企业微信 | `jimuqu.channels.wecom.*` | websocket / 平台能力 | 建设中 |
-| 微信 | `jimuqu.channels.weixin.*` | iLink long-poll | 建设中 |
-| QQBot | `jimuqu.channels.qqbot.*` | websocket / REST | 建设中 |
-| 腾讯元宝 | `jimuqu.channels.yuanbao.*` | websocket / REST | 建设中 |
+| 飞书 | `solonclaw.channels.feishu.*` | websocket / 平台能力 | 建设中 |
+| 钉钉 | `solonclaw.channels.dingtalk.*` | stream mode | 建设中 |
+| 企业微信 | `solonclaw.channels.wecom.*` | websocket / 平台能力 | 建设中 |
+| 微信 | `solonclaw.channels.weixin.*` | iLink long-poll | 建设中 |
+| QQBot | `solonclaw.channels.qqbot.*` | websocket / REST | 建设中 |
+| 腾讯元宝 | `solonclaw.channels.yuanbao.*` | websocket / REST | 建设中 |
 
 Dashboard 提供渠道状态与 doctor 入口，建议优先通过 Dashboard 完成接入、诊断和排错。默认渠道示例仅开启微信：
 
 ```yaml
-jimuqu:
+solonclaw:
   channels:
     weixin:
       enabled: true
@@ -167,10 +162,10 @@ jimuqu:
 ## 目录结构
 
 ```text
-src/main/java/com/jimuqu/agent/
+src/main/java/com/jimuqu/solon/claw/
 ├── agent/          # Agent profile
 ├── bootstrap/      # Solon 启动、Bean 装配、HTTP 控制器
-├── config/         # 配置加载、环境变量覆盖、路径规范化
+├── config/         # 配置文件加载、运行时覆盖、路径规范化
 ├── context/        # AGENTS / MEMORY / USER / Skills 上下文
 ├── core/           # 领域模型、仓储接口、服务接口
 ├── engine/         # Agent 主循环、上下文压缩、委托

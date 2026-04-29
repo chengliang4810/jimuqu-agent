@@ -4,8 +4,8 @@
 <configuration scan="true" scanPeriod="60 seconds" debug="false">
     <conversionRule conversionWord="tags" converterClass="ch.qos.logback.solon.SolonTagsConverter" />
 
-    <solonProperty name="APP_NAME" source="solon.app.name" defaultValue="jimuqu-agent" />
-    <solonProperty name="RUNTIME_HOME" source="jimuqu.runtime.home" defaultValue="runtime" />
+    <solonProperty name="APP_NAME" source="solon.app.name" defaultValue="solon-claw" />
+    <solonProperty name="RUNTIME_HOME" source="solonclaw.runtime.home" defaultValue="runtime" />
     <property name="LOG_DIR" value="${RUNTIME_HOME}/logs" />
 
     <solonProperty name="CONSOLE_LOG_PATTERN" source="solon.logging.appender.console.pattern"
@@ -93,15 +93,15 @@
         </filter>
     </appender>
 
-    <logger name="com.jimuqu.agent.gateway" level="INFO" additivity="false">
+    <logger name="com.jimuqu.solon.claw.gateway" level="INFO" additivity="false">
         <appender-ref ref="Console" />
         <appender-ref ref="GatewayFile" />
         <appender-ref ref="ErrorFile" />
         <appender-ref ref="Solon" />
     </logger>
 
-    <logger name="com.jimuqu.agent.scheduler" level="INFO" />
-    <logger name="com.jimuqu.agent.tool" level="INFO" />
+    <logger name="com.jimuqu.solon.claw.scheduler" level="INFO" />
+    <logger name="com.jimuqu.solon.claw.tool" level="INFO" />
 
     <root level="${LOGGER_ROOT_LEVEL}">
         <appender-ref ref="Console" />

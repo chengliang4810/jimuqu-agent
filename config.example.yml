@@ -1,4 +1,4 @@
-# Jimuqu Agent 运行配置示例。
+# SolonClaw 运行配置示例。
 # 使用方式：复制为 runtime/config.yml，再按部署环境修改。
 
 # 模型提供方列表。键名是 providerKey，可在 model.providerKey 和 fallbackProviders 中引用。
@@ -44,8 +44,8 @@ fallbackProviders: []
 #     # 备用模型名；留空时使用该提供方 defaultModel。
 #     model: qwen3
 
-# Jimuqu 运行时配置。
-jimuqu:
+# SolonClaw 运行时配置。
+solonclaw:
   # 本地运行目录配置。
   runtime:
     # 运行时根目录。

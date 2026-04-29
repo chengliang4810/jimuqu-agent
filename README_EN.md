@@ -1,8 +1,8 @@
-# jimuqu-agent
+# solon-claw
 
 English | [简体中文](README.md)
 
-jimuqu-agent is a single-instance Agent service built with Java, Solon, and Solon AI. The project aims to reproduce the core behavior and capabilities of Hermes Agent in the Java / Solon ecosystem, with a focus on the Agent loop, tool calling, sessions, memory, skills, scheduled tasks, Chinese messaging channels, and a dashboard-first setup and diagnostics experience.
+solon-claw is a single-instance Agent service built with Java, Solon, and Solon AI. The project aims to reproduce the core behavior and capabilities of Hermes Agent in the Java / Solon ecosystem, with a focus on the Agent loop, tool calling, sessions, memory, skills, scheduled tasks, Chinese messaging channels, and a dashboard-first setup and diagnostics experience.
 
 > The project is under active development. APIs and configuration keys may change as the implementation evolves. Feedback and contributions are welcome.
 
@@ -41,8 +41,8 @@ jimuqu-agent is a single-instance Agent service built with Java, Solon, and Solo
 ### Clone and Build
 
 ```bash
-git clone https://github.com/chengliang4810/jimuqu-agent.git
-cd jimuqu-agent
+git clone https://github.com/chengliang4810/solon-claw.git
+cd solon-claw
 mvn -DskipTests package
 ```
 
@@ -55,7 +55,7 @@ mvn -DskipTests -Dskip.web.build=true package
 ### Run
 
 ```bash
-java -jar target/jimuqu-agent-0.0.1.jar
+java -jar target/solon-claw-0.0.1.jar
 ```
 
 The default endpoint is:
@@ -73,11 +73,6 @@ docker compose up -d
 ```
 
 The default Compose file mounts local `./runtime` to `/app/runtime` inside the container for persistent runtime data.
-On Linux hosts, set the container runtime user to your current UID/GID to keep bind-mounted files writable:
-
-```bash
-JIMUQU_UID=$(id -u) JIMUQU_GID=$(id -g) docker compose up -d
-```
 
 ## Configuration
 
@@ -114,16 +109,16 @@ Common runtime settings:
 | Key | Default | Description |
 | --- | --- | --- |
 | `server.port` | `8080` | HTTP server port |
-| `jimuqu.runtime.home` | `runtime` | Runtime root directory |
+| `solonclaw.runtime.home` | `runtime` | Runtime root directory |
 | `providers.<key>.baseUrl` | - | Model service base URL |
 | `providers.<key>.apiKey` | - | Model service API key |
 | `providers.<key>.defaultModel` | - | Default model for the provider |
 | `providers.<key>.dialect` | `openai-responses` | Protocol dialect |
 | `model.providerKey` | `default` | Active default provider |
 | `model.default` | empty | Global model override; when empty, provider `defaultModel` is used |
-| `jimuqu.llm.stream` | `true` | Enables streaming output |
-| `jimuqu.llm.reasoningEffort` | `medium` | Default reasoning effort |
-| `jimuqu.scheduler.enabled` | `true` | Enables scheduled jobs |
+| `solonclaw.llm.stream` | `true` | Enables streaming output |
+| `solonclaw.llm.reasoningEffort` | `medium` | Default reasoning effort |
+| `solonclaw.scheduler.enabled` | `true` | Enables scheduled jobs |
 
 Prefer the Dashboard for provider and default-model management, or edit `runtime/config.yml` directly. Keep secrets out of Git.
 
@@ -133,12 +128,12 @@ Supported and prioritized channels:
 
 | Channel | Prefix | Inbound mode | Status |
 | --- | --- | --- | --- |
-| Feishu | `jimuqu.channels.feishu.*` | websocket / platform capabilities | In progress |
-| DingTalk | `jimuqu.channels.dingtalk.*` | stream mode | In progress |
-| WeCom | `jimuqu.channels.wecom.*` | websocket / platform capabilities | In progress |
-| Weixin | `jimuqu.channels.weixin.*` | iLink long-poll | In progress |
-| QQBot | `jimuqu.channels.qqbot.*` | websocket / REST | In progress |
-| Yuanbao | `jimuqu.channels.yuanbao.*` | websocket / REST | In progress |
+| Feishu | `solonclaw.channels.feishu.*` | websocket / platform capabilities | In progress |
+| DingTalk | `solonclaw.channels.dingtalk.*` | stream mode | In progress |
+| WeCom | `solonclaw.channels.wecom.*` | websocket / platform capabilities | In progress |
+| Weixin | `solonclaw.channels.weixin.*` | iLink long-poll | In progress |
+| QQBot | `solonclaw.channels.qqbot.*` | websocket / REST | In progress |
+| Yuanbao | `solonclaw.channels.yuanbao.*` | websocket / REST | In progress |
 
 The Dashboard includes channel status and doctor endpoints. Prefer the Dashboard for setup, diagnostics, and troubleshooting.
 
@@ -177,10 +172,10 @@ Dashboard APIs require a session token by default. Gateway injection uses HMAC s
 ## Project Layout
 
 ```text
-src/main/java/com/jimuqu/agent/
+src/main/java/com/jimuqu/solon/claw/
 ├── agent/          # Agent profiles
 ├── bootstrap/      # Solon startup, bean wiring, HTTP controllers
-├── config/         # Config loading, env overrides, path normalization
+├── config/         # Config-file loading, runtime overrides, path normalization
 ├── context/        # AGENTS / MEMORY / USER / Skills context
 ├── core/           # Domain models, repository interfaces, service interfaces
 ├── engine/         # Agent loop, compression, delegation

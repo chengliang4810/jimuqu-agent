@@ -71,7 +71,7 @@ export default {
   // Sidebar
   account: {
     dashboardAccessToken: 'Dashboard Access Token',
-    accessTokenDescription: 'Only one runtime config item is managed here: jimuqu.dashboard.accessToken. It is used as the Bearer Token for Dashboard pages and /api/* requests.',
+    accessTokenDescription: 'Only one runtime config item is managed here: solonclaw.dashboard.accessToken. It is used as the Bearer Token for Dashboard pages and /api/* requests.',
     accessTokenPlaceholder: 'Enter a new access token',
     accessTokenRequired: 'Access token is required',
     accessTokenSaved: 'Access token saved',
@@ -79,7 +79,7 @@ export default {
     accessTokenRevealFailed: 'Failed to read access token',
     revealAccessToken: 'Show current value',
     clearAccessToken: 'Clear token',
-    clearAccessTokenConfirm: 'Clear jimuqu.dashboard.accessToken? The service will fall back to the temporary token generated at startup.',
+    clearAccessTokenConfirm: 'Clear solonclaw.dashboard.accessToken? The service will fall back to the temporary token generated at startup.',
     currentValue: 'Current value',
   },
 

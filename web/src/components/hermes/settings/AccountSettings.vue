@@ -1,11 +1,11 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { NButton, NInput, NPopconfirm, useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import { clearApiKey, setApiKey } from "@/api/client";
 import { fetchRuntimeConfigItems, revealRuntimeConfigItem, setRuntimeConfigItem } from "@/api/hermes/config";
 
-const ACCESS_TOKEN_KEY = "jimuqu.dashboard.accessToken";
+const ACCESS_TOKEN_KEY = "solonclaw.dashboard.accessToken";
 
 const { t } = useI18n();
 const message = useMessage();
