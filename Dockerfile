@@ -52,6 +52,8 @@ RUN apt-get update \
         ca-certificates \
         tzdata \
         locales \
+        gosu \
+        tini \
         fontconfig \
         python3 \
         python3-pip \
@@ -69,9 +71,16 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /tmp/jimuqu-agent.jar /app/jimuqu-agent.jar
+COPY docker/entrypoint.sh /app/docker-entrypoint.sh
 
-RUN mkdir -p /app/runtime
+RUN groupadd -g 10000 jimuqu \
+    && useradd -u 10000 -g jimuqu -m -d /home/jimuqu jimuqu \
+    && mkdir -p /app/runtime \
+    && sed -i 's/\r$//' /app/docker-entrypoint.sh \
+    && chmod 755 /app/docker-entrypoint.sh \
+    && chmod -R a+rX /app \
+    && chown -R jimuqu:jimuqu /app/runtime
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "/app/jimuqu-agent.jar"]
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/app/docker-entrypoint.sh"]

@@ -73,6 +73,11 @@ docker compose up -d
 ```
 
 The default Compose file mounts local `./runtime` to `/app/runtime` inside the container for persistent runtime data.
+On Linux hosts, set the container runtime user to your current UID/GID to keep bind-mounted files writable:
+
+```bash
+JIMUQU_UID=$(id -u) JIMUQU_GID=$(id -g) docker compose up -d
+```
 
 ## Configuration
 

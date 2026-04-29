@@ -22,6 +22,34 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class WeixinInboundDispatchTest {
     @Test
+    void shouldSplitLongOutboundTextAtWeixinSafeLimit() throws Exception {
+        WeiXinChannelAdapter adapter = newAdapter();
+        Method split = WeiXinChannelAdapter.class.getDeclaredMethod("splitTextForDelivery", String.class);
+        split.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        List<String> chunks = (List<String>) split.invoke(adapter, repeat("a", 2001));
+
+        assertThat(chunks).hasSize(2);
+        assertThat(chunks.get(0)).hasSize(2000);
+        assertThat(chunks.get(1)).hasSize(1);
+    }
+
+    @Test
+    void shouldStillSplitMultilineTextByLineWhenConfigured() throws Exception {
+        AppConfig config = newConfig();
+        config.getChannels().getWeixin().setSplitMultilineMessages(true);
+        WeiXinChannelAdapter adapter = newAdapter(config);
+        Method split = WeiXinChannelAdapter.class.getDeclaredMethod("splitTextForDelivery", String.class);
+        split.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        List<String> chunks = (List<String>) split.invoke(adapter, "第一行\n\n第二行");
+
+        assertThat(chunks).containsExactly("第一行", "第二行");
+    }
+
+    @Test
     void shouldDispatchInboundOffThePollingThread() throws Exception {
         AppConfig config = newConfig();
         config.getChannels().getWeixin().setEnabled(true);
@@ -59,6 +87,26 @@ public class WeixinInboundDispatchTest {
         assertThat(handlerThread.get()).isNotEqualTo(callerThread);
 
         adapter.disconnect();
+    }
+
+    private WeiXinChannelAdapter newAdapter() throws Exception {
+        return newAdapter(newConfig());
+    }
+
+    private WeiXinChannelAdapter newAdapter(AppConfig config) {
+        return new WeiXinChannelAdapter(
+                config.getChannels().getWeixin(),
+                new InMemoryChannelStateRepository(),
+                new AttachmentCacheService(config)
+        );
+    }
+
+    private String repeat(String text, int count) {
+        StringBuilder builder = new StringBuilder(text.length() * count);
+        for (int i = 0; i < count; i++) {
+            builder.append(text);
+        }
+        return builder.toString();
     }
 
     private AppConfig newConfig() throws Exception {

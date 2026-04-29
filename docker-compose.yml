@@ -7,3 +7,6 @@ services:
       - "8080:8080"
     volumes:
       - ./runtime:/app/runtime
+    environment:
+      - JIMUQU_UID=${JIMUQU_UID:-10000}
+      - JIMUQU_GID=${JIMUQU_GID:-10000}

@@ -63,6 +63,7 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     private static final int MEDIA_FILE = 3;
     private static final int TYPING_START = 1;
     private static final int TYPING_STOP = 2;
+    private static final int MAX_TEXT_CHUNK_LENGTH = 2000;
 
     private final AppConfig.ChannelConfig config;
     private final ChannelStateRepository channelStateRepository;
@@ -186,7 +187,7 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
             } catch (Exception e) {
                 setLastError("weixin_send_text_failed", safeMessage(e));
                 if (attempt >= attempts) {
-                    throw e;
+                    throw new IllegalStateException("Weixin text send failed after " + attempts + " attempt(s): " + safeMessage(e), e);
                 }
                 sleepQuietlyMillis((long) (config.getSendChunkRetryDelaySeconds() * 1000L));
             }
@@ -199,11 +200,11 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         if (normalized.length() == 0) {
             return chunks;
         }
-        if (!config.isSplitMultilineMessages() && normalized.length() <= 4000) {
+        if (!config.isSplitMultilineMessages() && normalized.length() <= MAX_TEXT_CHUNK_LENGTH) {
             chunks.add(normalized);
             return chunks;
         }
-        if (config.isSplitMultilineMessages() && normalized.indexOf('\n') >= 0 && normalized.length() <= 4000) {
+        if (config.isSplitMultilineMessages() && normalized.indexOf('\n') >= 0 && normalized.length() <= MAX_TEXT_CHUNK_LENGTH) {
             String[] lines = normalized.split("\\R");
             for (String line : lines) {
                 String trimmed = line == null ? "" : line.trim();
@@ -223,13 +224,13 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
             if (trimmed.length() == 0) {
                 continue;
             }
-            if (trimmed.length() > 4000) {
+            if (trimmed.length() > MAX_TEXT_CHUNK_LENGTH) {
                 appendChunk(chunks, current);
                 splitHard(trimmed, chunks);
                 continue;
             }
             String candidate = current.length() == 0 ? trimmed : current.toString() + "\n\n" + trimmed;
-            if (candidate.length() > 4000) {
+            if (candidate.length() > MAX_TEXT_CHUNK_LENGTH) {
                 appendChunk(chunks, current);
                 current.append(trimmed);
             } else {
@@ -257,7 +258,7 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     private void splitHard(String text, List<String> chunks) {
         int start = 0;
         while (start < text.length()) {
-            int end = Math.min(start + 4000, text.length());
+            int end = Math.min(start + MAX_TEXT_CHUNK_LENGTH, text.length());
             chunks.add(text.substring(start, end));
             start = end;
         }

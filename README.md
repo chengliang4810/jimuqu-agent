@@ -73,6 +73,11 @@ docker compose up -d
 ```
 
 默认 Compose 会将本地 `./runtime` 挂载到容器内 `/app/runtime`，方便持久化运行数据。
+Linux 宿主机上如需让容器写出的文件归属当前用户，可指定：
+
+```bash
+JIMUQU_UID=$(id -u) JIMUQU_GID=$(id -g) docker compose up -d
+```
 
 ## 配置
 
