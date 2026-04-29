@@ -2,6 +2,8 @@ name: Publish Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -22,21 +24,11 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    env:
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Validate release tag
-        shell: bash
-        run: |
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+(\.[0-9]+){1,2}([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Release tag must look like v0.0.1, got: $RELEASE_TAG"
-            exit 1
-          fi
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -51,6 +43,47 @@ jobs:
           node-version: "20"
           cache: npm
           cache-dependency-path: web/package-lock.json
+
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RELEASE_TAG="${{ inputs.tag_name }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            RELEASE_TAG="${{ github.ref_name }}"
+          else
+            VERSION="$(mvn -B -q -DforceStdout help:evaluate "-Dexpression=project.version")"
+            SHORT_SHA="${GITHUB_SHA::7}"
+            RELEASE_TAG="v${VERSION}-${SHORT_SHA}"
+          fi
+
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+(\.[0-9]+){1,2}([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag must look like v0.0.1 or v0.0.1-abcdef1, got: $RELEASE_TAG"
+            exit 1
+          fi
+
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag for main push
+        if: github.event_name == 'push' && github.ref_type == 'branch' && github.ref_name == 'main'
+        shell: bash
+        run: |
+          RELEASE_TAG="${{ steps.release.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
+            TAG_COMMIT="$(git rev-list -n 1 "$RELEASE_TAG")"
+            if [ "$TAG_COMMIT" != "$GITHUB_SHA" ]; then
+              echo "Tag $RELEASE_TAG already exists on $TAG_COMMIT, current commit is $GITHUB_SHA"
+              exit 1
+            fi
+            echo "Tag $RELEASE_TAG already exists on this commit"
+          else
+            git tag -a "$RELEASE_TAG" "$GITHUB_SHA" -m "Release $RELEASE_TAG"
+            git push origin "refs/tags/$RELEASE_TAG"
+          fi
 
       - name: Build release artifact
         run: mvn -B -DskipTests package
@@ -76,7 +109,7 @@ jobs:
           (cd dist && sha256sum "$(basename "$RELEASE_JAR")" > SHA256SUMS)
 
           cat > dist/release-notes.md <<EOF
-          ## jimuqu-agent ${RELEASE_TAG}
+          ## jimuqu-agent ${{ steps.release.outputs.tag }}
 
           本次发布包含可直接通过 \`java -jar\` 运行的完整 shaded jar。
 
@@ -110,9 +143,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
+          tag_name: ${{ steps.release.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: jimuqu-agent ${{ env.RELEASE_TAG }}
+          name: jimuqu-agent ${{ steps.release.outputs.tag }}
           body_path: ${{ steps.artifact.outputs.body_path }}
           generate_release_notes: true
           prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
