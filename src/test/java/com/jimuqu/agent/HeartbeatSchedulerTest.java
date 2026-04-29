@@ -35,7 +35,7 @@ public class HeartbeatSchedulerTest {
     @Test
     void shouldNotRunWhenDisabled() throws Exception {
         AppConfig config = config();
-        config.getAgent().getHeartbeat().setEnabled(false);
+        config.getAgent().getHeartbeat().setIntervalMinutes(0);
         CapturingOrchestrator orchestrator = new CapturingOrchestrator();
 
         HeartbeatScheduler scheduler = new HeartbeatScheduler(
@@ -54,7 +54,6 @@ public class HeartbeatSchedulerTest {
     @Test
     void shouldSkipWhenHeartbeatFileHasOnlyComments() throws Exception {
         AppConfig config = config();
-        config.getAgent().getHeartbeat().setEnabled(true);
         InMemoryGatewayPolicyRepository repository = new InMemoryGatewayPolicyRepository();
         repository.saveHomeChannel(home(PlatformType.FEISHU, "chat-1"));
         CapturingOrchestrator orchestrator = new CapturingOrchestrator();
@@ -75,7 +74,6 @@ public class HeartbeatSchedulerTest {
     @Test
     void shouldDeliverNonQuietReplyToHomeChannel() throws Exception {
         AppConfig config = config();
-        config.getAgent().getHeartbeat().setEnabled(true);
         InMemoryGatewayPolicyRepository repository = new InMemoryGatewayPolicyRepository();
         repository.saveHomeChannel(home(PlatformType.FEISHU, "chat-1"));
         CapturingOrchestrator orchestrator = new CapturingOrchestrator();
@@ -105,7 +103,6 @@ public class HeartbeatSchedulerTest {
     @Test
     void shouldSkipDeliveryForQuietToken() throws Exception {
         AppConfig config = config();
-        config.getAgent().getHeartbeat().setEnabled(true);
         InMemoryGatewayPolicyRepository repository = new InMemoryGatewayPolicyRepository();
         repository.saveHomeChannel(home(PlatformType.WECOM, "chat-2"));
         CapturingOrchestrator orchestrator = new CapturingOrchestrator();
@@ -129,7 +126,6 @@ public class HeartbeatSchedulerTest {
     @Test
     void shouldNotFailWithoutHomeChannel() throws Exception {
         AppConfig config = config();
-        config.getAgent().getHeartbeat().setEnabled(true);
         CapturingOrchestrator orchestrator = new CapturingOrchestrator();
         CapturingDeliveryService deliveryService = new CapturingDeliveryService();
 
@@ -152,7 +148,7 @@ public class HeartbeatSchedulerTest {
         File runtimeDir = new File(tempDir.toFile(), "runtime");
         config.getRuntime().setHome(runtimeDir.getAbsolutePath());
         config.getRuntime().setContextDir(new File(runtimeDir, "context").getAbsolutePath());
-        config.getAgent().getHeartbeat().setQuietToken("HEARTBEAT_OK");
+        config.getAgent().getHeartbeat().setIntervalMinutes(30);
         config.getChannels().getFeishu().setEnabled(true);
         config.getChannels().getWecom().setEnabled(true);
         return config;

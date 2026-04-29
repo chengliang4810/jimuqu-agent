@@ -18,7 +18,7 @@ public class HeartbeatHomeChannelIntegrationTest {
     @Test
     void shouldUseHomeChannelConfiguredBySetHome() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
-        env.appConfig.getAgent().getHeartbeat().setEnabled(true);
+        env.appConfig.getAgent().getHeartbeat().setIntervalMinutes(30);
         env.appConfig.getChannels().getFeishu().setEnabled(true);
 
         GatewayMessage initDm = new GatewayMessage(PlatformType.FEISHU, "dm-admin", "admin-user", "hello");

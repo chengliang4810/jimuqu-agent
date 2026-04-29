@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 public class HeartbeatScheduler {
     private static final Logger log = LoggerFactory.getLogger(HeartbeatScheduler.class);
     private static final String HEARTBEAT_USER = "__heartbeat__";
+    private static final String QUIET_TOKEN = "HEARTBEAT_OK";
     private static final String DEFAULT_PROMPT = "请阅读 HEARTBEAT.md 并严格执行其中的检查清单。如果没有任何需要关注的内容，只回复 HEARTBEAT_OK。";
 
     private final AppConfig appConfig;
@@ -37,10 +38,10 @@ public class HeartbeatScheduler {
     private ScheduledExecutorService executorService;
 
     public void start() {
-        if (!appConfig.getAgent().getHeartbeat().isEnabled()) {
+        int intervalMinutes = appConfig.getAgent().getHeartbeat().getIntervalMinutes();
+        if (intervalMinutes <= 0) {
             return;
         }
-        int intervalMinutes = Math.max(1, appConfig.getAgent().getHeartbeat().getIntervalMinutes());
         executorService = Executors.newSingleThreadScheduledExecutor();
         executorService.scheduleWithFixedDelay(this::tickSafe, 30, intervalMinutes * 60L, TimeUnit.SECONDS);
     }
@@ -64,7 +65,8 @@ public class HeartbeatScheduler {
     }
 
     public void tick() throws Exception {
-        if (!appConfig.getAgent().getHeartbeat().isEnabled()) {
+        int intervalMinutes = appConfig.getAgent().getHeartbeat().getIntervalMinutes();
+        if (intervalMinutes <= 0) {
             log.debug("Heartbeat skipped: disabled");
             return;
         }
@@ -73,9 +75,7 @@ public class HeartbeatScheduler {
             return;
         }
 
-        log.info("Heartbeat tick started: intervalMinutes={}, deliveryMode={}",
-                appConfig.getAgent().getHeartbeat().getIntervalMinutes(),
-                appConfig.getAgent().getHeartbeat().getDeliveryMode());
+        log.info("Heartbeat tick started: intervalMinutes={}", intervalMinutes);
         tryRunForPlatform(PlatformType.FEISHU, appConfig.getChannels().getFeishu().isEnabled());
         tryRunForPlatform(PlatformType.DINGTALK, appConfig.getChannels().getDingtalk().isEnabled());
         tryRunForPlatform(PlatformType.WECOM, appConfig.getChannels().getWecom().isEnabled());
@@ -112,12 +112,6 @@ public class HeartbeatScheduler {
             return;
         }
 
-        if (!"home".equalsIgnoreCase(appConfig.getAgent().getHeartbeat().getDeliveryMode())) {
-            log.info("Heartbeat produced output but skipped delivery due to deliveryMode={}",
-                    appConfig.getAgent().getHeartbeat().getDeliveryMode());
-            return;
-        }
-
         DeliveryRequest request = new DeliveryRequest();
         request.setPlatform(platform);
         request.setChatId(home.getChatId());
@@ -133,8 +127,7 @@ public class HeartbeatScheduler {
         if (reply == null || StrUtil.isBlank(reply.getContent())) {
             return false;
         }
-        String quietToken = StrUtil.blankToDefault(appConfig.getAgent().getHeartbeat().getQuietToken(), "HEARTBEAT_OK");
-        return !quietToken.equalsIgnoreCase(StrUtil.nullToEmpty(reply.getContent()).trim());
+        return !QUIET_TOKEN.equalsIgnoreCase(StrUtil.nullToEmpty(reply.getContent()).trim());
     }
 
     private boolean hasHeartbeatTasks() {

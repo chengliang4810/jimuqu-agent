@@ -289,10 +289,7 @@ public class AppConfig {
         config.getGateway().setInjectionReplayWindowSeconds(resolveInt("JIMUQU_GATEWAY_INJECTION_REPLAY_WINDOW_SECONDS", readInt(props, overrides, "jimuqu.gateway.injectionReplayWindowSeconds", 300)));
         config.getDashboard().setAccessToken(resolveSecret("JIMUQU_DASHBOARD_ACCESS_TOKEN", readString(props, overrides, "jimuqu.dashboard.accessToken", "")));
         config.getAgent().setPersonalities(loadPersonalities(props, overrides));
-        config.getAgent().getHeartbeat().setEnabled(resolveBoolean("JIMUQU_AGENT_HEARTBEAT_ENABLED", readBoolean(props, overrides, "jimuqu.agent.heartbeat.enabled", false)));
         config.getAgent().getHeartbeat().setIntervalMinutes(resolveInt("JIMUQU_AGENT_HEARTBEAT_INTERVAL_MINUTES", readInt(props, overrides, "jimuqu.agent.heartbeat.intervalMinutes", RuntimePathConstants.DEFAULT_HEARTBEAT_INTERVAL_MINUTES)));
-        config.getAgent().getHeartbeat().setDeliveryMode(resolveConfigString("JIMUQU_AGENT_HEARTBEAT_DELIVERY_MODE", readString(props, overrides, "jimuqu.agent.heartbeat.deliveryMode", RuntimePathConstants.DEFAULT_HEARTBEAT_DELIVERY_MODE)));
-        config.getAgent().getHeartbeat().setQuietToken(resolveConfigString("JIMUQU_AGENT_HEARTBEAT_QUIET_TOKEN", readString(props, overrides, "jimuqu.agent.heartbeat.quietToken", RuntimePathConstants.DEFAULT_HEARTBEAT_QUIET_TOKEN)));
         config.getReact().setMaxSteps(resolveInt("JIMUQU_REACT_MAX_STEPS", readInt(props, overrides, "jimuqu.react.maxSteps", 12)));
         config.getReact().setRetryMax(resolveInt("JIMUQU_REACT_RETRY_MAX", readInt(props, overrides, "jimuqu.react.retryMax", 3)));
         config.getReact().setRetryDelayMs(resolveInt("JIMUQU_REACT_RETRY_DELAY_MS", readInt(props, overrides, "jimuqu.react.retryDelayMs", 2000)));
@@ -356,10 +353,7 @@ public class AppConfig {
         this.gateway.setInjectionReplayWindowSeconds(other.getGateway().getInjectionReplayWindowSeconds());
         this.dashboard.setAccessToken(other.getDashboard().getAccessToken());
         this.agent.setPersonalities(clonePersonalities(other.getAgent().getPersonalities()));
-        this.agent.getHeartbeat().setEnabled(other.getAgent().getHeartbeat().isEnabled());
         this.agent.getHeartbeat().setIntervalMinutes(other.getAgent().getHeartbeat().getIntervalMinutes());
-        this.agent.getHeartbeat().setDeliveryMode(other.getAgent().getHeartbeat().getDeliveryMode());
-        this.agent.getHeartbeat().setQuietToken(other.getAgent().getHeartbeat().getQuietToken());
     }
 
     private void copyRuntime(RuntimeConfig other) {
@@ -1497,24 +1491,9 @@ public class AppConfig {
     @NoArgsConstructor
     public static class HeartbeatConfig {
         /**
-         * 是否启用 heartbeat。
-         */
-        private boolean enabled = false;
-
-        /**
-         * 固定轮询间隔（分钟）。
+         * 固定轮询间隔（分钟）；0 表示关闭 heartbeat。
          */
         private int intervalMinutes = RuntimePathConstants.DEFAULT_HEARTBEAT_INTERVAL_MINUTES;
-
-        /**
-         * 结果投递模式。
-         */
-        private String deliveryMode = RuntimePathConstants.DEFAULT_HEARTBEAT_DELIVERY_MODE;
-
-        /**
-         * 静默返回 token。
-         */
-        private String quietToken = RuntimePathConstants.DEFAULT_HEARTBEAT_QUIET_TOKEN;
     }
 
     /**

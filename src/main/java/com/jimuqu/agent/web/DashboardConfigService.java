@@ -116,11 +116,7 @@ public class DashboardConfigService {
 
         addField(new FieldDefinition("learning.enabled", "boolean", "agent", "启用主回复后的自动学习"));
         addField(new FieldDefinition("learning.toolCallThreshold", "number", "agent", "触发学习所需的最少工具调用数"));
-        addField(new FieldDefinition("agent.heartbeat.enabled", "boolean", "agent", "启用 HEARTBEAT.md 周期轮询"));
-        addField(new FieldDefinition("agent.heartbeat.intervalMinutes", "number", "agent", "heartbeat 轮询间隔（分钟）"));
-        addField(new FieldDefinition("agent.heartbeat.deliveryMode", "select", "agent", "heartbeat 结果投递模式")
-                .options("home", "local"));
-        addField(new FieldDefinition("agent.heartbeat.quietToken", "string", "agent", "heartbeat 静默 token"));
+        addField(new FieldDefinition("agent.heartbeat.intervalMinutes", "number", "agent", "heartbeat 轮询间隔（分钟，0 表示关闭）"));
         addField(new FieldDefinition("rollback.enabled", "boolean", "agent", "启用 checkpoint 回滚"));
         addField(new FieldDefinition("rollback.maxCheckpointsPerSource", "number", "agent", "每个来源保留的最大 checkpoint 数"));
         addField(new FieldDefinition("react.maxSteps", "number", "agent", "主代理最大推理步数"));

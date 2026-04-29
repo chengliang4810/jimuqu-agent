@@ -401,10 +401,7 @@ public class RuntimeConfigResolver {
         add(mappings, "JIMUQU_GATEWAY_INJECTION_REPLAY_WINDOW_SECONDS", "jimuqu.gateway.injectionReplayWindowSeconds");
         add(mappings, "JIMUQU_DASHBOARD_ACCESS_TOKEN", "jimuqu.dashboard.accessToken");
 
-        add(mappings, "JIMUQU_AGENT_HEARTBEAT_ENABLED", "jimuqu.agent.heartbeat.enabled");
         add(mappings, "JIMUQU_AGENT_HEARTBEAT_INTERVAL_MINUTES", "jimuqu.agent.heartbeat.intervalMinutes");
-        add(mappings, "JIMUQU_AGENT_HEARTBEAT_DELIVERY_MODE", "jimuqu.agent.heartbeat.deliveryMode");
-        add(mappings, "JIMUQU_AGENT_HEARTBEAT_QUIET_TOKEN", "jimuqu.agent.heartbeat.quietToken");
 
         add(mappings, "JIMUQU_REACT_MAX_STEPS", "jimuqu.react.maxSteps");
         add(mappings, "JIMUQU_REACT_RETRY_MAX", "jimuqu.react.retryMax");

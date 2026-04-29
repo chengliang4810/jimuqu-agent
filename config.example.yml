@@ -85,10 +85,7 @@ jimuqu:
 
   agent:
     heartbeat:
-      enabled: false
-      intervalMinutes: 30
-      deliveryMode: home
-      quietToken: HEARTBEAT_OK
+      intervalMinutes: 0
     personalities:
       helpful:
         description: 友好、通用的默认助手

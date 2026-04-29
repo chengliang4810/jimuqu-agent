@@ -50,10 +50,7 @@ jimuqu.learning.enabled: true
 jimuqu.learning.toolCallThreshold: 5
 
 # HEARTBEAT.md 周期轮询
-jimuqu.agent.heartbeat.enabled: false
-jimuqu.agent.heartbeat.intervalMinutes: 30
-jimuqu.agent.heartbeat.deliveryMode: home
-jimuqu.agent.heartbeat.quietToken: HEARTBEAT_OK
+jimuqu.agent.heartbeat.intervalMinutes: 0
 
 # 文件快照与回滚
 jimuqu.rollback.enabled: true

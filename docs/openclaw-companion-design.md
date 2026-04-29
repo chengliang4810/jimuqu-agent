@@ -402,11 +402,7 @@ String buildSystemPrompt(CompanionContextRequest request);
 建议新增配置：
 
 ```yaml
-jimuqu.agent.heartbeat.enabled: false
-jimuqu.agent.heartbeat.intervalMinutes: 30
-jimuqu.agent.heartbeat.activeHours: 08:00-22:00
-jimuqu.agent.heartbeat.deliveryTarget: home
-jimuqu.agent.heartbeat.okSilence: true
+jimuqu.agent.heartbeat.intervalMinutes: 0
 ```
 
 推荐行为：
