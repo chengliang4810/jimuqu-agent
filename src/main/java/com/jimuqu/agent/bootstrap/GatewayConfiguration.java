@@ -11,6 +11,7 @@ import com.jimuqu.agent.core.repository.ChannelStateRepository;
 import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.repository.GatewayPolicyRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.service.AgentRunControlService;
 import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.ChannelAdapter;
 import com.jimuqu.agent.core.service.CommandService;
@@ -120,6 +121,7 @@ public class GatewayConfiguration {
                                          DisplaySettingsService displaySettingsService,
                                          AppUpdateService appUpdateService,
                                          DangerousCommandApprovalService dangerousCommandApprovalService,
+                                         AgentRunControlService agentRunControlService,
                                          AgentProfileService agentProfileService) {
         return new DefaultCommandService(
                 sessionRepository,
@@ -140,6 +142,7 @@ public class GatewayConfiguration {
                 displaySettingsService,
                 appUpdateService,
                 dangerousCommandApprovalService,
+                agentRunControlService,
                 agentProfileService
         );
     }

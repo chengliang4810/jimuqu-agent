@@ -11,6 +11,7 @@ import com.jimuqu.agent.context.FileContextService;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.context.PersonaWorkspaceService;
 import com.jimuqu.agent.core.service.ChannelAdapter;
+import com.jimuqu.agent.core.service.AgentRunControlService;
 import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.CommandService;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
@@ -113,6 +114,7 @@ public class TestEnvironment {
     public final ProcessRegistry processRegistry;
     public final SkillHubService skillHubService;
     public final DangerousCommandApprovalService dangerousCommandApprovalService;
+    public final AgentRunControlService agentRunControlService;
     public final AgentProfileService agentProfileService;
 
     public static TestEnvironment withFakeLlm() throws Exception {
@@ -198,7 +200,7 @@ public class TestEnvironment {
         ConversationOrchestrator orchestrator = new DefaultConversationOrchestrator(sessionRepository, contextService, contextCompressionService, llmGateway, toolRegistry, deliveryService, displaySettingsService, runtimeSettingsService, dangerousCommandApprovalService, agentRunSupervisor);
         holder.set(orchestrator);
         SkillLearningService skillLearningService = new AsyncSkillLearningService(config, sessionRepository, memoryService, localSkillService, checkpointService, llmGateway);
-        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService, displaySettingsService, appUpdateService, dangerousCommandApprovalService, agentProfileService);
+        CommandService commandService = new DefaultCommandService(sessionRepository, toolRegistry, localSkillService, cronJobRepository, orchestrator, contextService, contextCompressionService, deliveryService, gatewayAuthorizationService, checkpointService, skillHubService, config, globalSettingRepository, processRegistry, runtimeSettingsService, displaySettingsService, appUpdateService, dangerousCommandApprovalService, agentRunSupervisor, agentProfileService);
         DefaultGatewayService gatewayService = new DefaultGatewayService(commandService, orchestrator, deliveryService, sessionRepository, gatewayAuthorizationService, skillLearningService, memoryManager);
         return new TestEnvironment(
                 config,
@@ -223,6 +225,7 @@ public class TestEnvironment {
                 processRegistry,
                 skillHubService,
                 dangerousCommandApprovalService,
+                agentRunSupervisor,
                 agentProfileService
         );
     }

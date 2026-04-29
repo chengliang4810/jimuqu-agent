@@ -5,6 +5,7 @@ import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.service.AgentRunCancelledException;
 import com.jimuqu.agent.core.service.CommandService;
 import com.jimuqu.agent.core.service.ConversationOrchestrator;
 import com.jimuqu.agent.core.service.DeliveryService;
@@ -124,6 +125,14 @@ public class DefaultGatewayService {
         } catch (Exception e) {
             if (messageKey != null) {
                 recentMessageKeys.remove(messageKey);
+            }
+            Throwable cause = rootCause(e);
+            if (cause instanceof AgentRunCancelledException) {
+                GatewayReply cancelledReply = GatewayReply.ok(cause.getMessage());
+                if (authorized) {
+                    safeDeliver(message, cancelledReply);
+                }
+                return cancelledReply;
             }
             log.warn("Gateway handle failed: platform={}, chatId={}, userId={}, text={}",
                     message.getPlatform(),

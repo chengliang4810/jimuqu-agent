@@ -6,6 +6,7 @@ import com.jimuqu.agent.agent.AgentProfileService;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.context.LocalSkillService;
 import com.jimuqu.agent.core.enums.PlatformType;
+import com.jimuqu.agent.core.model.AgentRunStopResult;
 import com.jimuqu.agent.core.model.CheckpointRecord;
 import com.jimuqu.agent.core.model.CronJobRecord;
 import com.jimuqu.agent.core.model.GatewayMessage;
@@ -14,6 +15,7 @@ import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.CronJobRepository;
 import com.jimuqu.agent.core.repository.GlobalSettingRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.service.AgentRunControlService;
 import com.jimuqu.agent.core.service.CheckpointService;
 import com.jimuqu.agent.core.service.CommandService;
 import com.jimuqu.agent.core.service.ConversationEventSink;
@@ -126,6 +128,7 @@ public class DefaultCommandService implements CommandService {
     private final DisplaySettingsService displaySettingsService;
     private final AppUpdateService appUpdateService;
     private final DangerousCommandApprovalService dangerousCommandApprovalService;
+    private final AgentRunControlService agentRunControlService;
     private final AgentProfileService agentProfileService;
 
     /**
@@ -274,7 +277,7 @@ public class DefaultCommandService implements CommandService {
         }
 
         if (GatewayCommandConstants.COMMAND_STOP.equals(command)) {
-            return GatewayReply.ok("已停止后台进程：" + processRegistry.stopAll() + " 个。");
+            return handleStop(message);
         }
 
         if (GatewayCommandConstants.COMMAND_PERSONALITY.equals(command)) {
@@ -444,6 +447,29 @@ public class DefaultCommandService implements CommandService {
         GatewayReply reply = handle(message, commandLine);
         SessionRecord session = sessionRepository.getBoundSession(message.sourceKey());
         emitDirectReply(reply, eventSink, session == null ? null : session.getSessionId());
+        return reply;
+    }
+
+    private GatewayReply handleStop(GatewayMessage message) throws Exception {
+        AgentRunStopResult stopResult = agentRunControlService == null
+                ? AgentRunStopResult.none()
+                : agentRunControlService.stop(message.sourceKey());
+        int stoppedProcesses = processRegistry.stopAll();
+
+        StringBuilder buffer = new StringBuilder();
+        if (stopResult.isActiveRun()) {
+            buffer.append("已请求停止当前任务：").append(stopResult.getRunId());
+        } else {
+            buffer.append("当前聊天没有正在执行的任务。");
+        }
+        buffer.append("\n已停止后台进程：").append(stoppedProcesses).append(" 个。");
+
+        SessionRecord session = sessionRepository.getBoundSession(message.sourceKey());
+        GatewayReply reply = GatewayReply.ok(buffer.toString());
+        if (session != null) {
+            reply.setSessionId(session.getSessionId());
+            reply.setBranchName(session.getBranchName());
+        }
         return reply;
     }
 
@@ -1051,7 +1077,7 @@ public class DefaultCommandService implements CommandService {
                 helpLine(GatewayCommandConstants.SLASH_RESUME + " <session-or-branch>", "恢复指定会话或分支"),
                 helpLine(GatewayCommandConstants.SLASH_STATUS, "查看当前会话状态"),
                 helpLine(GatewayCommandConstants.SLASH_USAGE, "查看当前会话运行信息"),
-                helpLine(GatewayCommandConstants.SLASH_STOP, "停止后台进程"),
+                helpLine(GatewayCommandConstants.SLASH_STOP, "停止当前任务和后台进程"),
                 helpLine(GatewayCommandConstants.SLASH_PERSONALITY + " [name|none]", "查看或切换人格"),
                 helpLine(GatewayCommandConstants.SLASH_VERSION + " [check|update]", "查看版本或执行更新"),
                 helpLine(GatewayCommandConstants.SLASH_MODEL + " [--global] [provider:]<model>|clear", "查看或切换模型"),

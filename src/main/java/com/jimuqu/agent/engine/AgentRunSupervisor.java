@@ -5,11 +5,14 @@ import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.AgentRunContext;
 import com.jimuqu.agent.core.model.AgentRunOutcome;
 import com.jimuqu.agent.core.model.AgentRunRecord;
+import com.jimuqu.agent.core.model.AgentRunStopResult;
 import com.jimuqu.agent.core.model.ContextBudgetDecision;
 import com.jimuqu.agent.core.model.LlmResult;
 import com.jimuqu.agent.core.model.SessionRecord;
 import com.jimuqu.agent.core.repository.AgentRunRepository;
 import com.jimuqu.agent.core.repository.SessionRepository;
+import com.jimuqu.agent.core.service.AgentRunCancelledException;
+import com.jimuqu.agent.core.service.AgentRunControlService;
 import com.jimuqu.agent.core.service.ContextBudgetService;
 import com.jimuqu.agent.core.service.ContextCompressionService;
 import com.jimuqu.agent.core.service.ConversationEventSink;
@@ -31,12 +34,15 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * OpenClaw 风格的外层 Agent run 状态机。
  */
 @RequiredArgsConstructor
-public class AgentRunSupervisor {
+public class AgentRunSupervisor implements AgentRunControlService {
     private static final Logger log = LoggerFactory.getLogger(AgentRunSupervisor.class);
     private static final String EMPTY_REPLY_RECOVERY_PROMPT = "你刚刚已经完成了工具调用，但没有输出最终答复。请基于当前会话中的最新工具结果，直接用中文给出简洁最终答复，不要再次调用工具。";
     private static final String EMPTY_REPLY_FALLBACK = "本轮已完成工具调用，但模型没有返回可读结论。请使用 /retry 重试，或继续给出下一步指令。";
@@ -50,6 +56,29 @@ public class AgentRunSupervisor {
     private final ContextBudgetService contextBudgetService;
     private final LlmGateway llmGateway;
     private final LlmProviderService llmProviderService;
+    private final ConcurrentMap<String, RunHandle> runningRuns = new ConcurrentHashMap<String, RunHandle>();
+
+    @Override
+    public AgentRunStopResult stop(String sourceKey) {
+        RunHandle handle = runningRuns.get(normalizeSourceKey(sourceKey));
+        if (handle == null) {
+            return AgentRunStopResult.none();
+        }
+        handle.cancelled.set(true);
+        Thread thread = handle.thread;
+        boolean interruptSent = false;
+        if (thread != null && thread.isAlive()) {
+            thread.interrupt();
+            interruptSent = true;
+        }
+        return AgentRunStopResult.stopped(handle.runId, handle.sessionId, interruptSent, handle.startedAt);
+    }
+
+    @Override
+    public boolean isRunning(String sourceKey) {
+        RunHandle handle = runningRuns.get(normalizeSourceKey(sourceKey));
+        return handle != null && !handle.cancelled.get();
+    }
 
     public AgentRunOutcome run(SessionRecord session,
                                String systemPrompt,
@@ -68,129 +97,158 @@ public class AgentRunSupervisor {
         runRecord.setStartedAt(now);
         agentRunRepository.saveRun(runRecord);
 
-        pruneOldRuns();
-
         AgentRunContext runContext = new AgentRunContext(agentRunRepository, runRecord.getRunId(), session.getSessionId(), session.getSourceKey());
-        runContext.event("run.start", resume ? "恢复挂起会话" : "开始执行用户请求");
-        eventSink.onRunStarted(session.getSessionId());
+        RunHandle runHandle = registerRun(session.getSourceKey(), runRecord.getRunId(), session.getSessionId(), now);
+        try {
+            pruneOldRuns();
 
-        List<AppConfig.LlmConfig> candidates = buildCandidateConfigs(session);
-        Throwable lastError = null;
-        LlmResult finalResult = null;
-        String replyText = "";
-        String previousProvider = null;
-        int attemptNo = 0;
+            runContext.event("run.start", resume ? "恢复挂起会话" : "开始执行用户请求");
+            eventSink.onRunStarted(session.getSessionId());
 
-        for (int candidateIndex = 0; candidateIndex < candidates.size(); candidateIndex++) {
-            AppConfig.LlmConfig resolved = candidates.get(candidateIndex);
-            int maxAttempts = Math.max(1, appConfig.getTrace().getMaxAttempts());
-            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-                attemptNo++;
-                runContext.setAttempt(attemptNo, resolved.getProvider(), resolved.getModel());
-                runRecord.setAttempts(attemptNo);
-                runRecord.setProvider(resolved.getProvider());
-                runRecord.setModel(resolved.getModel());
-                agentRunRepository.saveRun(runRecord);
-                eventSink.onAttemptStarted(runRecord.getRunId(), attemptNo, resolved.getProvider(), resolved.getModel());
-                runContext.event("attempt.start", "开始第 " + attemptNo + " 次尝试：" + resolved.getProvider() + "/" + resolved.getModel());
+            List<AppConfig.LlmConfig> candidates = buildCandidateConfigs(session);
+            Throwable lastError = null;
+            LlmResult finalResult = null;
+            String replyText = "";
+            String previousProvider = null;
+            int attemptNo = 0;
 
-                try {
-                    session = compressBeforeAttempt(session, systemPrompt, userMessage, resolved, runContext, eventSink, runRecord.getRunId());
-                    String previousNdjson = session.getNdjson();
-                    LlmResult result = llmGateway.executeOnce(session, systemPrompt, userMessage, tools, feedbackSink, eventSink, resume, resolved, runContext);
-                    String currentReply = extractText(result.getAssistantMessage());
-                    if (StrUtil.isBlank(currentReply) && hasRecentToolActivity(previousNdjson, result.getNdjson())) {
-                        session.setNdjson(result.getNdjson());
-                        runContext.event("recovery.start", "工具调用后空回复，发起无工具恢复");
-                        eventSink.onRecoveryStarted(runRecord.getRunId(), "empty_reply");
-                        LlmResult recovered = recover(session, systemPrompt, EMPTY_REPLY_RECOVERY_PROMPT, resolved, feedbackSink, eventSink, runContext);
-                        if (recovered != null) {
-                            mergeUsage(result, recovered);
-                            result = recovered;
-                            currentReply = extractText(recovered.getAssistantMessage());
+            for (int candidateIndex = 0; candidateIndex < candidates.size(); candidateIndex++) {
+                checkCancellation(session.getSourceKey());
+                AppConfig.LlmConfig resolved = candidates.get(candidateIndex);
+                int maxAttempts = Math.max(1, appConfig.getTrace().getMaxAttempts());
+                for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                    checkCancellation(session.getSourceKey());
+                    attemptNo++;
+                    runContext.setAttempt(attemptNo, resolved.getProvider(), resolved.getModel());
+                    runRecord.setAttempts(attemptNo);
+                    runRecord.setProvider(resolved.getProvider());
+                    runRecord.setModel(resolved.getModel());
+                    agentRunRepository.saveRun(runRecord);
+                    eventSink.onAttemptStarted(runRecord.getRunId(), attemptNo, resolved.getProvider(), resolved.getModel());
+                    runContext.event("attempt.start", "开始第 " + attemptNo + " 次尝试：" + resolved.getProvider() + "/" + resolved.getModel());
+
+                    try {
+                        session = compressBeforeAttempt(session, systemPrompt, userMessage, resolved, runContext, eventSink, runRecord.getRunId());
+                        checkCancellation(session.getSourceKey());
+                        String previousNdjson = session.getNdjson();
+                        LlmResult result = llmGateway.executeOnce(session, systemPrompt, userMessage, tools, feedbackSink, eventSink, resume, resolved, runContext);
+                        checkCancellation(session.getSourceKey());
+                        String currentReply = extractText(result.getAssistantMessage());
+                        if (StrUtil.isBlank(currentReply) && hasRecentToolActivity(previousNdjson, result.getNdjson())) {
+                            session.setNdjson(result.getNdjson());
+                            checkCancellation(session.getSourceKey());
+                            runContext.event("recovery.start", "工具调用后空回复，发起无工具恢复");
+                            eventSink.onRecoveryStarted(runRecord.getRunId(), "empty_reply");
+                            LlmResult recovered = recover(session, systemPrompt, EMPTY_REPLY_RECOVERY_PROMPT, resolved, feedbackSink, eventSink, runContext);
+                            checkCancellation(session.getSourceKey());
+                            if (recovered != null) {
+                                mergeUsage(result, recovered);
+                                result = recovered;
+                                currentReply = extractText(recovered.getAssistantMessage());
+                            }
+                        }
+
+                        if (isMaxStepsReply(currentReply)) {
+                            session.setNdjson(result.getNdjson());
+                            checkCancellation(session.getSourceKey());
+                            runContext.event("recovery.start", "达到最大步骤上限，发起收敛总结");
+                            eventSink.onRecoveryStarted(runRecord.getRunId(), "max_steps");
+                            LlmResult recovered = recover(session, systemPrompt, MAX_STEPS_RECOVERY_PROMPT, resolved, feedbackSink, eventSink, runContext);
+                            checkCancellation(session.getSourceKey());
+                            if (hasUsableRecoveryReply(recovered)) {
+                                mergeUsage(result, recovered);
+                                result = recovered;
+                                currentReply = extractText(recovered.getAssistantMessage());
+                            } else {
+                                currentReply = MAX_STEPS_RECOVERY_FALLBACK;
+                            }
+                        }
+
+                        if (StrUtil.isNotBlank(currentReply) || hasVisibleContent(result)) {
+                            finalResult = result;
+                            replyText = StrUtil.blankToDefault(currentReply, EMPTY_REPLY_FALLBACK);
+                            eventSink.onAttemptCompleted(runRecord.getRunId(), attemptNo, "success", "");
+                            runContext.event("attempt.success", "第 " + attemptNo + " 次尝试成功");
+                            break;
+                        }
+
+                        lastError = new IllegalStateException("LLM returned empty assistant content");
+                        eventSink.onAttemptCompleted(runRecord.getRunId(), attemptNo, "empty", "LLM returned empty assistant content");
+                        runContext.event("attempt.empty", "模型返回空内容");
+                    } catch (AgentRunCancelledException e) {
+                        throw e;
+                    } catch (Exception e) {
+                        if (isCancellationRequested(session.getSourceKey())) {
+                            throw new AgentRunCancelledException();
+                        }
+                        lastError = e;
+                        eventSink.onAttemptCompleted(runRecord.getRunId(), attemptNo, "error", e.getMessage());
+                        runContext.event("attempt.error", "第 " + attemptNo + " 次尝试失败：" + e.getMessage());
+                        if (classifyRetryable(e) && attempt < maxAttempts) {
+                            continue;
                         }
                     }
+                }
 
-                    if (isMaxStepsReply(currentReply)) {
-                        session.setNdjson(result.getNdjson());
-                        runContext.event("recovery.start", "达到最大步骤上限，发起收敛总结");
-                        eventSink.onRecoveryStarted(runRecord.getRunId(), "max_steps");
-                        LlmResult recovered = recover(session, systemPrompt, MAX_STEPS_RECOVERY_PROMPT, resolved, feedbackSink, eventSink, runContext);
-                        if (hasUsableRecoveryReply(recovered)) {
-                            mergeUsage(result, recovered);
-                            result = recovered;
-                            currentReply = extractText(recovered.getAssistantMessage());
-                        } else {
-                            currentReply = MAX_STEPS_RECOVERY_FALLBACK;
-                        }
-                    }
+                if (finalResult != null) {
+                    break;
+                }
 
-                    if (StrUtil.isNotBlank(currentReply) || hasVisibleContent(result)) {
-                        finalResult = result;
-                        replyText = StrUtil.blankToDefault(currentReply, EMPTY_REPLY_FALLBACK);
-                        eventSink.onAttemptCompleted(runRecord.getRunId(), attemptNo, "success", "");
-                        runContext.event("attempt.success", "第 " + attemptNo + " 次尝试成功");
-                        break;
-                    }
-
-                    lastError = new IllegalStateException("LLM returned empty assistant content");
-                    eventSink.onAttemptCompleted(runRecord.getRunId(), attemptNo, "empty", "LLM returned empty assistant content");
-                    runContext.event("attempt.empty", "模型返回空内容");
-                } catch (Exception e) {
-                    lastError = e;
-                    eventSink.onAttemptCompleted(runRecord.getRunId(), attemptNo, "error", e.getMessage());
-                    runContext.event("attempt.error", "第 " + attemptNo + " 次尝试失败：" + e.getMessage());
-                    if (classifyRetryable(e) && attempt < maxAttempts) {
-                        continue;
-                    }
+                previousProvider = resolved.getProvider();
+                if (candidateIndex + 1 < candidates.size()) {
+                    AppConfig.LlmConfig next = candidates.get(candidateIndex + 1);
+                    eventSink.onFallback(runRecord.getRunId(), previousProvider, next.getProvider(), lastError == null ? "empty response" : lastError.getMessage());
+                    runContext.event("fallback", "切换 fallback provider：" + previousProvider + " -> " + next.getProvider());
                 }
             }
 
-            if (finalResult != null) {
-                break;
+            if (finalResult == null) {
+                runRecord.setStatus("failed");
+                runRecord.setFinishedAt(System.currentTimeMillis());
+                runRecord.setError(lastError == null ? "LLM execution failed" : lastError.getMessage());
+                agentRunRepository.saveRun(runRecord);
+                runContext.event("run.failed", runRecord.getError());
+                if (lastError instanceof Exception) {
+                    throw (Exception) lastError;
+                }
+                throw new IllegalStateException(runRecord.getError(), lastError);
             }
 
-            previousProvider = resolved.getProvider();
-            if (candidateIndex + 1 < candidates.size()) {
-                AppConfig.LlmConfig next = candidates.get(candidateIndex + 1);
-                eventSink.onFallback(runRecord.getRunId(), previousProvider, next.getProvider(), lastError == null ? "empty response" : lastError.getMessage());
-                runContext.event("fallback", "切换 fallback provider：" + previousProvider + " -> " + next.getProvider());
-            }
-        }
+            checkCancellation(session.getSourceKey());
+            session.setNdjson(finalResult.getNdjson());
+            applyUsage(session, finalResult);
+            session.setUpdatedAt(System.currentTimeMillis());
+            sessionRepository.save(session);
 
-        if (finalResult == null) {
-            runRecord.setStatus("failed");
+            runRecord.setStatus("success");
+            runRecord.setFinalReplyPreview(AgentRunContext.safe(replyText, 1000));
+            runRecord.setInputTokens(finalResult.getInputTokens());
+            runRecord.setOutputTokens(finalResult.getOutputTokens());
+            runRecord.setTotalTokens(finalResult.getTotalTokens());
+            runRecord.setProvider(finalResult.getProvider());
+            runRecord.setModel(finalResult.getModel());
             runRecord.setFinishedAt(System.currentTimeMillis());
-            runRecord.setError(lastError == null ? "LLM execution failed" : lastError.getMessage());
             agentRunRepository.saveRun(runRecord);
-            runContext.event("run.failed", runRecord.getError());
-            if (lastError instanceof Exception) {
-                throw (Exception) lastError;
+            runContext.event("run.success", "运行完成");
+
+            AgentRunOutcome outcome = new AgentRunOutcome();
+            outcome.setFinalReply(replyText);
+            outcome.setResult(finalResult);
+            outcome.setRunRecord(runRecord);
+            return outcome;
+        } catch (AgentRunCancelledException e) {
+            runRecord.setStatus("cancelled");
+            runRecord.setFinishedAt(System.currentTimeMillis());
+            runRecord.setError(e.getMessage());
+            agentRunRepository.saveRun(runRecord);
+            runContext.event("run.cancelled", e.getMessage());
+            throw e;
+        } finally {
+            unregisterRun(session.getSourceKey(), runHandle);
+            if (runHandle.cancelled.get()) {
+                Thread.interrupted();
             }
-            throw new IllegalStateException(runRecord.getError(), lastError);
         }
-
-        session.setNdjson(finalResult.getNdjson());
-        applyUsage(session, finalResult);
-        session.setUpdatedAt(System.currentTimeMillis());
-        sessionRepository.save(session);
-
-        runRecord.setStatus("success");
-        runRecord.setFinalReplyPreview(AgentRunContext.safe(replyText, 1000));
-        runRecord.setInputTokens(finalResult.getInputTokens());
-        runRecord.setOutputTokens(finalResult.getOutputTokens());
-        runRecord.setTotalTokens(finalResult.getTotalTokens());
-        runRecord.setProvider(finalResult.getProvider());
-        runRecord.setModel(finalResult.getModel());
-        runRecord.setFinishedAt(System.currentTimeMillis());
-        agentRunRepository.saveRun(runRecord);
-        runContext.event("run.success", "运行完成");
-
-        AgentRunOutcome outcome = new AgentRunOutcome();
-        outcome.setFinalReply(replyText);
-        outcome.setResult(finalResult);
-        outcome.setRunRecord(runRecord);
-        return outcome;
     }
 
     private SessionRecord compressBeforeAttempt(SessionRecord session,
@@ -414,6 +472,52 @@ public class AgentRunSupervisor {
         extra.setReasoningTokens(Math.max(0L, extra.getReasoningTokens()) + Math.max(0L, base.getReasoningTokens()));
         extra.setCacheReadTokens(Math.max(0L, extra.getCacheReadTokens()) + Math.max(0L, base.getCacheReadTokens()));
         extra.setTotalTokens(Math.max(0L, extra.getTotalTokens()) + Math.max(0L, base.getTotalTokens()));
+    }
+
+    private RunHandle registerRun(String sourceKey, String runId, String sessionId, long startedAt) {
+        RunHandle handle = new RunHandle(runId, sessionId, Thread.currentThread(), startedAt);
+        runningRuns.put(normalizeSourceKey(sourceKey), handle);
+        return handle;
+    }
+
+    private void unregisterRun(String sourceKey, RunHandle handle) {
+        if (handle == null) {
+            return;
+        }
+        runningRuns.remove(normalizeSourceKey(sourceKey), handle);
+    }
+
+    private void checkCancellation(String sourceKey) {
+        if (isCancellationRequested(sourceKey)) {
+            throw new AgentRunCancelledException();
+        }
+        if (Thread.currentThread().isInterrupted()) {
+            throw new AgentRunCancelledException();
+        }
+    }
+
+    private boolean isCancellationRequested(String sourceKey) {
+        RunHandle handle = runningRuns.get(normalizeSourceKey(sourceKey));
+        return handle != null && handle.cancelled.get();
+    }
+
+    private String normalizeSourceKey(String sourceKey) {
+        return StrUtil.blankToDefault(sourceKey, "__default__");
+    }
+
+    private static class RunHandle {
+        private final String runId;
+        private final String sessionId;
+        private final Thread thread;
+        private final long startedAt;
+        private final AtomicBoolean cancelled = new AtomicBoolean(false);
+
+        private RunHandle(String runId, String sessionId, Thread thread, long startedAt) {
+            this.runId = runId;
+            this.sessionId = sessionId;
+            this.thread = thread;
+            this.startedAt = startedAt;
+        }
     }
 
     private void pruneOldRuns() {
