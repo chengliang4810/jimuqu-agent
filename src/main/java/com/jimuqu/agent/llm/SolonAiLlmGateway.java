@@ -17,8 +17,9 @@ import com.jimuqu.agent.storage.session.SqliteAgentSession;
 import com.jimuqu.agent.support.LlmProviderService;
 import com.jimuqu.agent.support.constants.LlmConstants;
 import com.jimuqu.agent.tool.runtime.DangerousCommandApprovalService;
+import org.noear.solon.ai.agent.AgentSession;
+import org.noear.solon.ai.agent.AgentSessionProvider;
 import org.noear.solon.ai.agent.trace.Metrics;
-import org.noear.solon.ai.agent.AgentSystemPrompt;
 import org.noear.solon.ai.agent.react.ReActAgent;
 import org.noear.solon.ai.agent.react.ReActInterceptor;
 import org.noear.solon.ai.agent.react.ReActResponse;
@@ -29,6 +30,7 @@ import org.noear.solon.ai.agent.react.intercept.ToolSanitizerInterceptor;
 import org.noear.solon.ai.agent.react.intercept.summarize.CompositeSummarizationStrategy;
 import org.noear.solon.ai.agent.react.intercept.summarize.HierarchicalSummarizationStrategy;
 import org.noear.solon.ai.agent.react.intercept.summarize.KeyInfoExtractionStrategy;
+import org.noear.solon.ai.chat.ChatConfig;
 import org.noear.solon.ai.chat.ChatModel;
 import org.noear.solon.ai.chat.ChatRequestDesc;
 import org.noear.solon.ai.chat.ChatResponse;
@@ -36,6 +38,9 @@ import org.noear.solon.ai.chat.dialect.ChatDialectManager;
 import org.noear.solon.ai.chat.message.ChatMessage;
 import org.noear.solon.ai.chat.message.AssistantMessage;
 import org.noear.solon.ai.chat.prompt.Prompt;
+import org.noear.solon.ai.harness.HarnessEngine;
+import org.noear.solon.ai.harness.HarnessProperties;
+import org.noear.solon.ai.harness.agent.AgentDefinition;
 import org.noear.solon.ai.skills.pdf.PdfSkill;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +53,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
@@ -235,8 +241,8 @@ public class SolonAiLlmGateway implements LlmGateway {
                 resolved.isStream(),
                 session != null && StrUtil.isNotBlank(session.getModelOverride()));
         SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
-        ChatModel chatModel = buildChatModel(resolved);
-        ReActAgent agent = buildReActAgent(chatModel, resolved, systemPrompt, toolObjects, agentSession, feedbackSink, runContext);
+        ChatConfig chatConfig = buildChatConfig(resolved);
+        ReActAgent agent = buildHarnessReActAgent(chatConfig, resolved, systemPrompt, toolObjects, agentSession, feedbackSink, runContext);
         if (eventSink != null && eventSink != ConversationEventSink.noop()) {
             return callAgentStream(agent, agentSession, session, userMessage, resume, resolved, eventSink);
         }
@@ -502,29 +508,32 @@ public class SolonAiLlmGateway implements LlmGateway {
         }
     }
 
-    private ChatModel buildChatModel(AppConfig.LlmConfig resolved) {
+    private ChatConfig buildChatConfig(AppConfig.LlmConfig resolved) {
         ensureCustomDialectsRegistered();
         String dialect = LlmProviderSupport.normalizeDialect(StrUtil.isNotBlank(resolved.getDialect()) ? resolved.getDialect() : resolved.getProvider());
 
-        ChatModel.Builder builder = ChatModel.of(resolved.getApiUrl())
-                .provider(dialect)
-                .model(resolved.getModel())
-                .timeout(Duration.ofMinutes(5));
+        ChatConfig chatConfig = new ChatConfig();
+        chatConfig.setApiUrl(resolved.getApiUrl());
+        chatConfig.setProvider(dialect);
+        chatConfig.setModel(resolved.getModel());
+        chatConfig.setTimeout(Duration.ofMinutes(5));
 
         if (resolved.getApiKey() != null && resolved.getApiKey().trim().length() > 0) {
-            builder.apiKey(resolved.getApiKey());
+            chatConfig.setApiKey(resolved.getApiKey());
         }
 
-        builder.modelOptions(options -> {
-            options.temperature(resolved.getTemperature());
-            options.max_tokens(resolved.getMaxTokens());
-            if (LlmConstants.PROVIDER_OPENAI_RESPONSES.equals(dialect)
-                    && resolved.getReasoningEffort() != null && resolved.getReasoningEffort().trim().length() > 0) {
-                options.optionSet("reasoning", java.util.Collections.<String, Object>singletonMap("effort", resolved.getReasoningEffort()));
-            }
-        });
+        chatConfig.getModelOptions().temperature(resolved.getTemperature());
+        chatConfig.getModelOptions().max_tokens(resolved.getMaxTokens());
+        if (LlmConstants.PROVIDER_OPENAI_RESPONSES.equals(dialect)
+                && resolved.getReasoningEffort() != null && resolved.getReasoningEffort().trim().length() > 0) {
+            chatConfig.getModelOptions().optionSet("reasoning", Collections.<String, Object>singletonMap("effort", resolved.getReasoningEffort()));
+        }
 
-        return builder.build();
+        return chatConfig;
+    }
+
+    private ChatModel buildChatModel(AppConfig.LlmConfig resolved) {
+        return buildChatConfig(resolved).toChatModel();
     }
 
     private String providerSignature(AppConfig.LlmConfig config) {
@@ -542,41 +551,49 @@ public class SolonAiLlmGateway implements LlmGateway {
         }
     }
 
-    private ReActAgent buildReActAgent(ChatModel chatModel,
-                                       AppConfig.LlmConfig resolved,
-                                       final String systemPrompt,
-                                       List<Object> toolObjects,
-                                       SqliteAgentSession agentSession,
-                                       ConversationFeedbackSink feedbackSink,
-                                       AgentRunContext runContext) {
+    private ReActAgent buildHarnessReActAgent(ChatConfig chatConfig,
+                                              AppConfig.LlmConfig resolved,
+                                              String systemPrompt,
+                                              List<Object> toolObjects,
+                                              SqliteAgentSession agentSession,
+                                              ConversationFeedbackSink feedbackSink,
+                                              AgentRunContext runContext) {
         boolean delegateSession = isDelegateSession(agentSession);
         int maxSteps = delegateSession ? appConfig.getReact().getDelegateMaxSteps() : appConfig.getReact().getMaxSteps();
         int retryMax = delegateSession ? appConfig.getReact().getDelegateRetryMax() : appConfig.getReact().getRetryMax();
         long retryDelayMs = delegateSession ? appConfig.getReact().getDelegateRetryDelayMs() : appConfig.getReact().getRetryDelayMs();
-        SummarizationInterceptor summarizationInterceptor = buildSummarizationInterceptor(resolved, chatModel);
-        ReActAgent.Builder builder = ReActAgent.of(chatModel)
-                .name("jimuqu_react")
-                .role("Jimuqu Agent")
-                .systemPrompt(new AgentSystemPrompt<org.noear.solon.ai.agent.react.ReActTrace>() {
-                    @Override
-                    public Locale getLocale() {
-                        return Locale.CHINESE;
-                    }
 
-                    @Override
-                    public String getSystemPrompt(org.noear.solon.ai.agent.react.ReActTrace trace) {
-                        return systemPrompt;
-                    }
-                })
-                .sessionWindowSize(Math.max(8, agentSession.getMessages().size() + 8))
+        HarnessProperties harnessProperties = new HarnessProperties(".jimuqu-harness");
+        harnessProperties.setWorkspace(appConfig.getRuntime().getHome());
+        harnessProperties.addModel(chatConfig);
+        harnessProperties.setMaxSteps(maxSteps);
+        harnessProperties.setMaxStepsAutoExtensible(false);
+        harnessProperties.setSessionWindowSize(Math.max(8, agentSession.getMessages().size() + 8));
+        harnessProperties.setSummaryWindowSize(Math.max(10, appConfig.getReact().getSummarizationMaxMessages()));
+        harnessProperties.setSummaryWindowToken(Math.max(8000, appConfig.getReact().getSummarizationMaxTokens()));
+        harnessProperties.setSandboxMode(true);
+        harnessProperties.setSubagentEnabled(false);
+        harnessProperties.setHitlEnabled(false);
+
+        HarnessEngine harnessEngine = HarnessEngine.of(harnessProperties)
+                .sessionProvider(new FixedAgentSessionProvider(agentSession))
+                .summarizationInterceptor(buildHarnessSummarizationInterceptor(resolved, chatConfig))
+                .build();
+
+        AgentDefinition definition = new AgentDefinition();
+        definition.setSystemPrompt(systemPrompt);
+        definition.getMetadata().setName("jimuqu_react");
+        definition.getMetadata().setDescription("Jimuqu Agent");
+        definition.getMetadata().setMaxSteps(maxSteps);
+        definition.getMetadata().setMaxStepsAutoExtensible(Boolean.FALSE);
+        definition.getMetadata().setSessionWindowSize(Math.max(8, agentSession.getMessages().size() + 8));
+        definition.getMetadata().setTools(Collections.<String>emptyList());
+
+        ReActAgent.Builder builder = harnessEngine.createSubagent(definition)
+                .role("Jimuqu Agent")
                 .retryConfig(retryMax, retryDelayMs)
-                .maxSteps(maxSteps)
                 .defaultInterceptorAdd(new ToolRetryInterceptor())
                 .defaultInterceptorAdd(new ToolSanitizerInterceptor());
-
-        if (summarizationInterceptor != null) {
-            builder.defaultInterceptorAdd(summarizationInterceptor);
-        }
         if (dangerousCommandApprovalService != null) {
             builder.defaultInterceptorAdd(dangerousCommandApprovalService.buildInterceptor());
         }
@@ -594,12 +611,12 @@ public class SolonAiLlmGateway implements LlmGateway {
         return builder.build();
     }
 
-    private SummarizationInterceptor buildSummarizationInterceptor(AppConfig.LlmConfig resolved, ChatModel chatModel) {
+    private SummarizationInterceptor buildHarnessSummarizationInterceptor(AppConfig.LlmConfig resolved, ChatConfig chatConfig) {
         if (!appConfig.getReact().isSummarizationEnabled()) {
-            return null;
+            return new NoopSummarizationInterceptor();
         }
 
-        ChatModel summaryChatModel = buildSummaryChatModel(resolved, chatModel);
+        ChatModel summaryChatModel = buildSummaryChatModel(resolved, chatConfig);
         CompositeSummarizationStrategy strategy = new CompositeSummarizationStrategy()
                 .addStrategy(new KeyInfoExtractionStrategy(summaryChatModel))
                 .addStrategy(new HierarchicalSummarizationStrategy(summaryChatModel));
@@ -611,15 +628,15 @@ public class SolonAiLlmGateway implements LlmGateway {
         );
     }
 
-    private ChatModel buildSummaryChatModel(AppConfig.LlmConfig resolved, ChatModel chatModel) {
+    private ChatModel buildSummaryChatModel(AppConfig.LlmConfig resolved, ChatConfig chatConfig) {
         String summaryModel = StrUtil.nullToEmpty(appConfig.getCompression().getSummaryModel()).trim();
         if (StrUtil.isBlank(summaryModel) || StrUtil.equals(summaryModel, resolved.getModel())) {
-            return chatModel;
+            return chatConfig.toChatModel();
         }
 
         AppConfig.LlmConfig summaryConfig = copyLlmConfig(resolved);
         summaryConfig.setModel(summaryModel);
-        return buildChatModel(summaryConfig);
+        return buildChatConfig(summaryConfig).toChatModel();
     }
 
     private AppConfig.LlmConfig copyLlmConfig(AppConfig.LlmConfig source) {
@@ -687,6 +704,32 @@ public class SolonAiLlmGateway implements LlmGateway {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Harness 需要一个会话提供器；Jimuqu 的会话生命周期仍由外层仓储控制。
+     */
+    private static class FixedAgentSessionProvider implements AgentSessionProvider {
+        private final AgentSession session;
+
+        private FixedAgentSessionProvider(AgentSession session) {
+            this.session = session;
+        }
+
+        @Override
+        public AgentSession getSession(String instanceId) {
+            return session;
+        }
+    }
+
+    /**
+     * 关闭 Jimuqu 配置里的 ReAct 摘要时，避免 Harness 默认摘要拦截器改变现有行为。
+     */
+    private static class NoopSummarizationInterceptor extends SummarizationInterceptor {
+        @Override
+        public void onObservation(ReActTrace trace, String toolName, String result, long durationMs) {
+            // no-op
+        }
     }
 
     /**

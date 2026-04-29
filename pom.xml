@@ -45,6 +45,11 @@
         </dependency>
         <dependency>
             <groupId>org.noear</groupId>
+            <artifactId>solon-ai-harness</artifactId>
+            <version>${solon.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.noear</groupId>
             <artifactId>solon-ai-skill-web</artifactId>
             <version>${solon.version}</version>
         </dependency>
