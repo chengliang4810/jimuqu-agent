@@ -1,10 +1,13 @@
 package com.jimuqu.agent.context;
 
 import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.io.IORuntimeException;
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.support.constants.ContextFileConstants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.InputStream;
@@ -17,6 +20,7 @@ import java.util.List;
  * runtime/ 根目录下人格工作区文件的统一访问服务。
  */
 public class PersonaWorkspaceService {
+    private static final Logger log = LoggerFactory.getLogger(PersonaWorkspaceService.class);
     private static final String TEMPLATE_ROOT = "persona-templates/";
 
     private final File workspaceDir;
@@ -25,8 +29,8 @@ public class PersonaWorkspaceService {
     public PersonaWorkspaceService(AppConfig appConfig) {
         this.workspaceDir = FileUtil.file(appConfig.getRuntime().getHome());
         this.memoryDir = FileUtil.file(this.workspaceDir, ContextFileConstants.MEMORY_DIR);
-        FileUtil.mkdir(this.workspaceDir);
-        FileUtil.mkdir(this.memoryDir);
+        mkdirIfPossible(this.workspaceDir, "persona workspace");
+        mkdirIfPossible(this.memoryDir, "persona memory");
         ensureSeeded();
     }
 
@@ -66,14 +70,22 @@ public class PersonaWorkspaceService {
     }
 
     /**
-     * 读取文件内容；不存在时返回空字符串。
+     * 读取文件内容；不存在时返回模板默认内容。
      */
     public String read(String key) {
         File target = file(key);
         if (!target.exists()) {
-            return "";
+            return loadTemplate(key);
         }
-        return FileUtil.readUtf8String(target);
+        try {
+            return FileUtil.readUtf8String(target);
+        } catch (IORuntimeException e) {
+            log.warn("Unable to read persona workspace file {}; falling back to bundled template: {}", target.getAbsolutePath(), failureMessage(e));
+            return loadTemplate(key);
+        } catch (SecurityException e) {
+            log.warn("Unable to read persona workspace file {}; falling back to bundled template: {}", target.getAbsolutePath(), failureMessage(e));
+            return loadTemplate(key);
+        }
     }
 
     /**
@@ -87,8 +99,7 @@ public class PersonaWorkspaceService {
      * 写入文件内容，不存在时自动创建。
      */
     public void write(String key, String content) {
-        FileUtil.mkdir(workspaceDir);
-        FileUtil.writeUtf8String(StrUtil.nullToEmpty(content), file(key));
+        writeContent(file(key), content);
     }
 
     /**
@@ -168,8 +179,39 @@ public class PersonaWorkspaceService {
             if (target.exists()) {
                 continue;
             }
-            FileUtil.writeUtf8String(loadTemplate(key), target);
+            try {
+                writeContent(target, loadTemplate(key));
+            } catch (IORuntimeException e) {
+                log.warn("Unable to seed persona workspace file {}: {}. Startup continues; fix runtime directory permissions before editing workspace files.", target.getAbsolutePath(), failureMessage(e));
+            } catch (SecurityException e) {
+                log.warn("Unable to seed persona workspace file {}: {}. Startup continues; fix runtime directory permissions before editing workspace files.", target.getAbsolutePath(), failureMessage(e));
+            }
         }
+    }
+
+    private void mkdirIfPossible(File dir, String label) {
+        try {
+            FileUtil.mkdir(dir);
+        } catch (IORuntimeException e) {
+            log.warn("Unable to create {} directory {}: {}. Startup continues; file edits under this directory may fail.", label, dir.getAbsolutePath(), failureMessage(e));
+        } catch (SecurityException e) {
+            log.warn("Unable to create {} directory {}: {}. Startup continues; file edits under this directory may fail.", label, dir.getAbsolutePath(), failureMessage(e));
+        }
+    }
+
+    private void writeContent(File target, String content) {
+        File parent = target.getParentFile();
+        if (parent != null) {
+            FileUtil.mkdir(parent);
+        }
+        FileUtil.writeUtf8String(StrUtil.nullToEmpty(content), target);
+    }
+
+    private static String failureMessage(Throwable e) {
+        if (e.getMessage() == null) {
+            return e.getClass().getSimpleName();
+        }
+        return e.getClass().getSimpleName() + ": " + e.getMessage();
     }
 
     /**

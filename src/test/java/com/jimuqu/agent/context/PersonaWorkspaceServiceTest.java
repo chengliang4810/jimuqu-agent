@@ -6,10 +6,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PersonaWorkspaceServiceTest {
@@ -78,6 +81,26 @@ class PersonaWorkspaceServiceTest {
                 service.read("unknown");
             }
         }).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void continuesWhenWorkspaceCannotBeSeeded() throws IOException {
+        File blocker = new File(tempDir.toFile(), "runtime-blocker");
+        Files.write(blocker.toPath(), new byte[0]);
+        AppConfig config = new AppConfig();
+        config.getRuntime().setHome(blocker.getAbsolutePath());
+        config.getRuntime().setContextDir(new File(tempDir.toFile(), "context").getAbsolutePath());
+
+        final PersonaWorkspaceService[] holder = new PersonaWorkspaceService[1];
+        assertThatCode(new org.assertj.core.api.ThrowableAssert.ThrowingCallable() {
+            @Override
+            public void call() {
+                holder[0] = new PersonaWorkspaceService(config);
+            }
+        }).doesNotThrowAnyException();
+
+        assertThat(holder[0].exists(ContextFileConstants.KEY_AGENTS)).isFalse();
+        assertThat(holder[0].read(ContextFileConstants.KEY_AGENTS)).contains("# AGENTS.md - 你的工作区");
     }
 
     private AppConfig appConfig() {

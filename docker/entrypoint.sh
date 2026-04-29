@@ -31,6 +31,14 @@ if [ "$(id -u)" = "0" ]; then
         chmod 640 "$JIMUQU_HOME/config.yml" 2>/dev/null || true
     fi
 
+    write_probe="$JIMUQU_HOME/.jimuqu-write-test"
+    if ! gosu jimuqu sh -c 'touch "$1" && rm -f "$1"' sh "$write_probe" 2>/dev/null; then
+        echo "Error: $JIMUQU_HOME is not writable by user jimuqu."
+        echo "Fix host permissions or set JIMUQU_UID/JIMUQU_GID to the owner of the bind-mounted runtime directory."
+        echo "Example: JIMUQU_UID=\$(id -u) JIMUQU_GID=\$(id -g) docker compose up -d"
+        exit 1
+    fi
+
     exec gosu jimuqu "$0" "$@"
 fi
 
