@@ -82,7 +82,7 @@ public class AgentRunSupervisorTest {
     private static Fixture fixture() throws Exception {
         AppConfig config = new AppConfig();
         File runtimeHome = Files.createTempDirectory("jimuqu-agent-supervisor").toFile();
-        config.getRuntime().setStateDb(new File(runtimeHome, "state.db").getAbsolutePath());
+        config.getRuntime().setStateDb(new File(new File(runtimeHome, "data"), "state.db").getAbsolutePath());
         config.getTrace().setMaxAttempts(1);
 
         AppConfig.ProviderConfig primary = new AppConfig.ProviderConfig();

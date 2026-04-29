@@ -31,10 +31,6 @@ public class LlmEnvOverrideLoadTest {
 
         Props props = new Props();
         props.put("jimuqu.runtime.home", runtimeHome.getAbsolutePath());
-        props.put("jimuqu.runtime.contextDir", new File(runtimeHome, "context").getAbsolutePath());
-        props.put("jimuqu.runtime.skillsDir", new File(runtimeHome, "skills").getAbsolutePath());
-        props.put("jimuqu.runtime.cacheDir", new File(runtimeHome, "cache").getAbsolutePath());
-        props.put("jimuqu.runtime.stateDb", new File(runtimeHome, "state.db").getAbsolutePath());
         props.put("providers.default.dialect", "ollama");
         props.put("providers.default.baseUrl", "http://127.0.0.1:11434");
         props.put("providers.default.defaultModel", "qwen");

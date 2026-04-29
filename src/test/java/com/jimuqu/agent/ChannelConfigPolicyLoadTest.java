@@ -39,10 +39,6 @@ public class ChannelConfigPolicyLoadTest {
 
         Props props = new Props();
         props.put("jimuqu.runtime.home", runtimeHome.getAbsolutePath());
-        props.put("jimuqu.runtime.contextDir", new File(runtimeHome, "context").getAbsolutePath());
-        props.put("jimuqu.runtime.skillsDir", new File(runtimeHome, "skills").getAbsolutePath());
-        props.put("jimuqu.runtime.cacheDir", new File(runtimeHome, "cache").getAbsolutePath());
-        props.put("jimuqu.runtime.stateDb", new File(runtimeHome, "state.db").getAbsolutePath());
         props.put("jimuqu.channels.feishu.enabled", "true");
 
         AppConfig config = AppConfig.load(props);

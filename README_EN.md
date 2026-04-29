@@ -64,7 +64,7 @@ The default endpoint is:
 http://127.0.0.1:8080
 ```
 
-On startup, the service creates a local `runtime/` directory for configuration, SQLite data, cache, logs, skills, and context files.
+On startup, the service creates a local `runtime/` directory for configuration, SQLite data, cache, logs, skills, and context files. Runtime children are derived by the program: `context/`, `skills/`, `cache/`, `logs/`, and `data/state.db`.
 
 ### Docker Compose
 
@@ -115,7 +115,6 @@ Common runtime settings:
 | --- | --- | --- |
 | `server.port` | `8080` | HTTP server port |
 | `jimuqu.runtime.home` | `runtime` | Runtime root directory |
-| `jimuqu.runtime.stateDb` | `runtime/state.db` | SQLite database path |
 | `providers.<key>.baseUrl` | - | Model service base URL |
 | `providers.<key>.apiKey` | - | Model service API key |
 | `providers.<key>.defaultModel` | - | Default model for the provider |

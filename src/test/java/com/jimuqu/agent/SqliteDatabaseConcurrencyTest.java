@@ -25,7 +25,7 @@ class SqliteDatabaseConcurrencyTest {
         File runtimeHome = Files.createTempDirectory("jimuqu-sqlite-concurrency").toFile();
         AppConfig config = new AppConfig();
         config.getRuntime().setHome(runtimeHome.getAbsolutePath());
-        config.getRuntime().setStateDb(new File(runtimeHome, "state.db").getAbsolutePath());
+        config.getRuntime().setStateDb(new File(new File(runtimeHome, "data"), "state.db").getAbsolutePath());
 
         SqliteChannelStateRepository repository = new SqliteChannelStateRepository(new SqliteDatabase(config));
         int workers = 12;

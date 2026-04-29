@@ -26,7 +26,7 @@ public class DingTalkAiCardRoutingTest {
         config.getRuntime().setContextDir(new File(runtimeHome, "context").getAbsolutePath());
         config.getRuntime().setSkillsDir(new File(runtimeHome, "skills").getAbsolutePath());
         config.getRuntime().setCacheDir(new File(runtimeHome, "cache").getAbsolutePath());
-        config.getRuntime().setStateDb(new File(runtimeHome, "state.db").getAbsolutePath());
+        config.getRuntime().setStateDb(new File(new File(runtimeHome, "data"), "state.db").getAbsolutePath());
         config.getChannels().getDingtalk().setEnabled(true);
         config.getChannels().getDingtalk().setClientId("app-key");
         config.getChannels().getDingtalk().setClientSecret("app-secret");

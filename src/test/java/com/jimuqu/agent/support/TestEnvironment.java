@@ -255,7 +255,7 @@ public class TestEnvironment {
         config.getRuntime().setContextDir(new File(runtimeHome, "context").getAbsolutePath());
         config.getRuntime().setSkillsDir(new File(runtimeHome, "skills").getAbsolutePath());
         config.getRuntime().setCacheDir(new File(runtimeHome, "cache").getAbsolutePath());
-        config.getRuntime().setStateDb(new File(runtimeHome, "state.db").getAbsolutePath());
+        config.getRuntime().setStateDb(new File(new File(runtimeHome, "data"), "state.db").getAbsolutePath());
         config.getRuntime().setConfigFile(new File(runtimeHome, "config.yml").getAbsolutePath());
         config.getRuntime().setLogsDir(new File(runtimeHome, "logs").getAbsolutePath());
         AppConfig.ProviderConfig provider = new AppConfig.ProviderConfig();

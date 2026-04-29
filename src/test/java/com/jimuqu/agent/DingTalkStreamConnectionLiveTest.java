@@ -36,7 +36,7 @@ public class DingTalkStreamConnectionLiveTest {
         appConfig.getRuntime().setContextDir(new java.io.File(runtimeHome, "context").getAbsolutePath());
         appConfig.getRuntime().setSkillsDir(new java.io.File(runtimeHome, "skills").getAbsolutePath());
         appConfig.getRuntime().setCacheDir(new java.io.File(runtimeHome, "cache").getAbsolutePath());
-        appConfig.getRuntime().setStateDb(new java.io.File(runtimeHome, "state.db").getAbsolutePath());
+        appConfig.getRuntime().setStateDb(new java.io.File(new java.io.File(runtimeHome, "data"), "state.db").getAbsolutePath());
         appConfig.normalizePaths();
         ChannelStateRepository channelStateRepository = new SqliteChannelStateRepository(new SqliteDatabase(appConfig));
 

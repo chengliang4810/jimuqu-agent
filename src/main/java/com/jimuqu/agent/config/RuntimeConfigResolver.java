@@ -394,10 +394,6 @@ public class RuntimeConfigResolver {
     private static Map<String, String> buildKeyPaths() {
         Map<String, String> mappings = new LinkedHashMap<String, String>();
         add(mappings, "JIMUQU_RUNTIME_HOME", "jimuqu.runtime.home");
-        add(mappings, "JIMUQU_RUNTIME_CONTEXT_DIR", "jimuqu.runtime.contextDir");
-        add(mappings, "JIMUQU_RUNTIME_SKILLS_DIR", "jimuqu.runtime.skillsDir");
-        add(mappings, "JIMUQU_RUNTIME_CACHE_DIR", "jimuqu.runtime.cacheDir");
-        add(mappings, "JIMUQU_RUNTIME_STATE_DB", "jimuqu.runtime.stateDb");
 
         add(mappings, "JIMUQU_LLM_PROVIDER_KEY", "model.providerKey");
         add(mappings, "JIMUQU_LLM_DEFAULT_MODEL", "model.default");

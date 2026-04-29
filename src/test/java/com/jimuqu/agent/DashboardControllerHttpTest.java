@@ -1,6 +1,7 @@
 package com.jimuqu.agent;
 
 import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.io.IORuntimeException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -38,10 +39,6 @@ public class DashboardControllerHttpTest {
         Solon.start(JimuquAgentApp.class, new String[]{
                 "--server.port=" + port,
                 "--jimuqu.runtime.home=" + runtimeHome.getAbsolutePath(),
-                "--jimuqu.runtime.contextDir=" + new File(runtimeHome, "context").getAbsolutePath(),
-                "--jimuqu.runtime.skillsDir=" + new File(runtimeHome, "skills").getAbsolutePath(),
-                "--jimuqu.runtime.cacheDir=" + new File(runtimeHome, "cache").getAbsolutePath(),
-                "--jimuqu.runtime.stateDb=" + new File(runtimeHome, "state.db").getAbsolutePath(),
                 "--jimuqu.scheduler.enabled=false",
                 "--jimuqu.gateway.allowAllUsers=true",
                 "--jimuqu.gateway.injectionSecret=test-injection-secret"
@@ -57,7 +54,11 @@ public class DashboardControllerHttpTest {
             Solon.stopBlock(false, 0);
         } finally {
             if (runtimeHome != null) {
-                FileUtil.del(runtimeHome);
+                try {
+                    FileUtil.del(runtimeHome);
+                } catch (IORuntimeException ignored) {
+                    // Windows may keep logback's agent.log handle briefly after Solon stops.
+                }
             }
         }
     }

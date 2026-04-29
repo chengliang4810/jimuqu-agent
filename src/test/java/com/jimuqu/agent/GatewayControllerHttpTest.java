@@ -1,6 +1,7 @@
 package com.jimuqu.agent;
 
 import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.io.IORuntimeException;
 import com.jimuqu.agent.config.AppConfig;
 import com.jimuqu.agent.core.model.GatewayMessage;
 import com.jimuqu.agent.core.model.GatewayReply;
@@ -48,10 +49,6 @@ public class GatewayControllerHttpTest {
         Solon.start(JimuquAgentApp.class, new String[]{
                 "--server.port=" + port,
                 "--jimuqu.runtime.home=" + runtimeHome.getAbsolutePath(),
-                "--jimuqu.runtime.contextDir=" + new File(runtimeHome, "context").getAbsolutePath(),
-                "--jimuqu.runtime.skillsDir=" + new File(runtimeHome, "skills").getAbsolutePath(),
-                "--jimuqu.runtime.cacheDir=" + new File(runtimeHome, "cache").getAbsolutePath(),
-                "--jimuqu.runtime.stateDb=" + new File(runtimeHome, "state.db").getAbsolutePath(),
                 "--jimuqu.gateway.injectionSecret=" + GATEWAY_SECRET,
                 "--jimuqu.scheduler.enabled=false"
         });
@@ -66,7 +63,11 @@ public class GatewayControllerHttpTest {
             Solon.stopBlock(false, 0);
         } finally {
             if (runtimeHome != null) {
-                FileUtil.del(runtimeHome);
+                try {
+                    FileUtil.del(runtimeHome);
+                } catch (IORuntimeException ignored) {
+                    // Windows may keep logback's agent.log handle briefly after Solon stops.
+                }
             }
         }
     }

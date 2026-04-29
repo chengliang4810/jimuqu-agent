@@ -6,7 +6,7 @@
 
     <solonProperty name="APP_NAME" source="solon.app.name" defaultValue="jimuqu-agent" />
     <solonProperty name="RUNTIME_HOME" source="jimuqu.runtime.home" defaultValue="runtime" />
-    <solonProperty name="LOG_DIR" source="jimuqu.logging.dir" defaultValue="${RUNTIME_HOME}/logs" />
+    <property name="LOG_DIR" value="${RUNTIME_HOME}/logs" />
 
     <solonProperty name="CONSOLE_LOG_PATTERN" source="solon.logging.appender.console.pattern"
                    defaultValue="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{48} - %msg%n%ex" />

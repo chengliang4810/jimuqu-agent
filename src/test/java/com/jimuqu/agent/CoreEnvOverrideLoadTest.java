@@ -62,10 +62,6 @@ public class CoreEnvOverrideLoadTest {
 
         Props props = new Props();
         props.put("jimuqu.runtime.home", runtimeHome.getAbsolutePath());
-        props.put("jimuqu.runtime.contextDir", new File(runtimeHome, "context").getAbsolutePath());
-        props.put("jimuqu.runtime.skillsDir", new File(runtimeHome, "skills").getAbsolutePath());
-        props.put("jimuqu.runtime.cacheDir", new File(runtimeHome, "cache").getAbsolutePath());
-        props.put("jimuqu.runtime.stateDb", new File(runtimeHome, "state.db").getAbsolutePath());
         props.put("jimuqu.scheduler.enabled", "true");
         props.put("jimuqu.channels.feishu.enabled", "false");
         props.put("jimuqu.channels.weixin.enabled", "false");

@@ -50,19 +50,7 @@ jimuqu:
   runtime:
     # 运行时根目录。
     home: runtime
-    # 上下文文件目录。
-    contextDir: runtime/context
-    # 本地技能目录。
-    skillsDir: runtime/skills
-    # 缓存目录。
-    cacheDir: runtime/cache
-    # SQLite 状态库路径。
-    stateDb: runtime/state.db
-
-  # 日志配置。
-  logging:
-    # 日志输出目录。
-    dir: runtime/logs
+    # 子目录由程序内置派生：context、skills、cache、logs、data/state.db。
 
   # Dashboard 与 API 访问配置。
   dashboard:

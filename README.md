@@ -64,7 +64,7 @@ java -jar target/jimuqu-agent-0.0.1.jar
 http://127.0.0.1:8080
 ```
 
-运行后会在当前目录创建 `runtime/`，用于保存配置、SQLite 数据库、缓存、日志、技能和上下文文件。
+运行后会在当前目录创建 `runtime/`，用于保存配置、SQLite 数据库、缓存、日志、技能和上下文文件。运行态子目录由程序内置派生：`context/`、`skills/`、`cache/`、`logs/` 和 `data/state.db`。
 
 ### Docker Compose
 
@@ -114,7 +114,6 @@ model:
 | --- | --- | --- |
 | `server.port` | `8080` | HTTP 服务端口 |
 | `jimuqu.runtime.home` | `runtime` | 运行时根目录 |
-| `jimuqu.runtime.stateDb` | `runtime/state.db` | SQLite 数据库路径 |
 | `providers.<key>.baseUrl` | - | 模型服务基础地址 |
 | `providers.<key>.apiKey` | - | 模型服务 API Key |
 | `providers.<key>.defaultModel` | - | 该提供方默认模型 |

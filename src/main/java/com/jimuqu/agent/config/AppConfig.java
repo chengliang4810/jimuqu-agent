@@ -129,41 +129,18 @@ public class AppConfig {
     public static AppConfig load(Props props) {
         AppConfig config = new AppConfig();
         File userDir = new File(System.getProperty("user.dir"));
-        File runtimeHome = asAbsoluteStatic(
-                new File(props.get("jimuqu.runtime.home", RuntimePathConstants.RUNTIME_HOME)),
-                userDir
-        );
+        File runtimeHome = asAbsoluteStatic(new File(resolveInitialRuntimeHome(props)), userDir);
         Map<String, Object> overrides = loadFlatOverrides(runtimeHome);
         Map<String, Object> structuredOverrides = loadStructuredOverrides(runtimeHome);
         RuntimeConfigResolver configResolver = RuntimeConfigResolver.initialize(runtimeHome.getAbsolutePath());
 
-        config.getRuntime().setHome(resolveConfigString("JIMUQU_RUNTIME_HOME", readString(props, overrides, "jimuqu.runtime.home", RuntimePathConstants.RUNTIME_HOME)));
-        config.getRuntime().setContextDir(resolveRuntimePath(
-                resolveConfigString("JIMUQU_RUNTIME_CONTEXT_DIR", readString(props, overrides, "jimuqu.runtime.contextDir", RuntimePathConstants.CONTEXT_DIR)),
-                config.getRuntime().getHome(),
-                RuntimePathConstants.CONTEXT_DIR,
-                "context"
-        ));
-        config.getRuntime().setSkillsDir(resolveRuntimePath(
-                resolveConfigString("JIMUQU_RUNTIME_SKILLS_DIR", readString(props, overrides, "jimuqu.runtime.skillsDir", RuntimePathConstants.SKILLS_DIR)),
-                config.getRuntime().getHome(),
-                RuntimePathConstants.SKILLS_DIR,
-                "skills"
-        ));
-        config.getRuntime().setCacheDir(resolveRuntimePath(
-                resolveConfigString("JIMUQU_RUNTIME_CACHE_DIR", readString(props, overrides, "jimuqu.runtime.cacheDir", RuntimePathConstants.CACHE_DIR)),
-                config.getRuntime().getHome(),
-                RuntimePathConstants.CACHE_DIR,
-                "cache"
-        ));
-        config.getRuntime().setStateDb(resolveRuntimePath(
-                resolveConfigString("JIMUQU_RUNTIME_STATE_DB", readString(props, overrides, "jimuqu.runtime.stateDb", RuntimePathConstants.STATE_DB)),
-                config.getRuntime().getHome(),
-                RuntimePathConstants.STATE_DB,
-                "state.db"
-        ));
+        config.getRuntime().setHome(resolveConfigString("JIMUQU_RUNTIME_HOME", runtimeHome.getPath()));
+        config.getRuntime().setContextDir(runtimeChildPath(config.getRuntime().getHome(), RuntimePathConstants.CONTEXT_DIR_NAME));
+        config.getRuntime().setSkillsDir(runtimeChildPath(config.getRuntime().getHome(), RuntimePathConstants.SKILLS_DIR_NAME));
+        config.getRuntime().setCacheDir(runtimeChildPath(config.getRuntime().getHome(), RuntimePathConstants.CACHE_DIR_NAME));
+        config.getRuntime().setStateDb(runtimeChildPath(config.getRuntime().getHome(), RuntimePathConstants.DATA_DIR_NAME, RuntimePathConstants.STATE_DB_FILE_NAME));
         config.getRuntime().setConfigFile(configResolver.configFile().getPath());
-        config.getRuntime().setLogsDir(new File(runtimeHome, "logs").getPath());
+        config.getRuntime().setLogsDir(runtimeChildPath(config.getRuntime().getHome(), RuntimePathConstants.LOGS_DIR_NAME));
 
         config.getLlm().setStream(resolveBoolean("JIMUQU_LLM_STREAM", readBoolean(props, overrides, "jimuqu.llm.stream", true)));
         config.getLlm().setReasoningEffort(resolveConfigString("JIMUQU_LLM_REASONING_EFFORT", readString(props, overrides, "jimuqu.llm.reasoningEffort", RuntimePathConstants.DEFAULT_REASONING_EFFORT)));
@@ -374,19 +351,14 @@ public class AppConfig {
      */
     public void normalizePaths() {
         File userDir = new File(System.getProperty("user.dir"));
-        runtime.setHome(asAbsolute(new File(runtime.getHome()), userDir).getAbsolutePath());
-        runtime.setContextDir(asAbsolute(new File(runtime.getContextDir()), userDir).getAbsolutePath());
-        runtime.setSkillsDir(asAbsolute(new File(runtime.getSkillsDir()), userDir).getAbsolutePath());
-        runtime.setCacheDir(asAbsolute(new File(runtime.getCacheDir()), userDir).getAbsolutePath());
-        runtime.setStateDb(asAbsolute(new File(runtime.getStateDb()), userDir).getAbsolutePath());
-        if (StrUtil.isBlank(runtime.getConfigFile())) {
-            runtime.setConfigFile(new File(runtime.getHome(), "config.yml").getPath());
-        }
-        if (StrUtil.isBlank(runtime.getLogsDir())) {
-            runtime.setLogsDir(new File(runtime.getHome(), "logs").getPath());
-        }
-        runtime.setConfigFile(asAbsolute(new File(runtime.getConfigFile()), userDir).getAbsolutePath());
-        runtime.setLogsDir(asAbsolute(new File(runtime.getLogsDir()), userDir).getAbsolutePath());
+        File runtimeHome = asAbsolute(new File(StrUtil.blankToDefault(runtime.getHome(), RuntimePathConstants.RUNTIME_HOME)), userDir);
+        runtime.setHome(runtimeHome.getAbsolutePath());
+        runtime.setContextDir(new File(runtimeHome, RuntimePathConstants.CONTEXT_DIR_NAME).getAbsolutePath());
+        runtime.setSkillsDir(new File(runtimeHome, RuntimePathConstants.SKILLS_DIR_NAME).getAbsolutePath());
+        runtime.setCacheDir(new File(runtimeHome, RuntimePathConstants.CACHE_DIR_NAME).getAbsolutePath());
+        runtime.setStateDb(new File(new File(runtimeHome, RuntimePathConstants.DATA_DIR_NAME), RuntimePathConstants.STATE_DB_FILE_NAME).getAbsolutePath());
+        runtime.setConfigFile(new File(runtimeHome, RuntimePathConstants.CONFIG_FILE_NAME).getAbsolutePath());
+        runtime.setLogsDir(new File(runtimeHome, RuntimePathConstants.LOGS_DIR_NAME).getAbsolutePath());
     }
 
     /**
@@ -1318,13 +1290,28 @@ public class AppConfig {
         return new File(base, file.getPath());
     }
 
-    private static String resolveRuntimePath(String rawValue, String runtimeHome, String defaultPath, String childName) {
-        String value = StrUtil.blankToDefault(rawValue, defaultPath);
-        if (!RuntimePathConstants.RUNTIME_HOME.equals(runtimeHome)
-                && defaultPath.equals(value)) {
-            return new File(runtimeHome, childName).getPath();
+    private static String resolveInitialRuntimeHome(Props props) {
+        String propsHome = props.get("jimuqu.runtime.home", RuntimePathConstants.RUNTIME_HOME);
+        if (StrUtil.isNotBlank(propsHome) && !RuntimePathConstants.RUNTIME_HOME.equals(propsHome.trim())) {
+            return propsHome.trim();
         }
-        return value;
+        String propertyHome = System.getProperty("jimuqu.runtime.home");
+        if (StrUtil.isNotBlank(propertyHome)) {
+            return propertyHome.trim();
+        }
+        String envHome = System.getenv("JIMUQU_RUNTIME_HOME");
+        if (StrUtil.isNotBlank(envHome)) {
+            return envHome.trim();
+        }
+        return RuntimePathConstants.RUNTIME_HOME;
+    }
+
+    private static String runtimeChildPath(String runtimeHome, String childName) {
+        return new File(StrUtil.blankToDefault(runtimeHome, RuntimePathConstants.RUNTIME_HOME), childName).getPath();
+    }
+
+    private static String runtimeChildPath(String runtimeHome, String childName, String fileName) {
+        return new File(runtimeChildPath(runtimeHome, childName), fileName).getPath();
     }
 
     /**

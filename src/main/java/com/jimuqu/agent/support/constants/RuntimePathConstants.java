@@ -5,12 +5,19 @@ package com.jimuqu.agent.support.constants;
  */
 public interface RuntimePathConstants {
     String RUNTIME_HOME = "runtime";
-    String CONTEXT_DIR = "runtime/context";
-    String SKILLS_DIR = "runtime/skills";
-    String CACHE_DIR = "runtime/cache";
-    String STATE_DB = "runtime/state.db";
-    String CONFIG_FILE = "runtime/config.yml";
-    String LOGS_DIR = "runtime/logs";
+    String CONTEXT_DIR_NAME = "context";
+    String SKILLS_DIR_NAME = "skills";
+    String CACHE_DIR_NAME = "cache";
+    String DATA_DIR_NAME = "data";
+    String CONFIG_FILE_NAME = "config.yml";
+    String STATE_DB_FILE_NAME = "state.db";
+    String LOGS_DIR_NAME = "logs";
+    String CONTEXT_DIR = RUNTIME_HOME + "/" + CONTEXT_DIR_NAME;
+    String SKILLS_DIR = RUNTIME_HOME + "/" + SKILLS_DIR_NAME;
+    String CACHE_DIR = RUNTIME_HOME + "/" + CACHE_DIR_NAME;
+    String STATE_DB = RUNTIME_HOME + "/" + DATA_DIR_NAME + "/" + STATE_DB_FILE_NAME;
+    String CONFIG_FILE = RUNTIME_HOME + "/" + CONFIG_FILE_NAME;
+    String LOGS_DIR = RUNTIME_HOME + "/" + LOGS_DIR_NAME;
 
     String DEFAULT_PROVIDER_KEY = "default";
     String DEFAULT_LLM_PROVIDER = "openai-responses";

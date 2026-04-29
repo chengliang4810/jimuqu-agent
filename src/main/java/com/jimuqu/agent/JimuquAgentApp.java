@@ -34,6 +34,14 @@ public class JimuquAgentApp {
                 }
             }
         }
-        return System.getProperty("jimuqu.runtime.home", RuntimePathConstants.RUNTIME_HOME);
+        String propertyHome = System.getProperty("jimuqu.runtime.home");
+        if (propertyHome != null && propertyHome.trim().length() > 0) {
+            return propertyHome.trim();
+        }
+        String envHome = System.getenv("JIMUQU_RUNTIME_HOME");
+        if (envHome != null && envHome.trim().length() > 0) {
+            return envHome.trim();
+        }
+        return RuntimePathConstants.RUNTIME_HOME;
     }
 }
