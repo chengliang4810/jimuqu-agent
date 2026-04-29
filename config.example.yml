@@ -67,7 +67,7 @@ jimuqu:
     maxCheckpointsPerSource: 20
 
   display:
-    toolProgress: new
+    toolProgress: all
     showReasoning: false
     toolPreviewLength: 80
     progressThrottleMs: 1500
@@ -114,7 +114,7 @@ jimuqu:
       botOpenId: ""
       botUserId: ""
       botName: ""
-      toolProgress: new
+      toolProgress: all
 
     dingtalk:
       enabled: false
@@ -129,7 +129,7 @@ jimuqu:
       dmPolicy: open
       groupPolicy: open
       groupAllowedUsers: []
-      toolProgress: new
+      toolProgress: all
       progressCardTemplateId: ""
 
     wecom:
@@ -146,7 +146,7 @@ jimuqu:
       groups:
         example_group_id:
           allowFrom: []
-      toolProgress: off
+      toolProgress: all
 
     weixin:
       enabled: true
@@ -165,7 +165,7 @@ jimuqu:
       sendChunkDelaySeconds: 0.35
       sendChunkRetries: 2
       sendChunkRetryDelaySeconds: 1.0
-      toolProgress: off
+      toolProgress: all
 
   gateway:
     allowedUsers: []
