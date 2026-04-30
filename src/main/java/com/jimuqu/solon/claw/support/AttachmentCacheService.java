@@ -5,7 +5,10 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.core.enums.PlatformType;
 import com.jimuqu.solon.claw.core.model.MessageAttachment;
+import com.jimuqu.solon.claw.support.constants.RuntimePathConstants;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -13,10 +16,27 @@ import java.util.UUID;
 public class AttachmentCacheService {
     private static final long MAX_CACHE_BYTES = 32L * 1024L * 1024L;
 
+    private final File runtimeHome;
     private final File cacheRoot;
 
     public AttachmentCacheService(AppConfig appConfig) {
-        this.cacheRoot = new File(appConfig.getRuntime().getCacheDir(), "media");
+        String runtimeHomeValue = null;
+        String cacheDirValue = null;
+        if (appConfig != null && appConfig.getRuntime() != null) {
+            runtimeHomeValue = appConfig.getRuntime().getHome();
+            cacheDirValue = appConfig.getRuntime().getCacheDir();
+        }
+        this.runtimeHome =
+                FileUtil.file(StrUtil.blankToDefault(runtimeHomeValue, RuntimePathConstants.RUNTIME_HOME))
+                        .getAbsoluteFile();
+        File cacheDir =
+                FileUtil.file(
+                                StrUtil.blankToDefault(
+                                        cacheDirValue,
+                                        new File(runtimeHome, RuntimePathConstants.CACHE_DIR_NAME)
+                                                .getPath()))
+                        .getAbsoluteFile();
+        this.cacheRoot = new File(cacheDir, "media");
     }
 
     /** 将原始字节落盘并返回附件模型。 */
@@ -89,6 +109,42 @@ public class AttachmentCacheService {
             throw new IllegalArgumentException("Attachment file is outside media cache: " + file);
         }
         return fromLocalFile(platform, canonical, explicitKind, fromQuote, transcribedText);
+    }
+
+    /**
+     * 发送工具引用 runtime 根目录下生成的附件时，先导入媒体缓存再发送。
+     *
+     * <p>只允许 runtime 根目录的一层生成物，避免把 config/data/logs 等运行时内部文件直接作为附件外发。
+     */
+    public MessageAttachment fromLocalOrGeneratedFile(
+            PlatformType platform,
+            File file,
+            String explicitKind,
+            boolean fromQuote,
+            String transcribedText) {
+        if (file == null || !file.isFile()) {
+            throw new IllegalArgumentException("Attachment file does not exist: " + file);
+        }
+        File canonical = FileUtil.file(file).getAbsoluteFile();
+        if (isUnderCacheRoot(canonical)) {
+            return fromLocalFile(platform, canonical, explicitKind, fromQuote, transcribedText);
+        }
+        if (!isSafeRuntimeGeneratedFile(canonical)) {
+            throw new IllegalArgumentException("Attachment file is outside runtime cache: " + file);
+        }
+        if (canonical.length() > MAX_CACHE_BYTES) {
+            throw new IllegalStateException("Attachment too large: " + canonical.length());
+        }
+
+        File target = new File(platformDir(platform), prefixedName(canonical.getName()));
+        FileUtil.mkParentDirs(target);
+        try {
+            Files.copy(canonical.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Failed to cache generated attachment: " + canonical.getAbsolutePath(), e);
+        }
+        return fromLocalFile(platform, target, explicitKind, fromQuote, transcribedText);
     }
 
     public File platformDir(PlatformType platform) {
@@ -243,6 +299,52 @@ public class AttachmentCacheService {
 
     private boolean isUnderMediaRoot(File file) {
         return isUnder(file, cacheRoot);
+    }
+
+    private boolean isSafeRuntimeGeneratedFile(File file) {
+        if (!isUnder(file, runtimeHome)) {
+            return false;
+        }
+        try {
+            File parent = file.getCanonicalFile().getParentFile();
+            if (parent == null || !parent.equals(runtimeHome.getCanonicalFile())) {
+                return false;
+            }
+        } catch (Exception e) {
+            File parent = file.getAbsoluteFile().getParentFile();
+            if (parent == null || !parent.equals(runtimeHome.getAbsoluteFile())) {
+                return false;
+            }
+        }
+        String ext = extension(file.getName());
+        return matches(
+                ext,
+                ".pdf",
+                ".docx",
+                ".xlsx",
+                ".pptx",
+                ".png",
+                ".jpg",
+                ".jpeg",
+                ".gif",
+                ".webp",
+                ".bmp",
+                ".mp4",
+                ".mov",
+                ".avi",
+                ".mkv",
+                ".webm",
+                ".3gp",
+                ".m4v",
+                ".silk",
+                ".ogg",
+                ".opus",
+                ".mp3",
+                ".wav",
+                ".m4a",
+                ".aac",
+                ".flac",
+                ".amr");
     }
 
     private boolean isUnder(File file, File root) {

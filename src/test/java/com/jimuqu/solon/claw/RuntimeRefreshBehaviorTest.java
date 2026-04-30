@@ -98,6 +98,22 @@ public class RuntimeRefreshBehaviorTest {
     }
 
     @Test
+    void shouldRejectDecimalIntegerConfigBeforeRefreshing() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        int previousMaxSteps = env.appConfig.getReact().getMaxSteps();
+        FileUtil.writeUtf8String(
+                "solonclaw:\n  react:\n    maxSteps: 50.0\n",
+                env.appConfig.getRuntime().getConfigFile());
+
+        GatewayRuntimeRefreshService.RefreshResult result =
+                env.gatewayRuntimeRefreshService.refreshConfigOnly();
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("solonclaw.react.maxSteps");
+        assertThat(env.appConfig.getReact().getMaxSteps()).isEqualTo(previousMaxSteps);
+    }
+
+    @Test
     void shouldRejectInvalidProviderShapeBeforeRefreshing() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         String previousModel = env.appConfig.getLlm().getModel();

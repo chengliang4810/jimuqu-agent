@@ -35,9 +35,13 @@ import java.util.concurrent.ConcurrentMap;
 import org.noear.solon.ai.chat.ChatRole;
 import org.noear.solon.ai.chat.message.AssistantMessage;
 import org.noear.solon.ai.chat.message.ChatMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** DefaultConversationOrchestrator 实现。 */
 public class DefaultConversationOrchestrator implements ConversationOrchestrator {
+    private static final Logger log = LoggerFactory.getLogger(DefaultConversationOrchestrator.class);
+
     /** 当模型只完成工具调用却未生成最终文字答复时，补发的恢复提示。 */
     private static final String EMPTY_REPLY_RECOVERY_PROMPT =
             "你刚刚已经完成了工具调用，但没有输出最终答复。请基于当前会话中的最新工具结果，直接用中文给出简洁最终答复，不要再次调用工具。";
@@ -389,7 +393,14 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             return assistantMessage.getContent();
         }
 
-        return assistantMessage.toString();
+        log.warn(
+                "Assistant message has no visible content in orchestrator; suppressing message object fallback: role={}, contentRawType={}, toolCalls={}",
+                assistantMessage.getRole(),
+                assistantMessage.getContentRaw() == null
+                        ? ""
+                        : assistantMessage.getContentRaw().getClass().getName(),
+                assistantMessage.getToolCalls() == null ? 0 : assistantMessage.getToolCalls().size());
+        return "";
     }
 
     /** 从第一条用户文本生成会话标题。 */

@@ -48,9 +48,11 @@ public class DashboardRunService {
         map.put("agent_name", record.getAgentName());
         map.put(
                 "agent_snapshot",
-                record.getAgentSnapshotJson() == null
-                        ? null
-                        : ONode.deserialize(record.getAgentSnapshotJson(), Object.class));
+                parseJsonField(
+                        record.getAgentSnapshotJson(),
+                        "agent_snapshot",
+                        record.getRunId(),
+                        null));
         map.put("status", record.getStatus());
         map.put("input_preview", record.getInputPreview());
         map.put("final_reply_preview", record.getFinalReplyPreview());
@@ -80,9 +82,40 @@ public class DashboardRunService {
         map.put("created_at", record.getCreatedAt());
         map.put(
                 "metadata",
-                record.getMetadataJson() == null
-                        ? null
-                        : ONode.deserialize(record.getMetadataJson(), Object.class));
+                parseJsonField(
+                        record.getMetadataJson(),
+                        "metadata",
+                        record.getRunId(),
+                        record.getEventId()));
         return map;
+    }
+
+    private Object parseJsonField(String json, String field, String runId, String eventId) {
+        if (json == null || json.trim().length() == 0) {
+            return null;
+        }
+        try {
+            return ONode.deserialize(json, Object.class);
+        } catch (Exception e) {
+            Map<String, Object> fallback = new LinkedHashMap<String, Object>();
+            fallback.put("parse_error", true);
+            fallback.put("field", field);
+            fallback.put("message", e.getMessage());
+            fallback.put("raw", truncate(json, 4000));
+            if (runId != null) {
+                fallback.put("run_id", runId);
+            }
+            if (eventId != null) {
+                fallback.put("event_id", eventId);
+            }
+            return fallback;
+        }
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength) + "...";
     }
 }

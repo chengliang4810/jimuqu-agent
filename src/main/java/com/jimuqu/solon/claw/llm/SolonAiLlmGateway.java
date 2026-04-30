@@ -54,6 +54,7 @@ import org.noear.solon.ai.harness.HarnessEngine;
 import org.noear.solon.ai.harness.HarnessProperties;
 import org.noear.solon.ai.harness.agent.AgentDefinition;
 import org.noear.solon.ai.skills.pdf.PdfSkill;
+import org.noear.snack4.ONode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -586,7 +587,13 @@ public class SolonAiLlmGateway implements LlmGateway {
         if (StrUtil.isNotBlank(assistantMessage.getContent())) {
             return assistantMessage.getContent().trim();
         }
-        return String.valueOf(assistantMessage).trim();
+        log.warn("Assistant message has no visible content; suppressing message object fallback: role={}, contentRawType={}, toolCalls={}",
+                assistantMessage.getRole(),
+                assistantMessage.getContentRaw() == null
+                        ? ""
+                        : assistantMessage.getContentRaw().getClass().getName(),
+                assistantMessage.getToolCalls() == null ? 0 : assistantMessage.getToolCalls().size());
+        return "";
     }
 
     private String extractReasoning(AssistantMessage assistantMessage) {
@@ -1191,12 +1198,13 @@ public class SolonAiLlmGateway implements LlmGateway {
             if (usage == null) {
                 return;
             }
-            promptTokens += Math.max(0L, usage.promptTokens());
-            completionTokens += Math.max(0L, usage.completionTokens());
-            totalTokens += Math.max(0L, usage.totalTokens());
-            reasoningTokens += Math.max(0L, usage.thinkTokens());
-            cacheReadTokens += Math.max(0L, usage.cacheReadInputTokens());
-            cacheWriteTokens += Math.max(0L, usage.cacheCreationInputTokens());
+            UsageSnapshot snapshot = normalize(usage);
+            promptTokens += snapshot.inputTokens;
+            completionTokens += snapshot.outputTokens;
+            totalTokens += snapshot.totalTokens;
+            reasoningTokens += snapshot.reasoningTokens;
+            cacheReadTokens += snapshot.cacheReadTokens;
+            cacheWriteTokens += snapshot.cacheWriteTokens;
         }
 
         private synchronized void applyTo(LlmResult result) {
@@ -1207,13 +1215,119 @@ public class SolonAiLlmGateway implements LlmGateway {
             result.setCacheWriteTokens(cacheWriteTokens);
             result.setReasoningTokens(reasoningTokens);
             if (promptTokens > 0) {
-                result.setInputTokens(Math.max(0L, promptTokens - cacheReadTokens - cacheWriteTokens));
+                result.setInputTokens(promptTokens);
             }
             if (completionTokens > 0) {
                 result.setOutputTokens(completionTokens);
             }
             if (totalTokens > 0) {
                 result.setTotalTokens(totalTokens);
+            }
+        }
+
+        private UsageSnapshot normalize(AiUsage usage) {
+            ONode source = usage.getSource();
+            long rawPromptTokens = Math.max(0L, usage.promptTokens());
+            long outputTokens = Math.max(0L, usage.completionTokens());
+            long cacheReadTokens = cacheReadTokens(usage, source);
+            long cacheWriteTokens = cacheWriteTokens(usage, source);
+            long inputTokens = rawPromptTokens;
+            if (promptTotalIncludesCache(source)) {
+                inputTokens = Math.max(0L, rawPromptTokens - cacheReadTokens - cacheWriteTokens);
+            }
+            long canonicalTotal = inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens;
+            long apiTotal = Math.max(0L, usage.totalTokens());
+            return new UsageSnapshot(
+                    inputTokens,
+                    outputTokens,
+                    Math.max(apiTotal, canonicalTotal),
+                    reasoningTokens(usage, source),
+                    cacheReadTokens,
+                    cacheWriteTokens);
+        }
+
+        private long cacheReadTokens(AiUsage usage, ONode source) {
+            return max(
+                    Math.max(0L, usage.cacheReadInputTokens()),
+                    detailLong(source, "prompt_tokens_details", "cached_tokens"),
+                    detailLong(source, "input_tokens_details", "cached_tokens"),
+                    nodeLong(source, "cache_read_input_tokens"));
+        }
+
+        private long cacheWriteTokens(AiUsage usage, ONode source) {
+            return max(
+                    Math.max(0L, usage.cacheCreationInputTokens()),
+                    detailLong(source, "prompt_tokens_details", "cache_write_tokens"),
+                    detailLong(source, "input_tokens_details", "cache_creation_tokens"),
+                    detailLong(source, "input_tokens_details", "cache_write_tokens"),
+                    nodeLong(source, "cache_creation_input_tokens"));
+        }
+
+        private long reasoningTokens(AiUsage usage, ONode source) {
+            return max(
+                    Math.max(0L, usage.thinkTokens()),
+                    detailLong(source, "completion_tokens_details", "reasoning_tokens"),
+                    detailLong(source, "output_tokens_details", "reasoning_tokens"));
+        }
+
+        private boolean promptTotalIncludesCache(ONode source) {
+            return objectNode(source, "prompt_tokens_details") != null
+                    || objectNode(source, "input_tokens_details") != null
+                    || nodeLong(source, "prompt_tokens") > 0L;
+        }
+
+        private ONode objectNode(ONode source, String key) {
+            if (source == null || !source.isObject()) {
+                return null;
+            }
+            ONode node = source.getOrNull(key);
+            return node == null || !node.isObject() ? null : node;
+        }
+
+        private long detailLong(ONode source, String detailsKey, String key) {
+            return nodeLong(objectNode(source, detailsKey), key);
+        }
+
+        private long nodeLong(ONode node, String key) {
+            if (node == null || !node.isObject() || !node.hasKey(key)) {
+                return 0L;
+            }
+            Long value = node.get(key).getLong(0L);
+            return value == null ? 0L : Math.max(0L, value);
+        }
+
+        private long max(long... values) {
+            long result = 0L;
+            if (values == null) {
+                return result;
+            }
+            for (long value : values) {
+                result = Math.max(result, value);
+            }
+            return result;
+        }
+
+        private static class UsageSnapshot {
+            private final long inputTokens;
+            private final long outputTokens;
+            private final long totalTokens;
+            private final long reasoningTokens;
+            private final long cacheReadTokens;
+            private final long cacheWriteTokens;
+
+            private UsageSnapshot(
+                    long inputTokens,
+                    long outputTokens,
+                    long totalTokens,
+                    long reasoningTokens,
+                    long cacheReadTokens,
+                    long cacheWriteTokens) {
+                this.inputTokens = inputTokens;
+                this.outputTokens = outputTokens;
+                this.totalTokens = totalTokens;
+                this.reasoningTokens = reasoningTokens;
+                this.cacheReadTokens = cacheReadTokens;
+                this.cacheWriteTokens = cacheWriteTokens;
             }
         }
     }

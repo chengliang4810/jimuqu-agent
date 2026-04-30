@@ -17,9 +17,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.noear.snack4.ONode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** GitHub source adapter。 */
 public class GitHubSkillSource implements SkillSource {
+    private static final Logger log = LoggerFactory.getLogger(GitHubSkillSource.class);
     private static final String API_BASE = "https://api.github.com/repos/";
     private static final LinkedHashSet<String> TRUSTED_REPOS =
             new LinkedHashSet<String>(
@@ -41,8 +44,26 @@ public class GitHubSkillSource implements SkillSource {
         String normalizedQuery = StrUtil.nullToEmpty(query).trim().toLowerCase(Locale.ROOT);
         List<SkillMeta> results = new ArrayList<SkillMeta>();
         for (TapRecord tap : allTaps()) {
-            for (SkillMeta meta :
-                    listSkillsInRepo(tap.getRepo(), StrUtil.blankToDefault(tap.getPath(), ""))) {
+            List<SkillMeta> tapResults;
+            try {
+                tapResults =
+                        listSkillsInRepo(tap.getRepo(), StrUtil.blankToDefault(tap.getPath(), ""));
+            } catch (Exception e) {
+                log.warn(
+                        "GitHub Skills Hub tap search failed, skipping tap: repo={}, path={}, query={}, limit={}, error={}",
+                        tap.getRepo(),
+                        StrUtil.blankToDefault(tap.getPath(), ""),
+                        StrUtil.nullToEmpty(query),
+                        limit,
+                        e.toString());
+                log.debug(
+                        "GitHub Skills Hub tap search failure detail: repo={}, path={}",
+                        tap.getRepo(),
+                        StrUtil.blankToDefault(tap.getPath(), ""),
+                        e);
+                continue;
+            }
+            for (SkillMeta meta : tapResults) {
                 String searchable =
                         (meta.getName()
                                         + " "

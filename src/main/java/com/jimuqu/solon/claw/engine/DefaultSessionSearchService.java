@@ -145,7 +145,7 @@ public class DefaultSessionSearchService implements SessionSearchService {
         if (StrUtil.isNotBlank(assistantMessage.getContent())) {
             return assistantMessage.getContent().trim();
         }
-        return String.valueOf(assistantMessage).trim();
+        return "";
     }
 
     private String formatConversation(SessionRecord session) throws Exception {

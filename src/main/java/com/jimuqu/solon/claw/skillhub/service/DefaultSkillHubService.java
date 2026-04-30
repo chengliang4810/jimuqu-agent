@@ -30,9 +30,13 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** 默认 Skills Hub 服务。 */
 public class DefaultSkillHubService implements SkillHubService {
+    private static final Logger log = LoggerFactory.getLogger(DefaultSkillHubService.class);
+
     private final File repoRoot;
     private final File skillsDir;
     private final SkillImportService skillImportService;
@@ -63,9 +67,10 @@ public class DefaultSkillHubService implements SkillHubService {
 
     @Override
     public SkillBrowseResult browse(String sourceFilter, int page, int pageSize) throws Exception {
-        List<SkillMeta> all =
+        SourceCollectResult collected =
                 collectFromSources(
                         "", sourceFilter, Math.max(pageSize * Math.max(page, 1), pageSize));
+        List<SkillMeta> all = collected.items;
         SkillBrowseResult result = new SkillBrowseResult();
         int safePage = Math.max(1, page);
         int safePageSize = Math.max(1, pageSize);
@@ -77,16 +82,19 @@ public class DefaultSkillHubService implements SkillHubService {
         if (start < all.size()) {
             result.setItems(new ArrayList<SkillMeta>(all.subList(start, end)));
         }
+        result.setTimedOutSources(collected.failedSources);
         return result;
     }
 
     @Override
     public SkillBrowseResult search(String query, String sourceFilter, int limit) throws Exception {
+        SourceCollectResult collected = collectFromSources(query, sourceFilter, limit);
         SkillBrowseResult result = new SkillBrowseResult();
-        result.setItems(collectFromSources(query, sourceFilter, limit));
+        result.setItems(collected.items);
         result.setTotal(result.getItems().size());
         result.setPage(1);
         result.setPageSize(limit);
+        result.setTimedOutSources(collected.failedSources);
         return result;
     }
 
@@ -242,16 +250,32 @@ public class DefaultSkillHubService implements SkillHubService {
         return "Removed tap: " + repo;
     }
 
-    private List<SkillMeta> collectFromSources(String query, String sourceFilter, int limit)
+    private SourceCollectResult collectFromSources(String query, String sourceFilter, int limit)
             throws Exception {
         List<SkillMeta> results = new ArrayList<SkillMeta>();
+        List<String> failedSources = new ArrayList<String>();
         for (SkillSource source : sources()) {
             if (!"all".equals(sourceFilter)
                     && !source.sourceId().equals(sourceFilter)
                     && !"official".equals(source.sourceId())) {
                 continue;
             }
-            results.addAll(source.search(query, limit));
+            try {
+                results.addAll(source.search(query, limit));
+            } catch (Exception e) {
+                failedSources.add(source.sourceId());
+                log.warn(
+                        "Skills Hub source search failed, skipping source: source={}, query={}, sourceFilter={}, limit={}, error={}",
+                        source.sourceId(),
+                        StrUtil.nullToEmpty(query),
+                        StrUtil.nullToEmpty(sourceFilter),
+                        limit,
+                        e.toString());
+                log.debug(
+                        "Skills Hub source search failure detail: source={}",
+                        source.sourceId(),
+                        e);
+            }
         }
         Map<String, SkillMeta> unique = new LinkedHashMap<String, SkillMeta>();
         for (SkillMeta meta : results) {
@@ -275,9 +299,10 @@ public class DefaultSkillHubService implements SkillHubService {
                     }
                 });
         if (deduped.size() > limit) {
-            return new ArrayList<SkillMeta>(deduped.subList(0, limit));
+            return new SourceCollectResult(
+                    new ArrayList<SkillMeta>(deduped.subList(0, limit)), failedSources);
         }
-        return deduped;
+        return new SourceCollectResult(deduped, failedSources);
     }
 
     private SkillBundle fetchFromRecordedSource(HubInstallRecord record) throws Exception {
@@ -289,7 +314,7 @@ public class DefaultSkillHubService implements SkillHubService {
         return null;
     }
 
-    private List<SkillSource> sources() {
+    protected List<SkillSource> sources() {
         List<SkillSource> sources = new ArrayList<SkillSource>();
         sources.add(new OfficialSkillSource(repoRoot));
         sources.add(new HermesIndexSource(httpClient, stateStore, gitHubSkillSource));
@@ -380,5 +405,15 @@ public class DefaultSkillHubService implements SkillHubService {
     private String deriveCategory(String installPath) {
         int index = installPath.lastIndexOf('/');
         return index < 0 ? null : installPath.substring(0, index);
+    }
+
+    private static class SourceCollectResult {
+        private final List<SkillMeta> items;
+        private final List<String> failedSources;
+
+        private SourceCollectResult(List<SkillMeta> items, List<String> failedSources) {
+            this.items = items;
+            this.failedSources = failedSources;
+        }
     }
 }

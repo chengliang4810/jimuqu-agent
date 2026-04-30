@@ -189,12 +189,11 @@ public class GatewayRuntimeRefreshService {
 
     private ValidationResult validateInteger(String key, Object value) {
         if (value instanceof Integer || value instanceof Long || value instanceof Short) {
-            return ValidationResult.success();
-        }
-        if (value instanceof Number) {
-            double number = ((Number) value).doubleValue();
-            if (number == Math.rint(number)) {
+            try {
+                Integer.parseInt(String.valueOf(value).trim());
                 return ValidationResult.success();
+            } catch (Exception ignored) {
+                // fall through
             }
         }
         if (value instanceof String) {

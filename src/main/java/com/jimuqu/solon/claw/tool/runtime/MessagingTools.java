@@ -33,7 +33,11 @@ public class MessagingTools {
             @Param(name = "platform", description = "目标平台名", required = false) String platform,
             @Param(name = "chatId", description = "目标聊天 ID", required = false) String chatId,
             @Param(name = "text", description = "要发送的文本") String text,
-            @Param(name = "mediaPaths", description = "可选本地附件路径数组", required = false)
+            @Param(
+                            name = "mediaPaths",
+                            description =
+                                    "可选本地附件路径数组；优先传 PDF/文件工具返回的路径或文件名。文件必须位于 runtime/cache 下，或是 runtime 根目录直接生成的安全附件文件。",
+                            required = false)
                     List<String> mediaPaths,
             @Param(
                             name = "channelExtrasJson",
@@ -94,7 +98,7 @@ public class MessagingTools {
             }
             File file = resolveAttachmentFile(rawPath.trim());
             attachments.add(
-                    attachmentCacheService.fromLocalFile(
+                    attachmentCacheService.fromLocalOrGeneratedFile(
                             platform, file.getAbsoluteFile(), null, false, null));
         }
         return attachments;

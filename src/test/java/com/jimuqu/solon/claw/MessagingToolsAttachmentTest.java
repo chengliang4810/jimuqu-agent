@@ -1,6 +1,7 @@
 package com.jimuqu.solon.claw;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.jimuqu.solon.claw.core.model.DeliveryRequest;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
@@ -118,5 +119,59 @@ public class MessagingToolsAttachmentTest {
         assertThat(request.getAttachments()).hasSize(1);
         assertThat(request.getAttachments().get(0).getLocalPath()).isEqualTo(pdf.getAbsolutePath());
         assertThat(request.getAttachments().get(0).getMimeType()).isEqualTo("application/pdf");
+    }
+
+    @Test
+    void shouldImportGeneratedPdfFromRuntimeRootIntoMediaCache() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        MessagingTools tools =
+                new MessagingTools(
+                        env.deliveryService,
+                        "MEMORY:chat-1:user-1",
+                        new AttachmentCacheService(env.appConfig),
+                        env.appConfig);
+
+        File pdf = new File(env.appConfig.getRuntime().getHome(), "jimuqu_agent_report.pdf");
+        Files.write(pdf.toPath(), new byte[] {1, 2, 3});
+
+        tools.sendMessage(
+                null,
+                null,
+                "发送报告",
+                Collections.singletonList(pdf.getAbsolutePath()),
+                null);
+
+        DeliveryRequest request = env.memoryChannelAdapter.getLastRequest();
+        assertThat(request.getAttachments()).hasSize(1);
+        assertThat(request.getAttachments().get(0).getLocalPath())
+                .contains(File.separator + "cache" + File.separator + "media" + File.separator);
+        assertThat(request.getAttachments().get(0).getOriginalName())
+                .endsWith("jimuqu_agent_report.pdf");
+        assertThat(request.getAttachments().get(0).getMimeType()).isEqualTo("application/pdf");
+    }
+
+    @Test
+    void shouldRejectRuntimeInternalFilesAsAttachments() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        MessagingTools tools =
+                new MessagingTools(
+                        env.deliveryService,
+                        "MEMORY:chat-1:user-1",
+                        new AttachmentCacheService(env.appConfig),
+                        env.appConfig);
+
+        File config = new File(env.appConfig.getRuntime().getHome(), "config.yml");
+        Files.write(config.toPath(), "secret: value".getBytes("UTF-8"));
+
+        assertThatThrownBy(
+                        () ->
+                                tools.sendMessage(
+                                        null,
+                                        null,
+                                        "发送配置",
+                                        Collections.singletonList(config.getAbsolutePath()),
+                                        null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("outside runtime cache");
     }
 }

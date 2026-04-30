@@ -540,7 +540,14 @@ public class AgentRunSupervisor implements AgentRunControlService {
         if (StrUtil.isNotBlank(assistantMessage.getContent())) {
             return assistantMessage.getContent();
         }
-        return String.valueOf(assistantMessage);
+        log.warn(
+                "Assistant message has no visible content in agent run; suppressing message object fallback: role={}, contentRawType={}, toolCalls={}",
+                assistantMessage.getRole(),
+                assistantMessage.getContentRaw() == null
+                        ? ""
+                        : assistantMessage.getContentRaw().getClass().getName(),
+                assistantMessage.getToolCalls() == null ? 0 : assistantMessage.getToolCalls().size());
+        return "";
     }
 
     private boolean hasVisibleContent(LlmResult result) {
