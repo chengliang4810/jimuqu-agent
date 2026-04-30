@@ -286,9 +286,10 @@ public class DangerousCommandApprovalService {
         }
 
         if (scope == ApprovalScope.SESSION) {
-            addSessionApproval(session.getContext(), pending.approvalKey());
+            addSessionApproval(
+                    session.getContext(), approvalPattern(pending.getToolName(), pending.getPatternKey()));
         } else if (scope == ApprovalScope.ALWAYS) {
-            addAlwaysApproval(pending.approvalKey());
+            addAlwaysApproval(approvalPattern(pending.getToolName(), pending.getPatternKey()));
         }
 
         String comment = scope.comment();
@@ -376,7 +377,7 @@ public class DangerousCommandApprovalService {
         if (session == null || StrUtil.isBlank(patternKey)) {
             return false;
         }
-        return loadSessionApprovals(session.getContext()).contains(patternKey);
+        return containsPattern(loadSessionApprovals(session.getContext()), patternKey);
     }
 
     public boolean isSessionApproved(
@@ -384,23 +385,25 @@ public class DangerousCommandApprovalService {
         if (session == null || StrUtil.hasBlank(toolName, patternKey)) {
             return false;
         }
-        return loadSessionApprovals(session.getContext())
-                .contains(approvalKey(toolName, patternKey, normalize(command)));
+        Set<String> approvals = loadSessionApprovals(session.getContext());
+        return approvals.contains(approvalPattern(toolName, patternKey))
+                || approvals.contains(approvalKey(toolName, patternKey, normalize(command)));
     }
 
     public boolean isAlwaysApproved(String patternKey) {
         if (StrUtil.isBlank(patternKey)) {
             return false;
         }
-        return loadAlwaysApprovedPatterns().contains(patternKey);
+        return containsPattern(loadAlwaysApprovedPatterns(), patternKey);
     }
 
     public boolean isAlwaysApproved(String toolName, String patternKey, String command) {
         if (StrUtil.hasBlank(toolName, patternKey)) {
             return false;
         }
-        return loadAlwaysApprovedPatterns()
-                .contains(approvalKey(toolName, patternKey, normalize(command)));
+        Set<String> approvals = loadAlwaysApprovedPatterns();
+        return approvals.contains(approvalPattern(toolName, patternKey))
+                || approvals.contains(approvalKey(toolName, patternKey, normalize(command)));
     }
 
     public List<String> listSessionApprovals(AgentSession session) {
@@ -526,7 +529,16 @@ public class DangerousCommandApprovalService {
     }
 
     private boolean isApproved(FlowContext context, String approvalKey) {
-        return loadSessionApprovals(context).contains(approvalKey)
+        ApprovalKeyParts parts = parseApprovalKey(approvalKey);
+        if (parts == null) {
+            return loadSessionApprovals(context).contains(approvalKey)
+                    || loadAlwaysApprovedPatterns().contains(approvalKey);
+        }
+
+        String approvalPattern = approvalPattern(parts.toolName, parts.patternKey);
+        return loadSessionApprovals(context).contains(approvalPattern)
+                || loadSessionApprovals(context).contains(approvalKey)
+                || loadAlwaysApprovedPatterns().contains(approvalPattern)
                 || loadAlwaysApprovedPatterns().contains(approvalKey);
     }
 
@@ -599,6 +611,23 @@ public class DangerousCommandApprovalService {
 
         values.add(text);
         return values;
+    }
+
+    private boolean containsPattern(Set<String> approvals, String patternKey) {
+        if (approvals == null || StrUtil.isBlank(patternKey)) {
+            return false;
+        }
+        String normalizedPattern = patternKey.trim();
+        if (approvals.contains(normalizedPattern)) {
+            return true;
+        }
+        for (String approval : approvals) {
+            ApprovalKeyParts parts = parseApprovalKey(approval);
+            if (parts != null && normalizedPattern.equals(parts.patternKey)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private PendingApproval toPendingApproval(Object raw) {
@@ -706,11 +735,26 @@ public class DangerousCommandApprovalService {
     }
 
     private String approvalKey(String toolName, String patternKey, String normalizedCode) {
-        return StrUtil.nullToEmpty(toolName).trim()
-                + ":"
-                + StrUtil.nullToEmpty(patternKey).trim()
+        return approvalPattern(toolName, patternKey)
                 + ":"
                 + commandHash(normalizedCode);
+    }
+
+    private String approvalPattern(String toolName, String patternKey) {
+        return StrUtil.nullToEmpty(toolName).trim()
+                + ":"
+                + StrUtil.nullToEmpty(patternKey).trim();
+    }
+
+    private ApprovalKeyParts parseApprovalKey(String approvalKey) {
+        if (StrUtil.isBlank(approvalKey)) {
+            return null;
+        }
+        String[] parts = approvalKey.split(":", 3);
+        if (parts.length < 2 || StrUtil.hasBlank(parts[0], parts[1])) {
+            return null;
+        }
+        return new ApprovalKeyParts(parts[0], parts[1]);
     }
 
     private String commandHash(String normalizedCode) {
@@ -847,6 +891,16 @@ public class DangerousCommandApprovalService {
 
         public void setNormalizedCode(String normalizedCode) {
             this.normalizedCode = normalizedCode;
+        }
+    }
+
+    private static class ApprovalKeyParts {
+        private final String toolName;
+        private final String patternKey;
+
+        private ApprovalKeyParts(String toolName, String patternKey) {
+            this.toolName = toolName;
+            this.patternKey = patternKey;
         }
     }
 

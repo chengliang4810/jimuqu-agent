@@ -36,7 +36,7 @@ public class DangerousCommandApprovalCommandTest {
         assertThat(
                         env.dangerousCommandApprovalService.isSessionApproved(
                                 updatedAgentSession, "recursive_delete"))
-                .isFalse();
+                .isTrue();
         assertThat(
                         env.dangerousCommandApprovalService.isSessionApproved(
                                 updatedAgentSession,
@@ -50,7 +50,7 @@ public class DangerousCommandApprovalCommandTest {
                                 "execute_shell",
                                 "recursive_delete",
                                 "rm -rf runtime/logs"))
-                .isFalse();
+                .isTrue();
     }
 
     @Test
@@ -73,7 +73,7 @@ public class DangerousCommandApprovalCommandTest {
 
         assertThat(reply.getContent()).isEqualTo("echo:resume");
         assertThat(env.dangerousCommandApprovalService.isAlwaysApproved("recursive_delete"))
-                .isFalse();
+                .isTrue();
         assertThat(
                         env.dangerousCommandApprovalService.isAlwaysApproved(
                                 "execute_shell", "recursive_delete", "rm -rf runtime/cache"))
@@ -81,7 +81,7 @@ public class DangerousCommandApprovalCommandTest {
         assertThat(
                         env.dangerousCommandApprovalService.isAlwaysApproved(
                                 "execute_shell", "recursive_delete", "rm -rf runtime/logs"))
-                .isFalse();
+                .isTrue();
     }
 
     @Test
