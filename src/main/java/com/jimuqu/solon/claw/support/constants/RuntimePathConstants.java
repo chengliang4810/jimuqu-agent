@@ -29,5 +29,5 @@ public interface RuntimePathConstants {
     int DEFAULT_MAX_TOKENS = 4096;
     double DEFAULT_TEMPERATURE = 0.2D;
 
-    int DEFAULT_HEARTBEAT_INTERVAL_MINUTES = 0;
+    int DEFAULT_HEARTBEAT_INTERVAL_MINUTES = 15;
 }

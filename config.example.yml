@@ -179,7 +179,7 @@ solonclaw:
     # 心跳任务配置。
     heartbeat:
       # 心跳间隔，单位分钟；0 表示不启用自动心跳。
-      intervalMinutes: 0
+      intervalMinutes: 15
     # 预定义人格配置。
     personalities:
       # 默认友好人格。

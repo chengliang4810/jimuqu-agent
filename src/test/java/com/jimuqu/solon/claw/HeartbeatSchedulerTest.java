@@ -31,6 +31,13 @@ public class HeartbeatSchedulerTest {
     @TempDir Path tempDir;
 
     @Test
+    void shouldDefaultHeartbeatIntervalToFifteenMinutes() {
+        AppConfig config = new AppConfig();
+
+        assertThat(config.getAgent().getHeartbeat().getIntervalMinutes()).isEqualTo(15);
+    }
+
+    @Test
     void shouldNotRunWhenDisabled() throws Exception {
         AppConfig config = config();
         config.getAgent().getHeartbeat().setIntervalMinutes(0);
