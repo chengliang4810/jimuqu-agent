@@ -112,12 +112,18 @@ runtime/config.yml
 ```yaml
 providers:
   default:
-    baseUrl: https://subapi.jimuqu.com
-    apiKey: YOUR_API_KEY
+    name: DefaultProvider
+    baseUrl: https://api.openai.com
+    apiKey: ""
     defaultModel: gpt-5.4
-    dialect: openai-responses
+    dialect: openai
 model:
   providerKey: default
+  default: "gpt-5.4"
+fallbackProviders: []
+solonclaw:
+  dashboard:
+    accessToken: "admin"
 ```
 
 常用运行配置：
@@ -128,7 +134,7 @@ model:
 | `providers.<key>.baseUrl` | - | 模型服务基础地址 |
 | `providers.<key>.apiKey` | - | 模型服务 API Key |
 | `providers.<key>.defaultModel` | - | 该提供方默认模型 |
-| `providers.<key>.dialect` | `openai-responses` | 协议方言 |
+| `providers.<key>.dialect` | `openai` | 协议方言 |
 | `model.providerKey` | `default` | 当前默认提供方 |
 | `model.default` | 空 | 全局默认模型覆盖；为空时使用 provider 的 `defaultModel` |
 | `solonclaw.llm.stream` | `true` | 是否启用流式输出 |

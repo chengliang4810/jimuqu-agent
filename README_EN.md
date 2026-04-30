@@ -110,15 +110,18 @@ Recommended model configuration structure:
 ```yaml
 providers:
   default:
-    name: Default Provider
-    baseUrl: https://subapi.jimuqu.com
-    apiKey: YOUR_API_KEY
+    name: DefaultProvider
+    baseUrl: https://api.openai.com
+    apiKey: ""
     defaultModel: gpt-5.4
-    dialect: openai-responses
+    dialect: openai
 model:
   providerKey: default
-  default: ""
+  default: "gpt-5.4"
 fallbackProviders: []
+solonclaw:
+  dashboard:
+    accessToken: "admin"
 ```
 
 Common runtime settings:
@@ -129,7 +132,7 @@ Common runtime settings:
 | `providers.<key>.baseUrl` | - | Model service base URL |
 | `providers.<key>.apiKey` | - | Model service API key |
 | `providers.<key>.defaultModel` | - | Default model for the provider |
-| `providers.<key>.dialect` | `openai-responses` | Protocol dialect |
+| `providers.<key>.dialect` | `openai` | Protocol dialect |
 | `model.providerKey` | `default` | Active default provider |
 | `model.default` | empty | Global model override; when empty, provider `defaultModel` is used |
 | `solonclaw.llm.stream` | `true` | Enables streaming output |

@@ -99,4 +99,28 @@ public class AppConfigPathNormalizationTest {
                 .startsWith("# Agent 请注意：这是只读参考模板，请不要修改本文件；需要变更运行配置时请修改同目录的 config.yml。")
                 .doesNotContain("stale content");
     }
+
+    @Test
+    void shouldCreateMinimalRuntimeConfigWhenMissing() throws Exception {
+        File runtimeHome = Files.createTempDirectory("solon-claw-runtime-init").toFile();
+        File runtimeConfig = new File(runtimeHome, "config.yml");
+
+        Props props = new Props();
+        props.put("solonclaw.runtime.home", runtimeHome.getAbsolutePath());
+
+        AppConfig config = AppConfig.load(props);
+
+        assertThat(runtimeConfig).exists();
+        String content = FileUtil.readUtf8String(runtimeConfig);
+        assertThat(content)
+                .contains("baseUrl: https://api.openai.com")
+                .contains("apiKey: \"\"")
+                .contains("dialect: openai")
+                .contains("accessToken: \"admin\"");
+        assertThat(config.getDashboard().getAccessToken()).isEqualTo("admin");
+        assertThat(config.getLlm().getDialect()).isEqualTo("openai");
+        assertThat(config.getLlm().getApiUrl()).isEqualTo("https://api.openai.com/v1/chat/completions");
+        assertThat(config.getLlm().getApiKey()).isEqualTo("");
+        assertThat(config.getLlm().getModel()).isEqualTo("gpt-5.4");
+    }
 }

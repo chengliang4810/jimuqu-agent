@@ -19,8 +19,8 @@ public interface RuntimePathConstants {
     String LOGS_DIR = RUNTIME_HOME + "/" + LOGS_DIR_NAME;
 
     String DEFAULT_PROVIDER_KEY = "default";
-    String DEFAULT_LLM_PROVIDER = "openai-responses";
-    String DEFAULT_LLM_API_URL = "https://subapi.jimuqu.com/v1/responses";
+    String DEFAULT_LLM_PROVIDER = "openai";
+    String DEFAULT_LLM_API_URL = "https://api.openai.com";
     String DEFAULT_LLM_MODEL = "gpt-5.4";
     String DEFAULT_REASONING_EFFORT = "medium";
     int DEFAULT_CONTEXT_WINDOW_TOKENS = 128000;

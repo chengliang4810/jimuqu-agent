@@ -126,9 +126,9 @@ public class TestEnvironment {
 
     public static TestEnvironment withLiveLlm() throws Exception {
         AppConfig config = newConfig();
-        String dialect = runtimeConfigValue("providers.default.dialect", "openai-responses");
+        String dialect = runtimeConfigValue("providers.default.dialect", "openai");
         String baseUrl =
-                runtimeConfigValue("providers.default.baseUrl", "https://subapi.jimuqu.com");
+                runtimeConfigValue("providers.default.baseUrl", "https://api.openai.com");
         AppConfig.ProviderConfig provider = config.getProviders().get("default");
         provider.setDialect(dialect);
         provider.setBaseUrl(baseUrl);
@@ -402,17 +402,17 @@ public class TestEnvironment {
         config.getRuntime().setConfigFile(new File(runtimeHome, "config.yml").getAbsolutePath());
         config.getRuntime().setLogsDir(new File(runtimeHome, "logs").getAbsolutePath());
         AppConfig.ProviderConfig provider = new AppConfig.ProviderConfig();
-        provider.setName("Default Provider");
-        provider.setBaseUrl("https://subapi.jimuqu.com");
+        provider.setName("DefaultProvider");
+        provider.setBaseUrl("https://api.openai.com");
         provider.setApiKey("");
         provider.setDefaultModel("gpt-5.4");
-        provider.setDialect("openai-responses");
+        provider.setDialect("openai");
         config.getProviders().put("default", provider);
         config.getModel().setProviderKey("default");
         config.getModel().setDefault("");
         config.getLlm().setProvider("default");
-        config.getLlm().setDialect("openai-responses");
-        config.getLlm().setApiUrl("https://subapi.jimuqu.com/v1/responses");
+        config.getLlm().setDialect("openai");
+        config.getLlm().setApiUrl("https://api.openai.com/v1/chat/completions");
         config.getLlm().setModel("gpt-5.4");
         config.getLlm().setReasoningEffort("medium");
         config.getLlm().setTemperature(0.2D);

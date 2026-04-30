@@ -23,7 +23,7 @@ public class AgentRuntimePromptTest {
                 .contains("chat_id=chat-a")
                 .contains("user_id=user-a")
                 .contains("effective_provider=default")
-                .contains("effective_dialect=openai-responses")
+                .contains("effective_dialect=openai")
                 .contains("effective_model=gpt-5.4")
                 .contains("react_summarization_enabled=true")
                 .contains("enabled_tools=")

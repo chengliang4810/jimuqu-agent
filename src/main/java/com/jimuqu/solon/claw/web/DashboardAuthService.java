@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 import org.noear.snack4.ONode;
 import org.noear.solon.core.handle.Context;
 
@@ -23,7 +22,6 @@ public class DashboardAuthService {
                             "/api/model/info"));
 
     private final AppConfig appConfig;
-    private final String fallbackSessionToken = UUID.randomUUID().toString().replace("-", "");
     private final List<Long> revealTimestamps = new ArrayList<Long>();
 
     public DashboardAuthService(AppConfig appConfig) {
@@ -135,7 +133,7 @@ public class DashboardAuthService {
                 appConfig == null || appConfig.getDashboard() == null
                         ? ""
                         : StrUtil.nullToEmpty(appConfig.getDashboard().getAccessToken());
-        return StrUtil.isBlank(configured) ? fallbackSessionToken : configured;
+        return StrUtil.isBlank(configured) ? "admin" : configured;
     }
 
     private String escapeJs(String value) {

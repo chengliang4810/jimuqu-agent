@@ -80,7 +80,7 @@ export default {
     accessTokenRevealFailed: '读取访问令牌失败',
     revealAccessToken: '显示当前值',
     clearAccessToken: '清空令牌',
-    clearAccessTokenConfirm: '确定清空 solonclaw.dashboard.accessToken 吗？清空后服务会使用启动时生成的临时令牌。',
+    clearAccessTokenConfirm: '确定清空 solonclaw.dashboard.accessToken 吗？清空后服务会使用默认令牌 admin。',
     currentValue: '当前值',
   },
 

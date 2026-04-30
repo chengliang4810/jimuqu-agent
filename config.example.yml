@@ -7,15 +7,15 @@ providers:
   # 默认云端模型提供方。
   default:
     # 提供方显示名称。
-    name: Default Provider
+    name: DefaultProvider
     # 模型接口基础地址。
-    baseUrl: https://subapi.jimuqu.com
+    baseUrl: https://api.openai.com
     # 模型接口密钥。生产环境请替换为真实密钥，避免提交到代码仓库。
-    apiKey: YOUR_API_KEY
+    apiKey: ""
     # 该提供方默认使用的模型。
     defaultModel: gpt-5.4
     # 协议类型，可选 openai、openai-responses、ollama、gemini、anthropic。
-    dialect: openai-responses
+    dialect: openai
   # 本地 Ollama 示例提供方。
   local-ollama:
     # 提供方显示名称。
@@ -49,8 +49,8 @@ fallbackProviders: []
 solonclaw:
   # Dashboard 与 API 访问配置。
   dashboard:
-    # Dashboard 页面和 /api/* 请求共用的 Bearer Token；留空时启动时生成临时 token。
-    accessToken: ""
+    # Dashboard 页面和 /api/* 请求共用的 Bearer Token。
+    accessToken: "admin"
 
   # 默认 LLM 运行参数。
   llm:

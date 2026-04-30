@@ -94,6 +94,7 @@ public class AppConfig {
         AppConfig config = new AppConfig();
         File userDir = new File(System.getProperty("user.dir"));
         File runtimeHome = asAbsoluteStatic(new File(resolveInitialRuntimeHome(props)), userDir);
+        initializeRuntimeConfigIfMissing(runtimeHome);
         Map<String, Object> overrides = loadFlatOverrides(runtimeHome);
         Map<String, Object> structuredOverrides = loadStructuredOverrides(runtimeHome);
         RuntimeConfigResolver configResolver =
@@ -1742,8 +1743,8 @@ public class AppConfig {
                         RuntimePathConstants.DEFAULT_LLM_MODEL);
         ProviderConfig provider = new ProviderConfig();
         provider.setName(
-                StrUtil.blankToDefault(props.get("providers.default.name"), "Default Provider"));
-        provider.setBaseUrl(LlmProviderSupport.deriveBaseUrl(baseUrl, dialect));
+                StrUtil.blankToDefault(props.get("providers.default.name"), "DefaultProvider"));
+        provider.setBaseUrl(baseUrl);
         provider.setApiKey(StrUtil.nullToEmpty(props.get("providers.default.apiKey")).trim());
         provider.setDefaultModel(defaultModel);
         provider.setDialect(LlmProviderSupport.normalizeDialect(dialect));
@@ -1916,6 +1917,42 @@ public class AppConfig {
 
     private static String resolveInitialRuntimeHome(Props props) {
         return props.get("solonclaw.runtime.home", RuntimePathConstants.RUNTIME_HOME);
+    }
+
+    private static void initializeRuntimeConfigIfMissing(File runtimeHome) {
+        File configFile = new File(runtimeHome, RuntimePathConstants.CONFIG_FILE_NAME);
+        if (configFile.exists()) {
+            return;
+        }
+
+        try {
+            FileUtil.mkParentDirs(configFile);
+            FileUtil.writeUtf8String(defaultRuntimeConfigContent(), configFile);
+        } catch (Exception ignored) {
+            // 运行配置初始化失败时继续启动；后续权限检查和 Dashboard 保存路径仍可提示用户修复。
+        }
+    }
+
+    private static String defaultRuntimeConfigContent() {
+        return "# SolonClaw 最小运行配置。\n"
+                + "# 启动时自动创建；可通过 Dashboard 或直接编辑本文件继续完善。\n"
+                + "providers:\n"
+                + "  default:\n"
+                + "    name: DefaultProvider\n"
+                + "    baseUrl: https://api.openai.com\n"
+                + "    apiKey: \"\"\n"
+                + "    defaultModel: gpt-5.4\n"
+                + "    dialect: openai\n"
+                + "\n"
+                + "model:\n"
+                + "  providerKey: default\n"
+                + "  default: \"gpt-5.4\"\n"
+                + "\n"
+                + "fallbackProviders: []\n"
+                + "\n"
+                + "solonclaw:\n"
+                + "  dashboard:\n"
+                + "    accessToken: \"admin\"\n";
     }
 
     private static void syncRuntimeConfigExample(String runtimeHome) {

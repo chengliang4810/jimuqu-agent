@@ -79,7 +79,7 @@ export default {
     accessTokenRevealFailed: 'Failed to read access token',
     revealAccessToken: 'Show current value',
     clearAccessToken: 'Clear token',
-    clearAccessTokenConfirm: 'Clear solonclaw.dashboard.accessToken? The service will fall back to the temporary token generated at startup.',
+    clearAccessTokenConfirm: 'Clear solonclaw.dashboard.accessToken? The service will fall back to the default token admin.',
     currentValue: 'Current value',
   },
 

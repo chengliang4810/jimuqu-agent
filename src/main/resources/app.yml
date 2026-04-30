@@ -12,15 +12,15 @@ solon.logging.logger.root.level: INFO
 # 运行时目录配置
 solonclaw.runtime.home: runtime
 
-# Dashboard and API shared access token. If empty, startup generates a temporary local token.
-solonclaw.dashboard.accessToken:
+# Dashboard and API shared access token.
+solonclaw.dashboard.accessToken: admin
 
 # 默认大模型配置
-providers.default.name: Default Provider
-providers.default.baseUrl: https://subapi.jimuqu.com
+providers.default.name: DefaultProvider
+providers.default.baseUrl: https://api.openai.com
 providers.default.apiKey:
 providers.default.defaultModel: gpt-5.4
-providers.default.dialect: openai-responses
+providers.default.dialect: openai
 model.providerKey: default
 model.default:
 solonclaw.llm.stream: true
