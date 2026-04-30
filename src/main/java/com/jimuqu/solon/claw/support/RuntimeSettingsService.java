@@ -285,7 +285,7 @@ public class RuntimeSettingsService {
                 .append('\n');
         appendShellGuidance(buffer, enabledToolNames);
         buffer.append(
-                "Only change your own configuration through /model, config_set, or config_set_secret. Global changes take effect on the next message.");
+                "Only change your own configuration through /model, config_set, or config_set_secret. If you edit runtime/config.yml directly, call config_refresh afterward; it validates YAML first and refuses invalid config. Global changes take effect on the next message.");
         return buffer.toString();
     }
 

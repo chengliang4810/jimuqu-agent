@@ -1,5 +1,6 @@
 package com.jimuqu.solon.claw.tool.runtime;
 
+import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.solon.claw.support.RuntimeSettingsService;
 import lombok.RequiredArgsConstructor;
 import org.noear.snack4.ONode;
@@ -10,6 +11,7 @@ import org.noear.solon.annotation.Param;
 @RequiredArgsConstructor
 public class ConfigTools {
     private final RuntimeSettingsService runtimeSettingsService;
+    private final GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
 
     @ToolMapping(
             name = "config_get",
@@ -42,6 +44,33 @@ public class ConfigTools {
                     .set("key", key)
                     .set("value", runtimeSettingsService.getConfigValue(key))
                     .set("note", "takes effect on the next message")
+                    .toJson();
+        } catch (Exception e) {
+            return error(e);
+        }
+    }
+
+    @ToolMapping(
+            name = "config_refresh",
+            description =
+                    "Validate runtime/config.yml first, then refresh runtime config. If validation fails, do not refresh.")
+    public String configRefresh(
+            @Param(
+                            name = "reconnectChannels",
+                            description = "是否重连渠道连接；默认 false",
+                            required = false)
+                    Boolean reconnectChannels) {
+        try {
+            GatewayRuntimeRefreshService.RefreshResult result =
+                    Boolean.TRUE.equals(reconnectChannels)
+                            ? gatewayRuntimeRefreshService.refreshNow()
+                            : gatewayRuntimeRefreshService.refreshConfigOnly();
+            return new ONode()
+                    .set("success", result.isSuccess())
+                    .set("refreshed", result.isRefreshed())
+                    .set("reconnectedChannels", result.isReconnectedChannels())
+                    .set("configFile", result.getConfigFile())
+                    .set("message", result.getMessage())
                     .toJson();
         } catch (Exception e) {
             return error(e);
@@ -117,6 +146,24 @@ public class ConfigTools {
                 @Param(name = "key", description = "配置键，例如 providers.default.apiKey") String key,
                 @Param(name = "value", description = "新的密钥值") String value) {
             return delegate.configSetSecret(key, value);
+        }
+    }
+
+    @RequiredArgsConstructor
+    public static class ConfigRefreshTool {
+        private final ConfigTools delegate;
+
+        @ToolMapping(
+                name = "config_refresh",
+                description =
+                        "Validate runtime/config.yml first, then refresh runtime config. If validation fails, do not refresh.")
+        public String configRefresh(
+                @Param(
+                                name = "reconnectChannels",
+                                description = "是否重连渠道连接；默认 false",
+                                required = false)
+                        Boolean reconnectChannels) {
+            return delegate.configRefresh(reconnectChannels);
         }
     }
 }

@@ -66,6 +66,53 @@ public class RuntimeRefreshBehaviorTest {
         assertThat(adapter.connectCount).isEqualTo(1);
     }
 
+    @Test
+    void shouldRefreshDirectConfigFileChangesAfterValidation() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        FileUtil.writeUtf8String(
+                "solonclaw:\n  react:\n    maxSteps: 50\n",
+                env.appConfig.getRuntime().getConfigFile());
+
+        GatewayRuntimeRefreshService.RefreshResult result =
+                env.gatewayRuntimeRefreshService.refreshConfigOnly();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.isRefreshed()).isTrue();
+        assertThat(env.appConfig.getReact().getMaxSteps()).isEqualTo(50);
+    }
+
+    @Test
+    void shouldRejectInvalidConfigBeforeRefreshing() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        int previousMaxSteps = env.appConfig.getReact().getMaxSteps();
+        FileUtil.writeUtf8String(
+                "solonclaw:\n  react:\n    maxSteps: wrong\n",
+                env.appConfig.getRuntime().getConfigFile());
+
+        GatewayRuntimeRefreshService.RefreshResult result =
+                env.gatewayRuntimeRefreshService.refreshConfigOnly();
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("solonclaw.react.maxSteps");
+        assertThat(env.appConfig.getReact().getMaxSteps()).isEqualTo(previousMaxSteps);
+    }
+
+    @Test
+    void shouldRejectInvalidProviderShapeBeforeRefreshing() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        String previousModel = env.appConfig.getLlm().getModel();
+        FileUtil.writeUtf8String(
+                "providers:\n  default: wrong\nmodel:\n  providerKey: default\n",
+                env.appConfig.getRuntime().getConfigFile());
+
+        GatewayRuntimeRefreshService.RefreshResult result =
+                env.gatewayRuntimeRefreshService.refreshConfigOnly();
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("providers.default");
+        assertThat(env.appConfig.getLlm().getModel()).isEqualTo(previousModel);
+    }
+
     private RuntimeSettingsService runtimeSettingsService(
             TestEnvironment env, RecordingChannelAdapter adapter) {
         Map<PlatformType, ChannelAdapter> adapters =

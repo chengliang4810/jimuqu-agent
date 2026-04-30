@@ -31,6 +31,7 @@ public interface ToolNameConstants {
     String CONFIG_GET = "config_get";
     String CONFIG_SET = "config_set";
     String CONFIG_SET_SECRET = "config_set_secret";
+    String CONFIG_REFRESH = "config_refresh";
     String CODESEARCH = "codesearch";
     String WEBSEARCH = "websearch";
     String WEBFETCH = "webfetch";

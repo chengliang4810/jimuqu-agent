@@ -33,7 +33,8 @@ public class ToolRegistryExposureTest {
                         "skill_manage",
                         "skills_hub_search",
                         "skills_hub_install",
-                        "skills_hub_tap");
+                        "skills_hub_tap",
+                        "config_refresh");
         assertThat(names)
                 .doesNotContain(
                         "exists_cmd",
@@ -55,6 +56,7 @@ public class ToolRegistryExposureTest {
         assertThat(joined).contains("SystemClockSkill");
         assertThat(joined).contains("TodoTools");
         assertThat(joined).contains("SkillsListTool");
+        assertThat(joined).contains("ConfigRefreshTool");
     }
 
     @Test

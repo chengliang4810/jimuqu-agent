@@ -133,7 +133,8 @@ public class DashboardSkillsService {
                         Arrays.asList(
                                 ToolNameConstants.CONFIG_GET,
                                 ToolNameConstants.CONFIG_SET,
-                                ToolNameConstants.CONFIG_SET_SECRET)));
+                                ToolNameConstants.CONFIG_SET_SECRET,
+                                ToolNameConstants.CONFIG_REFRESH)));
         return result;
     }
 

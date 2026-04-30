@@ -22,6 +22,7 @@ import com.jimuqu.solon.claw.core.service.ToolRegistry;
 import com.jimuqu.solon.claw.engine.AgentRunSupervisor;
 import com.jimuqu.solon.claw.engine.DefaultConversationOrchestrator;
 import com.jimuqu.solon.claw.engine.DefaultDelegationService;
+import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.solon.claw.llm.SolonAiLlmGateway;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
@@ -77,7 +78,8 @@ public class ToolConfiguration {
             CheckpointService checkpointService,
             DelegationService delegationService,
             AttachmentCacheService attachmentCacheService,
-            RuntimeSettingsService runtimeSettingsService) {
+            RuntimeSettingsService runtimeSettingsService,
+            GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
         return new DefaultToolRegistry(
                 appConfig,
                 preferenceStore,
@@ -91,7 +93,8 @@ public class ToolConfiguration {
                 checkpointService,
                 delegationService,
                 attachmentCacheService,
-                runtimeSettingsService);
+                runtimeSettingsService,
+                gatewayRuntimeRefreshService);
     }
 
     @Bean

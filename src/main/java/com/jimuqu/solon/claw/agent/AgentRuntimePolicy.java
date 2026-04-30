@@ -44,6 +44,7 @@ public final class AgentRuntimePolicy {
                     ToolNameConstants.CONFIG_GET,
                     ToolNameConstants.CONFIG_SET,
                     ToolNameConstants.CONFIG_SET_SECRET,
+                    ToolNameConstants.CONFIG_REFRESH,
                     ToolNameConstants.CODESEARCH,
                     ToolNameConstants.WEBSEARCH,
                     ToolNameConstants.WEBFETCH);
@@ -228,6 +229,7 @@ public final class AgentRuntimePolicy {
             output.add(ToolNameConstants.CONFIG_GET);
             output.add(ToolNameConstants.CONFIG_SET);
             output.add(ToolNameConstants.CONFIG_SET_SECRET);
+            output.add(ToolNameConstants.CONFIG_REFRESH);
             return;
         }
         output.add(name);

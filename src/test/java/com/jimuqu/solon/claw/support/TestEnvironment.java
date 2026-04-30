@@ -115,6 +115,7 @@ public class TestEnvironment {
     public final AgentRunControlService agentRunControlService;
     public final AgentProfileService agentProfileService;
     public final AgentRuntimeService agentRuntimeService;
+    public final GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
 
     public static TestEnvironment withFakeLlm() throws Exception {
         return create(new FakeLlmGateway());
@@ -274,7 +275,8 @@ public class TestEnvironment {
                         checkpointService,
                         delegationService,
                         attachmentCacheService,
-                        runtimeSettingsService);
+                        runtimeSettingsService,
+                        refreshService);
         ContextBudgetService contextBudgetService = new DefaultContextBudgetService(config);
         AgentRunSupervisor agentRunSupervisor =
                 new AgentRunSupervisor(
@@ -365,7 +367,8 @@ public class TestEnvironment {
                 dangerousCommandApprovalService,
                 agentRunSupervisor,
                 agentProfileService,
-                agentRuntimeService);
+                agentRuntimeService,
+                refreshService);
     }
 
     public GatewayMessage message(String chatId, String userId, String text) {

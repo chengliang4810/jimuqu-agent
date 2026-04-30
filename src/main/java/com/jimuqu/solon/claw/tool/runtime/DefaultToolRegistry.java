@@ -14,6 +14,7 @@ import com.jimuqu.solon.claw.core.service.MemoryService;
 import com.jimuqu.solon.claw.core.service.SessionSearchService;
 import com.jimuqu.solon.claw.core.service.SkillHubService;
 import com.jimuqu.solon.claw.core.service.ToolRegistry;
+import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.jimuqu.solon.claw.support.RuntimeSettingsService;
@@ -66,6 +67,7 @@ public class DefaultToolRegistry implements ToolRegistry {
                     ToolNameConstants.CONFIG_GET,
                     ToolNameConstants.CONFIG_SET,
                     ToolNameConstants.CONFIG_SET_SECRET,
+                    ToolNameConstants.CONFIG_REFRESH,
                     ToolNameConstants.CODESEARCH,
                     ToolNameConstants.WEBSEARCH,
                     ToolNameConstants.WEBFETCH);
@@ -109,6 +111,9 @@ public class DefaultToolRegistry implements ToolRegistry {
     /** 运行时配置服务。 */
     private final RuntimeSettingsService runtimeSettingsService;
 
+    /** 运行时配置刷新服务。 */
+    private final GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
+
     public DefaultToolRegistry(
             AppConfig appConfig,
             SqlitePreferenceStore preferenceStore,
@@ -122,7 +127,8 @@ public class DefaultToolRegistry implements ToolRegistry {
             CheckpointService checkpointService,
             DelegationService delegationService,
             AttachmentCacheService attachmentCacheService,
-            RuntimeSettingsService runtimeSettingsService) {
+            RuntimeSettingsService runtimeSettingsService,
+            GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
         this.appConfig = appConfig;
         this.preferenceStore = preferenceStore;
         this.sessionRepository = sessionRepository;
@@ -136,6 +142,7 @@ public class DefaultToolRegistry implements ToolRegistry {
         this.delegationService = delegationService;
         this.attachmentCacheService = attachmentCacheService;
         this.runtimeSettingsService = runtimeSettingsService;
+        this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
     }
 
     @Override
@@ -168,7 +175,7 @@ public class DefaultToolRegistry implements ToolRegistry {
         CronjobTools cronjobTools = new CronjobTools(cronJobRepository, sourceKey);
         TodoTools todoTools = new TodoTools(appConfig, sourceKey);
         DelegateTools delegateTools = new DelegateTools(delegationService, sourceKey);
-        ConfigTools configTools = new ConfigTools(runtimeSettingsService);
+        ConfigTools configTools = new ConfigTools(runtimeSettingsService, gatewayRuntimeRefreshService);
         String sysWorkDir = resolveWorkDir(agentScope);
         FileReadWriteSkill fileSkill = new FileReadWriteSkill(sysWorkDir);
         ShellSkill shellSkill = new ShellSkill(sysWorkDir);
@@ -208,6 +215,8 @@ public class DefaultToolRegistry implements ToolRegistry {
                 tools.add(new ConfigTools.ConfigSetTool(configTools));
             } else if (ToolNameConstants.CONFIG_SET_SECRET.equals(toolName)) {
                 tools.add(new ConfigTools.ConfigSetSecretTool(configTools));
+            } else if (ToolNameConstants.CONFIG_REFRESH.equals(toolName)) {
+                tools.add(new ConfigTools.ConfigRefreshTool(configTools));
             } else if (ToolNameConstants.MEMORY.equals(toolName)) {
                 tools.add(memoryTools);
             } else if (ToolNameConstants.SESSION_SEARCH.equals(toolName)) {
