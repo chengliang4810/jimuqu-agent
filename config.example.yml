@@ -1,3 +1,4 @@
+# Agent 请注意：这是只读参考模板，请不要修改本文件；需要变更运行配置时请修改同目录的 config.yml。
 # SolonClaw 运行配置示例。
 # 使用方式：复制为 runtime/config.yml，再按部署环境修改。
 
@@ -46,12 +47,6 @@ fallbackProviders: []
 
 # SolonClaw 运行时配置。
 solonclaw:
-  # 本地运行目录配置。
-  runtime:
-    # 运行时根目录。
-    home: runtime
-    # 子目录由程序内置派生：context、skills、cache、logs、data/state.db。
-
   # Dashboard 与 API 访问配置。
   dashboard:
     # Dashboard 页面和 /api/* 请求共用的 Bearer Token；留空时启动时生成临时 token。

@@ -2,6 +2,7 @@ package com.jimuqu.solon.claw;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import cn.hutool.core.io.FileUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
 import java.io.File;
 import java.nio.file.Files;
@@ -80,5 +81,22 @@ public class AppConfigPathNormalizationTest {
                 .isEqualTo(new File(new File(runtimeHome, "data"), "state.db").getAbsolutePath());
         assertThat(config.getRuntime().getLogsDir())
                 .isEqualTo(new File(runtimeHome, "logs").getAbsolutePath());
+    }
+
+    @Test
+    void shouldSyncConfigExampleIntoRuntimeHomeOnEveryLoad() throws Exception {
+        File runtimeHome = Files.createTempDirectory("solon-claw-runtime-example").toFile();
+        File runtimeExample = new File(runtimeHome, "config.example.yml");
+        FileUtil.writeUtf8String("stale content", runtimeExample);
+
+        Props props = new Props();
+        props.put("solonclaw.runtime.home", runtimeHome.getAbsolutePath());
+
+        AppConfig.load(props);
+
+        assertThat(runtimeExample).exists();
+        assertThat(FileUtil.readUtf8String(runtimeExample))
+                .startsWith("# Agent 请注意：这是只读参考模板，请不要修改本文件；需要变更运行配置时请修改同目录的 config.yml。")
+                .doesNotContain("stale content");
     }
 }

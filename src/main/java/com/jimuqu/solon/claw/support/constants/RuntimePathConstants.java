@@ -8,6 +8,7 @@ public interface RuntimePathConstants {
     String CACHE_DIR_NAME = "cache";
     String DATA_DIR_NAME = "data";
     String CONFIG_FILE_NAME = "config.yml";
+    String CONFIG_EXAMPLE_FILE_NAME = "config.example.yml";
     String STATE_DB_FILE_NAME = "state.db";
     String LOGS_DIR_NAME = "logs";
     String CONTEXT_DIR = RUNTIME_HOME + "/" + CONTEXT_DIR_NAME;

@@ -1,6 +1,7 @@
 package com.jimuqu.solon.claw;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import cn.hutool.core.io.FileUtil;
 import com.jimuqu.solon.claw.config.RuntimeConfigResolver;
@@ -34,5 +35,21 @@ public class RuntimeConfigResolverTest {
         assertThat(RuntimeConfigResolver.cfgGet("missing.path", "fallback")).isEqualTo("fallback");
         assertThat(RuntimeConfigResolver.getRawValue("solonclaw.display.runtimeFooter.fields"))
                 .isEqualTo(java.util.Arrays.asList("model", "cwd"));
+    }
+
+    @Test
+    void shouldNotExposeRuntimeHomeAsRuntimeConfigKey() throws Exception {
+        File runtimeHome = Files.createTempDirectory("solonclaw-runtime-home").toFile();
+        FileUtil.writeUtf8String(
+                "solonclaw:\n" + "  runtime:\n" + "    home: /tmp/other-runtime\n",
+                new File(runtimeHome, "config.yml"));
+
+        RuntimeConfigResolver resolver =
+                RuntimeConfigResolver.initialize(runtimeHome.getAbsolutePath());
+
+        assertThat(resolver.get("solonclaw.runtime.home")).isNull();
+        assertThatThrownBy(() -> resolver.setFileValue("solonclaw.runtime.home", "runtime2"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Unsupported config key");
     }
 }

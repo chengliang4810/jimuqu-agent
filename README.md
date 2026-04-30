@@ -88,6 +88,8 @@ src/main/resources/app.yml
 runtime/config.yml
 ```
 
+`runtime/config.yml` 不配置运行目录本身；运行目录在启动级配置中决定，默认使用当前目录下的 `runtime/`。
+
 完整示例可参考仓库根目录的 `config.example.yml`。
 
 最小 `runtime/config.yml` 示例：
@@ -108,7 +110,6 @@ model:
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
 | `server.port` | `8080` | HTTP 服务端口 |
-| `solonclaw.runtime.home` | `runtime` | 运行时根目录 |
 | `providers.<key>.baseUrl` | - | 模型服务基础地址 |
 | `providers.<key>.apiKey` | - | 模型服务 API Key |
 | `providers.<key>.defaultModel` | - | 该提供方默认模型 |

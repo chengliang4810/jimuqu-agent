@@ -8,6 +8,9 @@ import com.jimuqu.solon.claw.support.constants.CompressionConstants;
 import com.jimuqu.solon.claw.support.constants.GatewayBehaviorConstants;
 import com.jimuqu.solon.claw.support.constants.RuntimePathConstants;
 import java.io.File;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -962,6 +965,7 @@ public class AppConfig {
                                         32000)));
 
         config.normalizePaths();
+        syncRuntimeConfigExample(config.getRuntime().getHome());
         return config;
     }
 
@@ -1912,6 +1916,25 @@ public class AppConfig {
 
     private static String resolveInitialRuntimeHome(Props props) {
         return props.get("solonclaw.runtime.home", RuntimePathConstants.RUNTIME_HOME);
+    }
+
+    private static void syncRuntimeConfigExample(String runtimeHome) {
+        try (InputStream stream =
+                AppConfig.class
+                        .getClassLoader()
+                        .getResourceAsStream(RuntimePathConstants.CONFIG_EXAMPLE_FILE_NAME)) {
+            if (stream == null) {
+                return;
+            }
+            File target =
+                    new File(
+                            StrUtil.blankToDefault(runtimeHome, RuntimePathConstants.RUNTIME_HOME),
+                            RuntimePathConstants.CONFIG_EXAMPLE_FILE_NAME);
+            FileUtil.mkParentDirs(target);
+            Files.copy(stream, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception ignored) {
+            // 示例配置只用于 Agent 参考，启动不应因同步失败而中断。
+        }
     }
 
     private static String runtimeChildPath(String runtimeHome, String childName) {

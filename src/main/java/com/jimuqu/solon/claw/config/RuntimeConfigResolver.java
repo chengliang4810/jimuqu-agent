@@ -30,7 +30,7 @@ public class RuntimeConfigResolver {
         reload();
     }
 
-    /** 基于 runtime.home 初始化全局解析器。 */
+    /** 基于已解析的运行时根目录初始化全局解析器。 */
     public static RuntimeConfigResolver initialize(String runtimeHome) {
         File homeDir = resolveRuntimeHome(runtimeHome);
         File configFile = FileUtil.file(homeDir, "config.yml");
@@ -233,6 +233,9 @@ public class RuntimeConfigResolver {
         if (StrUtil.isNotBlank(mapped)) {
             return mapped;
         }
+        if (key.startsWith("solonclaw.runtime.")) {
+            return null;
+        }
         if (key.startsWith("solonclaw.")
                 || key.startsWith("providers.")
                 || key.startsWith("model.")
@@ -373,7 +376,6 @@ public class RuntimeConfigResolver {
     private static Map<String, String> buildKeyPaths() {
         Map<String, String> mappings = new LinkedHashMap<String, String>();
 
-        add(mappings, "solonclaw.runtime.home");
         add(mappings, "model.providerKey");
         add(mappings, "model.default");
         add(mappings, "providers.default.name");

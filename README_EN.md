@@ -88,6 +88,8 @@ Model providers are managed by the runtime configuration file and the Dashboard.
 runtime/config.yml
 ```
 
+`runtime/config.yml` does not configure its own directory. The runtime directory is decided by startup-level configuration and defaults to `runtime/` under the current working directory.
+
 Recommended model configuration structure:
 
 ```yaml
@@ -109,7 +111,6 @@ Common runtime settings:
 | Key | Default | Description |
 | --- | --- | --- |
 | `server.port` | `8080` | HTTP server port |
-| `solonclaw.runtime.home` | `runtime` | Runtime root directory |
 | `providers.<key>.baseUrl` | - | Model service base URL |
 | `providers.<key>.apiKey` | - | Model service API key |
 | `providers.<key>.defaultModel` | - | Default model for the provider |
