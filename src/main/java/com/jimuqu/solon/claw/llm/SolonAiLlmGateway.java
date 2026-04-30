@@ -11,8 +11,7 @@ import com.jimuqu.solon.claw.core.service.ConversationEventSink;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
 import com.jimuqu.solon.claw.gateway.feedback.ConversationFeedbackSink;
 import com.jimuqu.solon.claw.gateway.feedback.ToolPreviewSupport;
-import com.jimuqu.solon.claw.llm.dialect.LoggingOpenaiChatDialect;
-import com.jimuqu.solon.claw.llm.dialect.LoggingOpenaiResponsesDialect;
+import com.jimuqu.solon.claw.llm.dialect.RawResponseLoggingChatDialect;
 import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
 import com.jimuqu.solon.claw.support.LlmProviderService;
 import com.jimuqu.solon.claw.support.constants.LlmConstants;
@@ -53,6 +52,11 @@ import org.noear.solon.ai.chat.prompt.Prompt;
 import org.noear.solon.ai.harness.HarnessEngine;
 import org.noear.solon.ai.harness.HarnessProperties;
 import org.noear.solon.ai.harness.agent.AgentDefinition;
+import org.noear.solon.ai.llm.dialect.anthropic.AnthropicChatDialect;
+import org.noear.solon.ai.llm.dialect.gemini.GeminiChatDialect;
+import org.noear.solon.ai.llm.dialect.ollama.OllamaChatDialect;
+import org.noear.solon.ai.llm.dialect.openai.OpenaiChatDialect;
+import org.noear.solon.ai.llm.dialect.openai.OpenaiResponsesDialect;
 import org.noear.solon.ai.skills.pdf.PdfSkill;
 import org.noear.snack4.ONode;
 import org.slf4j.Logger;
@@ -777,8 +781,30 @@ public class SolonAiLlmGateway implements LlmGateway {
 
     private void ensureCustomDialectsRegistered() {
         if (CUSTOM_DIALECTS_REGISTERED.compareAndSet(false, true)) {
-            ChatDialectManager.register(new LoggingOpenaiChatDialect(), -100);
-            ChatDialectManager.register(new LoggingOpenaiResponsesDialect(), -100);
+            ChatDialectManager.register(
+                    new RawResponseLoggingChatDialect(
+                            OpenaiResponsesDialect.getInstance(),
+                            LlmConstants.PROVIDER_OPENAI_RESPONSES,
+                            true),
+                    -100);
+            ChatDialectManager.register(
+                    new RawResponseLoggingChatDialect(
+                            OpenaiChatDialect.getInstance(), LlmConstants.PROVIDER_OPENAI, false),
+                    -99);
+            ChatDialectManager.register(
+                    new RawResponseLoggingChatDialect(
+                            OllamaChatDialect.getInstance(), LlmConstants.PROVIDER_OLLAMA, false),
+                    -98);
+            ChatDialectManager.register(
+                    new RawResponseLoggingChatDialect(
+                            GeminiChatDialect.getInstance(), LlmConstants.PROVIDER_GEMINI, false),
+                    -97);
+            ChatDialectManager.register(
+                    new RawResponseLoggingChatDialect(
+                            AnthropicChatDialect.getInstance(),
+                            LlmConstants.PROVIDER_ANTHROPIC,
+                            false),
+                    -96);
         }
     }
 

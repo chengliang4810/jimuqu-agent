@@ -6,8 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.llm.SolonAiLlmGateway;
-import com.jimuqu.solon.claw.llm.dialect.LoggingOpenaiChatDialect;
-import com.jimuqu.solon.claw.llm.dialect.LoggingOpenaiResponsesDialect;
+import com.jimuqu.solon.claw.llm.dialect.RawResponseLoggingChatDialect;
 import java.lang.reflect.Method;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
@@ -48,7 +47,7 @@ public class SolonAiLlmGatewayConfigTest {
     }
 
     @Test
-    void shouldUseLoggingDialectForOpenaiResponsesProvider() throws Exception {
+    void shouldUseRawResponseLoggingDialectForOpenaiResponsesProvider() throws Exception {
         AppConfig config = new AppConfig();
         config.getLlm().setProvider("openai-responses");
         config.getLlm().setApiUrl("https://example.com/v1/responses");
@@ -62,11 +61,13 @@ public class SolonAiLlmGatewayConfigTest {
 
         ChatModel chatModel = (ChatModel) buildChatModel.invoke(gateway, config.getLlm());
 
-        assertThat(chatModel.getDialect()).isInstanceOf(LoggingOpenaiResponsesDialect.class);
+        assertThat(chatModel.getDialect()).isInstanceOf(RawResponseLoggingChatDialect.class);
+        assertThat(((RawResponseLoggingChatDialect) chatModel.getDialect()).getDialectName())
+                .isEqualTo("openai-responses");
     }
 
     @Test
-    void shouldUseLoggingDialectForOpenaiProvider() throws Exception {
+    void shouldUseRawResponseLoggingDialectForOpenaiProvider() throws Exception {
         AppConfig config = new AppConfig();
         config.getLlm().setProvider("openai");
         config.getLlm().setDialect("openai");
@@ -81,6 +82,36 @@ public class SolonAiLlmGatewayConfigTest {
 
         ChatModel chatModel = (ChatModel) buildChatModel.invoke(gateway, config.getLlm());
 
-        assertThat(chatModel.getDialect()).isInstanceOf(LoggingOpenaiChatDialect.class);
+        assertThat(chatModel.getDialect()).isInstanceOf(RawResponseLoggingChatDialect.class);
+        assertThat(((RawResponseLoggingChatDialect) chatModel.getDialect()).getDialectName())
+                .isEqualTo("openai");
+    }
+
+    @Test
+    void shouldUseRawResponseLoggingDialectForAllSupportedProviders() throws Exception {
+        assertLoggingDialect("ollama", "http://localhost:11434/api/chat", "llama3");
+        assertLoggingDialect("gemini", "https://generativelanguage.googleapis.com/v1beta", "gemini-pro");
+        assertLoggingDialect("anthropic", "https://api.anthropic.com/v1/messages", "claude-sonnet");
+    }
+
+    private void assertLoggingDialect(String provider, String apiUrl, String model)
+            throws Exception {
+        AppConfig config = new AppConfig();
+        config.getLlm().setProvider(provider);
+        config.getLlm().setDialect(provider);
+        config.getLlm().setApiUrl(apiUrl);
+        config.getLlm().setModel(model);
+
+        SolonAiLlmGateway gateway = new SolonAiLlmGateway(config);
+        Method buildChatModel =
+                SolonAiLlmGateway.class.getDeclaredMethod(
+                        "buildChatModel", AppConfig.LlmConfig.class);
+        buildChatModel.setAccessible(true);
+
+        ChatModel chatModel = (ChatModel) buildChatModel.invoke(gateway, config.getLlm());
+
+        assertThat(chatModel.getDialect()).isInstanceOf(RawResponseLoggingChatDialect.class);
+        assertThat(((RawResponseLoggingChatDialect) chatModel.getDialect()).getDialectName())
+                .isEqualTo(provider);
     }
 }
