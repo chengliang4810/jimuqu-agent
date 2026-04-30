@@ -72,7 +72,22 @@ http://127.0.0.1:8080
 docker compose up -d
 ```
 
-默认 Compose 会将本地 `./runtime` 挂载到容器内 `/app/runtime`，方便持久化运行数据。
+默认 Compose 会将本地 `./runtime` 挂载到容器内 `/app/runtime`，方便持久化运行数据。镜像内服务默认以非 root 用户 `solonclaw` 运行，UID/GID 为 `10000:10000`。如果从旧镜像或 root 容器迁移后看到 `/app/runtime is not writable`，先在服务器项目目录执行：
+
+```bash
+sudo mkdir -p runtime
+sudo chown -R 10000:10000 runtime
+sudo chmod -R u+rwX runtime
+docker compose up -d
+```
+
+如果你希望容器内用户匹配宿主机当前用户，也可以在启动前设置：
+
+```bash
+export SOLONCLAW_UID="$(id -u)"
+export SOLONCLAW_GID="$(id -g)"
+docker compose up -d
+```
 
 ## 配置
 

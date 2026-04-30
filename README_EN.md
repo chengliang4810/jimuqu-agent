@@ -72,7 +72,22 @@ On startup, the service creates a local `runtime/` directory for configuration, 
 docker compose up -d
 ```
 
-The default Compose file mounts local `./runtime` to `/app/runtime` inside the container for persistent runtime data.
+The default Compose file mounts local `./runtime` to `/app/runtime` inside the container for persistent runtime data. The image runs the service as the non-root `solonclaw` user by default, with UID/GID `10000:10000`. If you are migrating from an older image or a root-run container and see `/app/runtime is not writable`, run this from the server project directory:
+
+```bash
+sudo mkdir -p runtime
+sudo chown -R 10000:10000 runtime
+sudo chmod -R u+rwX runtime
+docker compose up -d
+```
+
+To align the container user with the current host user instead, set:
+
+```bash
+export SOLONCLAW_UID="$(id -u)"
+export SOLONCLAW_GID="$(id -g)"
+docker compose up -d
+```
 
 ## Configuration
 
