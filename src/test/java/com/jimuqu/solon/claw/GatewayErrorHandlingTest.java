@@ -26,8 +26,7 @@ public class GatewayErrorHandlingTest {
                         env.deliveryService,
                         env.sessionRepository,
                         env.gatewayAuthorizationService,
-                        new NoopSkillLearningService(),
-                        env.memoryManager);
+                        new NoopSkillLearningService());
 
         GatewayMessage message = env.message("chat-a", "user-a", "改为gpt-5.4吧");
         GatewayReply reply = gatewayService.handle(message);

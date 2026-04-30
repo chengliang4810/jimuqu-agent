@@ -55,6 +55,46 @@ public class MemoryAndSkillsTest {
     }
 
     @Test
+    void shouldSyncSuccessfulTurnsIntoTodayMemory() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+
+        env.memoryManager.syncTurn("MEMORY:daily-room:daily-user", "记住今天的排查结论", "已经确认会写入今日记忆");
+
+        String today = env.memoryService.read("today");
+        assertThat(today).contains("# ");
+        assertThat(today).contains("MEMORY:daily-room:daily-user");
+        assertThat(today).contains("记住今天的排查结论");
+        assertThat(today).contains("已经确认会写入今日记忆");
+    }
+
+    @Test
+    void shouldUpdateTodayMemoryAfterGatewayReply() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+
+        env.send("memory-chat", "memory-user", "hello");
+        env.send("memory-chat", "memory-user", "/pairing claim-admin");
+        env.send("memory-chat", "memory-user", "检查记忆文件自动维护");
+
+        String today = env.memoryService.read("today");
+        assertThat(today).contains("MEMORY:memory-chat:memory-user");
+        assertThat(today).contains("检查记忆文件自动维护");
+        assertThat(today).contains("echo:检查记忆文件自动维护");
+    }
+
+    @Test
+    void shouldUpdateTodayMemoryWhenOrchestratorIsCalledDirectly() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+
+        env.conversationOrchestrator.handleIncoming(
+                env.message("dashboard", "direct-session", "dashboard 直接调用也要维护记忆"));
+
+        String today = env.memoryService.read("today");
+        assertThat(today).contains("MEMORY:dashboard:direct-session");
+        assertThat(today).contains("dashboard 直接调用也要维护记忆");
+        assertThat(today).contains("echo:dashboard 直接调用也要维护记忆");
+    }
+
+    @Test
     void shouldRejectTransientMemoryEntries() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
 
@@ -134,12 +174,15 @@ public class MemoryAndSkillsTest {
 
         String addResult = tools.memory("add", "memory", "长期偏好：输出中文", null);
         String readResult = tools.memory("read", "memory", null, null);
+        String todayResult = tools.memory("add", "today", "今日完成记忆写入验证", null);
 
         assertThat(addResult).contains("\"success\":true");
         assertThat(addResult).contains("\"action\":\"add\"");
         assertThat(readResult).contains("\"success\":true");
         assertThat(readResult).contains("\"content\"");
         assertThat(readResult).contains("长期偏好：输出中文");
+        assertThat(todayResult).contains("\"success\":true");
+        assertThat(env.memoryService.read("today")).contains("今日完成记忆写入验证");
     }
 
     @Test

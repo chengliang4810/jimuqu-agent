@@ -35,8 +35,7 @@ public class GatewayResilienceTest {
                                     GatewayReply reply) {
                                 throw new IllegalStateException("learning scheduler boom");
                             }
-                        },
-                        env.memoryManager);
+                        });
 
         GatewayReply reply = service.handle(env.message("room", "user", "hello"));
 
@@ -81,8 +80,7 @@ public class GatewayResilienceTest {
                                     SessionRecord session,
                                     GatewayMessage message,
                                     GatewayReply reply) {}
-                        },
-                        env.memoryManager);
+                        });
 
         GatewayMessage firstMessage = env.message("room", "user", "hello");
         firstMessage.setThreadId("msg-1");

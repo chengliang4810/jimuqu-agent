@@ -15,6 +15,7 @@ import com.jimuqu.solon.claw.core.service.ConversationOrchestrator;
 import com.jimuqu.solon.claw.core.service.DelegationService;
 import com.jimuqu.solon.claw.core.service.DeliveryService;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
+import com.jimuqu.solon.claw.core.service.MemoryManager;
 import com.jimuqu.solon.claw.core.service.MemoryService;
 import com.jimuqu.solon.claw.core.service.SessionSearchService;
 import com.jimuqu.solon.claw.core.service.SkillHubService;
@@ -180,7 +181,8 @@ public class ToolConfiguration {
             DangerousCommandApprovalService dangerousCommandApprovalService,
             AgentRunSupervisor agentRunSupervisor,
             RuntimeFooterService runtimeFooterService,
-            AgentRuntimeService agentRuntimeService) {
+            AgentRuntimeService agentRuntimeService,
+            MemoryManager memoryManager) {
         ConversationOrchestrator orchestrator =
                 new DefaultConversationOrchestrator(
                         sessionRepository,
@@ -194,7 +196,8 @@ public class ToolConfiguration {
                         dangerousCommandApprovalService,
                         agentRunSupervisor,
                         runtimeFooterService,
-                        agentRuntimeService);
+                        agentRuntimeService,
+                        memoryManager);
         holder.set(orchestrator);
         return orchestrator;
     }

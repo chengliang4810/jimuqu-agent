@@ -18,10 +18,10 @@ public class MemoryTools {
     @ToolMapping(
             name = "memory",
             description =
-                    "Manage persistent memory. action supports add, replace, remove, read. target supports memory or user.")
+                    "Manage persistent memory. action supports add, replace, remove, read. target supports memory, user, or today.")
     public String memory(
             @Param(name = "action", description = "操作类型：add、replace、remove、read") String action,
-            @Param(name = "target", description = "目标存储：memory 或 user") String target,
+            @Param(name = "target", description = "目标存储：memory、user 或 today") String target,
             @Param(name = "content", description = "新增或替换的内容", required = false) String content,
             @Param(name = "oldText", description = "replace/remove 时用于匹配旧条目的文本", required = false)
                     String oldText)

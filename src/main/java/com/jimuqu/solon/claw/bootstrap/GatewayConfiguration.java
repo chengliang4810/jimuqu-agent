@@ -191,7 +191,6 @@ public class GatewayConfiguration {
             SessionRepository sessionRepository,
             GatewayAuthorizationService gatewayAuthorizationService,
             SkillLearningService skillLearningService,
-            MemoryManager memoryManager,
             ChannelConnectionManager channelConnectionManager) {
         final DefaultGatewayService service =
                 new DefaultGatewayService(
@@ -200,8 +199,7 @@ public class GatewayConfiguration {
                         deliveryService,
                         sessionRepository,
                         gatewayAuthorizationService,
-                        skillLearningService,
-                        memoryManager);
+                        skillLearningService);
 
         channelConnectionManager.bindInboundHandler(
                 new InboundMessageHandler() {

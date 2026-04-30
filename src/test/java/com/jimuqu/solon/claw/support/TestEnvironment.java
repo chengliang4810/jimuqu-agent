@@ -300,7 +300,8 @@ public class TestEnvironment {
                         dangerousCommandApprovalService,
                         agentRunSupervisor,
                         runtimeFooterService,
-                        agentRuntimeService);
+                        agentRuntimeService,
+                        memoryManager);
         holder.set(orchestrator);
         SkillLearningService skillLearningService =
                 new AsyncSkillLearningService(
@@ -339,8 +340,7 @@ public class TestEnvironment {
                         deliveryService,
                         sessionRepository,
                         gatewayAuthorizationService,
-                        skillLearningService,
-                        memoryManager);
+                        skillLearningService);
         return new TestEnvironment(
                 config,
                 memoryAdapter,

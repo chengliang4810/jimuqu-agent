@@ -16,6 +16,7 @@ import com.jimuqu.solon.claw.core.service.ConversationEventSink;
 import com.jimuqu.solon.claw.core.service.ConversationOrchestrator;
 import com.jimuqu.solon.claw.core.service.DeliveryService;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
+import com.jimuqu.solon.claw.core.service.MemoryManager;
 import com.jimuqu.solon.claw.core.service.ToolRegistry;
 import com.jimuqu.solon.claw.gateway.feedback.ConversationFeedbackSink;
 import com.jimuqu.solon.claw.gateway.feedback.GatewayConversationFeedbackSink;
@@ -70,6 +71,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     private final AgentRunSupervisor agentRunSupervisor;
     private final RuntimeFooterService runtimeFooterService;
     private final AgentRuntimeService agentRuntimeService;
+    private final MemoryManager memoryManager;
     private final ConcurrentMap<String, Object> sourceLocks =
             new ConcurrentHashMap<String, Object>();
 
@@ -97,6 +99,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
                 dangerousCommandApprovalService,
                 agentRunSupervisor,
                 runtimeFooterService,
+                null,
                 null);
     }
 
@@ -113,6 +116,36 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             AgentRunSupervisor agentRunSupervisor,
             RuntimeFooterService runtimeFooterService,
             AgentRuntimeService agentRuntimeService) {
+        this(
+                sessionRepository,
+                contextService,
+                contextCompressionService,
+                llmGateway,
+                toolRegistry,
+                deliveryService,
+                displaySettingsService,
+                runtimeSettingsService,
+                dangerousCommandApprovalService,
+                agentRunSupervisor,
+                runtimeFooterService,
+                agentRuntimeService,
+                null);
+    }
+
+    public DefaultConversationOrchestrator(
+            SessionRepository sessionRepository,
+            ContextService contextService,
+            ContextCompressionService contextCompressionService,
+            LlmGateway llmGateway,
+            ToolRegistry toolRegistry,
+            DeliveryService deliveryService,
+            DisplaySettingsService displaySettingsService,
+            RuntimeSettingsService runtimeSettingsService,
+            DangerousCommandApprovalService dangerousCommandApprovalService,
+            AgentRunSupervisor agentRunSupervisor,
+            RuntimeFooterService runtimeFooterService,
+            AgentRuntimeService agentRuntimeService,
+            MemoryManager memoryManager) {
         this.sessionRepository = sessionRepository;
         this.contextService = contextService;
         this.contextCompressionService = contextCompressionService;
@@ -125,6 +158,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         this.agentRunSupervisor = agentRunSupervisor;
         this.runtimeFooterService = runtimeFooterService;
         this.agentRuntimeService = agentRuntimeService;
+        this.memoryManager = memoryManager;
     }
 
     public GatewayReply handleIncoming(GatewayMessage message) throws Exception {
@@ -199,6 +233,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             finalReply = decorateFinalReply(finalReply, feedbackTarget.getPlatform(), outcome);
             feedbackSink.onFinalReply(finalReply);
             eventSink.onRunCompleted(session.getSessionId(), finalReply, outcome.getResult());
+            syncMemory(session.getSourceKey(), null, finalReply);
             GatewayReply reply = GatewayReply.ok(finalReply);
             reply.setSessionId(session.getSessionId());
             reply.setBranchName(session.getBranchName());
@@ -288,6 +323,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         }
         feedbackSink.onFinalReply(finalReply);
         eventSink.onRunCompleted(session.getSessionId(), finalReply, outcome.getResult());
+        syncMemory(message.sourceKey(), effectiveUserText, finalReply);
         GatewayReply reply = GatewayReply.ok(finalReply);
         reply.setSessionId(session.getSessionId());
         reply.setBranchName(session.getBranchName());
@@ -378,6 +414,17 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
 
         reply.getChannelExtras()
                 .putAll(dangerousCommandApprovalService.buildDeliveryExtras(platform, pending));
+    }
+
+    private void syncMemory(String sourceKey, String userMessage, String finalReply) {
+        if (memoryManager == null) {
+            return;
+        }
+        try {
+            memoryManager.syncTurn(sourceKey, userMessage, finalReply);
+        } catch (Exception e) {
+            log.warn("Memory sync failed: sourceKey={}", sourceKey, e);
+        }
     }
 
     private String extractText(AssistantMessage assistantMessage) {

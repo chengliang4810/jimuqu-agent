@@ -50,9 +50,13 @@ public class FileMemoryService implements MemoryService {
     }
 
     @Override
-    public String add(String target, String content) throws Exception {
+    public synchronized String add(String target, String content) throws Exception {
         if (StrUtil.isBlank(content)) {
             return "记忆内容不能为空。";
+        }
+
+        if (MemoryConstants.TARGET_TODAY.equalsIgnoreCase(target)) {
+            return appendTodayEntry(content);
         }
 
         String normalized = normalizeEntry(content);
@@ -69,7 +73,8 @@ public class FileMemoryService implements MemoryService {
     }
 
     @Override
-    public String replace(String target, String oldText, String newContent) throws Exception {
+    public synchronized String replace(String target, String oldText, String newContent)
+            throws Exception {
         if (StrUtil.isBlank(oldText) || StrUtil.isBlank(newContent)) {
             return "replace 需要 oldText 和 newContent。";
         }
@@ -98,7 +103,7 @@ public class FileMemoryService implements MemoryService {
     }
 
     @Override
-    public String remove(String target, String matchText) throws Exception {
+    public synchronized String remove(String target, String matchText) throws Exception {
         if (StrUtil.isBlank(matchText)) {
             return "remove 需要 matchText。";
         }
@@ -214,6 +219,44 @@ public class FileMemoryService implements MemoryService {
             return "";
         }
         return FileUtil.readUtf8String(file).trim();
+    }
+
+    private String appendTodayEntry(String content) {
+        String normalized = normalizeDailyEntry(content);
+        if (StrUtil.isBlank(normalized)) {
+            return "今日记忆内容不能为空。";
+        }
+
+        File file = todayMemoryFile();
+        if (!file.exists() || StrUtil.isBlank(FileUtil.readUtf8String(file))) {
+            FileUtil.writeUtf8String(
+                    "# "
+                            + LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+                            + System.lineSeparator()
+                            + System.lineSeparator(),
+                    file);
+        }
+
+        String existing = FileUtil.readUtf8String(file);
+        if (existing.contains(normalized)) {
+            return "今日记忆已存在。";
+        }
+
+        StringBuilder entry = new StringBuilder();
+        if (!existing.endsWith(System.lineSeparator())) {
+            entry.append(System.lineSeparator());
+        }
+        entry.append("- ").append(normalized).append(System.lineSeparator());
+        FileUtil.appendUtf8String(entry.toString(), file);
+        return "已写入 " + MemoryConstants.TARGET_TODAY + "。";
+    }
+
+    private String normalizeDailyEntry(String content) {
+        String normalized = normalizeEntry(content);
+        if (normalized.length() > 500) {
+            return normalized.substring(0, 500).trim() + "...";
+        }
+        return normalized;
     }
 
     private File memoryDir() {

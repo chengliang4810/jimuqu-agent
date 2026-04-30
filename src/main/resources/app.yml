@@ -45,7 +45,7 @@ solonclaw.learning.enabled: true
 solonclaw.learning.toolCallThreshold: 5
 
 # HEARTBEAT.md 周期轮询
-solonclaw.agent.heartbeat.intervalMinutes: 0
+solonclaw.agent.heartbeat.intervalMinutes: 15
 
 # 文件快照与回滚
 solonclaw.rollback.enabled: true
