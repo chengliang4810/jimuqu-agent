@@ -24,14 +24,22 @@ public class SessionUsageTrackingTest {
                 env.sessionRepository.getBoundSession("MEMORY:usage-chat:usage-user");
         assertThat(session.getLastInputTokens()).isGreaterThan(0L);
         assertThat(session.getLastOutputTokens()).isGreaterThan(0L);
+        assertThat(session.getLastCacheReadTokens()).isGreaterThan(0L);
+        assertThat(session.getLastCacheWriteTokens()).isGreaterThan(0L);
         assertThat(session.getLastTotalTokens())
-                .isEqualTo(session.getLastInputTokens() + session.getLastOutputTokens());
+                .isEqualTo(
+                        session.getLastInputTokens()
+                                + session.getLastOutputTokens()
+                                + session.getLastCacheReadTokens()
+                                + session.getLastCacheWriteTokens());
         assertThat(session.getCumulativeTotalTokens()).isEqualTo(session.getLastTotalTokens());
         assertThat(session.getLastResolvedModel()).isEqualTo("gpt-5.4");
 
         GatewayReply usageReply = env.send("usage-chat", "usage-user", "/usage");
         assertThat(usageReply.getContent())
                 .contains("cumulative_total_tokens=")
+                .contains("cumulative_cache_write_tokens=")
+                .contains("last_cache_write_tokens=")
                 .contains("last_total_tokens=");
 
         DashboardSessionService sessionService = new DashboardSessionService(env.sessionRepository);
@@ -56,6 +64,8 @@ public class SessionUsageTrackingTest {
         Map<String, Object> totals = (Map<String, Object>) analytics.get("totals");
         assertThat(((Number) totals.get("total_input")).longValue()).isGreaterThan(0L);
         assertThat(((Number) totals.get("total_output")).longValue()).isGreaterThan(0L);
+        assertThat(((Number) totals.get("total_cache_read")).longValue()).isGreaterThan(0L);
+        assertThat(((Number) totals.get("total_cache_write")).longValue()).isGreaterThan(0L);
         assertThat(((Number) totals.get("total_sessions")).intValue()).isGreaterThanOrEqualTo(1);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> daily = (List<Map<String, Object>>) analytics.get("daily");
@@ -65,8 +75,12 @@ public class SessionUsageTrackingTest {
                         day -> {
                             long tokens =
                                     ((Number) day.get("input_tokens")).longValue()
-                                            + ((Number) day.get("output_tokens")).longValue();
+                                            + ((Number) day.get("output_tokens")).longValue()
+                                            + ((Number) day.get("cache_read_tokens")).longValue()
+                                            + ((Number) day.get("cache_write_tokens")).longValue();
                             assertThat(tokens).isGreaterThan(0L);
+                            assertThat(((Number) day.get("cache_write_tokens")).longValue())
+                                    .isGreaterThanOrEqualTo(0L);
                             assertThat(((Number) day.get("sessions")).intValue())
                                     .isGreaterThanOrEqualTo(1);
                         });

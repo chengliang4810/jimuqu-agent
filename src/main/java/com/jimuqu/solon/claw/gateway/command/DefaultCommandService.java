@@ -1293,6 +1293,9 @@ public class DefaultCommandService implements CommandService {
         buffer.append("last_cache_read_tokens=")
                 .append(session.getLastCacheReadTokens())
                 .append('\n');
+        buffer.append("last_cache_write_tokens=")
+                .append(session.getLastCacheWriteTokens())
+                .append('\n');
         buffer.append("last_total_tokens=").append(session.getLastTotalTokens()).append('\n');
         buffer.append("cumulative_input_tokens=")
                 .append(session.getCumulativeInputTokens())
@@ -1305,6 +1308,9 @@ public class DefaultCommandService implements CommandService {
                 .append('\n');
         buffer.append("cumulative_cache_read_tokens=")
                 .append(session.getCumulativeCacheReadTokens())
+                .append('\n');
+        buffer.append("cumulative_cache_write_tokens=")
+                .append(session.getCumulativeCacheWriteTokens())
                 .append('\n');
         buffer.append("cumulative_total_tokens=")
                 .append(session.getCumulativeTotalTokens())

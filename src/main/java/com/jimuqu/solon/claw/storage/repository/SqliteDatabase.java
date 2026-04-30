@@ -138,11 +138,13 @@ public class SqliteDatabase {
                             + "last_output_tokens integer not null default 0,"
                             + "last_reasoning_tokens integer not null default 0,"
                             + "last_cache_read_tokens integer not null default 0,"
+                            + "last_cache_write_tokens integer not null default 0,"
                             + "last_total_tokens integer not null default 0,"
                             + "cumulative_input_tokens integer not null default 0,"
                             + "cumulative_output_tokens integer not null default 0,"
                             + "cumulative_reasoning_tokens integer not null default 0,"
                             + "cumulative_cache_read_tokens integer not null default 0,"
+                            + "cumulative_cache_write_tokens integer not null default 0,"
                             + "cumulative_total_tokens integer not null default 0,"
                             + "last_usage_at integer not null default 0,"
                             + "last_resolved_provider text,"
@@ -233,6 +235,11 @@ public class SqliteDatabase {
             }
             try {
                 statement.execute(
+                        "alter table sessions add column last_cache_write_tokens integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute(
                         "alter table sessions add column last_total_tokens integer not null default 0");
             } catch (Exception ignored) {
             }
@@ -254,6 +261,11 @@ public class SqliteDatabase {
             try {
                 statement.execute(
                         "alter table sessions add column cumulative_cache_read_tokens integer not null default 0");
+            } catch (Exception ignored) {
+            }
+            try {
+                statement.execute(
+                        "alter table sessions add column cumulative_cache_write_tokens integer not null default 0");
             } catch (Exception ignored) {
             }
             try {

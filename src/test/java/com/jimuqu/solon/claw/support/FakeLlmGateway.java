@@ -35,7 +35,13 @@ public class FakeLlmGateway implements LlmGateway {
         result.setModel("gpt-5.4");
         result.setInputTokens(Math.max(1, userMessage == null ? 0 : userMessage.length()));
         result.setOutputTokens(Math.max(1, ("echo:" + userMessage).length()));
-        result.setTotalTokens(result.getInputTokens() + result.getOutputTokens());
+        result.setCacheReadTokens(2L);
+        result.setCacheWriteTokens(1L);
+        result.setTotalTokens(
+                result.getInputTokens()
+                        + result.getOutputTokens()
+                        + result.getCacheReadTokens()
+                        + result.getCacheWriteTokens());
         return result;
     }
 
@@ -58,7 +64,9 @@ public class FakeLlmGateway implements LlmGateway {
         result.setModel("gpt-5.4");
         result.setInputTokens(1L);
         result.setOutputTokens("echo:resume".length());
-        result.setTotalTokens(result.getInputTokens() + result.getOutputTokens());
+        result.setCacheReadTokens(1L);
+        result.setTotalTokens(
+                result.getInputTokens() + result.getOutputTokens() + result.getCacheReadTokens());
         return result;
     }
 }

@@ -16,10 +16,7 @@ export interface SessionSummary {
   cache_read_tokens: number
   cache_write_tokens: number
   reasoning_tokens: number
-  billing_provider: string | null
-  estimated_cost_usd: number
-  actual_cost_usd: number | null
-  cost_status: string
+  provider: string | null
   parent_session_id?: string | null
   branch_name?: string | null
   compressed_summary?: string | null
@@ -68,6 +65,7 @@ interface DashboardSessionSummary {
   output_tokens: number
   reasoning_tokens?: number
   cache_read_tokens?: number
+  cache_write_tokens?: number
   total_tokens?: number
   preview: string | null
   parent_session_id?: string | null
@@ -87,6 +85,7 @@ interface DashboardSessionDetail {
   output_tokens: number
   reasoning_tokens: number
   cache_read_tokens: number
+  cache_write_tokens: number
   total_tokens: number
   last_total_tokens: number
   last_usage_at: number
@@ -126,12 +125,9 @@ function mapSummary(s: DashboardSessionSummary): SessionSummary {
     input_tokens: s.input_tokens,
     output_tokens: s.output_tokens,
     cache_read_tokens: s.cache_read_tokens || 0,
-    cache_write_tokens: 0,
+    cache_write_tokens: s.cache_write_tokens || 0,
     reasoning_tokens: s.reasoning_tokens || 0,
-    billing_provider: s.provider || null,
-    estimated_cost_usd: 0,
-    actual_cost_usd: null,
-    cost_status: 'unavailable',
+    provider: s.provider || null,
     parent_session_id: s.parent_session_id || null,
     branch_name: s.branch_name || null,
     compressed_summary: s.compressed_summary || null,
@@ -203,10 +199,7 @@ export async function searchSessions(q: string, source?: string, limit?: number)
           cache_read_tokens: 0,
           cache_write_tokens: 0,
           reasoning_tokens: 0,
-          billing_provider: null,
-          estimated_cost_usd: 0,
-          actual_cost_usd: null,
-          cost_status: 'unavailable',
+          provider: null,
           parent_session_id: null,
           branch_name: null,
           compressed_summary: null,
@@ -242,12 +235,9 @@ export async function fetchSession(id: string): Promise<SessionDetail | null> {
       input_tokens: detail.input_tokens,
       output_tokens: detail.output_tokens,
       cache_read_tokens: detail.cache_read_tokens,
-      cache_write_tokens: 0,
+      cache_write_tokens: detail.cache_write_tokens,
       reasoning_tokens: detail.reasoning_tokens,
-      billing_provider: detail.provider || null,
-      estimated_cost_usd: 0,
-      actual_cost_usd: null,
-      cost_status: 'unavailable',
+      provider: detail.provider || null,
       parent_session_id: detail.parent_session_id || null,
       branch_name: detail.branch_name || null,
       compressed_summary: detail.compressed_summary || null,

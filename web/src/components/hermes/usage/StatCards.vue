@@ -11,11 +11,6 @@ function formatTokens(n: number): string {
   return String(n)
 }
 
-function formatCost(n: number): string {
-  if (n <= 0) return '--'
-  if (n < 0.01) return '<$0.01'
-  return '$' + n.toFixed(2)
-}
 </script>
 
 <template>
@@ -34,14 +29,11 @@ function formatCost(n: number): string {
       <div class="stat-sub">{{ t('usage.avgPerDay', { n: usageStore.avgSessionsPerDay.toFixed(1) }) }}</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">{{ t('usage.estimatedCost') }}</div>
-      <div class="stat-value">{{ formatCost(usageStore.estimatedCost) }}</div>
-    </div>
-    <div class="stat-card">
       <div class="stat-label">{{ t('usage.cacheHitRate') }}</div>
       <div class="stat-value">{{ usageStore.cacheHitRate !== null ? usageStore.cacheHitRate.toFixed(1) + '%' : '--' }}</div>
       <div class="stat-sub" v-if="usageStore.cacheHitRate !== null">
-        {{ formatTokens(usageStore.totalCacheTokens) }} {{ t('usage.tokens') }}
+        {{ formatTokens(usageStore.totalCacheReadTokens) }} {{ t('usage.cacheRead') }} /
+        {{ formatTokens(usageStore.totalCacheWriteTokens) }} {{ t('usage.cacheWrite') }}
       </div>
     </div>
   </div>
@@ -52,7 +44,7 @@ function formatCost(n: number): string {
 
 .stat-cards {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-bottom: 20px;
 }

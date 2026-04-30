@@ -11,12 +11,6 @@ function formatTokens(n: number): string {
   return String(n)
 }
 
-function formatCost(n: number): string {
-  if (n <= 0) return '--'
-  if (n < 0.01) return '<$0.01'
-  return '$' + n.toFixed(2)
-}
-
 const maxTokens = computed(() =>
   Math.max(...usageStore.dailyUsage.map(d => d.tokens), 1),
 )
@@ -45,9 +39,9 @@ import { computed } from 'vue'
         <div class="bar-tooltip">
           <div class="tooltip-date">{{ d.date }}</div>
           <div class="tooltip-row">{{ t('usage.tokens') }}: {{ formatTokens(d.tokens) }}</div>
-          <div class="tooltip-row">{{ t('usage.cache') }}: {{ formatTokens(d.cache) }}</div>
+          <div class="tooltip-row">{{ t('usage.cacheRead') }}: {{ formatTokens(d.cacheRead) }}</div>
+          <div class="tooltip-row">{{ t('usage.cacheWrite') }}: {{ formatTokens(d.cacheWrite) }}</div>
           <div class="tooltip-row">{{ t('usage.sessions') }}: {{ d.sessions }}</div>
-          <div class="tooltip-row">{{ t('usage.cost') }}: {{ formatCost(d.cost) }}</div>
         </div>
       </div>
     </div>
@@ -62,18 +56,18 @@ import { computed } from 'vue'
           <tr>
             <th>{{ t('usage.date') }}</th>
             <th>{{ t('usage.tokens') }}</th>
-            <th>{{ t('usage.cache') }}</th>
+            <th>{{ t('usage.cacheRead') }}</th>
+            <th>{{ t('usage.cacheWrite') }}</th>
             <th>{{ t('usage.sessions') }}</th>
-            <th>{{ t('usage.cost') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="d in [...usageStore.dailyUsage].reverse().slice(0, 30)" :key="d.date">
             <td>{{ d.date }}</td>
             <td>{{ formatTokens(d.tokens) }}</td>
-            <td>{{ formatTokens(d.cache) }}</td>
+            <td>{{ formatTokens(d.cacheRead) }}</td>
+            <td>{{ formatTokens(d.cacheWrite) }}</td>
             <td>{{ d.sessions }}</td>
-            <td>{{ formatCost(d.cost) }}</td>
           </tr>
         </tbody>
       </table>

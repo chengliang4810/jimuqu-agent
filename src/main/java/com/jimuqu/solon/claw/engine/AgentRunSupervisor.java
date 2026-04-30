@@ -609,6 +609,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
         session.setLastOutputTokens(result.getOutputTokens());
         session.setLastReasoningTokens(result.getReasoningTokens());
         session.setLastCacheReadTokens(result.getCacheReadTokens());
+        session.setLastCacheWriteTokens(result.getCacheWriteTokens());
         session.setLastTotalTokens(result.getTotalTokens());
         session.setCumulativeInputTokens(
                 session.getCumulativeInputTokens() + Math.max(0L, result.getInputTokens()));
@@ -618,11 +619,16 @@ public class AgentRunSupervisor implements AgentRunControlService {
                 session.getCumulativeReasoningTokens() + Math.max(0L, result.getReasoningTokens()));
         session.setCumulativeCacheReadTokens(
                 session.getCumulativeCacheReadTokens() + Math.max(0L, result.getCacheReadTokens()));
+        session.setCumulativeCacheWriteTokens(
+                session.getCumulativeCacheWriteTokens()
+                        + Math.max(0L, result.getCacheWriteTokens()));
         session.setCumulativeTotalTokens(
                 session.getCumulativeTotalTokens() + Math.max(0L, result.getTotalTokens()));
         if (result.getTotalTokens() > 0
                 || result.getInputTokens() > 0
-                || result.getOutputTokens() > 0) {
+                || result.getOutputTokens() > 0
+                || result.getCacheReadTokens() > 0
+                || result.getCacheWriteTokens() > 0) {
             session.setLastUsageAt(System.currentTimeMillis());
         }
         if (StrUtil.isNotBlank(result.getProvider())) {
@@ -645,6 +651,9 @@ public class AgentRunSupervisor implements AgentRunControlService {
                 Math.max(0L, extra.getReasoningTokens()) + Math.max(0L, base.getReasoningTokens()));
         extra.setCacheReadTokens(
                 Math.max(0L, extra.getCacheReadTokens()) + Math.max(0L, base.getCacheReadTokens()));
+        extra.setCacheWriteTokens(
+                Math.max(0L, extra.getCacheWriteTokens())
+                        + Math.max(0L, base.getCacheWriteTokens()));
         extra.setTotalTokens(
                 Math.max(0L, extra.getTotalTokens()) + Math.max(0L, base.getTotalTokens()));
     }

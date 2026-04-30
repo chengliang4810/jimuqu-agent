@@ -9,7 +9,6 @@ export interface DisplayConfig {
   show_reasoning?: boolean
   streaming?: boolean
   inline_diffs?: boolean
-  show_cost?: boolean
   skin?: string
 }
 

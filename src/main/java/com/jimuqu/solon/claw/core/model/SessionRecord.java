@@ -69,6 +69,9 @@ public class SessionRecord {
     /** 最近一轮 cache read token。 */
     private long lastCacheReadTokens;
 
+    /** 最近一轮 cache write token。 */
+    private long lastCacheWriteTokens;
+
     /** 最近一轮总 token。 */
     private long lastTotalTokens;
 
@@ -83,6 +86,9 @@ public class SessionRecord {
 
     /** 累计 cache read token。 */
     private long cumulativeCacheReadTokens;
+
+    /** 累计 cache write token。 */
+    private long cumulativeCacheWriteTokens;
 
     /** 累计总 token。 */
     private long cumulativeTotalTokens;

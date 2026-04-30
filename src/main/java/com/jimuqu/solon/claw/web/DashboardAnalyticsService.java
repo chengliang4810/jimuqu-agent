@@ -43,13 +43,17 @@ public class DashboardAnalyticsService {
         Map<String, Long> dailyOutputTokens = new LinkedHashMap<String, Long>();
         Map<String, Long> dailyReasoningTokens = new LinkedHashMap<String, Long>();
         Map<String, Long> dailyCacheReadTokens = new LinkedHashMap<String, Long>();
+        Map<String, Long> dailyCacheWriteTokens = new LinkedHashMap<String, Long>();
         Map<String, Long> modelInputTokens = new LinkedHashMap<String, Long>();
         Map<String, Long> modelOutputTokens = new LinkedHashMap<String, Long>();
+        Map<String, Long> modelCacheReadTokens = new LinkedHashMap<String, Long>();
+        Map<String, Long> modelCacheWriteTokens = new LinkedHashMap<String, Long>();
         int totalInRange = 0;
         long totalInput = 0L;
         long totalOutput = 0L;
         long totalReasoning = 0L;
         long totalCacheRead = 0L;
+        long totalCacheWrite = 0L;
 
         for (SessionRecord record : records) {
             long usageAt =
@@ -70,6 +74,7 @@ public class DashboardAnalyticsService {
             addLong(dailyOutputTokens, dayKey, record.getCumulativeOutputTokens());
             addLong(dailyReasoningTokens, dayKey, record.getCumulativeReasoningTokens());
             addLong(dailyCacheReadTokens, dayKey, record.getCumulativeCacheReadTokens());
+            addLong(dailyCacheWriteTokens, dayKey, record.getCumulativeCacheWriteTokens());
 
             String modelKey =
                     normalizeModelLabel(
@@ -80,11 +85,14 @@ public class DashboardAnalyticsService {
                     modelSessions.containsKey(modelKey) ? modelSessions.get(modelKey) + 1 : 1);
             addLong(modelInputTokens, modelKey, record.getCumulativeInputTokens());
             addLong(modelOutputTokens, modelKey, record.getCumulativeOutputTokens());
+            addLong(modelCacheReadTokens, modelKey, record.getCumulativeCacheReadTokens());
+            addLong(modelCacheWriteTokens, modelKey, record.getCumulativeCacheWriteTokens());
             totalInRange++;
             totalInput += record.getCumulativeInputTokens();
             totalOutput += record.getCumulativeOutputTokens();
             totalReasoning += record.getCumulativeReasoningTokens();
             totalCacheRead += record.getCumulativeCacheReadTokens();
+            totalCacheWrite += record.getCumulativeCacheWriteTokens();
         }
 
         if (totalInRange <= 0) {
@@ -108,12 +116,15 @@ public class DashboardAnalyticsService {
                             ? dailyCacheReadTokens.get(dayKey)
                             : 0L);
             item.put(
+                    "cache_write_tokens",
+                    dailyCacheWriteTokens.containsKey(dayKey)
+                            ? dailyCacheWriteTokens.get(dayKey)
+                            : 0L);
+            item.put(
                     "reasoning_tokens",
                     dailyReasoningTokens.containsKey(dayKey)
                             ? dailyReasoningTokens.get(dayKey)
                             : 0L);
-            item.put("estimated_cost", 0.0D);
-            item.put("actual_cost", 0.0D);
             item.put("sessions", dailySessions.containsKey(dayKey) ? dailySessions.get(dayKey) : 0);
             daily.add(item);
             cursor = cursor.plusDays(1);
@@ -132,13 +143,28 @@ public class DashboardAnalyticsService {
                     modelOutputTokens.containsKey(entry.getKey())
                             ? modelOutputTokens.get(entry.getKey())
                             : 0L);
-            item.put("estimated_cost", 0.0D);
+            item.put(
+                    "cache_read_tokens",
+                    modelCacheReadTokens.containsKey(entry.getKey())
+                            ? modelCacheReadTokens.get(entry.getKey())
+                            : 0L);
+            item.put(
+                    "cache_write_tokens",
+                    modelCacheWriteTokens.containsKey(entry.getKey())
+                            ? modelCacheWriteTokens.get(entry.getKey())
+                            : 0L);
             item.put("sessions", entry.getValue());
             byModel.add(item);
         }
 
         totals =
-                createTotals(totalInRange, totalInput, totalOutput, totalCacheRead, totalReasoning);
+                createTotals(
+                        totalInRange,
+                        totalInput,
+                        totalOutput,
+                        totalCacheRead,
+                        totalCacheWrite,
+                        totalReasoning);
         return buildResponse(daily, byModel, totals);
     }
 
@@ -154,7 +180,7 @@ public class DashboardAnalyticsService {
     }
 
     private Map<String, Object> createTotals(int totalSessions) {
-        return createTotals(totalSessions, 0L, 0L, 0L, 0L);
+        return createTotals(totalSessions, 0L, 0L, 0L, 0L, 0L);
     }
 
     private Map<String, Object> createTotals(
@@ -162,14 +188,14 @@ public class DashboardAnalyticsService {
             long totalInput,
             long totalOutput,
             long totalCacheRead,
+            long totalCacheWrite,
             long totalReasoning) {
         Map<String, Object> totals = new LinkedHashMap<String, Object>();
         totals.put("total_input", totalInput);
         totals.put("total_output", totalOutput);
         totals.put("total_cache_read", totalCacheRead);
+        totals.put("total_cache_write", totalCacheWrite);
         totals.put("total_reasoning", totalReasoning);
-        totals.put("total_estimated_cost", 0.0D);
-        totals.put("total_actual_cost", 0.0D);
         totals.put("total_sessions", totalSessions);
         return totals;
     }

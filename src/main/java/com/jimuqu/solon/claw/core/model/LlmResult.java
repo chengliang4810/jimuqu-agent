@@ -37,6 +37,9 @@ public class LlmResult {
     /** 本轮累计 cache read token。 */
     private long cacheReadTokens;
 
+    /** 本轮累计 cache write token。 */
+    private long cacheWriteTokens;
+
     /** 本轮 ReAct/模型调用累计总 token。 */
     private long totalTokens;
 

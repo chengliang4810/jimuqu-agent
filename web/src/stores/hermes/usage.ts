@@ -5,15 +5,18 @@ import { computed, ref } from 'vue'
 interface DailyUsage {
   date: string
   tokens: number
-  cache: number
+  cacheRead: number
+  cacheWrite: number
+  cacheTotal: number
   sessions: number
-  cost: number
 }
 
 interface ModelUsage {
   model: string
   inputTokens: number
   outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
   cacheTokens: number
   totalTokens: number
   sessions: number
@@ -38,19 +41,25 @@ export const useUsageStore = defineStore('usage', () => {
 
   const totalOutputTokens = computed(() => analytics.value?.totals.total_output || 0)
 
-  const totalTokens = computed(() => totalInputTokens.value + totalOutputTokens.value)
-
   const totalSessions = computed(() => analytics.value?.totals.total_sessions || 0)
 
-  const totalCacheTokens = computed(() => analytics.value?.totals.total_cache_read || 0)
+  const totalCacheReadTokens = computed(() => analytics.value?.totals.total_cache_read || 0)
+
+  const totalCacheWriteTokens = computed(() => analytics.value?.totals.total_cache_write || 0)
+
+  const totalCacheTokens = computed(() => totalCacheReadTokens.value + totalCacheWriteTokens.value)
+
+  const totalPromptTokens = computed(() =>
+    totalInputTokens.value + totalCacheReadTokens.value + totalCacheWriteTokens.value,
+  )
+
+  const totalTokens = computed(() => totalPromptTokens.value + totalOutputTokens.value)
 
   const cacheHitRate = computed(() => {
-    const total = totalInputTokens.value
+    const total = totalPromptTokens.value
     if (total === 0) return null
-    return ((totalCacheTokens.value / total) * 100)
+    return ((totalCacheReadTokens.value / total) * 100)
   })
-
-  const estimatedCost = computed(() => analytics.value?.totals.total_estimated_cost || 0)
 
   const modelUsage = computed<ModelUsage[]>(() => {
     return (analytics.value?.by_model || [])
@@ -58,8 +67,14 @@ export const useUsageStore = defineStore('usage', () => {
         model: item.model || 'unknown',
         inputTokens: item.input_tokens || 0,
         outputTokens: item.output_tokens || 0,
-        cacheTokens: 0,
-        totalTokens: (item.input_tokens || 0) + (item.output_tokens || 0),
+        cacheReadTokens: item.cache_read_tokens || 0,
+        cacheWriteTokens: item.cache_write_tokens || 0,
+        cacheTokens: (item.cache_read_tokens || 0) + (item.cache_write_tokens || 0),
+        totalTokens:
+          (item.input_tokens || 0)
+          + (item.output_tokens || 0)
+          + (item.cache_read_tokens || 0)
+          + (item.cache_write_tokens || 0),
         sessions: item.sessions || 0,
       }))
       .sort((a, b) => b.totalTokens - a.totalTokens)
@@ -68,10 +83,15 @@ export const useUsageStore = defineStore('usage', () => {
   const dailyUsage = computed<DailyUsage[]>(() => {
     return (analytics.value?.daily || []).map((item) => ({
       date: item.day,
-      tokens: (item.input_tokens || 0) + (item.output_tokens || 0),
-      cache: item.cache_read_tokens || 0,
+      tokens:
+        (item.input_tokens || 0)
+        + (item.output_tokens || 0)
+        + (item.cache_read_tokens || 0)
+        + (item.cache_write_tokens || 0),
+      cacheRead: item.cache_read_tokens || 0,
+      cacheWrite: item.cache_write_tokens || 0,
+      cacheTotal: (item.cache_read_tokens || 0) + (item.cache_write_tokens || 0),
       sessions: item.sessions || 0,
-      cost: item.actual_cost || item.estimated_cost || 0,
     }))
   })
 
@@ -88,9 +108,10 @@ export const useUsageStore = defineStore('usage', () => {
     totalOutputTokens,
     totalTokens,
     totalSessions,
+    totalCacheReadTokens,
+    totalCacheWriteTokens,
     totalCacheTokens,
     cacheHitRate,
-    estimatedCost,
     modelUsage,
     dailyUsage,
     avgSessionsPerDay,

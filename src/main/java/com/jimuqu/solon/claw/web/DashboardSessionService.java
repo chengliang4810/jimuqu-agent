@@ -118,11 +118,13 @@ public class DashboardSessionService {
         result.put("output_tokens", record.getCumulativeOutputTokens());
         result.put("reasoning_tokens", record.getCumulativeReasoningTokens());
         result.put("cache_read_tokens", record.getCumulativeCacheReadTokens());
+        result.put("cache_write_tokens", record.getCumulativeCacheWriteTokens());
         result.put("total_tokens", record.getCumulativeTotalTokens());
         result.put("last_input_tokens", record.getLastInputTokens());
         result.put("last_output_tokens", record.getLastOutputTokens());
         result.put("last_reasoning_tokens", record.getLastReasoningTokens());
         result.put("last_cache_read_tokens", record.getLastCacheReadTokens());
+        result.put("last_cache_write_tokens", record.getLastCacheWriteTokens());
         result.put("last_total_tokens", record.getLastTotalTokens());
         result.put("last_usage_at", record.getLastUsageAt());
         result.put(
@@ -295,6 +297,7 @@ public class DashboardSessionService {
         result.put("output_tokens", record.getCumulativeOutputTokens());
         result.put("reasoning_tokens", record.getCumulativeReasoningTokens());
         result.put("cache_read_tokens", record.getCumulativeCacheReadTokens());
+        result.put("cache_write_tokens", record.getCumulativeCacheWriteTokens());
         result.put("total_tokens", record.getCumulativeTotalTokens());
         result.put("last_total_tokens", record.getLastTotalTokens());
         result.put("last_usage_at", record.getLastUsageAt());

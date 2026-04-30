@@ -24,6 +24,9 @@ function formatTokens(n: number): string {
             :style="{ width: (m.totalTokens / usageStore.modelUsage[0].totalTokens * 100) + '%' }"
           />
         </div>
+        <span class="model-cache">
+          {{ formatTokens(m.cacheReadTokens) }} / {{ formatTokens(m.cacheWriteTokens) }}
+        </span>
         <span class="model-tokens">{{ formatTokens(m.totalTokens) }}</span>
       </div>
     </div>
@@ -95,6 +98,14 @@ function formatTokens(n: number): string {
   font-size: 12px;
   color: $text-muted;
   width: 60px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.model-cache {
+  font-size: 11px;
+  color: $text-muted;
+  width: 86px;
   text-align: right;
   flex-shrink: 0;
 }

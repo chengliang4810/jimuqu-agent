@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import org.noear.solon.ai.AiUsage;
 import org.noear.solon.ai.agent.AgentSession;
 import org.noear.solon.ai.agent.AgentSessionProvider;
 import org.noear.solon.ai.agent.react.ReActAgent;
@@ -317,6 +318,7 @@ public class SolonAiLlmGateway implements LlmGateway {
                 session != null && StrUtil.isNotBlank(session.getModelOverride()));
         SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
         ChatConfig chatConfig = buildChatConfig(resolved);
+        UsageCollector usageCollector = new UsageCollector();
         ReActAgent agent =
                 buildHarnessReActAgent(
                         chatConfig,
@@ -325,7 +327,8 @@ public class SolonAiLlmGateway implements LlmGateway {
                         toolObjects,
                         agentSession,
                         feedbackSink,
-                        runContext);
+                        runContext,
+                        usageCollector);
         if (eventSink != null && eventSink != ConversationEventSink.noop()) {
             return callAgentStream(
                     agent,
@@ -335,7 +338,8 @@ public class SolonAiLlmGateway implements LlmGateway {
                     resume,
                     resolved,
                     feedbackSink,
-                    eventSink);
+                    eventSink,
+                    usageCollector);
         }
         ReActResponse response = callAgent(agent, agentSession, userMessage, resume);
 
@@ -349,6 +353,7 @@ public class SolonAiLlmGateway implements LlmGateway {
         result.setProvider(resolved.getProvider());
         result.setModel(StrUtil.blankToDefault(resolved.getModel(), ""));
         applyMetrics(result, response.getMetrics());
+        usageCollector.applyTo(result);
         logUsage(session, resolved, result);
         return result;
     }
@@ -379,7 +384,8 @@ public class SolonAiLlmGateway implements LlmGateway {
             boolean resume,
             AppConfig.LlmConfig resolved,
             ConversationFeedbackSink feedbackSink,
-            ConversationEventSink eventSink)
+            ConversationEventSink eventSink,
+            UsageCollector usageCollector)
             throws Exception {
         final StringBuilder emittedText = new StringBuilder();
         final ReActResponse[] finalResponse = new ReActResponse[1];
@@ -450,6 +456,9 @@ public class SolonAiLlmGateway implements LlmGateway {
         result.setModel(StrUtil.blankToDefault(resolved.getModel(), ""));
         if (finalResponse[0] != null) {
             applyMetrics(result, finalResponse[0].getMetrics());
+        }
+        if (usageCollector != null) {
+            usageCollector.applyTo(result);
         }
         logUsage(session, resolved, result);
         return result;
@@ -773,7 +782,8 @@ public class SolonAiLlmGateway implements LlmGateway {
             List<Object> toolObjects,
             SqliteAgentSession agentSession,
             ConversationFeedbackSink feedbackSink,
-            AgentRunContext runContext) {
+            AgentRunContext runContext,
+            UsageCollector usageCollector) {
         boolean delegateSession = isDelegateSession(agentSession);
         int maxSteps =
                 delegateSession
@@ -838,6 +848,9 @@ public class SolonAiLlmGateway implements LlmGateway {
             builder.defaultInterceptorAdd(
                     new TracingReActInterceptor(
                             runContext, appConfig.getTrace().getToolPreviewLength()));
+        }
+        if (usageCollector != null) {
+            builder.defaultInterceptorAdd(new UsageCollectingInterceptor(usageCollector));
         }
 
         for (Object toolObject : toolObjects) {
@@ -933,7 +946,9 @@ public class SolonAiLlmGateway implements LlmGateway {
     private void logUsage(SessionRecord session, AppConfig.LlmConfig resolved, LlmResult result) {
         if (result.getTotalTokens() <= 0
                 && result.getInputTokens() <= 0
-                && result.getOutputTokens() <= 0) {
+                && result.getOutputTokens() <= 0
+                && result.getCacheReadTokens() <= 0
+                && result.getCacheWriteTokens() <= 0) {
             log.info(
                     "LLM usage unavailable: provider={}, dialect={}, model={}, sessionId={}",
                     resolved.getProvider(),
@@ -944,13 +959,15 @@ public class SolonAiLlmGateway implements LlmGateway {
         }
 
         log.info(
-                "LLM usage: provider={}, dialect={}, model={}, sessionId={}, inputTokens={}, outputTokens={}, totalTokens={}",
+                "LLM usage: provider={}, dialect={}, model={}, sessionId={}, inputTokens={}, outputTokens={}, cacheReadTokens={}, cacheWriteTokens={}, totalTokens={}",
                 resolved.getProvider(),
                 resolved.getDialect(),
                 resolved.getModel(),
                 session == null ? "" : StrUtil.nullToEmpty(session.getSessionId()),
                 result.getInputTokens(),
                 result.getOutputTokens(),
+                result.getCacheReadTokens(),
+                result.getCacheWriteTokens(),
                 result.getTotalTokens());
     }
 
@@ -1144,6 +1161,60 @@ public class SolonAiLlmGateway implements LlmGateway {
         public void onObservation(
                 ReActTrace trace, String toolName, String result, long durationMs) {
             feedbackSink.onToolFinished(toolName, result, durationMs);
+        }
+    }
+
+    private static class UsageCollectingInterceptor implements ReActInterceptor {
+        private final UsageCollector usageCollector;
+
+        private UsageCollectingInterceptor(UsageCollector usageCollector) {
+            this.usageCollector = usageCollector;
+        }
+
+        @Override
+        public void onModelEnd(ReActTrace trace, ChatResponse resp) {
+            if (resp != null) {
+                usageCollector.add(resp.getUsage());
+            }
+        }
+    }
+
+    private static class UsageCollector {
+        private long promptTokens;
+        private long completionTokens;
+        private long totalTokens;
+        private long reasoningTokens;
+        private long cacheReadTokens;
+        private long cacheWriteTokens;
+
+        private synchronized void add(AiUsage usage) {
+            if (usage == null) {
+                return;
+            }
+            promptTokens += Math.max(0L, usage.promptTokens());
+            completionTokens += Math.max(0L, usage.completionTokens());
+            totalTokens += Math.max(0L, usage.totalTokens());
+            reasoningTokens += Math.max(0L, usage.thinkTokens());
+            cacheReadTokens += Math.max(0L, usage.cacheReadInputTokens());
+            cacheWriteTokens += Math.max(0L, usage.cacheCreationInputTokens());
+        }
+
+        private synchronized void applyTo(LlmResult result) {
+            if (result == null) {
+                return;
+            }
+            result.setCacheReadTokens(cacheReadTokens);
+            result.setCacheWriteTokens(cacheWriteTokens);
+            result.setReasoningTokens(reasoningTokens);
+            if (promptTokens > 0) {
+                result.setInputTokens(Math.max(0L, promptTokens - cacheReadTokens - cacheWriteTokens));
+            }
+            if (completionTokens > 0) {
+                result.setOutputTokens(completionTokens);
+            }
+            if (totalTokens > 0) {
+                result.setTotalTokens(totalTokens);
+            }
         }
     }
 
