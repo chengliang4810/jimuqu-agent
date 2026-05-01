@@ -423,6 +423,9 @@ public class GatewayRuntimeRefreshService {
                     "solonclaw.agent",
                     "solonclaw.agent.heartbeat",
                     "solonclaw.react",
+                    "solonclaw.trace",
+                    "solonclaw.task",
+                    "solonclaw.mcp",
                     "solonclaw.channels",
                     "solonclaw.channels.feishu",
                     "solonclaw.channels.dingtalk",
@@ -454,7 +457,15 @@ public class GatewayRuntimeRefreshService {
                     "solonclaw.react.delegateRetryMax",
                     "solonclaw.react.delegateRetryDelayMs",
                     "solonclaw.react.summarizationMaxMessages",
-                    "solonclaw.react.summarizationMaxTokens");
+                    "solonclaw.react.summarizationMaxTokens",
+                    "solonclaw.trace.retentionDays",
+                    "solonclaw.trace.maxAttempts",
+                    "solonclaw.trace.toolPreviewLength",
+                    "solonclaw.task.staleAfterMinutes",
+                    "solonclaw.task.subagentMaxConcurrency",
+                    "solonclaw.task.subagentMaxDepth",
+                    "solonclaw.task.toolOutputInlineLimit",
+                    "solonclaw.task.mediaCacheTtlHours");
 
     private static final Set<String> DOUBLE_KEYS =
             setOf(
@@ -474,7 +485,8 @@ public class GatewayRuntimeRefreshService {
                     "solonclaw.display.showReasoning",
                     "solonclaw.display.runtimeFooter.enabled",
                     "solonclaw.gateway.allowAllUsers",
-                    "solonclaw.react.summarizationEnabled");
+                    "solonclaw.react.summarizationEnabled",
+                    "solonclaw.mcp.enabled");
 
     private static final Set<String> LIST_KEYS =
             setOf(

@@ -132,11 +132,17 @@ public class AgentRunSupervisor implements AgentRunControlService {
         runRecord.setRunId(IdSupport.newId());
         runRecord.setSessionId(session.getSessionId());
         runRecord.setSourceKey(session.getSourceKey());
+        runRecord.setRunKind(resume ? "resume" : "conversation");
         runRecord.setAgentName(agentScope.getEffectiveName());
         runRecord.setAgentSnapshotJson(agentScope.getSnapshotJson());
         runRecord.setStatus("running");
+        runRecord.setPhase("queued");
+        runRecord.setBusyPolicy("queue");
         runRecord.setInputPreview(AgentRunContext.safe(userMessage, 1000));
+        runRecord.setQueuedAt(now);
         runRecord.setStartedAt(now);
+        runRecord.setHeartbeatAt(now);
+        runRecord.setLastActivityAt(now);
         agentRunRepository.saveRun(runRecord);
 
         AgentRunContext runContext =
@@ -152,6 +158,8 @@ public class AgentRunSupervisor implements AgentRunControlService {
         try {
             pruneOldRuns();
 
+            updateRunPhase(runRecord, "running");
+            runContext.setPhase("running");
             runContext.event("run.start", resume ? "恢复挂起会话" : "开始执行用户请求");
             eventSink.onRunStarted(session.getSessionId());
 
@@ -173,9 +181,11 @@ public class AgentRunSupervisor implements AgentRunControlService {
                     checkCancellation(session.getSourceKey());
                     attemptNo++;
                     runContext.setAttempt(attemptNo, resolved.getProvider(), resolved.getModel());
+                    updateRunPhase(runRecord, "model");
                     runRecord.setAttempts(attemptNo);
                     runRecord.setProvider(resolved.getProvider());
                     runRecord.setModel(resolved.getModel());
+                    heartbeat(runRecord);
                     agentRunRepository.saveRun(runRecord);
                     eventSink.onAttemptStarted(
                             runRecord.getRunId(),
@@ -209,7 +219,11 @@ public class AgentRunSupervisor implements AgentRunControlService {
                         if (compression.getEstimatedTokens() > 0) {
                             contextEstimateTokens = compression.getEstimatedTokens();
                         }
+                        runRecord.setContextEstimateTokens(contextEstimateTokens);
                         contextWindowTokens = Math.max(1024, resolved.getContextWindowTokens());
+                        runRecord.setContextWindowTokens(contextWindowTokens);
+                        heartbeat(runRecord);
+                        agentRunRepository.saveRun(runRecord);
                         checkCancellation(session.getSourceKey());
                         String previousNdjson = session.getNdjson();
                         LlmResult result =
@@ -229,6 +243,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
                                 && hasRecentToolActivity(previousNdjson, result.getNdjson())) {
                             session.setNdjson(result.getNdjson());
                             checkCancellation(session.getSourceKey());
+                            updateRunPhase(runRecord, "recovery");
                             runContext.event("recovery.start", "工具调用后空回复，发起无工具恢复");
                             eventSink.onRecoveryStarted(runRecord.getRunId(), "empty_reply");
                             LlmResult recovered =
@@ -251,6 +266,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
                         if (isMaxStepsReply(currentReply)) {
                             session.setNdjson(result.getNdjson());
                             checkCancellation(session.getSourceKey());
+                            updateRunPhase(runRecord, "recovery");
                             runContext.event("recovery.start", "达到最大步骤上限，发起收敛总结");
                             eventSink.onRecoveryStarted(runRecord.getRunId(), "max_steps");
                             LlmResult recovered =
@@ -295,6 +311,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
                         if (isCancellationRequested(session.getSourceKey())) {
                             throw new AgentRunCancelledException();
                         }
+                        updateRunPhase(runRecord, "retry");
                         lastError = e;
                         eventSink.onAttemptCompleted(
                                 runRecord.getRunId(), attemptNo, "error", e.getMessage());
@@ -313,6 +330,8 @@ public class AgentRunSupervisor implements AgentRunControlService {
                 previousProvider = resolved.getProvider();
                 if (candidateIndex + 1 < candidates.size()) {
                     AppConfig.LlmConfig next = candidates.get(candidateIndex + 1);
+                    runRecord.setFallbackCount(runRecord.getFallbackCount() + 1);
+                    updateRunPhase(runRecord, "fallback");
                     eventSink.onFallback(
                             runRecord.getRunId(),
                             previousProvider,
@@ -329,6 +348,8 @@ public class AgentRunSupervisor implements AgentRunControlService {
 
             if (finalResult == null) {
                 runRecord.setStatus("failed");
+                runRecord.setPhase("failed");
+                runRecord.setExitReason("failed");
                 runRecord.setFinishedAt(System.currentTimeMillis());
                 runRecord.setError(
                         lastError == null ? "LLM execution failed" : lastError.getMessage());
@@ -347,6 +368,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
             sessionRepository.save(session);
 
             runRecord.setStatus("success");
+            runRecord.setPhase("completed");
             runRecord.setFinalReplyPreview(AgentRunContext.safe(replyText, 1000));
             runRecord.setInputTokens(finalResult.getInputTokens());
             runRecord.setOutputTokens(finalResult.getOutputTokens());
@@ -354,6 +376,8 @@ public class AgentRunSupervisor implements AgentRunControlService {
             runRecord.setProvider(finalResult.getProvider());
             runRecord.setModel(finalResult.getModel());
             runRecord.setFinishedAt(System.currentTimeMillis());
+            runRecord.setExitReason("success");
+            heartbeat(runRecord);
             agentRunRepository.saveRun(runRecord);
             runContext.event("run.success", "运行完成");
 
@@ -372,8 +396,11 @@ public class AgentRunSupervisor implements AgentRunControlService {
             return outcome;
         } catch (AgentRunCancelledException e) {
             runRecord.setStatus("cancelled");
+            runRecord.setPhase("cancelled");
+            runRecord.setExitReason("cancelled");
             runRecord.setFinishedAt(System.currentTimeMillis());
             runRecord.setError(e.getMessage());
+            heartbeat(runRecord);
             agentRunRepository.saveRun(runRecord);
             runContext.event("run.cancelled", e.getMessage());
             throw e;
@@ -397,6 +424,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
         ContextBudgetDecision decision =
                 contextBudgetService.decide(session, systemPrompt, userMessage, resolved);
         if (!decision.isShouldCompress()) {
+            runContext.setPhase("compression");
             eventSink.onCompressionDecision(
                     runId,
                     false,
@@ -414,6 +442,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
         }
 
         SessionRecord before = cloneSessionState(session);
+        runContext.setPhase("compression");
         CompressionOutcome outcome =
                 contextCompressionService.compressNowWithOutcome(
                         session, systemPrompt, userMessage);
@@ -435,6 +464,14 @@ public class AgentRunSupervisor implements AgentRunControlService {
                 runContext.metadata("estimatedTokens", decision.getEstimatedTokens()));
         if (changed) {
             sessionRepository.save(compressed);
+        }
+        AgentRunRecord record = agentRunRepository.findRun(runId);
+        if (record != null) {
+            record.setCompressionCount(record.getCompressionCount() + 1);
+            record.setContextEstimateTokens(decision.getEstimatedTokens());
+            record.setContextWindowTokens(decision.getThresholdTokens());
+            heartbeat(record);
+            agentRunRepository.saveRun(record);
         }
         outcome.setEstimatedTokens(decision.getEstimatedTokens());
         outcome.setThresholdTokens(decision.getThresholdTokens());
@@ -678,6 +715,31 @@ public class AgentRunSupervisor implements AgentRunControlService {
         }
         runningRuns.remove(normalizeSourceKey(sourceKey), handle);
         lastRunFinishedAt = System.currentTimeMillis();
+    }
+
+    public void recoverStaleRuns(long staleAfterMillis) {
+        if (agentRunRepository == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long before = now - Math.max(60_000L, staleAfterMillis);
+        try {
+            agentRunRepository.markStaleRuns(before, now);
+        } catch (Exception e) {
+            log.warn("recoverStaleRuns failed", e);
+        }
+    }
+
+    private void updateRunPhase(AgentRunRecord runRecord, String phase) throws Exception {
+        runRecord.setPhase(phase);
+        heartbeat(runRecord);
+        agentRunRepository.saveRun(runRecord);
+    }
+
+    private void heartbeat(AgentRunRecord runRecord) {
+        long now = System.currentTimeMillis();
+        runRecord.setHeartbeatAt(now);
+        runRecord.setLastActivityAt(now);
     }
 
     private void checkCancellation(String sourceKey) {

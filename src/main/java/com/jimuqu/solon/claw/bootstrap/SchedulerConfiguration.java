@@ -11,6 +11,7 @@ import com.jimuqu.solon.claw.core.service.DeliveryService;
 import com.jimuqu.solon.claw.scheduler.DefaultCronScheduler;
 import com.jimuqu.solon.claw.scheduler.HeartbeatScheduler;
 import com.jimuqu.solon.claw.scheduler.SkillCuratorScheduler;
+import com.jimuqu.solon.claw.engine.AgentRunSupervisor;
 import org.noear.solon.annotation.Bean;
 import org.noear.solon.annotation.Configuration;
 
@@ -62,5 +63,13 @@ public class SchedulerConfiguration {
                 new SkillCuratorScheduler(appConfig, skillCuratorService, agentRunControlService);
         scheduler.start();
         return scheduler;
+    }
+
+    @Bean
+    public Object staleRunRecoveryBootstrap(
+            AppConfig appConfig, AgentRunSupervisor agentRunSupervisor) {
+        long staleAfterMinutes = Math.max(1, appConfig.getTask().getStaleAfterMinutes());
+        agentRunSupervisor.recoverStaleRuns(staleAfterMinutes * 60L * 1000L);
+        return new Object();
     }
 }

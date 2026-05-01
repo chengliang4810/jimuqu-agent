@@ -14,6 +14,7 @@ public class AgentRunContext {
     private final String sessionId;
     private final String sourceKey;
     private String workspaceDir;
+    private String phase;
     private int attemptNo;
     private String provider;
     private String model;
@@ -28,6 +29,14 @@ public class AgentRunContext {
 
     public String getRunId() {
         return runId;
+    }
+
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public String getSourceKey() {
+        return sourceKey;
     }
 
     public int getAttemptNo() {
@@ -48,6 +57,14 @@ public class AgentRunContext {
         this.workspaceDir = workspaceDir;
     }
 
+    public String getPhase() {
+        return phase;
+    }
+
+    public void setPhase(String phase) {
+        this.phase = phase;
+    }
+
     public void event(String eventType, String summary) {
         event(eventType, summary, null);
     }
@@ -63,6 +80,8 @@ public class AgentRunContext {
             event.setSessionId(sessionId);
             event.setSourceKey(sourceKey);
             event.setEventType(eventType);
+            event.setPhase(phase);
+            event.setSeverity(resolveSeverity(eventType));
             event.setAttemptNo(attemptNo);
             event.setProvider(provider);
             event.setModel(model);
@@ -80,11 +99,41 @@ public class AgentRunContext {
         return map;
     }
 
+    public Map<String, Object> metadata(String key, Object value, String key2, Object value2) {
+        Map<String, Object> map = metadata(key, value);
+        map.put(key2, value2);
+        return map;
+    }
+
+    public void saveToolCall(ToolCallRecord record) {
+        if (repository == null || record == null) {
+            return;
+        }
+        try {
+            repository.saveToolCall(record);
+        } catch (Exception ignored) {
+        }
+    }
+
     public static String safe(String text, int limit) {
         String redacted = SecretRedactor.redact(text, limit);
         if (redacted == null) {
             return null;
         }
         return redacted.length() <= limit ? redacted : redacted.substring(0, limit) + "...";
+    }
+
+    private String resolveSeverity(String eventType) {
+        String value = eventType == null ? "" : eventType.toLowerCase(java.util.Locale.ROOT);
+        if (value.contains("failed") || value.contains("error")) {
+            return "error";
+        }
+        if (value.contains("fallback")
+                || value.contains("recovery")
+                || value.contains("compression.failed")
+                || value.contains("cancel")) {
+            return "warn";
+        }
+        return "info";
     }
 }

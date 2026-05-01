@@ -7,6 +7,8 @@ import com.jimuqu.solon.claw.core.model.DelegationTask;
 import com.jimuqu.solon.claw.core.model.GatewayMessage;
 import com.jimuqu.solon.claw.core.model.GatewayReply;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
+import com.jimuqu.solon.claw.core.model.SubagentRunRecord;
+import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.DelegationService;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
@@ -20,12 +22,11 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.noear.snack4.ONode;
 
 /** 默认子代理委托服务。 */
-@RequiredArgsConstructor
 public class DefaultDelegationService implements DelegationService {
     /** 委托日志器。 */
     private static final Logger log = LoggerFactory.getLogger(DefaultDelegationService.class);
@@ -76,6 +77,30 @@ public class DefaultDelegationService implements DelegationService {
     /** 会话仓储。 */
     private final SessionRepository sessionRepository;
 
+    /** Agent run 轨迹仓储。 */
+    private final AgentRunRepository agentRunRepository;
+
+    /** Hermes 风格暂停新子代理 spawn。 */
+    private volatile boolean spawnPaused;
+
+    public DefaultDelegationService(
+            ConversationOrchestratorHolder conversationHolder,
+            SqlitePreferenceStore preferenceStore,
+            SessionRepository sessionRepository) {
+        this(conversationHolder, preferenceStore, sessionRepository, null);
+    }
+
+    public DefaultDelegationService(
+            ConversationOrchestratorHolder conversationHolder,
+            SqlitePreferenceStore preferenceStore,
+            SessionRepository sessionRepository,
+            AgentRunRepository agentRunRepository) {
+        this.conversationHolder = conversationHolder;
+        this.preferenceStore = preferenceStore;
+        this.sessionRepository = sessionRepository;
+        this.agentRunRepository = agentRunRepository;
+    }
+
     @Override
     public DelegationResult delegateSingle(String sourceKey, String prompt, String context)
             throws Exception {
@@ -92,9 +117,13 @@ public class DefaultDelegationService implements DelegationService {
         if (StrUtil.isBlank(prompt)) {
             return failureResult("delegate", "委托任务不能为空。");
         }
+        if (spawnPaused) {
+            return failureResult("delegate", "Subagent spawning is paused.");
+        }
 
         try {
             SessionRecord parentSession = sessionRepository.getBoundSession(sourceKey);
+            String subagentId = "sa-" + IdSupport.newId();
             String childSourceKey = sourceKey + ":delegate:" + IdSupport.newId();
             cloneToolVisibility(sourceKey, childSourceKey);
             applyAllowedTools(childSourceKey, task == null ? null : task.getAllowedTools());
@@ -107,12 +136,16 @@ public class DefaultDelegationService implements DelegationService {
             GatewayMessage message =
                     new GatewayMessage(PlatformType.MEMORY, "", "", decoratePrompt(task));
             message.setSourceKeyOverride(childSourceKey);
+            SubagentRunRecord subagent = startSubagent(subagentId, sourceKey, childSourceKey, task);
             GatewayReply reply = conversationHolder.get().handleIncoming(message);
+            finishSubagent(subagent, reply);
 
             DelegationResult result = new DelegationResult();
+            result.setSubagentId(subagentId);
             result.setName(
                     StrUtil.blankToDefault(task == null ? null : task.getName(), "delegate"));
             result.setSessionId(reply == null ? null : reply.getSessionId());
+            result.setSourceKey(childSourceKey);
             result.setContent(reply == null ? "" : reply.getContent());
             result.setError(reply != null && reply.isError());
             return result;
@@ -120,6 +153,14 @@ public class DefaultDelegationService implements DelegationService {
             log.warn("delegateSingle failed: sourceKey={}, prompt={}", sourceKey, prompt, e);
             return failureResult("delegate", e.getMessage());
         }
+    }
+
+    public void setSpawnPaused(boolean paused) {
+        this.spawnPaused = paused;
+    }
+
+    public boolean isSpawnPaused() {
+        return spawnPaused;
     }
 
     @Override
@@ -236,5 +277,58 @@ public class DefaultDelegationService implements DelegationService {
         result.setError(true);
         result.setContent(StrUtil.blankToDefault(message, "delegation failed"));
         return result;
+    }
+
+    private SubagentRunRecord startSubagent(
+            String subagentId, String parentSourceKey, String childSourceKey, DelegationTask task) {
+        SubagentRunRecord record = new SubagentRunRecord();
+        long now = System.currentTimeMillis();
+        record.setSubagentId(subagentId);
+        record.setParentSourceKey(parentSourceKey);
+        record.setChildSourceKey(childSourceKey);
+        record.setName(StrUtil.blankToDefault(task == null ? null : task.getName(), "delegate"));
+        record.setGoalPreview(
+                com.jimuqu.solon.claw.core.model.AgentRunContext.safe(
+                        task == null ? null : task.getPrompt(), 1000));
+        record.setStatus("running");
+        record.setDepth(1);
+        record.setStartedAt(now);
+        record.setHeartbeatAt(now);
+        saveSubagent(record);
+        return record;
+    }
+
+    private void finishSubagent(SubagentRunRecord record, GatewayReply reply) {
+        if (record == null) {
+            return;
+        }
+        record.setStatus(reply != null && reply.isError() ? "failed" : "success");
+        record.setSessionId(reply == null ? null : reply.getSessionId());
+        record.setError(reply != null && reply.isError() ? reply.getContent() : null);
+        record.setOutputTailJson(buildTailJson(reply == null ? "" : reply.getContent()));
+        record.setFinishedAt(System.currentTimeMillis());
+        record.setHeartbeatAt(record.getFinishedAt());
+        saveSubagent(record);
+    }
+
+    private void saveSubagent(SubagentRunRecord record) {
+        if (agentRunRepository == null) {
+            return;
+        }
+        try {
+            agentRunRepository.saveSubagentRun(record);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private String buildTailJson(String content) {
+        ONode array = new ONode().asArray();
+        ONode item = new ONode().asObject();
+        item.set(
+                "preview",
+                com.jimuqu.solon.claw.core.model.AgentRunContext.safe(content, 1000));
+        item.set("is_error", false);
+        array.add(item);
+        return array.toJson();
     }
 }

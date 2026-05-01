@@ -420,21 +420,40 @@ public class SqliteDatabase {
                             + "run_id text primary key,"
                             + "session_id text not null,"
                             + "source_key text,"
+                            + "run_kind text,"
+                            + "parent_run_id text,"
                             + "agent_name text,"
                             + "agent_snapshot_json text,"
                             + "status text not null,"
+                            + "phase text,"
+                            + "busy_policy text,"
+                            + "backgrounded integer not null default 0,"
                             + "input_preview text,"
                             + "final_reply_preview text,"
                             + "provider text,"
                             + "model text,"
                             + "attempts integer not null default 0,"
+                            + "context_estimate_tokens integer not null default 0,"
+                            + "context_window_tokens integer not null default 0,"
+                            + "compression_count integer not null default 0,"
+                            + "fallback_count integer not null default 0,"
+                            + "tool_call_count integer not null default 0,"
+                            + "subtask_count integer not null default 0,"
                             + "input_tokens integer not null default 0,"
                             + "output_tokens integer not null default 0,"
                             + "total_tokens integer not null default 0,"
+                            + "queued_at integer not null default 0,"
                             + "started_at integer not null,"
+                            + "heartbeat_at integer not null default 0,"
+                            + "last_activity_at integer not null default 0,"
                             + "finished_at integer not null default 0,"
+                            + "exit_reason text,"
+                            + "recoverable integer not null default 0,"
+                            + "recovery_hint text,"
                             + "error text"
                             + ")");
+            addColumn(statement, "agent_runs", "run_kind text");
+            addColumn(statement, "agent_runs", "parent_run_id text");
             try {
                 statement.execute("alter table agent_runs add column agent_name text");
             } catch (Exception ignored) {
@@ -443,8 +462,27 @@ public class SqliteDatabase {
                 statement.execute("alter table agent_runs add column agent_snapshot_json text");
             } catch (Exception ignored) {
             }
+            addColumn(statement, "agent_runs", "phase text");
+            addColumn(statement, "agent_runs", "busy_policy text");
+            addColumn(statement, "agent_runs", "backgrounded integer not null default 0");
+            addColumn(statement, "agent_runs", "context_estimate_tokens integer not null default 0");
+            addColumn(statement, "agent_runs", "context_window_tokens integer not null default 0");
+            addColumn(statement, "agent_runs", "compression_count integer not null default 0");
+            addColumn(statement, "agent_runs", "fallback_count integer not null default 0");
+            addColumn(statement, "agent_runs", "tool_call_count integer not null default 0");
+            addColumn(statement, "agent_runs", "subtask_count integer not null default 0");
+            addColumn(statement, "agent_runs", "queued_at integer not null default 0");
+            addColumn(statement, "agent_runs", "heartbeat_at integer not null default 0");
+            addColumn(statement, "agent_runs", "last_activity_at integer not null default 0");
+            addColumn(statement, "agent_runs", "exit_reason text");
+            addColumn(statement, "agent_runs", "recoverable integer not null default 0");
+            addColumn(statement, "agent_runs", "recovery_hint text");
             statement.execute(
                     "create index if not exists idx_agent_runs_session_started on agent_runs(session_id, started_at desc)");
+            statement.execute(
+                    "create index if not exists idx_agent_runs_parent on agent_runs(parent_run_id)");
+            statement.execute(
+                    "create index if not exists idx_agent_runs_status_activity on agent_runs(status, last_activity_at)");
             statement.execute(
                     "create table if not exists agent_run_events ("
                             + "event_id text primary key,"
@@ -452,6 +490,8 @@ public class SqliteDatabase {
                             + "session_id text,"
                             + "source_key text,"
                             + "event_type text not null,"
+                            + "phase text,"
+                            + "severity text,"
                             + "attempt_no integer not null default 0,"
                             + "provider text,"
                             + "model text,"
@@ -459,8 +499,142 @@ public class SqliteDatabase {
                             + "metadata_json text,"
                             + "created_at integer not null"
                             + ")");
+            addColumn(statement, "agent_run_events", "phase text");
+            addColumn(statement, "agent_run_events", "severity text");
             statement.execute(
                     "create index if not exists idx_agent_run_events_run_time on agent_run_events(run_id, created_at asc)");
+            statement.execute(
+                    "create virtual table if not exists agent_run_events_fts using fts5(run_id, session_id, source_key, event_type, summary, metadata_json)");
+            statement.execute(
+                    "create table if not exists tool_calls ("
+                            + "tool_call_id text primary key,"
+                            + "run_id text not null,"
+                            + "session_id text,"
+                            + "source_key text,"
+                            + "tool_name text not null,"
+                            + "status text not null,"
+                            + "args_preview text,"
+                            + "result_preview text,"
+                            + "result_ref text,"
+                            + "error text,"
+                            + "interruptible integer not null default 0,"
+                            + "side_effecting integer not null default 0,"
+                            + "started_at integer not null,"
+                            + "finished_at integer not null default 0,"
+                            + "duration_ms integer not null default 0"
+                            + ")");
+            statement.execute(
+                    "create index if not exists idx_tool_calls_run_started on tool_calls(run_id, started_at asc)");
+            statement.execute(
+                    "create table if not exists subagent_runs ("
+                            + "subagent_id text primary key,"
+                            + "parent_run_id text,"
+                            + "child_run_id text,"
+                            + "parent_source_key text,"
+                            + "child_source_key text,"
+                            + "session_id text,"
+                            + "name text,"
+                            + "goal_preview text,"
+                            + "status text not null,"
+                            + "depth integer not null default 1,"
+                            + "task_index integer not null default 0,"
+                            + "output_tail_json text,"
+                            + "error text,"
+                            + "started_at integer not null,"
+                            + "finished_at integer not null default 0,"
+                            + "heartbeat_at integer not null default 0"
+                            + ")");
+            statement.execute(
+                    "create index if not exists idx_subagent_runs_parent on subagent_runs(parent_run_id, started_at asc)");
+            statement.execute(
+                    "create table if not exists run_recoveries ("
+                            + "recovery_id text primary key,"
+                            + "run_id text not null,"
+                            + "session_id text,"
+                            + "source_key text,"
+                            + "recovery_type text not null,"
+                            + "status text not null,"
+                            + "summary text,"
+                            + "payload_json text,"
+                            + "created_at integer not null,"
+                            + "resolved_at integer not null default 0"
+                            + ")");
+            statement.execute(
+                    "create index if not exists idx_run_recoveries_run on run_recoveries(run_id, created_at asc)");
+            statement.execute(
+                    "create table if not exists task_todos ("
+                            + "todo_id text primary key,"
+                            + "run_id text,"
+                            + "session_id text,"
+                            + "source_key text,"
+                            + "content text not null,"
+                            + "status text not null,"
+                            + "sort_order integer not null default 0,"
+                            + "created_at integer not null,"
+                            + "updated_at integer not null"
+                            + ")");
+            statement.execute(
+                    "create index if not exists idx_task_todos_session on task_todos(session_id, sort_order asc)");
+            statement.execute(
+                    "create table if not exists mcp_servers ("
+                            + "server_id text primary key,"
+                            + "name text not null,"
+                            + "transport text not null,"
+                            + "endpoint text,"
+                            + "command text,"
+                            + "args_json text,"
+                            + "auth_json text,"
+                            + "status text not null,"
+                            + "tools_json text,"
+                            + "last_error text,"
+                            + "enabled integer not null default 1,"
+                            + "created_at integer not null,"
+                            + "updated_at integer not null,"
+                            + "last_checked_at integer not null default 0"
+                            + ")");
+            statement.execute(
+                    "create table if not exists curator_reports ("
+                            + "report_id text primary key,"
+                            + "status text not null,"
+                            + "summary text,"
+                            + "report_path text,"
+                            + "report_json text,"
+                            + "started_at integer not null,"
+                            + "finished_at integer not null"
+                            + ")");
+            statement.execute(
+                    "create table if not exists skill_improvements ("
+                            + "improvement_id text primary key,"
+                            + "session_id text,"
+                            + "run_id text,"
+                            + "skill_name text not null,"
+                            + "action text not null,"
+                            + "summary text,"
+                            + "changed_files_json text,"
+                            + "evidence_json text,"
+                            + "needs_review integer not null default 0,"
+                            + "created_at integer not null"
+                            + ")");
+            statement.execute(
+                    "create table if not exists channel_media ("
+                            + "media_id text primary key,"
+                            + "platform text not null,"
+                            + "chat_id text,"
+                            + "message_id text,"
+                            + "kind text,"
+                            + "original_name text,"
+                            + "mime_type text,"
+                            + "local_path text,"
+                            + "remote_id text,"
+                            + "status text not null,"
+                            + "error text,"
+                            + "size_bytes integer not null default 0,"
+                            + "created_at integer not null,"
+                            + "updated_at integer not null,"
+                            + "expires_at integer not null default 0"
+                            + ")");
+            statement.execute(
+                    "create index if not exists idx_channel_media_platform_chat on channel_media(platform, chat_id, updated_at desc)");
             statement.execute(
                     "create table if not exists channel_states ("
                             + "platform text not null,"
@@ -536,6 +710,13 @@ public class SqliteDatabase {
                 resultSet.close();
             } catch (Exception ignored) {
             }
+        }
+    }
+
+    private void addColumn(Statement statement, String tableName, String columnDefinition) {
+        try {
+            statement.execute("alter table " + tableName + " add column " + columnDefinition);
+        } catch (Exception ignored) {
         }
     }
 }

@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jimuqu.solon.claw.core.model.AgentRunEventRecord;
 import com.jimuqu.solon.claw.core.model.AgentRunRecord;
+import com.jimuqu.solon.claw.core.model.RunRecoveryRecord;
+import com.jimuqu.solon.claw.core.model.SubagentRunRecord;
+import com.jimuqu.solon.claw.core.model.ToolCallRecord;
 import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.web.DashboardRunService;
 import java.util.ArrayList;
@@ -55,6 +58,19 @@ public class DashboardRunServiceTest {
         }
 
         @Override
+        public List<AgentRunRecord> listRecoverable(int limit) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public List<AgentRunRecord> listActiveBefore(long beforeEpochMillis, int limit) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public void markStaleRuns(long beforeEpochMillis, long now) {}
+
+        @Override
         public void appendEvent(AgentRunEventRecord event) {
             events.add(event);
         }
@@ -62,6 +78,30 @@ public class DashboardRunServiceTest {
         @Override
         public List<AgentRunEventRecord> listEvents(String runId) {
             return events;
+        }
+
+        @Override
+        public void saveToolCall(ToolCallRecord record) {}
+
+        @Override
+        public List<ToolCallRecord> listToolCalls(String runId) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public void saveSubagentRun(SubagentRunRecord record) {}
+
+        @Override
+        public List<SubagentRunRecord> listSubagents(String parentRunId) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public void saveRecovery(RunRecoveryRecord record) {}
+
+        @Override
+        public List<RunRecoveryRecord> listRecoveries(String runId) {
+            return Collections.emptyList();
         }
 
         @Override

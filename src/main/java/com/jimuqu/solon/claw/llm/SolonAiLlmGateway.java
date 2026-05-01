@@ -6,6 +6,7 @@ import com.jimuqu.solon.claw.config.RuntimeConfigResolver;
 import com.jimuqu.solon.claw.core.model.AgentRunContext;
 import com.jimuqu.solon.claw.core.model.LlmResult;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
+import com.jimuqu.solon.claw.core.model.ToolCallRecord;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.ConversationEventSink;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
@@ -15,6 +16,7 @@ import com.jimuqu.solon.claw.llm.dialect.LoggingOpenaiChatDialect;
 import com.jimuqu.solon.claw.llm.dialect.LoggingOpenaiResponsesDialect;
 import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
 import com.jimuqu.solon.claw.support.LlmProviderService;
+import com.jimuqu.solon.claw.support.IdSupport;
 import com.jimuqu.solon.claw.support.constants.LlmConstants;
 import com.jimuqu.solon.claw.tool.runtime.DangerousCommandApprovalService;
 import java.io.File;
@@ -25,6 +27,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import org.noear.solon.ai.AiUsage;
@@ -1336,6 +1340,8 @@ public class SolonAiLlmGateway implements LlmGateway {
     private static class TracingReActInterceptor implements ReActInterceptor {
         private final AgentRunContext runContext;
         private final int previewLength;
+        private final ConcurrentMap<String, ToolCallRecord> activeToolCalls =
+                new ConcurrentHashMap<String, ToolCallRecord>();
 
         private TracingReActInterceptor(AgentRunContext runContext, int previewLength) {
             this.runContext = runContext;
@@ -1344,30 +1350,80 @@ public class SolonAiLlmGateway implements LlmGateway {
 
         @Override
         public void onModelStart(ReActTrace trace, ChatRequestDesc req) {
+            runContext.setPhase("model");
             runContext.event("model.start", "开始请求模型");
         }
 
         @Override
         public void onModelEnd(ReActTrace trace, ChatResponse resp) {
+            runContext.setPhase("model");
             runContext.event("model.end", "模型响应完成");
         }
 
         @Override
         public void onAction(ReActTrace trace, String toolName, Map<String, Object> args) {
+            runContext.setPhase("tool");
             Map<String, Object> metadata = new java.util.LinkedHashMap<String, Object>();
             metadata.put("tool", toolName);
             metadata.put("args", args);
             runContext.event("tool.start", "调用工具：" + toolName, metadata);
+            ToolCallRecord record = new ToolCallRecord();
+            record.setToolCallId(IdSupport.newId());
+            record.setRunId(runContext.getRunId());
+            record.setSessionId(runContext.getSessionId());
+            record.setSourceKey(runContext.getSourceKey());
+            record.setToolName(toolName);
+            record.setStatus("running");
+            record.setArgsPreview(AgentRunContext.safe(String.valueOf(args), previewLength));
+            record.setInterruptible(true);
+            record.setSideEffecting(isSideEffectingTool(toolName));
+            record.setStartedAt(System.currentTimeMillis());
+            activeToolCalls.put(toolName, record);
+            runContext.saveToolCall(record);
         }
 
         @Override
         public void onObservation(
                 ReActTrace trace, String toolName, String result, long durationMs) {
+            runContext.setPhase("tool");
             Map<String, Object> metadata = new java.util.LinkedHashMap<String, Object>();
             metadata.put("tool", toolName);
             metadata.put("durationMs", durationMs);
             metadata.put("preview", AgentRunContext.safe(result, previewLength));
             runContext.event("tool.end", "工具完成：" + toolName + "（" + durationMs + "ms）", metadata);
+            ToolCallRecord record = activeToolCalls.remove(toolName);
+            if (record == null) {
+                record = new ToolCallRecord();
+                record.setToolCallId(IdSupport.newId());
+                record.setRunId(runContext.getRunId());
+                record.setSessionId(runContext.getSessionId());
+                record.setSourceKey(runContext.getSourceKey());
+                record.setToolName(toolName);
+                record.setStartedAt(System.currentTimeMillis());
+                record.setInterruptible(true);
+                record.setSideEffecting(isSideEffectingTool(toolName));
+            }
+            record.setStatus("completed");
+            record.setResultPreview(AgentRunContext.safe(result, previewLength));
+            record.setFinishedAt(System.currentTimeMillis());
+            record.setDurationMs(durationMs);
+            runContext.saveToolCall(record);
+        }
+
+        private boolean isSideEffectingTool(String toolName) {
+            if (toolName == null) {
+                return false;
+            }
+            String value = toolName.toLowerCase(java.util.Locale.ROOT);
+            return value.contains("write")
+                    || value.contains("delete")
+                    || value.contains("shell")
+                    || value.contains("python")
+                    || value.contains("js")
+                    || value.contains("send")
+                    || value.contains("cron")
+                    || value.contains("skill_manage")
+                    || value.contains("delegate");
         }
     }
 }

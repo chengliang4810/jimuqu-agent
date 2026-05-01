@@ -47,10 +47,7 @@ public class CommandEnhancementTest {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         bootstrapAdmin(env);
 
-        Process process =
-                new ProcessBuilder(
-                                "powershell", "-NoProfile", "-Command", "Start-Sleep -Seconds 30")
-                        .start();
+        Process process = newSleepProcess();
         env.processRegistry.add(process);
         GatewayReply stopReply = env.send("admin-chat", "admin-user", "/stop");
         assertThat(stopReply.getContent()).contains("1");
@@ -75,5 +72,20 @@ public class CommandEnhancementTest {
     private void bootstrapAdmin(TestEnvironment env) throws Exception {
         env.send("admin-chat", "admin-user", "hello");
         env.send("admin-chat", "admin-user", "/pairing claim-admin");
+    }
+
+    private Process newSleepProcess() throws Exception {
+        return new ProcessBuilder(
+                        System.getProperty("java.home") + File.separator + "bin" + File.separator + "java",
+                        "-cp",
+                        System.getProperty("java.class.path"),
+                        SleepProcess.class.getName())
+                .start();
+    }
+
+    public static class SleepProcess {
+        public static void main(String[] args) throws Exception {
+            Thread.sleep(30000L);
+        }
     }
 }
