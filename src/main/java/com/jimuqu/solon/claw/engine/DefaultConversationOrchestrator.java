@@ -204,6 +204,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             if (session == null) {
                 return GatewayReply.error("当前来源键没有可恢复的会话。");
             }
+            String resumedUserMessage = MessageSupport.getLastUserMessage(session.getNdjson());
 
             AgentRuntimeScope agentScope = resolveAgentScope(session);
             List<String> enabledToolNames =
@@ -233,7 +234,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             finalReply = decorateFinalReply(finalReply, feedbackTarget.getPlatform(), outcome);
             feedbackSink.onFinalReply(finalReply);
             eventSink.onRunCompleted(session.getSessionId(), finalReply, outcome.getResult());
-            syncMemory(session.getSourceKey(), null, finalReply);
+            syncMemory(session.getSourceKey(), resumedUserMessage, finalReply);
             GatewayReply reply = GatewayReply.ok(finalReply);
             reply.setSessionId(session.getSessionId());
             reply.setBranchName(session.getBranchName());

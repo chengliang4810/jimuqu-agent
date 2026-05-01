@@ -95,6 +95,23 @@ public class MemoryAndSkillsTest {
     }
 
     @Test
+    void shouldUpdateTodayMemoryWhenPendingRunResumes() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+
+        env.conversationOrchestrator.handleIncoming(
+                env.message("approval-room", "approval-user", "执行需要审批的清理命令"));
+        GatewayReply reply =
+                env.conversationOrchestrator.resumePending(
+                        "MEMORY:approval-room:approval-user");
+
+        String today = env.memoryService.read("today");
+        assertThat(reply.getContent()).contains("echo:resume");
+        assertThat(today).contains("MEMORY:approval-room:approval-user");
+        assertThat(today).contains("执行需要审批的清理命令");
+        assertThat(today).contains("echo:resume");
+    }
+
+    @Test
     void shouldRejectTransientMemoryEntries() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
 
