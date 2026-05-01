@@ -22,6 +22,8 @@ import com.jimuqu.solon.claw.tool.runtime.DangerousCommandApprovalService;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -858,7 +860,10 @@ public class SolonAiLlmGateway implements LlmGateway {
         if (runContext != null) {
             builder.defaultInterceptorAdd(
                     new TracingReActInterceptor(
-                            runContext, appConfig.getTrace().getToolPreviewLength()));
+                            runContext,
+                            appConfig.getTrace().getToolPreviewLength(),
+                            appConfig.getTask().getToolOutputInlineLimit(),
+                            appConfig.getRuntime().getCacheDir()));
         }
         if (usageCollector != null) {
             builder.defaultInterceptorAdd(new UsageCollectingInterceptor(usageCollector));
@@ -1340,12 +1345,20 @@ public class SolonAiLlmGateway implements LlmGateway {
     private static class TracingReActInterceptor implements ReActInterceptor {
         private final AgentRunContext runContext;
         private final int previewLength;
+        private final int inlineLimitBytes;
+        private final String cacheDir;
         private final ConcurrentMap<String, ToolCallRecord> activeToolCalls =
                 new ConcurrentHashMap<String, ToolCallRecord>();
 
-        private TracingReActInterceptor(AgentRunContext runContext, int previewLength) {
+        private TracingReActInterceptor(
+                AgentRunContext runContext,
+                int previewLength,
+                int inlineLimitBytes,
+                String cacheDir) {
             this.runContext = runContext;
             this.previewLength = Math.max(200, previewLength);
+            this.inlineLimitBytes = Math.max(256, inlineLimitBytes);
+            this.cacheDir = cacheDir;
         }
 
         @Override
@@ -1377,6 +1390,10 @@ public class SolonAiLlmGateway implements LlmGateway {
             record.setArgsPreview(AgentRunContext.safe(String.valueOf(args), previewLength));
             record.setInterruptible(true);
             record.setSideEffecting(isSideEffectingTool(toolName));
+            record.setReadOnly(!record.isSideEffecting());
+            record.setResultIndexable(true);
+            record.setOutputLimitBytes(inlineLimitBytes);
+            record.setExecutionPolicy(record.isSideEffecting() ? "serial" : "parallel_readonly");
             record.setStartedAt(System.currentTimeMillis());
             activeToolCalls.put(toolName, record);
             runContext.saveToolCall(record);
@@ -1389,11 +1406,14 @@ public class SolonAiLlmGateway implements LlmGateway {
             Map<String, Object> metadata = new java.util.LinkedHashMap<String, Object>();
             metadata.put("tool", toolName);
             metadata.put("durationMs", durationMs);
-            metadata.put("preview", AgentRunContext.safe(result, previewLength));
+            ToolOutput output = storeOutputIfNeeded(toolName, result, null);
+            metadata.put("preview", output.preview);
+            metadata.put("result_ref", output.ref);
             runContext.event("tool.end", "工具完成：" + toolName + "（" + durationMs + "ms）", metadata);
             ToolCallRecord record = activeToolCalls.remove(toolName);
             if (record == null) {
                 record = new ToolCallRecord();
+                output = storeOutputIfNeeded(toolName, result, record);
                 record.setToolCallId(IdSupport.newId());
                 record.setRunId(runContext.getRunId());
                 record.setSessionId(runContext.getSessionId());
@@ -1402,12 +1422,52 @@ public class SolonAiLlmGateway implements LlmGateway {
                 record.setStartedAt(System.currentTimeMillis());
                 record.setInterruptible(true);
                 record.setSideEffecting(isSideEffectingTool(toolName));
+                record.setReadOnly(!record.isSideEffecting());
+                record.setResultIndexable(true);
+                record.setOutputLimitBytes(inlineLimitBytes);
+                record.setExecutionPolicy(record.isSideEffecting() ? "serial" : "parallel_readonly");
+            } else {
+                output = storeOutputIfNeeded(toolName, result, record);
             }
             record.setStatus("completed");
-            record.setResultPreview(AgentRunContext.safe(result, previewLength));
+            record.setResultPreview(output.preview);
+            record.setResultRef(output.ref);
+            record.setResultSizeBytes(output.sizeBytes);
             record.setFinishedAt(System.currentTimeMillis());
             record.setDurationMs(durationMs);
             runContext.saveToolCall(record);
+        }
+
+        private ToolOutput storeOutputIfNeeded(
+                String toolName, String result, ToolCallRecord record) {
+            ToolOutput output = new ToolOutput();
+            byte[] bytes = StrUtil.nullToEmpty(result).getBytes(StandardCharsets.UTF_8);
+            output.sizeBytes = bytes.length;
+            output.preview = AgentRunContext.safe(result, previewLength);
+            if (bytes.length <= inlineLimitBytes || StrUtil.isBlank(cacheDir)) {
+                return output;
+            }
+            try {
+                String callId =
+                        record != null && StrUtil.isNotBlank(record.getToolCallId())
+                                ? record.getToolCallId()
+                                : IdSupport.newId();
+                if (record != null && StrUtil.isBlank(record.getToolCallId())) {
+                    record.setToolCallId(callId);
+                }
+                File dir = new File(new File(cacheDir, "tool-results"), runContext.getRunId());
+                cn.hutool.core.io.FileUtil.mkdir(dir);
+                File file = new File(dir, callId + ".txt");
+                Files.write(file.toPath(), bytes);
+                output.ref = file.getAbsolutePath();
+                output.preview =
+                        AgentRunContext.safe(result, Math.min(previewLength, 600))
+                                + "\n[result_ref: "
+                                + output.ref
+                                + "]";
+            } catch (Exception ignored) {
+            }
+            return output;
         }
 
         private boolean isSideEffectingTool(String toolName) {
@@ -1424,6 +1484,12 @@ public class SolonAiLlmGateway implements LlmGateway {
                     || value.contains("cron")
                     || value.contains("skill_manage")
                     || value.contains("delegate");
+        }
+
+        private static class ToolOutput {
+            private String preview;
+            private String ref;
+            private long sizeBytes;
         }
     }
 }

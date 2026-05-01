@@ -1,6 +1,8 @@
 package com.jimuqu.solon.claw.web;
 
 import java.util.Map;
+import java.util.LinkedHashMap;
+import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Controller;
 import org.noear.solon.annotation.Mapping;
 import org.noear.solon.core.handle.Context;
@@ -29,5 +31,31 @@ public class DashboardCuratorController {
     @Mapping(value = "/api/hermes/curator/{reportId}", method = MethodType.GET)
     public Map<String, Object> detail(String reportId) throws Exception {
         return DashboardResponse.ok(curatorService.detail(reportId));
+    }
+
+    @Mapping(value = "/api/hermes/curator/improvements", method = MethodType.GET)
+    public Map<String, Object> improvements(Context context) throws Exception {
+        return DashboardResponse.ok(curatorService.improvements(context.paramAsInt("limit", 20)));
+    }
+
+    @Mapping(value = "/api/hermes/curator/apply", method = MethodType.POST)
+    public Map<String, Object> apply(Context context) throws Exception {
+        Map<String, Object> body =
+                ONode.deserialize(ONode.ofJson(context.body()).toJson(), LinkedHashMap.class);
+        return DashboardResponse.ok(
+                curatorService.apply(read(body, "skill"), read(body, "suggestion")));
+    }
+
+    @Mapping(value = "/api/hermes/curator/ignore", method = MethodType.POST)
+    public Map<String, Object> ignore(Context context) throws Exception {
+        Map<String, Object> body =
+                ONode.deserialize(ONode.ofJson(context.body()).toJson(), LinkedHashMap.class);
+        return DashboardResponse.ok(
+                curatorService.ignore(read(body, "skill"), read(body, "suggestion")));
+    }
+
+    private String read(Map<String, Object> body, String key) {
+        Object value = body == null ? null : body.get(key);
+        return value == null ? "" : String.valueOf(value);
     }
 }

@@ -1,7 +1,10 @@
 package com.jimuqu.solon.claw.engine;
 
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.core.enums.PlatformType;
+import com.jimuqu.solon.claw.core.model.AgentRunContext;
+import com.jimuqu.solon.claw.core.model.AgentRunRecord;
 import com.jimuqu.solon.claw.core.model.DelegationResult;
 import com.jimuqu.solon.claw.core.model.DelegationTask;
 import com.jimuqu.solon.claw.core.model.GatewayMessage;
@@ -17,11 +20,16 @@ import com.jimuqu.solon.claw.support.IdSupport;
 import com.jimuqu.solon.claw.support.constants.ToolNameConstants;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.noear.snack4.ONode;
@@ -30,9 +38,6 @@ import org.noear.snack4.ONode;
 public class DefaultDelegationService implements DelegationService {
     /** 委托日志器。 */
     private static final Logger log = LoggerFactory.getLogger(DefaultDelegationService.class);
-
-    /** 默认最大并行数。 */
-    private static final int MAX_CONCURRENT = 3;
 
     /** 子代理固定禁用的工具。 */
     private static final List<String> BLOCKED_TOOLS =
@@ -80,6 +85,13 @@ public class DefaultDelegationService implements DelegationService {
     /** Agent run 轨迹仓储。 */
     private final AgentRunRepository agentRunRepository;
 
+    private final AppConfig appConfig;
+
+    private final ConcurrentMap<String, SubagentRunRecord> activeRegistry =
+            new ConcurrentHashMap<String, SubagentRunRecord>();
+
+    private final Semaphore concurrencyLimiter;
+
     /** Hermes 风格暂停新子代理 spawn。 */
     private volatile boolean spawnPaused;
 
@@ -87,7 +99,7 @@ public class DefaultDelegationService implements DelegationService {
             ConversationOrchestratorHolder conversationHolder,
             SqlitePreferenceStore preferenceStore,
             SessionRepository sessionRepository) {
-        this(conversationHolder, preferenceStore, sessionRepository, null);
+        this(conversationHolder, preferenceStore, sessionRepository, null, null);
     }
 
     public DefaultDelegationService(
@@ -95,10 +107,23 @@ public class DefaultDelegationService implements DelegationService {
             SqlitePreferenceStore preferenceStore,
             SessionRepository sessionRepository,
             AgentRunRepository agentRunRepository) {
+        this(conversationHolder, preferenceStore, sessionRepository, agentRunRepository, null);
+    }
+
+    public DefaultDelegationService(
+            ConversationOrchestratorHolder conversationHolder,
+            SqlitePreferenceStore preferenceStore,
+            SessionRepository sessionRepository,
+            AgentRunRepository agentRunRepository,
+            AppConfig appConfig) {
         this.conversationHolder = conversationHolder;
         this.preferenceStore = preferenceStore;
         this.sessionRepository = sessionRepository;
         this.agentRunRepository = agentRunRepository;
+        this.appConfig = appConfig;
+        int maxConcurrency =
+                appConfig == null ? 3 : Math.max(1, appConfig.getTask().getSubagentMaxConcurrency());
+        this.concurrencyLimiter = new Semaphore(maxConcurrency, true);
     }
 
     @Override
@@ -120,6 +145,21 @@ public class DefaultDelegationService implements DelegationService {
         if (spawnPaused) {
             return failureResult("delegate", "Subagent spawning is paused.");
         }
+        AgentRunContext parentContext = AgentRunContext.current();
+        int depth = resolveDepth(parentContext);
+        int maxDepth = appConfig == null ? 1 : Math.max(1, appConfig.getTask().getSubagentMaxDepth());
+        if (depth > maxDepth) {
+            if (parentContext != null) {
+                parentContext.event("subagent.rejected", "子 Agent depth 超限：" + depth + "/" + maxDepth);
+            }
+            return failureResult("delegate", "Subagent depth limit exceeded.");
+        }
+        if (!concurrencyLimiter.tryAcquire()) {
+            if (parentContext != null) {
+                parentContext.event("subagent.rejected", "子 Agent 并发数已达上限");
+            }
+            return failureResult("delegate", "Subagent concurrency limit exceeded.");
+        }
 
         try {
             SessionRecord parentSession = sessionRepository.getBoundSession(sourceKey);
@@ -136,7 +176,12 @@ public class DefaultDelegationService implements DelegationService {
             GatewayMessage message =
                     new GatewayMessage(PlatformType.MEMORY, "", "", decoratePrompt(task));
             message.setSourceKeyOverride(childSourceKey);
-            SubagentRunRecord subagent = startSubagent(subagentId, sourceKey, childSourceKey, task);
+            SubagentRunRecord subagent =
+                    startSubagent(subagentId, sourceKey, childSourceKey, task, parentContext, depth);
+            if (isInterrupted(subagentId)) {
+                finishInterrupted(subagent, "Subagent interrupted before start.");
+                return failureResult(subagent.getName(), "Subagent interrupted before start.");
+            }
             GatewayReply reply = conversationHolder.get().handleIncoming(message);
             finishSubagent(subagent, reply);
 
@@ -148,19 +193,57 @@ public class DefaultDelegationService implements DelegationService {
             result.setSourceKey(childSourceKey);
             result.setContent(reply == null ? "" : reply.getContent());
             result.setError(reply != null && reply.isError());
+            if (subagent.getChildRunId() != null) {
+                result.setRunId(subagent.getChildRunId());
+            }
             return result;
         } catch (Exception e) {
             log.warn("delegateSingle failed: sourceKey={}, prompt={}", sourceKey, prompt, e);
             return failureResult("delegate", e.getMessage());
+        } finally {
+            concurrencyLimiter.release();
         }
     }
 
+    @Override
     public void setSpawnPaused(boolean paused) {
         this.spawnPaused = paused;
     }
 
+    @Override
     public boolean isSpawnPaused() {
         return spawnPaused;
+    }
+
+    @Override
+    public boolean interruptSubagent(String subagentId) {
+        SubagentRunRecord record = activeRegistry.get(subagentId);
+        if (record == null) {
+            return false;
+        }
+        record.setInterruptRequested(true);
+        record.setStatus("interrupting");
+        record.setHeartbeatAt(System.currentTimeMillis());
+        saveSubagent(record);
+        return true;
+    }
+
+    @Override
+    public List<Map<String, Object>> activeSubagents() {
+        List<Map<String, Object>> list = new ArrayList<Map<String, Object>>();
+        for (SubagentRunRecord record : activeRegistry.values()) {
+            Map<String, Object> map = new LinkedHashMap<String, Object>();
+            map.put("subagent_id", record.getSubagentId());
+            map.put("parent_run_id", record.getParentRunId());
+            map.put("child_run_id", record.getChildRunId());
+            map.put("source_key", record.getChildSourceKey());
+            map.put("status", record.getStatus());
+            map.put("depth", record.getDepth());
+            map.put("heartbeat_at", record.getHeartbeatAt());
+            map.put("output_tail", record.getOutputTailJson());
+            list.add(map);
+        }
+        return list;
     }
 
     @Override
@@ -172,7 +255,12 @@ public class DefaultDelegationService implements DelegationService {
         }
 
         ExecutorService executorService =
-                Executors.newFixedThreadPool(Math.min(MAX_CONCURRENT, tasks.size()));
+                Executors.newFixedThreadPool(
+                        Math.min(
+                                appConfig == null
+                                        ? 3
+                                        : Math.max(1, appConfig.getTask().getSubagentMaxConcurrency()),
+                                tasks.size()));
         try {
             List<Future<DelegationResult>> futures = new ArrayList<Future<DelegationResult>>();
             for (final DelegationTask task : tasks) {
@@ -280,10 +368,16 @@ public class DefaultDelegationService implements DelegationService {
     }
 
     private SubagentRunRecord startSubagent(
-            String subagentId, String parentSourceKey, String childSourceKey, DelegationTask task) {
+            String subagentId,
+            String parentSourceKey,
+            String childSourceKey,
+            DelegationTask task,
+            AgentRunContext parentContext,
+            int depth) {
         SubagentRunRecord record = new SubagentRunRecord();
         long now = System.currentTimeMillis();
         record.setSubagentId(subagentId);
+        record.setParentRunId(parentContext == null ? null : parentContext.getRunId());
         record.setParentSourceKey(parentSourceKey);
         record.setChildSourceKey(childSourceKey);
         record.setName(StrUtil.blankToDefault(task == null ? null : task.getName(), "delegate"));
@@ -291,10 +385,16 @@ public class DefaultDelegationService implements DelegationService {
                 com.jimuqu.solon.claw.core.model.AgentRunContext.safe(
                         task == null ? null : task.getPrompt(), 1000));
         record.setStatus("running");
-        record.setDepth(1);
+        record.setActive(true);
+        record.setDepth(depth);
         record.setStartedAt(now);
         record.setHeartbeatAt(now);
         saveSubagent(record);
+        activeRegistry.put(subagentId, record);
+        if (parentContext != null) {
+            parentContext.event("subagent.spawned", "子 Agent 已启动：" + record.getName());
+            incrementSubtaskCount(parentContext.getRunId());
+        }
         return record;
     }
 
@@ -304,11 +404,82 @@ public class DefaultDelegationService implements DelegationService {
         }
         record.setStatus(reply != null && reply.isError() ? "failed" : "success");
         record.setSessionId(reply == null ? null : reply.getSessionId());
+        record.setChildRunId(resolveLatestRunId(record.getChildSourceKey(), record.getSessionId()));
         record.setError(reply != null && reply.isError() ? reply.getContent() : null);
         record.setOutputTailJson(buildTailJson(reply == null ? "" : reply.getContent()));
+        record.setActive(false);
         record.setFinishedAt(System.currentTimeMillis());
         record.setHeartbeatAt(record.getFinishedAt());
         saveSubagent(record);
+        activeRegistry.remove(record.getSubagentId());
+    }
+
+    private void finishInterrupted(SubagentRunRecord record, String message) {
+        if (record == null) {
+            return;
+        }
+        record.setStatus("interrupted");
+        record.setError(message);
+        record.setActive(false);
+        record.setInterruptRequested(true);
+        record.setFinishedAt(System.currentTimeMillis());
+        record.setHeartbeatAt(record.getFinishedAt());
+        saveSubagent(record);
+        activeRegistry.remove(record.getSubagentId());
+    }
+
+    private boolean isInterrupted(String subagentId) {
+        SubagentRunRecord record = activeRegistry.get(subagentId);
+        return record != null && record.isInterruptRequested();
+    }
+
+    private int resolveDepth(AgentRunContext parentContext) {
+        if (parentContext == null || StrUtil.isBlank(parentContext.getRunId())) {
+            return 1;
+        }
+        try {
+            AgentRunRecord parent = agentRunRepository == null ? null : agentRunRepository.findRun(parentContext.getRunId());
+            if (parent != null && "subagent".equals(parent.getRunKind())) {
+                return 2;
+            }
+        } catch (Exception ignored) {
+        }
+        return 1;
+    }
+
+    private void incrementSubtaskCount(String parentRunId) {
+        if (agentRunRepository == null || StrUtil.isBlank(parentRunId)) {
+            return;
+        }
+        try {
+            AgentRunRecord parent = agentRunRepository.findRun(parentRunId);
+            if (parent != null) {
+                parent.setSubtaskCount(parent.getSubtaskCount() + 1);
+                parent.setLastActivityAt(System.currentTimeMillis());
+                agentRunRepository.saveRun(parent);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private String resolveLatestRunId(String childSourceKey, String sessionId) {
+        if (agentRunRepository == null || StrUtil.isBlank(childSourceKey)) {
+            return null;
+        }
+        try {
+            List<AgentRunRecord> runs = agentRunRepository.listActiveBySource(childSourceKey, 1);
+            if (!runs.isEmpty()) {
+                return runs.get(0).getRunId();
+            }
+            if (StrUtil.isNotBlank(sessionId)) {
+                List<AgentRunRecord> bySession = agentRunRepository.listBySession(sessionId, 1);
+                if (!bySession.isEmpty()) {
+                    return bySession.get(0).getRunId();
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     private void saveSubagent(SubagentRunRecord record) {

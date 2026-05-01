@@ -2,11 +2,13 @@ package com.jimuqu.solon.claw.web;
 
 import com.jimuqu.solon.claw.core.model.AgentRunEventRecord;
 import com.jimuqu.solon.claw.core.model.AgentRunRecord;
+import com.jimuqu.solon.claw.core.model.RunControlCommand;
 import com.jimuqu.solon.claw.core.model.RunRecoveryRecord;
 import com.jimuqu.solon.claw.core.model.SubagentRunRecord;
 import com.jimuqu.solon.claw.core.model.ToolCallRecord;
 import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.core.service.AgentRunControlService;
+import com.jimuqu.solon.claw.core.service.DelegationService;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -18,15 +20,24 @@ import org.noear.snack4.ONode;
 public class DashboardRunService {
     private final AgentRunRepository agentRunRepository;
     private final AgentRunControlService agentRunControlService;
+    private final DelegationService delegationService;
 
     public DashboardRunService(AgentRunRepository agentRunRepository) {
-        this(agentRunRepository, null);
+        this(agentRunRepository, null, null);
     }
 
     public DashboardRunService(
             AgentRunRepository agentRunRepository, AgentRunControlService agentRunControlService) {
+        this(agentRunRepository, agentRunControlService, null);
+    }
+
+    public DashboardRunService(
+            AgentRunRepository agentRunRepository,
+            AgentRunControlService agentRunControlService,
+            DelegationService delegationService) {
         this.agentRunRepository = agentRunRepository;
         this.agentRunControlService = agentRunControlService;
+        this.delegationService = delegationService;
     }
 
     public Map<String, Object> sessionRuns(String sessionId, int limit) throws Exception {
@@ -50,6 +61,7 @@ public class DashboardRunService {
         map.put("tools", toolCalls(runId).get("tools"));
         map.put("subagents", subagents(runId).get("subagents"));
         map.put("recoveries", recoveries(runId).get("recoveries"));
+        map.put("commands", commands(runId).get("commands"));
         return map;
     }
 
@@ -59,6 +71,52 @@ public class DashboardRunService {
             runs.add(toRun(record));
         }
         return Collections.singletonMap("runs", runs);
+    }
+
+    public Map<String, Object> activeSubagents() {
+        Map<String, Object> map = new LinkedHashMap<String, Object>();
+        map.put(
+                "subagents",
+                delegationService == null
+                        ? Collections.emptyList()
+                        : delegationService.activeSubagents());
+        map.put(
+                "spawn_paused",
+                delegationService != null && delegationService.isSpawnPaused());
+        return map;
+    }
+
+    public Map<String, Object> controlSubagent(String subagentId, String command) {
+        Map<String, Object> map = new LinkedHashMap<String, Object>();
+        map.put("subagent_id", subagentId);
+        map.put("command", command);
+        if (delegationService == null) {
+            map.put("ok", false);
+            map.put("status", "delegation_unavailable");
+            return map;
+        }
+        String normalized =
+                command == null ? "" : command.trim().toLowerCase(java.util.Locale.ROOT);
+        if ("pause_spawn".equals(normalized) || "pause".equals(normalized)) {
+            delegationService.setSpawnPaused(true);
+            map.put("ok", true);
+            map.put("status", "spawn_paused");
+            return map;
+        }
+        if ("resume_spawn".equals(normalized) || "resume".equals(normalized)) {
+            delegationService.setSpawnPaused(false);
+            map.put("ok", true);
+            map.put("status", "spawn_resumed");
+            return map;
+        }
+        if ("interrupt".equals(normalized)) {
+            map.put("ok", delegationService.interruptSubagent(subagentId));
+            map.put("status", Boolean.TRUE.equals(map.get("ok")) ? "interrupting" : "not_found");
+            return map;
+        }
+        map.put("ok", false);
+        map.put("status", "unsupported_command");
+        return map;
     }
 
     public Map<String, Object> control(String runId, String command, Map<String, Object> payload)
@@ -71,39 +129,11 @@ public class DashboardRunService {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("run_id", runId);
         result.put("command", normalized);
-        if ("cancel".equals(normalized) || "interrupt".equals(normalized) || "stop".equals(normalized)) {
-            if (agentRunControlService == null) {
-                result.put("ok", false);
-                result.put("status", "control_unavailable");
-                return result;
-            }
-            result.put("result", agentRunControlService.stop(record.getSourceKey()));
-            result.put("ok", true);
-            result.put("status", "interrupting");
-            return result;
-        }
-        if ("background".equals(normalized)) {
-            record.setStatus("backgrounded");
-            record.setPhase("backgrounded");
-            record.setBackgrounded(true);
-            record.setLastActivityAt(System.currentTimeMillis());
-            agentRunRepository.saveRun(record);
-            result.put("ok", true);
-            result.put("status", "backgrounded");
-            return result;
-        }
-        if ("resume".equals(normalized)) {
-            record.setStatus("recoverable".equals(record.getStatus()) ? "running" : record.getStatus());
-            record.setPhase("recovery");
-            record.setRecoverable(false);
-            record.setLastActivityAt(System.currentTimeMillis());
-            agentRunRepository.saveRun(record);
-            result.put("ok", true);
-            result.put("status", record.getStatus());
-            return result;
+        if (agentRunControlService != null) {
+            return agentRunControlService.controlRun(runId, normalized, payload);
         }
         result.put("ok", false);
-        result.put("status", "unsupported_command");
+        result.put("status", "control_unavailable");
         result.put("payload", payload);
         return result;
     }
@@ -138,6 +168,14 @@ public class DashboardRunService {
             recoveries.add(toRecovery(record));
         }
         return Collections.singletonMap("recoveries", recoveries);
+    }
+
+    public Map<String, Object> commands(String runId) throws Exception {
+        List<Map<String, Object>> commands = new ArrayList<Map<String, Object>>();
+        for (RunControlCommand record : agentRunRepository.listRunControlCommands(runId)) {
+            commands.add(toCommand(record));
+        }
+        return Collections.singletonMap("commands", commands);
     }
 
     private Map<String, Object> toRun(AgentRunRecord record) {
@@ -221,8 +259,13 @@ public class DashboardRunService {
         map.put("result_preview", record.getResultPreview());
         map.put("result_ref", record.getResultRef());
         map.put("error", record.getError());
+        map.put("read_only", record.isReadOnly());
         map.put("interruptible", record.isInterruptible());
         map.put("side_effecting", record.isSideEffecting());
+        map.put("result_indexable", record.isResultIndexable());
+        map.put("output_limit_bytes", record.getOutputLimitBytes());
+        map.put("result_size_bytes", record.getResultSizeBytes());
+        map.put("execution_policy", record.getExecutionPolicy());
         map.put("started_at", record.getStartedAt());
         map.put("finished_at", record.getFinishedAt());
         map.put("duration_ms", record.getDurationMs());
@@ -240,6 +283,8 @@ public class DashboardRunService {
         map.put("name", record.getName());
         map.put("goal_preview", record.getGoalPreview());
         map.put("status", record.getStatus());
+        map.put("active", record.isActive());
+        map.put("interrupt_requested", record.isInterruptRequested());
         map.put("depth", record.getDepth());
         map.put("task_index", record.getTaskIndex());
         map.put(
@@ -250,6 +295,19 @@ public class DashboardRunService {
         map.put("started_at", record.getStartedAt());
         map.put("finished_at", record.getFinishedAt());
         map.put("heartbeat_at", record.getHeartbeatAt());
+        return map;
+    }
+
+    private Map<String, Object> toCommand(RunControlCommand record) {
+        Map<String, Object> map = new LinkedHashMap<String, Object>();
+        map.put("command_id", record.getCommandId());
+        map.put("run_id", record.getRunId());
+        map.put("source_key", record.getSourceKey());
+        map.put("command", record.getCommand());
+        map.put("status", record.getStatus());
+        map.put("created_at", record.getCreatedAt());
+        map.put("handled_at", record.getHandledAt());
+        map.put("payload", parseJsonField(record.getPayloadJson(), "payload", record.getRunId(), null));
         return map;
     }
 

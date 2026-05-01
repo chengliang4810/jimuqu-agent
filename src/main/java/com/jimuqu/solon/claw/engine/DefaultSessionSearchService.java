@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.core.model.LlmResult;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.model.SessionSearchEntry;
+import com.jimuqu.solon.claw.core.model.SessionSearchQuery;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
 import com.jimuqu.solon.claw.core.service.SessionSearchService;
@@ -96,6 +97,33 @@ public class DefaultSessionSearchService implements SessionSearchService {
             results.add(entry);
         }
         return results;
+    }
+
+    @Override
+    public List<SessionSearchEntry> search(SessionSearchQuery query) throws Exception {
+        if (query == null) {
+            return search(null, null, DEFAULT_LIMIT);
+        }
+        List<SessionSearchEntry> entries =
+                search(query.getSourceKey(), query.getQuery(), query.getLimit());
+        List<SessionSearchEntry> filtered = new ArrayList<SessionSearchEntry>();
+        for (SessionSearchEntry entry : entries) {
+            if (StrUtil.isNotBlank(query.getSessionId())
+                    && !query.getSessionId().equals(entry.getSessionId())) {
+                continue;
+            }
+            if (query.getTimeFrom() > 0 && entry.getUpdatedAt() < query.getTimeFrom()) {
+                continue;
+            }
+            if (query.getTimeTo() > 0 && entry.getUpdatedAt() > query.getTimeTo()) {
+                continue;
+            }
+            entry.setRunId(query.getRunId());
+            entry.setToolName(query.getToolName());
+            entry.setChannel(query.getChannel());
+            filtered.add(entry);
+        }
+        return filtered;
     }
 
     private String buildSummary(

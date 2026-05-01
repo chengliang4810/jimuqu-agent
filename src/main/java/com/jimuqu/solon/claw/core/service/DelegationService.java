@@ -3,6 +3,7 @@ package com.jimuqu.solon.claw.core.service;
 import com.jimuqu.solon.claw.core.model.DelegationResult;
 import com.jimuqu.solon.claw.core.model.DelegationTask;
 import java.util.List;
+import java.util.Map;
 
 /** 子代理委托服务接口。 */
 public interface DelegationService {
@@ -21,4 +22,18 @@ public interface DelegationService {
     /** 批量并行委托。 */
     List<DelegationResult> delegateBatch(String sourceKey, List<DelegationTask> tasks)
             throws Exception;
+
+    default void setSpawnPaused(boolean paused) {}
+
+    default boolean isSpawnPaused() {
+        return false;
+    }
+
+    default boolean interruptSubagent(String subagentId) {
+        return false;
+    }
+
+    default List<Map<String, Object>> activeSubagents() {
+        return java.util.Collections.emptyList();
+    }
 }

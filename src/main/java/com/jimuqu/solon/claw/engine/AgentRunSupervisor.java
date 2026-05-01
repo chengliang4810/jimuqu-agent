@@ -4,12 +4,18 @@ import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.agent.AgentRuntimeScope;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.core.model.AgentRunContext;
+import com.jimuqu.solon.claw.core.model.AgentRunEventRecord;
 import com.jimuqu.solon.claw.core.model.AgentRunOutcome;
 import com.jimuqu.solon.claw.core.model.AgentRunRecord;
 import com.jimuqu.solon.claw.core.model.AgentRunStopResult;
 import com.jimuqu.solon.claw.core.model.CompressionOutcome;
 import com.jimuqu.solon.claw.core.model.ContextBudgetDecision;
+import com.jimuqu.solon.claw.core.model.GatewayMessage;
+import com.jimuqu.solon.claw.core.model.GatewayReply;
 import com.jimuqu.solon.claw.core.model.LlmResult;
+import com.jimuqu.solon.claw.core.model.QueuedRunMessage;
+import com.jimuqu.solon.claw.core.model.RunBusyDecision;
+import com.jimuqu.solon.claw.core.model.RunControlCommand;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
@@ -28,9 +34,11 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.noear.solon.ai.chat.ChatRole;
 import org.noear.solon.ai.chat.message.AssistantMessage;
@@ -60,6 +68,8 @@ public class AgentRunSupervisor implements AgentRunControlService {
     private final LlmProviderService llmProviderService;
     private final ConcurrentMap<String, RunHandle> runningRuns =
             new ConcurrentHashMap<String, RunHandle>();
+    private final ConcurrentMap<String, AtomicBoolean> drainingQueues =
+            new ConcurrentHashMap<String, AtomicBoolean>();
     private volatile long lastRunFinishedAt;
 
     @Override
@@ -77,6 +87,185 @@ public class AgentRunSupervisor implements AgentRunControlService {
         }
         return AgentRunStopResult.stopped(
                 handle.runId, handle.sessionId, interruptSent, handle.startedAt);
+    }
+
+    @Override
+    public RunBusyDecision coordinateIncoming(
+            String sourceKey, String sessionId, GatewayMessage message) throws Exception {
+        String key = normalizeSourceKey(sourceKey);
+        String policy = normalizeBusyPolicy(appConfig.getTask().getBusyPolicy());
+        RunHandle handle = runningRuns.get(key);
+        if (handle == null || handle.cancelled.get()) {
+            return RunBusyDecision.runNow(policy);
+        }
+        AgentRunRecord runningRecord = agentRunRepository.findRun(handle.runId);
+        if (runningRecord != null && runningRecord.isBackgrounded()) {
+            return RunBusyDecision.runNow(policy);
+        }
+        if ("interrupt".equals(policy)) {
+            AgentRunRecord active = runningRecord;
+            if (active != null) {
+                active.setStatus("interrupting");
+                active.setPhase("interrupting");
+                active.setLastActivityAt(System.currentTimeMillis());
+                active.setExitReason("busy_interrupt");
+                agentRunRepository.saveRun(active);
+                appendRunEvent(active, "run.interrupting", "收到新消息，按 interrupt 策略打断当前 run", null);
+            }
+            recordCommand(handle.runId, key, "interrupt", "{\"reason\":\"busy_policy\"}", "handled");
+            stop(key);
+            return RunBusyDecision.runNow(policy);
+        }
+        if ("steer".equals(policy)) {
+            String text = message == null ? "" : message.getText();
+            recordCommand(
+                    handle.runId,
+                    key,
+                    "steer",
+                    "{\"instruction\":\"" + escapeJson(AgentRunContext.safe(text, 2000)) + "\"}",
+                    "pending");
+            AgentRunRecord active = agentRunRepository.findRun(handle.runId);
+            if (active != null) {
+                appendRunEvent(active, "run.steer", "收到运行中 steer 指令，下一轮模型调用前注入", null);
+            }
+            RunBusyDecision decision = new RunBusyDecision();
+            decision.setPolicy(policy);
+            decision.setStatus("steered");
+            decision.setRunId(handle.runId);
+            decision.setMessage("已将新消息注入当前长任务。");
+            return decision;
+        }
+        if ("reject".equals(policy)) {
+            AgentRunRecord active = agentRunRepository.findRun(handle.runId);
+            if (active != null) {
+                appendRunEvent(active, "run.rejected", "同一会话已有运行中任务，按 reject 策略拒绝新消息", null);
+            }
+            RunBusyDecision decision = new RunBusyDecision();
+            decision.setPolicy(policy);
+            decision.setStatus("rejected");
+            decision.setRunId(handle.runId);
+            decision.setRejected(true);
+            decision.setMessage("当前会话已有任务在运行，请稍后再试，或先停止当前任务。");
+            return decision;
+        }
+        QueuedRunMessage queued = queueMessage(key, sessionId, message, policy);
+        RunBusyDecision decision = new RunBusyDecision();
+        decision.setPolicy(policy);
+        decision.setStatus("queued");
+        decision.setRunId(queued.getRunId());
+        decision.setQueueId(queued.getQueueId());
+        decision.setQueued(true);
+        decision.setMessage("当前会话已有任务在运行，新消息已排队。");
+        return decision;
+    }
+
+    @Override
+    public Map<String, Object> controlRun(String runId, String command, Map<String, Object> payload)
+            throws Exception {
+        AgentRunRecord record = agentRunRepository.findRun(runId);
+        if (record == null) {
+            throw new IllegalArgumentException("Run not found: " + runId);
+        }
+        String normalized =
+                StrUtil.blankToDefault(command, "").trim().toLowerCase(Locale.ROOT);
+        String payloadJson = payload == null ? null : org.noear.snack4.ONode.serialize(payload);
+        recordCommand(runId, record.getSourceKey(), normalized, payloadJson, "handled");
+        Map<String, Object> result = new java.util.LinkedHashMap<String, Object>();
+        result.put("run_id", runId);
+        result.put("command", normalized);
+        if ("cancel".equals(normalized) || "interrupt".equals(normalized) || "stop".equals(normalized)) {
+            record.setStatus("interrupting");
+            record.setPhase("interrupting");
+            record.setLastActivityAt(System.currentTimeMillis());
+            agentRunRepository.saveRun(record);
+            appendRunEvent(record, "run.control." + normalized, "收到控制命令：" + normalized, payloadJson);
+            result.put("result", stop(record.getSourceKey()));
+            result.put("ok", true);
+            result.put("status", "interrupting");
+            return result;
+        }
+        if ("background".equals(normalized)) {
+            record.setStatus("backgrounded");
+            record.setPhase("backgrounded");
+            record.setBackgrounded(true);
+            record.setLastActivityAt(System.currentTimeMillis());
+            agentRunRepository.saveRun(record);
+            appendRunEvent(record, "run.backgrounded", "run 已转入后台继续执行", payloadJson);
+            result.put("ok", true);
+            result.put("status", "backgrounded");
+            return result;
+        }
+        if ("resume".equals(normalized)) {
+            record.setStatus("running");
+            record.setPhase("recovery");
+            record.setRecoverable(false);
+            record.setLastActivityAt(System.currentTimeMillis());
+            agentRunRepository.saveRun(record);
+            appendRunEvent(record, "run.resume", "Dashboard 请求恢复观察 run", payloadJson);
+            result.put("ok", true);
+            result.put("status", record.getStatus());
+            return result;
+        }
+        if ("steer".equals(normalized)) {
+            recordCommand(runId, record.getSourceKey(), "steer", payloadJson, "pending");
+            appendRunEvent(record, "run.steer", "Dashboard 注入 steer 指令", payloadJson);
+            result.put("ok", true);
+            result.put("status", "steered");
+            return result;
+        }
+        result.put("ok", false);
+        result.put("status", "unsupported_command");
+        return result;
+    }
+
+    @Override
+    public String consumeSteerInstruction(String runId) {
+        try {
+            RunControlCommand command = agentRunRepository.findLatestPendingCommand(runId, "steer");
+            if (command == null) {
+                return null;
+            }
+            agentRunRepository.markRunControlCommandHandled(
+                    command.getCommandId(), "handled", System.currentTimeMillis());
+            String payload = command.getPayloadJson();
+            if (StrUtil.isBlank(payload)) {
+                return null;
+            }
+            Object parsed = org.noear.snack4.ONode.deserialize(payload, Object.class);
+            if (parsed instanceof Map) {
+                Object instruction = ((Map<?, ?>) parsed).get("instruction");
+                return instruction == null ? payload : String.valueOf(instruction);
+            }
+            return payload;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    @Override
+    public void onRunFinished(
+            String sourceKey, String sessionId, Function<GatewayMessage, GatewayReply> runner) {
+        String key = normalizeSourceKey(sourceKey);
+        if (isRunning(key)) {
+            return;
+        }
+        AtomicBoolean draining =
+                drainingQueues.computeIfAbsent(key, ignored -> new AtomicBoolean(false));
+        if (!draining.compareAndSet(false, true)) {
+            return;
+        }
+        Thread thread =
+                new Thread(
+                        () -> {
+                            try {
+                                drainQueue(key, sessionId, runner);
+                            } finally {
+                                draining.set(false);
+                            }
+                        },
+                        "jimuqu-run-queue-" + Math.abs(key.hashCode()));
+        thread.setDaemon(true);
+        thread.start();
     }
 
     @Override
@@ -132,7 +321,10 @@ public class AgentRunSupervisor implements AgentRunControlService {
         runRecord.setRunId(IdSupport.newId());
         runRecord.setSessionId(session.getSessionId());
         runRecord.setSourceKey(session.getSourceKey());
-        runRecord.setRunKind(resume ? "resume" : "conversation");
+        AgentRunContext parentContext = AgentRunContext.current();
+        boolean subagentRun = parentContext != null && !StrUtil.equals(parentContext.getSourceKey(), session.getSourceKey());
+        runRecord.setRunKind(subagentRun ? "subagent" : (resume ? "resume" : "conversation"));
+        runRecord.setParentRunId(subagentRun ? parentContext.getRunId() : null);
         runRecord.setAgentName(agentScope.getEffectiveName());
         runRecord.setAgentSnapshotJson(agentScope.getSnapshotJson());
         runRecord.setStatus("running");
@@ -155,6 +347,8 @@ public class AgentRunSupervisor implements AgentRunControlService {
         RunHandle runHandle =
                 registerRun(
                         session.getSourceKey(), runRecord.getRunId(), session.getSessionId(), now);
+        AgentRunContext previousContext = AgentRunContext.current();
+        AgentRunContext.setCurrent(runContext);
         try {
             pruneOldRuns();
 
@@ -202,11 +396,20 @@ public class AgentRunSupervisor implements AgentRunControlService {
                                     + resolved.getModel());
 
                     try {
+                        String steer = consumeSteerInstruction(runRecord.getRunId());
+                        String effectiveUserMessage = userMessage;
+                        if (StrUtil.isNotBlank(steer)) {
+                            effectiveUserMessage =
+                                    StrUtil.blankToDefault(userMessage, "")
+                                            + "\n\n[运行中追加指令]\n"
+                                            + steer;
+                            runContext.event("run.steer.injected", "已将 steer 指令注入本轮模型调用");
+                        }
                         CompressionOutcome compression =
                                 compressBeforeAttempt(
                                         session,
                                         systemPrompt,
-                                        userMessage,
+                                        effectiveUserMessage,
                                         resolved,
                                         runContext,
                                         eventSink,
@@ -230,7 +433,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
                                 llmGateway.executeOnce(
                                         session,
                                         systemPrompt,
-                                        userMessage,
+                                        effectiveUserMessage,
                                         tools,
                                         feedbackSink,
                                         eventSink,
@@ -406,9 +609,11 @@ public class AgentRunSupervisor implements AgentRunControlService {
             throw e;
         } finally {
             unregisterRun(session.getSourceKey(), runHandle);
+            AgentRunContext.setCurrent(previousContext);
             if (runHandle.cancelled.get()) {
                 Thread.interrupted();
             }
+            lastRunFinishedAt = System.currentTimeMillis();
         }
     }
 
@@ -754,6 +959,186 @@ public class AgentRunSupervisor implements AgentRunControlService {
     private boolean isCancellationRequested(String sourceKey) {
         RunHandle handle = runningRuns.get(normalizeSourceKey(sourceKey));
         return handle != null && handle.cancelled.get();
+    }
+
+    private QueuedRunMessage queueMessage(
+            String sourceKey, String sessionId, GatewayMessage message, String policy)
+            throws Exception {
+        long now = System.currentTimeMillis();
+        QueuedRunMessage queued = new QueuedRunMessage();
+        queued.setQueueId(IdSupport.newId());
+        queued.setRunId(IdSupport.newId());
+        queued.setSessionId(sessionId);
+        queued.setSourceKey(sourceKey);
+        queued.setMessageText(AgentRunContext.safe(message == null ? "" : message.getText(), 4000));
+        queued.setMessageJson(serializeMessage(message));
+        queued.setStatus("queued");
+        queued.setBusyPolicy(policy);
+        queued.setCreatedAt(now);
+        agentRunRepository.saveQueuedMessage(queued);
+
+        AgentRunRecord runRecord = new AgentRunRecord();
+        runRecord.setRunId(queued.getRunId());
+        runRecord.setSessionId(sessionId);
+        runRecord.setSourceKey(sourceKey);
+        runRecord.setRunKind("conversation");
+        runRecord.setStatus("queued");
+        runRecord.setPhase("queued");
+        runRecord.setBusyPolicy(policy);
+        runRecord.setInputPreview(queued.getMessageText());
+        runRecord.setQueuedAt(now);
+        runRecord.setStartedAt(now);
+        runRecord.setHeartbeatAt(now);
+        runRecord.setLastActivityAt(now);
+        agentRunRepository.saveRun(runRecord);
+        appendRunEvent(runRecord, "run.queued", "busy 策略为 queue，新消息已进入队列", null);
+        return queued;
+    }
+
+    private String serializeMessage(GatewayMessage message) {
+        if (message == null) {
+            return "{}";
+        }
+        Map<String, Object> map = new java.util.LinkedHashMap<String, Object>();
+        map.put("platform", message.getPlatform() == null ? null : message.getPlatform().name());
+        map.put("chatId", message.getChatId());
+        map.put("userId", message.getUserId());
+        map.put("chatType", message.getChatType());
+        map.put("chatName", message.getChatName());
+        map.put("userName", message.getUserName());
+        map.put("text", message.getText());
+        map.put("threadId", message.getThreadId());
+        map.put("sourceKeyOverride", message.getSourceKeyOverride());
+        map.put("heartbeat", message.isHeartbeat());
+        map.put("timestamp", message.getTimestamp());
+        return org.noear.snack4.ONode.serialize(map);
+    }
+
+    private GatewayMessage deserializeMessage(QueuedRunMessage queued) {
+        GatewayMessage message = new GatewayMessage();
+        try {
+            Object parsed = org.noear.snack4.ONode.deserialize(queued.getMessageJson(), Object.class);
+            if (parsed instanceof Map) {
+                Map<?, ?> map = (Map<?, ?>) parsed;
+                message.setPlatform(
+                        com.jimuqu.solon.claw.core.enums.PlatformType.fromName(
+                                stringValue(map.get("platform"))));
+                message.setChatId(stringValue(map.get("chatId")));
+                message.setUserId(stringValue(map.get("userId")));
+                message.setChatType(stringValue(map.get("chatType")));
+                message.setChatName(stringValue(map.get("chatName")));
+                message.setUserName(stringValue(map.get("userName")));
+                message.setText(stringValue(map.get("text")));
+                message.setThreadId(stringValue(map.get("threadId")));
+                message.setSourceKeyOverride(stringValue(map.get("sourceKeyOverride")));
+                message.setHeartbeat(Boolean.parseBoolean(stringValue(map.get("heartbeat"))));
+                Object timestamp = map.get("timestamp");
+                if (timestamp instanceof Number) {
+                    message.setTimestamp(((Number) timestamp).longValue());
+                }
+            }
+        } catch (Exception ignored) {
+            message.setText(queued.getMessageText());
+            message.setSourceKeyOverride(queued.getSourceKey());
+        }
+        if (StrUtil.isBlank(message.getSourceKeyOverride())) {
+            message.setSourceKeyOverride(queued.getSourceKey());
+        }
+        return message;
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private void drainQueue(
+            String sourceKey, String sessionId, Function<GatewayMessage, GatewayReply> runner) {
+        if (runner == null) {
+            return;
+        }
+        while (!isRunning(sourceKey)) {
+            QueuedRunMessage queued;
+            try {
+                queued = agentRunRepository.findNextQueuedMessage(sourceKey, sessionId);
+            } catch (Exception e) {
+                log.warn("find queued run failed: sourceKey={}", sourceKey, e);
+                return;
+            }
+            if (queued == null) {
+                return;
+            }
+            try {
+                agentRunRepository.markQueuedMessage(
+                        queued.getQueueId(), "running", System.currentTimeMillis(), null);
+                runner.apply(deserializeMessage(queued));
+                agentRunRepository.markQueuedMessage(
+                        queued.getQueueId(), "success", System.currentTimeMillis(), null);
+            } catch (Exception e) {
+                try {
+                    agentRunRepository.markQueuedMessage(
+                            queued.getQueueId(), "failed", System.currentTimeMillis(), e.getMessage());
+                } catch (Exception ignored) {
+                }
+                log.warn("queued run failed: queueId={}", queued.getQueueId(), e);
+            }
+        }
+    }
+
+    private String normalizeBusyPolicy(String policy) {
+        String normalized = StrUtil.blankToDefault(policy, "queue").trim().toLowerCase(Locale.ROOT);
+        if ("interrupt".equals(normalized)
+                || "steer".equals(normalized)
+                || "reject".equals(normalized)
+                || "queue".equals(normalized)) {
+            return normalized;
+        }
+        return "queue";
+    }
+
+    private void recordCommand(
+            String runId, String sourceKey, String command, String payloadJson, String status)
+            throws Exception {
+        RunControlCommand record = new RunControlCommand();
+        record.setCommandId(IdSupport.newId());
+        record.setRunId(runId);
+        record.setSourceKey(sourceKey);
+        record.setCommand(command);
+        record.setPayloadJson(payloadJson);
+        record.setStatus(StrUtil.blankToDefault(status, "pending"));
+        record.setCreatedAt(System.currentTimeMillis());
+        if (!"pending".equals(record.getStatus())) {
+            record.setHandledAt(record.getCreatedAt());
+        }
+        agentRunRepository.saveRunControlCommand(record);
+    }
+
+    private void appendRunEvent(
+            AgentRunRecord record, String eventType, String summary, String metadataJson) {
+        if (record == null) {
+            return;
+        }
+        try {
+            AgentRunEventRecord event = new AgentRunEventRecord();
+            event.setEventId(IdSupport.newId());
+            event.setRunId(record.getRunId());
+            event.setSessionId(record.getSessionId());
+            event.setSourceKey(record.getSourceKey());
+            event.setEventType(eventType);
+            event.setPhase(record.getPhase());
+            event.setSeverity(eventType != null && eventType.contains("reject") ? "warn" : "info");
+            event.setSummary(AgentRunContext.safe(summary, 1000));
+            event.setMetadataJson(metadataJson);
+            event.setCreatedAt(System.currentTimeMillis());
+            agentRunRepository.appendEvent(event);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private String normalizeSourceKey(String sourceKey) {

@@ -77,6 +77,16 @@ public class DashboardRunController {
         return recoveries(runId);
     }
 
+    @Mapping(value = "/api/runs/{runId}/commands", method = MethodType.GET)
+    public Map<String, Object> commands(String runId) throws Exception {
+        return DashboardResponse.ok(dashboardRunService.commands(runId));
+    }
+
+    @Mapping(value = "/api/hermes/runs/{runId}/commands", method = MethodType.GET)
+    public Map<String, Object> hermesCommands(String runId) throws Exception {
+        return commands(runId);
+    }
+
     @Mapping(value = "/api/runs/{runId}/control", method = MethodType.POST)
     public Map<String, Object> control(String runId, Context context) throws Exception {
         ONode body = ONode.ofJson(context.body());
@@ -120,5 +130,17 @@ public class DashboardRunController {
     @Mapping(value = "/api/hermes/runs/recoverable", method = MethodType.GET)
     public Map<String, Object> hermesRecoverable(Context context) throws Exception {
         return recoverable(context);
+    }
+
+    @Mapping(value = "/api/hermes/runs/subagents/active", method = MethodType.GET)
+    public Map<String, Object> activeSubagents() {
+        return DashboardResponse.ok(dashboardRunService.activeSubagents());
+    }
+
+    @Mapping(value = "/api/hermes/runs/subagents/{subagentId}/control", method = MethodType.POST)
+    public Map<String, Object> controlSubagent(String subagentId, Context context) throws Exception {
+        ONode body = ONode.ofJson(context.body());
+        return DashboardResponse.ok(
+                dashboardRunService.controlSubagent(subagentId, body.get("command").getString()));
     }
 }

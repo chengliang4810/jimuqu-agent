@@ -9,6 +9,8 @@ import org.noear.snack4.ONode;
 
 /** 当前 Agent run 的追踪上下文。 */
 public class AgentRunContext {
+    private static final ThreadLocal<AgentRunContext> CURRENT = new ThreadLocal<AgentRunContext>();
+
     private final AgentRunRepository repository;
     private final String runId;
     private final String sessionId;
@@ -25,6 +27,18 @@ public class AgentRunContext {
         this.runId = runId;
         this.sessionId = sessionId;
         this.sourceKey = sourceKey;
+    }
+
+    public static AgentRunContext current() {
+        return CURRENT.get();
+    }
+
+    public static void setCurrent(AgentRunContext context) {
+        if (context == null) {
+            CURRENT.remove();
+        } else {
+            CURRENT.set(context);
+        }
     }
 
     public String getRunId() {

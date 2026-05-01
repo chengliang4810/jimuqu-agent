@@ -506,6 +506,38 @@ public class SqliteDatabase {
             statement.execute(
                     "create virtual table if not exists agent_run_events_fts using fts5(run_id, session_id, source_key, event_type, summary, metadata_json)");
             statement.execute(
+                    "create table if not exists run_control_commands ("
+                            + "command_id text primary key,"
+                            + "run_id text,"
+                            + "source_key text,"
+                            + "command text not null,"
+                            + "payload_json text,"
+                            + "status text not null,"
+                            + "created_at integer not null,"
+                            + "handled_at integer not null default 0"
+                            + ")");
+            statement.execute(
+                    "create index if not exists idx_run_control_commands_run on run_control_commands(run_id, created_at asc)");
+            statement.execute(
+                    "create index if not exists idx_run_control_commands_pending on run_control_commands(run_id, command, status, created_at desc)");
+            statement.execute(
+                    "create table if not exists queued_run_messages ("
+                            + "queue_id text primary key,"
+                            + "run_id text,"
+                            + "session_id text,"
+                            + "source_key text not null,"
+                            + "message_text text,"
+                            + "message_json text,"
+                            + "status text not null,"
+                            + "busy_policy text,"
+                            + "created_at integer not null,"
+                            + "started_at integer not null default 0,"
+                            + "finished_at integer not null default 0,"
+                            + "error text"
+                            + ")");
+            statement.execute(
+                    "create index if not exists idx_queued_run_messages_source_status on queued_run_messages(source_key, session_id, status, created_at asc)");
+            statement.execute(
                     "create table if not exists tool_calls ("
                             + "tool_call_id text primary key,"
                             + "run_id text not null,"
@@ -517,12 +549,22 @@ public class SqliteDatabase {
                             + "result_preview text,"
                             + "result_ref text,"
                             + "error text,"
+                            + "read_only integer not null default 0,"
                             + "interruptible integer not null default 0,"
                             + "side_effecting integer not null default 0,"
+                            + "result_indexable integer not null default 1,"
+                            + "output_limit_bytes integer not null default 0,"
+                            + "result_size_bytes integer not null default 0,"
+                            + "execution_policy text,"
                             + "started_at integer not null,"
                             + "finished_at integer not null default 0,"
                             + "duration_ms integer not null default 0"
                             + ")");
+            addColumn(statement, "tool_calls", "read_only integer not null default 0");
+            addColumn(statement, "tool_calls", "result_indexable integer not null default 1");
+            addColumn(statement, "tool_calls", "output_limit_bytes integer not null default 0");
+            addColumn(statement, "tool_calls", "result_size_bytes integer not null default 0");
+            addColumn(statement, "tool_calls", "execution_policy text");
             statement.execute(
                     "create index if not exists idx_tool_calls_run_started on tool_calls(run_id, started_at asc)");
             statement.execute(
@@ -536,6 +578,8 @@ public class SqliteDatabase {
                             + "name text,"
                             + "goal_preview text,"
                             + "status text not null,"
+                            + "active integer not null default 0,"
+                            + "interrupt_requested integer not null default 0,"
                             + "depth integer not null default 1,"
                             + "task_index integer not null default 0,"
                             + "output_tail_json text,"
@@ -544,6 +588,9 @@ public class SqliteDatabase {
                             + "finished_at integer not null default 0,"
                             + "heartbeat_at integer not null default 0"
                             + ")");
+            addColumn(statement, "subagent_runs", "active integer not null default 0");
+            addColumn(
+                    statement, "subagent_runs", "interrupt_requested integer not null default 0");
             statement.execute(
                     "create index if not exists idx_subagent_runs_parent on subagent_runs(parent_run_id, started_at asc)");
             statement.execute(

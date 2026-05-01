@@ -26,4 +26,9 @@ public class SessionSearchEntry {
 
     /** 聚焦总结。 */
     private String summary;
+
+    private String runId;
+    private String toolName;
+    private String channel;
+    private long score;
 }

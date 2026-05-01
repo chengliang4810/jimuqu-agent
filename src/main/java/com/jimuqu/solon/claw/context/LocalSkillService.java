@@ -280,6 +280,7 @@ public class LocalSkillService implements SkillCatalogService {
         if (descriptor == null) {
             throw new IllegalStateException("Skill not found: " + nameOrPath);
         }
+        ensureWritable(descriptor);
         writeSkillMainFile(FileUtil.file(descriptor.getSkillDir()), content);
         return buildDescriptor(FileUtil.file(descriptor.getSkillDir()), descriptor.getCategory());
     }
@@ -291,6 +292,7 @@ public class LocalSkillService implements SkillCatalogService {
         if (StrUtil.isBlank(oldText) || !view.getContent().contains(oldText)) {
             throw new IllegalStateException("Patch target not found.");
         }
+        ensureWritable(view.getDescriptor());
         File target = resolveSkillFile(view.getDescriptor(), filePath);
         writeTextAtomically(
                 target, view.getContent().replace(oldText, StrUtil.nullToEmpty(newText)));
@@ -303,6 +305,7 @@ public class LocalSkillService implements SkillCatalogService {
         if (descriptor == null) {
             throw new IllegalStateException("Skill not found: " + nameOrPath);
         }
+        ensureWritable(descriptor);
         FileUtil.del(FileUtil.file(descriptor.getSkillDir()));
         return "Deleted skill: " + descriptor.canonicalName();
     }
@@ -314,6 +317,7 @@ public class LocalSkillService implements SkillCatalogService {
         if (descriptor == null) {
             throw new IllegalStateException("Skill not found: " + nameOrPath);
         }
+        ensureWritable(descriptor);
         if ("SKILL.md".equalsIgnoreCase(StrUtil.nullToEmpty(filePath).trim().replace('\\', '/'))) {
             return editSkill(nameOrPath, fileContent).canonicalName();
         }
@@ -329,6 +333,7 @@ public class LocalSkillService implements SkillCatalogService {
         if (descriptor == null) {
             throw new IllegalStateException("Skill not found: " + nameOrPath);
         }
+        ensureWritable(descriptor);
         validateSupportFilePath(filePath);
         File target = resolveSkillFile(descriptor, filePath);
         if (!target.exists()) {
@@ -505,6 +510,43 @@ public class LocalSkillService implements SkillCatalogService {
                 }
             }
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void ensureWritable(SkillDescriptor descriptor) {
+        if (descriptor == null) {
+            return;
+        }
+        Map<String, Object> metadata = descriptor.getMetadata();
+        boolean pinned = false;
+        boolean readOnly = false;
+        if (metadata != null) {
+            pinned = asBoolean(metadata.get("pinned"));
+            readOnly = asBoolean(metadata.get("readonly")) || asBoolean(metadata.get("readOnly"));
+            Object curator = metadata.get("curator");
+            if (curator instanceof Map) {
+                pinned = pinned || asBoolean(((Map<String, Object>) curator).get("pinned"));
+                readOnly = readOnly || asBoolean(((Map<String, Object>) curator).get("readonly"));
+            }
+            Object hermes = metadata.get("hermes");
+            if (hermes instanceof Map) {
+                pinned = pinned || asBoolean(((Map<String, Object>) hermes).get("pinned"));
+                readOnly = readOnly || asBoolean(((Map<String, Object>) hermes).get("readonly"));
+            }
+        }
+        if (pinned || readOnly || !"agent-created".equals(descriptor.getTrustLevel())) {
+            throw new IllegalStateException(
+                    "Skill is pinned/read-only and cannot be modified: "
+                            + descriptor.canonicalName());
+        }
+    }
+
+    private boolean asBoolean(Object value) {
+        if (value instanceof Boolean) {
+            return ((Boolean) value).booleanValue();
+        }
+        String text = value == null ? "" : String.valueOf(value).trim();
+        return "true".equalsIgnoreCase(text) || "1".equals(text) || "yes".equalsIgnoreCase(text);
     }
 
     /** 解析技能目录。 */

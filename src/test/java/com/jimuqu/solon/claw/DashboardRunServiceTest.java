@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jimuqu.solon.claw.core.model.AgentRunEventRecord;
 import com.jimuqu.solon.claw.core.model.AgentRunRecord;
+import com.jimuqu.solon.claw.core.model.QueuedRunMessage;
 import com.jimuqu.solon.claw.core.model.RunRecoveryRecord;
+import com.jimuqu.solon.claw.core.model.RunControlCommand;
 import com.jimuqu.solon.claw.core.model.SubagentRunRecord;
 import com.jimuqu.solon.claw.core.model.ToolCallRecord;
 import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
@@ -71,6 +73,11 @@ public class DashboardRunServiceTest {
         public void markStaleRuns(long beforeEpochMillis, long now) {}
 
         @Override
+        public List<AgentRunRecord> listActiveBySource(String sourceKey, int limit) {
+            return Collections.emptyList();
+        }
+
+        @Override
         public void appendEvent(AgentRunEventRecord event) {
             events.add(event);
         }
@@ -79,6 +86,33 @@ public class DashboardRunServiceTest {
         public List<AgentRunEventRecord> listEvents(String runId) {
             return events;
         }
+
+        @Override
+        public void saveRunControlCommand(RunControlCommand command) {}
+
+        @Override
+        public List<RunControlCommand> listRunControlCommands(String runId) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public RunControlCommand findLatestPendingCommand(String runId, String command) {
+            return null;
+        }
+
+        @Override
+        public void markRunControlCommandHandled(String commandId, String status, long handledAt) {}
+
+        @Override
+        public void saveQueuedMessage(QueuedRunMessage message) {}
+
+        @Override
+        public QueuedRunMessage findNextQueuedMessage(String sourceKey, String sessionId) {
+            return null;
+        }
+
+        @Override
+        public void markQueuedMessage(String queueId, String status, long timestamp, String error) {}
 
         @Override
         public void saveToolCall(ToolCallRecord record) {}

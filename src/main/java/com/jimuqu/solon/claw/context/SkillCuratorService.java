@@ -45,6 +45,14 @@ public class SkillCuratorService {
             Map<String, Object> item = reviewSkill(descriptor, skillsState, now);
             items.add(item);
         }
+        items.sort(
+                new java.util.Comparator<Map<String, Object>>() {
+                    @Override
+                    public int compare(Map<String, Object> left, Map<String, Object> right) {
+                        return Long.compare(
+                                asLong(right.get("usageScore")), asLong(left.get("usageScore")));
+                    }
+                });
 
         state.put("lastRunAt", Long.valueOf(now));
         writeState(state);
@@ -74,28 +82,43 @@ public class SkillCuratorService {
         long touchedAt = lastTouchedAt(FileUtil.file(descriptor.getSkillDir()));
         long ageDays = Math.max(0L, (now - touchedAt) / (24L * 60L * 60L * 1000L));
         boolean pinned = isPinned(descriptor);
+        long loadCount = asLong(record.get("loadCount"));
+        long callCount = asLong(record.get("callCount"));
+        long usageScore = loadCount * 3L + callCount;
         String previousStatus =
                 StrUtil.nullToDefault(String.valueOf(record.get("status")), "active");
         String status = previousStatus;
         String action = "unchanged";
+        String archiveKind = "";
+        List<String> suggestions = new ArrayList<String>();
         if (pinned) {
             status = "pinned";
             action = "skipped_pinned";
         } else if (ageDays >= appConfig.getCurator().getArchiveAfterDays()) {
             status = "archived";
-            action = "marked_archived";
+            archiveKind = usageScore <= 0 ? "pruned" : "consolidated";
+            action = "marked_" + archiveKind;
+            suggestions.add(archiveKind + ": archive candidate");
         } else if (ageDays >= appConfig.getCurator().getStaleAfterDays()) {
             status = "stale";
             action = "marked_stale";
+            suggestions.add("stale: refresh or verify against current project behavior");
         } else {
             status = "active";
         }
+        List<String> contentFlags = inspectContentFlags(descriptor);
+        suggestions.addAll(contentFlags);
 
         record.put("status", status);
         record.put("lastSeenAt", Long.valueOf(now));
         record.put("lastTouchedAt", Long.valueOf(touchedAt));
         record.put("ageDays", Long.valueOf(ageDays));
         record.put("pinned", Boolean.valueOf(pinned));
+        record.put("archiveKind", archiveKind);
+        record.put("usageScore", Long.valueOf(usageScore));
+        record.put("loadCount", Long.valueOf(loadCount));
+        record.put("callCount", Long.valueOf(callCount));
+        record.put("suggestions", suggestions);
         skillsState.put(name, record);
 
         Map<String, Object> item = new LinkedHashMap<String, Object>();
@@ -105,8 +128,68 @@ public class SkillCuratorService {
         item.put("action", action);
         item.put("ageDays", Long.valueOf(ageDays));
         item.put("pinned", Boolean.valueOf(pinned));
+        item.put("archiveKind", archiveKind);
+        item.put("usageScore", Long.valueOf(usageScore));
+        item.put("loadCount", Long.valueOf(loadCount));
+        item.put("callCount", Long.valueOf(callCount));
+        item.put("suggestions", suggestions);
         item.put("path", descriptor.getSkillDir());
         return item;
+    }
+
+    public synchronized Map<String, Object> applySuggestion(String skillName, String suggestion) {
+        return recordSuggestionState(skillName, suggestion, "applied");
+    }
+
+    public synchronized Map<String, Object> ignoreSuggestion(String skillName, String suggestion) {
+        return recordSuggestionState(skillName, suggestion, "ignored");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> recordSuggestionState(
+            String skillName, String suggestion, String status) {
+        Map<String, Object> state = readState();
+        Map<String, Object> audit = ensureMap(state, "suggestionAudit");
+        List<Map<String, Object>> rows =
+                audit.get(skillName) instanceof List
+                        ? (List<Map<String, Object>>) audit.get(skillName)
+                        : new ArrayList<Map<String, Object>>();
+        Map<String, Object> row = new LinkedHashMap<String, Object>();
+        row.put("suggestion", suggestion);
+        row.put("status", status);
+        row.put("at", Long.valueOf(System.currentTimeMillis()));
+        rows.add(row);
+        audit.put(skillName, rows);
+        writeState(state);
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("skill", skillName);
+        result.put("suggestion", suggestion);
+        result.put("status", status);
+        return result;
+    }
+
+    private List<String> inspectContentFlags(SkillDescriptor descriptor) {
+        List<String> flags = new ArrayList<String>();
+        try {
+            String content =
+                    FileUtil.readUtf8String(
+                            FileUtil.file(descriptor.getSkillDir(), "SKILL.md"));
+            String normalized = StrUtil.nullToEmpty(content).toLowerCase();
+            if (normalized.contains("todo") || normalized.contains("待补充")) {
+                flags.add("hollow: contains TODO/待补充");
+            }
+            if (normalized.contains("deprecated") || normalized.contains("过期")) {
+                flags.add("stale_content: marked deprecated/过期");
+            }
+            if (normalized.indexOf("冲突") >= 0 || normalized.contains("conflict")) {
+                flags.add("conflict: conflict marker text present");
+            }
+            if (content.length() < 300) {
+                flags.add("hollow: content is too short");
+            }
+        } catch (Exception ignored) {
+        }
+        return flags;
     }
 
     private Map<String, Object> report(

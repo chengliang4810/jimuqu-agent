@@ -91,6 +91,75 @@ public class DashboardMediaService {
         return Collections.singletonMap("media_id", mediaId);
     }
 
+    public Map<String, Object> detail(String mediaId) throws Exception {
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement =
+                    connection.prepareStatement("select * from channel_media where media_id = ?");
+            statement.setString(1, mediaId);
+            ResultSet resultSet = statement.executeQuery();
+            try {
+                return resultSet.next() ? map(resultSet) : new LinkedHashMap<String, Object>();
+            } finally {
+                resultSet.close();
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
+    }
+
+    public Map<String, Object> refresh(String mediaId) throws Exception {
+        return updateStatus(mediaId, "refresh_requested", null);
+    }
+
+    public Map<String, Object> download(String mediaId) throws Exception {
+        Map<String, Object> detail = detail(mediaId);
+        File file = FileUtil.file(String.valueOf(detail.get("local_path")));
+        if (!file.isFile()) {
+            return updateStatus(mediaId, "download_missing", "local file not found");
+        }
+        Map<String, Object> result = updateStatus(mediaId, "download_ready", null);
+        result.put("local_path", file.getAbsolutePath());
+        result.put("size_bytes", file.length());
+        return result;
+    }
+
+    public Map<String, Object> reference(String mediaId) throws Exception {
+        Map<String, Object> detail = detail(mediaId);
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("media_id", mediaId);
+        result.put("reference", "media://" + mediaId);
+        result.put("status", detail.get("status"));
+        result.put("kind", detail.get("kind"));
+        result.put("local_path", detail.get("local_path"));
+        return result;
+    }
+
+    private Map<String, Object> updateStatus(String mediaId, String status, String error)
+            throws Exception {
+        long now = System.currentTimeMillis();
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement =
+                    connection.prepareStatement(
+                            "update channel_media set status = ?, error = ?, updated_at = ? where media_id = ?");
+            statement.setString(1, status);
+            statement.setString(2, error);
+            statement.setLong(3, now);
+            statement.setString(4, mediaId);
+            statement.executeUpdate();
+            statement.close();
+        } finally {
+            connection.close();
+        }
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("media_id", mediaId);
+        result.put("status", status);
+        result.put("error", error);
+        return result;
+    }
+
     private Map<String, Object> map(ResultSet resultSet) throws Exception {
         Map<String, Object> map = new LinkedHashMap<String, Object>();
         map.put("media_id", resultSet.getString("media_id"));

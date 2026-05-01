@@ -99,12 +99,13 @@ public class ToolConfiguration {
 
     @Bean
     public DelegationService delegationService(
+            AppConfig appConfig,
             ConversationOrchestratorHolder holder,
             SqlitePreferenceStore preferenceStore,
             SessionRepository sessionRepository,
             AgentRunRepository agentRunRepository) {
         return new DefaultDelegationService(
-                holder, preferenceStore, sessionRepository, agentRunRepository);
+                holder, preferenceStore, sessionRepository, agentRunRepository, appConfig);
     }
 
     @Bean

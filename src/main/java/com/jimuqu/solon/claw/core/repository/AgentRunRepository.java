@@ -2,7 +2,9 @@ package com.jimuqu.solon.claw.core.repository;
 
 import com.jimuqu.solon.claw.core.model.AgentRunEventRecord;
 import com.jimuqu.solon.claw.core.model.AgentRunRecord;
+import com.jimuqu.solon.claw.core.model.QueuedRunMessage;
 import com.jimuqu.solon.claw.core.model.RunRecoveryRecord;
+import com.jimuqu.solon.claw.core.model.RunControlCommand;
 import com.jimuqu.solon.claw.core.model.SubagentRunRecord;
 import com.jimuqu.solon.claw.core.model.ToolCallRecord;
 import java.util.List;
@@ -21,9 +23,27 @@ public interface AgentRunRepository {
 
     void markStaleRuns(long beforeEpochMillis, long now) throws Exception;
 
+    List<AgentRunRecord> listActiveBySource(String sourceKey, int limit) throws Exception;
+
     void appendEvent(AgentRunEventRecord event) throws Exception;
 
     List<AgentRunEventRecord> listEvents(String runId) throws Exception;
+
+    void saveRunControlCommand(RunControlCommand command) throws Exception;
+
+    List<RunControlCommand> listRunControlCommands(String runId) throws Exception;
+
+    RunControlCommand findLatestPendingCommand(String runId, String command) throws Exception;
+
+    void markRunControlCommandHandled(String commandId, String status, long handledAt)
+            throws Exception;
+
+    void saveQueuedMessage(QueuedRunMessage message) throws Exception;
+
+    QueuedRunMessage findNextQueuedMessage(String sourceKey, String sessionId) throws Exception;
+
+    void markQueuedMessage(String queueId, String status, long timestamp, String error)
+            throws Exception;
 
     void saveToolCall(ToolCallRecord record) throws Exception;
 

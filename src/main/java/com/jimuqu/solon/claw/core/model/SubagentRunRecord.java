@@ -18,6 +18,8 @@ public class SubagentRunRecord {
     private String name;
     private String goalPreview;
     private String status;
+    private boolean active;
+    private boolean interruptRequested;
     private int depth;
     private int taskIndex;
     private String outputTailJson;

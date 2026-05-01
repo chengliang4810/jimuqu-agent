@@ -85,8 +85,10 @@ public class DashboardConfiguration {
 
     @Bean
     public DashboardRunService dashboardRunService(
-            AgentRunRepository agentRunRepository, AgentRunControlService agentRunControlService) {
-        return new DashboardRunService(agentRunRepository, agentRunControlService);
+            AgentRunRepository agentRunRepository,
+            AgentRunControlService agentRunControlService,
+            com.jimuqu.solon.claw.core.service.DelegationService delegationService) {
+        return new DashboardRunService(agentRunRepository, agentRunControlService, delegationService);
     }
 
     @Bean

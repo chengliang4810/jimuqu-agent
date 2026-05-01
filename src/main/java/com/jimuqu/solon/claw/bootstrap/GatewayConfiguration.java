@@ -8,6 +8,7 @@ import com.jimuqu.solon.claw.core.enums.PlatformType;
 import com.jimuqu.solon.claw.core.model.GatewayMessage;
 import com.jimuqu.solon.claw.core.repository.ChannelStateRepository;
 import com.jimuqu.solon.claw.core.repository.CronJobRepository;
+import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.core.repository.GatewayPolicyRepository;
 import com.jimuqu.solon.claw.core.repository.GlobalSettingRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
@@ -159,7 +160,8 @@ public class GatewayConfiguration {
             AppUpdateService appUpdateService,
             DangerousCommandApprovalService dangerousCommandApprovalService,
             AgentRunControlService agentRunControlService,
-            AgentProfileService agentProfileService) {
+            AgentProfileService agentProfileService,
+            AgentRunRepository agentRunRepository) {
         return new DefaultCommandService(
                 sessionRepository,
                 toolRegistry,
@@ -180,7 +182,8 @@ public class GatewayConfiguration {
                 appUpdateService,
                 dangerousCommandApprovalService,
                 agentRunControlService,
-                agentProfileService);
+                agentProfileService,
+                agentRunRepository);
     }
 
     @Bean

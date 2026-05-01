@@ -8,6 +8,7 @@ import com.jimuqu.solon.claw.core.model.AgentRunOutcome;
 import com.jimuqu.solon.claw.core.model.GatewayMessage;
 import com.jimuqu.solon.claw.core.model.GatewayReply;
 import com.jimuqu.solon.claw.core.model.LlmResult;
+import com.jimuqu.solon.claw.core.model.RunBusyDecision;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.ContextCompressionService;
@@ -134,11 +135,34 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     public GatewayReply handleIncoming(GatewayMessage message, ConversationEventSink eventSink)
             throws Exception {
         String sourceKey = message.sourceKey();
+        SessionRecord session;
         synchronized (lockFor(sourceKey)) {
-            SessionRecord session = sessionRepository.getBoundSession(sourceKey);
+            session = sessionRepository.getBoundSession(sourceKey);
             if (session == null) {
                 session = sessionRepository.bindNewSession(sourceKey);
             }
+        }
+        RunBusyDecision decision =
+                agentRunSupervisor.coordinateIncoming(sourceKey, session.getSessionId(), message);
+        if (!decision.isShouldRunNow()) {
+            GatewayReply reply =
+                    GatewayReply.ok(StrUtil.blankToDefault(decision.getMessage(), decision.getStatus()));
+            reply.setSessionId(session.getSessionId());
+            reply.setBranchName(session.getBranchName());
+            reply.getRuntimeMetadata().put("busy_policy", decision.getPolicy());
+            reply.getRuntimeMetadata().put("busy_status", decision.getStatus());
+            if (StrUtil.isNotBlank(decision.getRunId())) {
+                reply.getRuntimeMetadata().put("run_id", decision.getRunId());
+            }
+            if (StrUtil.isNotBlank(decision.getQueueId())) {
+                reply.getRuntimeMetadata().put("queue_id", decision.getQueueId());
+            }
+            if (decision.isRejected()) {
+                reply.setError(true);
+            }
+            return reply;
+        }
+        synchronized (lockFor(sourceKey)) {
             return runOnSession(session, message, eventSink);
         }
     }
@@ -293,6 +317,16 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         reply.setBranchName(session.getBranchName());
         applyRuntimeMetadata(reply, outcome);
         applyApprovalCardIfNeeded(reply, message.getPlatform(), session);
+        agentRunSupervisor.onRunFinished(
+                message.sourceKey(),
+                session.getSessionId(),
+                queued -> {
+                    try {
+                        return handleIncoming(queued, eventSink);
+                    } catch (Exception e) {
+                        throw new IllegalStateException(e);
+                    }
+                });
         return reply;
     }
 

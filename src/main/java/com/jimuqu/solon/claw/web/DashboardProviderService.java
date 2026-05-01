@@ -49,6 +49,66 @@ public class DashboardProviderService {
         return result;
     }
 
+    public Map<String, Object> hermesModels() {
+        Map<String, Object> result = listProviders();
+        List<Map<String, Object>> models = new ArrayList<Map<String, Object>>();
+        for (Map.Entry<String, AppConfig.ProviderConfig> entry :
+                appConfig.getProviders().entrySet()) {
+            AppConfig.ProviderConfig provider = entry.getValue();
+            Map<String, Object> model = new LinkedHashMap<String, Object>();
+            model.put("provider", entry.getKey());
+            model.put("model", provider.getDefaultModel());
+            model.put("dialect", provider.getDialect());
+            model.put("role", entry.getKey().equals(appConfig.getModel().getProviderKey()) ? "primary" : "auxiliary");
+            model.put("status", providerStatus(provider));
+            model.put("metadata", modelMetadata(provider.getDialect()));
+            model.put("context_window", appConfig.getLlm().getContextWindowTokens());
+            model.put("max_output", appConfig.getLlm().getMaxTokens());
+            model.put("reasoning_effort", appConfig.getLlm().getReasoningEffort());
+            models.add(model);
+        }
+        result.put("models", models);
+        result.put("fallback_chain", cloneFallbackProviders(appConfig.getFallbackProviders()));
+        return result;
+    }
+
+    public Map<String, Object> health() {
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        List<Map<String, Object>> providers = new ArrayList<Map<String, Object>>();
+        for (Map.Entry<String, AppConfig.ProviderConfig> entry :
+                appConfig.getProviders().entrySet()) {
+            Map<String, Object> item = new LinkedHashMap<String, Object>();
+            item.put("provider", entry.getKey());
+            item.put("status", providerStatus(entry.getValue()));
+            item.put("checked_at", System.currentTimeMillis());
+            providers.add(item);
+        }
+        result.put("providers", providers);
+        return result;
+    }
+
+    private String providerStatus(AppConfig.ProviderConfig provider) {
+        if (provider == null || StrUtil.isBlank(provider.getBaseUrl())) {
+            return "unreachable";
+        }
+        if (StrUtil.isBlank(provider.getApiKey())
+                && !"ollama".equalsIgnoreCase(provider.getDialect())) {
+            return "missing_key";
+        }
+        return "configured";
+    }
+
+    private Map<String, Object> modelMetadata(String dialect) {
+        Map<String, Object> metadata = new LinkedHashMap<String, Object>();
+        String normalized = LlmProviderSupport.normalizeDialect(dialect);
+        metadata.put("tool_calling", Boolean.TRUE);
+        metadata.put("streaming", Boolean.TRUE);
+        metadata.put("reasoning", Boolean.valueOf("openai-responses".equals(normalized)));
+        metadata.put("prompt_cache", Boolean.valueOf("anthropic".equals(normalized) || "openai-responses".equals(normalized)));
+        metadata.put("supported", LlmProviderSupport.isSupportedDialect(normalized));
+        return metadata;
+    }
+
     @SuppressWarnings("unchecked")
     public Map<String, Object> createProvider(Map<String, Object> data) {
         String providerKey = readString(data, "providerKey");

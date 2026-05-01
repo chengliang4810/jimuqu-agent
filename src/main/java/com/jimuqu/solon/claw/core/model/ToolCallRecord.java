@@ -19,8 +19,13 @@ public class ToolCallRecord {
     private String resultPreview;
     private String resultRef;
     private String error;
+    private boolean readOnly;
     private boolean interruptible;
     private boolean sideEffecting;
+    private boolean resultIndexable;
+    private int outputLimitBytes;
+    private long resultSizeBytes;
+    private String executionPolicy;
     private long startedAt;
     private long finishedAt;
     private long durationMs;
