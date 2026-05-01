@@ -257,6 +257,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     private GatewayReply runOnSession(
             SessionRecord session, GatewayMessage message, ConversationEventSink eventSink)
             throws Exception {
+        boolean shouldDrainQueue = false;
         DangerousCommandApprovalService.PendingApproval pendingApproval =
                 dangerousCommandApprovalService == null
                         ? null
@@ -274,60 +275,66 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             return reply;
         }
 
-        String effectiveUserText = MessageAttachmentSupport.composeEffectiveUserText(message);
-        message.setText(effectiveUserText);
-        if (!message.isHeartbeat()
-                && StrUtil.isBlank(session.getTitle())
-                && StrUtil.isNotBlank(effectiveUserText)) {
-            session.setTitle(extractTitle(effectiveUserText));
-        }
-        AgentRuntimeScope agentScope = resolveAgentScope(session);
-        List<String> enabledToolNames =
-                toolRegistry.resolveEnabledToolNames(message.sourceKey(), agentScope);
-        List<Object> enabledTools =
-                toolRegistry.resolveEnabledTools(message.sourceKey(), agentScope);
-        String systemPrompt =
-                contextService.buildSystemPrompt(message.sourceKey(), agentScope)
-                        + "\n\n"
-                        + runtimeSettingsService.buildAgentRuntimePrompt(
-                                message.sourceKey(), session, enabledToolNames, agentScope);
-        session.setSystemPromptSnapshot(systemPrompt);
+        try {
+            String effectiveUserText = MessageAttachmentSupport.composeEffectiveUserText(message);
+            message.setText(effectiveUserText);
+            if (!message.isHeartbeat()
+                    && StrUtil.isBlank(session.getTitle())
+                    && StrUtil.isNotBlank(effectiveUserText)) {
+                session.setTitle(extractTitle(effectiveUserText));
+            }
+            AgentRuntimeScope agentScope = resolveAgentScope(session);
+            List<String> enabledToolNames =
+                    toolRegistry.resolveEnabledToolNames(message.sourceKey(), agentScope);
+            List<Object> enabledTools =
+                    toolRegistry.resolveEnabledTools(message.sourceKey(), agentScope);
+            String systemPrompt =
+                    contextService.buildSystemPrompt(message.sourceKey(), agentScope)
+                            + "\n\n"
+                            + runtimeSettingsService.buildAgentRuntimePrompt(
+                                    message.sourceKey(), session, enabledToolNames, agentScope);
+            session.setSystemPromptSnapshot(systemPrompt);
 
-        ConversationFeedbackSink feedbackSink = feedbackSinkFor(message);
-        AgentRunOutcome outcome =
-                agentRunSupervisor.run(
-                        session,
-                        systemPrompt,
-                        effectiveUserText,
-                        enabledTools,
-                        feedbackSink,
-                        eventSink,
-                        false,
-                        agentScope);
-        String finalReply = StrUtil.blankToDefault(outcome.getFinalReply(), EMPTY_REPLY_FALLBACK);
-        if (MessageDeliveryTracker.consumeDuplicateFinalReply(message.sourceKey(), finalReply)) {
-            finalReply = "";
-        } else {
-            finalReply = decorateFinalReply(finalReply, message.getPlatform(), outcome);
+            ConversationFeedbackSink feedbackSink = feedbackSinkFor(message);
+            AgentRunOutcome outcome =
+                    agentRunSupervisor.run(
+                            session,
+                            systemPrompt,
+                            effectiveUserText,
+                            enabledTools,
+                            feedbackSink,
+                            eventSink,
+                            false,
+                            agentScope);
+            shouldDrainQueue = true;
+            String finalReply = StrUtil.blankToDefault(outcome.getFinalReply(), EMPTY_REPLY_FALLBACK);
+            if (MessageDeliveryTracker.consumeDuplicateFinalReply(message.sourceKey(), finalReply)) {
+                finalReply = "";
+            } else {
+                finalReply = decorateFinalReply(finalReply, message.getPlatform(), outcome);
+            }
+            feedbackSink.onFinalReply(finalReply);
+            eventSink.onRunCompleted(session.getSessionId(), finalReply, outcome.getResult());
+            GatewayReply reply = GatewayReply.ok(finalReply);
+            reply.setSessionId(session.getSessionId());
+            reply.setBranchName(session.getBranchName());
+            applyRuntimeMetadata(reply, outcome);
+            applyApprovalCardIfNeeded(reply, message.getPlatform(), session);
+            return reply;
+        } finally {
+            if (shouldDrainQueue || !agentRunSupervisor.isRunning(message.sourceKey())) {
+                agentRunSupervisor.onRunFinished(
+                        message.sourceKey(),
+                        session.getSessionId(),
+                        queued -> {
+                            try {
+                                return handleIncoming(queued, eventSink);
+                            } catch (Exception e) {
+                                throw new IllegalStateException(e);
+                            }
+                        });
+            }
         }
-        feedbackSink.onFinalReply(finalReply);
-        eventSink.onRunCompleted(session.getSessionId(), finalReply, outcome.getResult());
-        GatewayReply reply = GatewayReply.ok(finalReply);
-        reply.setSessionId(session.getSessionId());
-        reply.setBranchName(session.getBranchName());
-        applyRuntimeMetadata(reply, outcome);
-        applyApprovalCardIfNeeded(reply, message.getPlatform(), session);
-        agentRunSupervisor.onRunFinished(
-                message.sourceKey(),
-                session.getSessionId(),
-                queued -> {
-                    try {
-                        return handleIncoming(queued, eventSink);
-                    } catch (Exception e) {
-                        throw new IllegalStateException(e);
-                    }
-                });
-        return reply;
     }
 
     private String decorateFinalReply(

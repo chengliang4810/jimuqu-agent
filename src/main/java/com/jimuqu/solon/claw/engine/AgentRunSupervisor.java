@@ -58,6 +58,8 @@ public class AgentRunSupervisor implements AgentRunControlService {
             "你刚刚因为最大推理步数限制而停止。不要再次调用工具。请基于当前会话中已经完成的分析、工具结果、文件修改和观察，直接输出中文收敛答复：优先给出已经完成的结果；若任务仍未彻底完成，明确说明还差什么、最推荐的下一步是什么。";
     private static final String MAX_STEPS_RECOVERY_FALLBACK =
             "本轮执行已达到最大步骤限制，已保留当前进展。请继续给出更聚焦的下一步，或使用 /retry 继续。";
+    private static final String QUEUED_RUN_ID_KEY = "__queuedRunId";
+    private static final String QUEUE_ID_KEY = "__queueId";
 
     private final AppConfig appConfig;
     private final SessionRepository sessionRepository;
@@ -317,10 +319,16 @@ public class AgentRunSupervisor implements AgentRunControlService {
             agentScope.setCacheDir(appConfig.getRuntime().getCacheDir());
         }
         long now = System.currentTimeMillis();
-        AgentRunRecord runRecord = new AgentRunRecord();
-        runRecord.setRunId(IdSupport.newId());
-        runRecord.setSessionId(session.getSessionId());
-        runRecord.setSourceKey(session.getSourceKey());
+        String queuedRunId = extractQueuedMarker(userMessage, QUEUED_RUN_ID_KEY);
+        userMessage = stripQueuedMarkers(userMessage);
+        AgentRunRecord runRecord =
+                StrUtil.isBlank(queuedRunId) ? null : agentRunRepository.findRun(queuedRunId);
+        if (runRecord == null) {
+            runRecord = new AgentRunRecord();
+            runRecord.setRunId(IdSupport.newId());
+            runRecord.setSessionId(session.getSessionId());
+            runRecord.setSourceKey(session.getSourceKey());
+        }
         AgentRunContext parentContext = AgentRunContext.current();
         boolean subagentRun = parentContext != null && !StrUtil.equals(parentContext.getSourceKey(), session.getSourceKey());
         runRecord.setRunKind(subagentRun ? "subagent" : (resume ? "resume" : "conversation"));
@@ -331,7 +339,9 @@ public class AgentRunSupervisor implements AgentRunControlService {
         runRecord.setPhase("queued");
         runRecord.setBusyPolicy("queue");
         runRecord.setInputPreview(AgentRunContext.safe(userMessage, 1000));
-        runRecord.setQueuedAt(now);
+        if (runRecord.getQueuedAt() <= 0) {
+            runRecord.setQueuedAt(now);
+        }
         runRecord.setStartedAt(now);
         runRecord.setHeartbeatAt(now);
         runRecord.setLastActivityAt(now);
@@ -1044,6 +1054,18 @@ public class AgentRunSupervisor implements AgentRunControlService {
         if (StrUtil.isBlank(message.getSourceKeyOverride())) {
             message.setSourceKeyOverride(queued.getSourceKey());
         }
+        String text = StrUtil.nullToEmpty(message.getText());
+        message.setText(
+                text
+                        + "\n\n[queue-metadata:"
+                        + QUEUED_RUN_ID_KEY
+                        + "="
+                        + queued.getRunId()
+                        + ";"
+                        + QUEUE_ID_KEY
+                        + "="
+                        + queued.getQueueId()
+                        + "]");
         return message;
     }
 
@@ -1139,6 +1161,50 @@ public class AgentRunSupervisor implements AgentRunControlService {
             return "";
         }
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private String extractQueuedMarker(String text, String key) {
+        if (StrUtil.isBlank(text) || StrUtil.isBlank(key)) {
+            return null;
+        }
+        String markerStart = "[queue-metadata:";
+        int start = text.lastIndexOf(markerStart);
+        if (start < 0) {
+            return null;
+        }
+        int end = text.indexOf(']', start);
+        if (end < 0) {
+            return null;
+        }
+        String body = text.substring(start + markerStart.length(), end);
+        String[] parts = body.split(";");
+        for (String part : parts) {
+            int equals = part.indexOf('=');
+            if (equals <= 0) {
+                continue;
+            }
+            String name = part.substring(0, equals).trim();
+            if (key.equals(name)) {
+                return part.substring(equals + 1).trim();
+            }
+        }
+        return null;
+    }
+
+    private String stripQueuedMarkers(String text) {
+        if (StrUtil.isBlank(text)) {
+            return text;
+        }
+        String markerStart = "\n\n[queue-metadata:";
+        int start = text.lastIndexOf(markerStart);
+        if (start < 0) {
+            return text;
+        }
+        int end = text.indexOf(']', start);
+        if (end < 0 || end != text.length() - 1) {
+            return text;
+        }
+        return text.substring(0, start);
     }
 
     private String normalizeSourceKey(String sourceKey) {

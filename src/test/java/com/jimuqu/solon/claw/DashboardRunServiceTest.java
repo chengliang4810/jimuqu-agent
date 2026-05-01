@@ -78,6 +78,18 @@ public class DashboardRunServiceTest {
         }
 
         @Override
+        public List<AgentRunRecord> searchRuns(
+                String sourceKey,
+                String sessionId,
+                String runId,
+                String query,
+                long timeFrom,
+                long timeTo,
+                int limit) {
+            return Collections.emptyList();
+        }
+
+        @Override
         public void appendEvent(AgentRunEventRecord event) {
             events.add(event);
         }
@@ -119,6 +131,19 @@ public class DashboardRunServiceTest {
 
         @Override
         public List<ToolCallRecord> listToolCalls(String runId) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public List<ToolCallRecord> searchToolCalls(
+                String sourceKey,
+                String sessionId,
+                String runId,
+                String toolName,
+                String query,
+                long timeFrom,
+                long timeTo,
+                int limit) {
             return Collections.emptyList();
         }
 

@@ -9,6 +9,7 @@ import com.jimuqu.solon.claw.core.repository.CronJobRepository;
 import com.jimuqu.solon.claw.core.repository.GlobalSettingRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.CheckpointService;
+import com.jimuqu.solon.claw.core.service.AgentRunControlService;
 import com.jimuqu.solon.claw.core.service.ContextBudgetService;
 import com.jimuqu.solon.claw.core.service.ContextCompressionService;
 import com.jimuqu.solon.claw.core.service.ConversationOrchestrator;
@@ -103,9 +104,15 @@ public class ToolConfiguration {
             ConversationOrchestratorHolder holder,
             SqlitePreferenceStore preferenceStore,
             SessionRepository sessionRepository,
-            AgentRunRepository agentRunRepository) {
+            AgentRunRepository agentRunRepository,
+            AgentRunControlService agentRunControlService) {
         return new DefaultDelegationService(
-                holder, preferenceStore, sessionRepository, agentRunRepository, appConfig);
+                holder,
+                preferenceStore,
+                sessionRepository,
+                agentRunRepository,
+                appConfig,
+                agentRunControlService);
     }
 
     @Bean

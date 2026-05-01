@@ -13,6 +13,7 @@ import com.jimuqu.solon.claw.context.FileMemoryService;
 import com.jimuqu.solon.claw.context.LocalSkillService;
 import com.jimuqu.solon.claw.context.PersonaWorkspaceService;
 import com.jimuqu.solon.claw.context.SkillCuratorService;
+import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.core.repository.GlobalSettingRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.CheckpointService;
@@ -184,8 +185,10 @@ public class ContextConfiguration {
 
     @Bean
     public SessionSearchService sessionSearchService(
-            SessionRepository sessionRepository, LlmGateway llmGateway) {
-        return new DefaultSessionSearchService(sessionRepository, llmGateway);
+            SessionRepository sessionRepository,
+            LlmGateway llmGateway,
+            AgentRunRepository agentRunRepository) {
+        return new DefaultSessionSearchService(sessionRepository, llmGateway, agentRunRepository);
     }
 
     @Bean(destroyMethod = "shutdown")

@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.model.SessionSearchEntry;
+import com.jimuqu.solon.claw.core.model.SessionSearchQuery;
+import com.jimuqu.solon.claw.core.model.ToolCallRecord;
+import com.jimuqu.solon.claw.support.IdSupport;
 import com.jimuqu.solon.claw.support.MessageSupport;
 import com.jimuqu.solon.claw.support.TestEnvironment;
 import java.util.ArrayList;
@@ -149,6 +152,75 @@ public class SessionSearchServiceTest {
         assertThat(entries)
                 .extracting(SessionSearchEntry::getTitle)
                 .doesNotContain("root current", "child current");
+    }
+
+    @Test
+    void shouldSearchRealRunRecordsWhenRunIdIsProvided() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        SessionRecord session = env.sessionRepository.bindNewSession("MEMORY:run-room:user");
+        session.setTitle("run backed session");
+        env.sessionRepository.save(session);
+        com.jimuqu.solon.claw.core.model.AgentRunRecord run =
+                new com.jimuqu.solon.claw.core.model.AgentRunRecord();
+        run.setRunId("run-search-1");
+        run.setSessionId(session.getSessionId());
+        run.setSourceKey("MEMORY:run-room:user");
+        run.setStatus("success");
+        run.setInputPreview("needle input");
+        run.setFinalReplyPreview("needle output");
+        run.setStartedAt(System.currentTimeMillis());
+        run.setLastActivityAt(run.getStartedAt());
+        env.agentRunRepository.saveRun(run);
+
+        SessionSearchQuery query = new SessionSearchQuery();
+        query.setRunId("run-search-1");
+        query.setQuery("needle");
+        query.setLimit(10);
+
+        List<SessionSearchEntry> entries = env.sessionSearchService.search(query);
+
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getRunId()).isEqualTo("run-search-1");
+        assertThat(entries.get(0).getSessionId()).isEqualTo(session.getSessionId());
+    }
+
+    @Test
+    void shouldSearchRealToolCallsWhenToolNameIsProvided() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        SessionRecord session = env.sessionRepository.bindNewSession("MEMORY:tool-room:user");
+        session.setTitle("tool backed session");
+        env.sessionRepository.save(session);
+        com.jimuqu.solon.claw.core.model.AgentRunRecord run =
+                new com.jimuqu.solon.claw.core.model.AgentRunRecord();
+        run.setRunId("run-tool-1");
+        run.setSessionId(session.getSessionId());
+        run.setSourceKey("MEMORY:tool-room:user");
+        run.setStatus("success");
+        run.setStartedAt(System.currentTimeMillis());
+        run.setLastActivityAt(run.getStartedAt());
+        env.agentRunRepository.saveRun(run);
+        ToolCallRecord toolCall = new ToolCallRecord();
+        toolCall.setToolCallId(IdSupport.newId());
+        toolCall.setRunId(run.getRunId());
+        toolCall.setSessionId(session.getSessionId());
+        toolCall.setSourceKey("MEMORY:tool-room:user");
+        toolCall.setToolName("execute_shell");
+        toolCall.setStatus("completed");
+        toolCall.setArgsPreview("git status");
+        toolCall.setResultPreview("clean");
+        toolCall.setStartedAt(System.currentTimeMillis());
+        env.agentRunRepository.saveToolCall(toolCall);
+
+        SessionSearchQuery query = new SessionSearchQuery();
+        query.setToolName("execute_shell");
+        query.setQuery("git status");
+        query.setLimit(10);
+
+        List<SessionSearchEntry> entries = env.sessionSearchService.search(query);
+
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getRunId()).isEqualTo(run.getRunId());
+        assertThat(entries.get(0).getToolName()).isEqualTo("execute_shell");
     }
 
     private AssistantMessage assistantWithToolCall(String name, String arguments) {

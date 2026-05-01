@@ -25,6 +25,16 @@ public interface AgentRunRepository {
 
     List<AgentRunRecord> listActiveBySource(String sourceKey, int limit) throws Exception;
 
+    List<AgentRunRecord> searchRuns(
+            String sourceKey,
+            String sessionId,
+            String runId,
+            String query,
+            long timeFrom,
+            long timeTo,
+            int limit)
+            throws Exception;
+
     void appendEvent(AgentRunEventRecord event) throws Exception;
 
     List<AgentRunEventRecord> listEvents(String runId) throws Exception;
@@ -48,6 +58,17 @@ public interface AgentRunRepository {
     void saveToolCall(ToolCallRecord record) throws Exception;
 
     List<ToolCallRecord> listToolCalls(String runId) throws Exception;
+
+    List<ToolCallRecord> searchToolCalls(
+            String sourceKey,
+            String sessionId,
+            String runId,
+            String toolName,
+            String query,
+            long timeFrom,
+            long timeTo,
+            int limit)
+            throws Exception;
 
     void saveSubagentRun(SubagentRunRecord record) throws Exception;
 

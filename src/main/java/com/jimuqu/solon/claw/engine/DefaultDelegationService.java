@@ -13,6 +13,7 @@ import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.model.SubagentRunRecord;
 import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
+import com.jimuqu.solon.claw.core.service.AgentRunControlService;
 import com.jimuqu.solon.claw.core.service.DelegationService;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.solon.claw.support.ConversationOrchestratorHolder;
@@ -87,6 +88,8 @@ public class DefaultDelegationService implements DelegationService {
 
     private final AppConfig appConfig;
 
+    private final AgentRunControlService agentRunControlService;
+
     private final ConcurrentMap<String, SubagentRunRecord> activeRegistry =
             new ConcurrentHashMap<String, SubagentRunRecord>();
 
@@ -99,7 +102,7 @@ public class DefaultDelegationService implements DelegationService {
             ConversationOrchestratorHolder conversationHolder,
             SqlitePreferenceStore preferenceStore,
             SessionRepository sessionRepository) {
-        this(conversationHolder, preferenceStore, sessionRepository, null, null);
+        this(conversationHolder, preferenceStore, sessionRepository, null, null, null);
     }
 
     public DefaultDelegationService(
@@ -107,7 +110,7 @@ public class DefaultDelegationService implements DelegationService {
             SqlitePreferenceStore preferenceStore,
             SessionRepository sessionRepository,
             AgentRunRepository agentRunRepository) {
-        this(conversationHolder, preferenceStore, sessionRepository, agentRunRepository, null);
+        this(conversationHolder, preferenceStore, sessionRepository, agentRunRepository, null, null);
     }
 
     public DefaultDelegationService(
@@ -116,11 +119,28 @@ public class DefaultDelegationService implements DelegationService {
             SessionRepository sessionRepository,
             AgentRunRepository agentRunRepository,
             AppConfig appConfig) {
+        this(
+                conversationHolder,
+                preferenceStore,
+                sessionRepository,
+                agentRunRepository,
+                appConfig,
+                null);
+    }
+
+    public DefaultDelegationService(
+            ConversationOrchestratorHolder conversationHolder,
+            SqlitePreferenceStore preferenceStore,
+            SessionRepository sessionRepository,
+            AgentRunRepository agentRunRepository,
+            AppConfig appConfig,
+            AgentRunControlService agentRunControlService) {
         this.conversationHolder = conversationHolder;
         this.preferenceStore = preferenceStore;
         this.sessionRepository = sessionRepository;
         this.agentRunRepository = agentRunRepository;
         this.appConfig = appConfig;
+        this.agentRunControlService = agentRunControlService;
         int maxConcurrency =
                 appConfig == null ? 3 : Math.max(1, appConfig.getTask().getSubagentMaxConcurrency());
         this.concurrencyLimiter = new Semaphore(maxConcurrency, true);
@@ -225,6 +245,9 @@ public class DefaultDelegationService implements DelegationService {
         record.setStatus("interrupting");
         record.setHeartbeatAt(System.currentTimeMillis());
         saveSubagent(record);
+        if (agentRunControlService != null) {
+            agentRunControlService.stop(record.getChildSourceKey());
+        }
         return true;
     }
 

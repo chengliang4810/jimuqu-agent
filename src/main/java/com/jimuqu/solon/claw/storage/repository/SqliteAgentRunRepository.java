@@ -213,6 +213,60 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     }
 
     @Override
+    public List<AgentRunRecord> searchRuns(
+            String sourceKey,
+            String sessionId,
+            String runId,
+            String query,
+            long timeFrom,
+            long timeTo,
+            int limit)
+            throws Exception {
+        List<AgentRunRecord> records = new ArrayList<AgentRunRecord>();
+        Connection connection = database.openConnection();
+        try {
+            StringBuilder sql = new StringBuilder("select distinct r.* from agent_runs r");
+            List<Object> args = new ArrayList<Object>();
+            boolean hasQuery = query != null && query.trim().length() > 0;
+            if (hasQuery) {
+                sql.append(" left join agent_run_events e on e.run_id = r.run_id");
+            }
+            sql.append(" where 1 = 1");
+            appendRunFilters(sql, args, sourceKey, sessionId, runId, timeFrom, timeTo);
+            if (hasQuery) {
+                sql.append(
+                        " and (lower(coalesce(r.input_preview, '')) like ?"
+                                + " or lower(coalesce(r.final_reply_preview, '')) like ?"
+                                + " or lower(coalesce(r.error, '')) like ?"
+                                + " or lower(coalesce(e.summary, '')) like ?"
+                                + " or lower(coalesce(e.metadata_json, '')) like ?)");
+                String pattern = "%" + query.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+                args.add(pattern);
+                args.add(pattern);
+                args.add(pattern);
+                args.add(pattern);
+                args.add(pattern);
+            }
+            sql.append(" order by coalesce(nullif(r.last_activity_at, 0), r.started_at) desc limit ?");
+            args.add(Math.max(1, Math.min(limit <= 0 ? 20 : limit, 200)));
+            PreparedStatement statement = connection.prepareStatement(sql.toString());
+            bindArgs(statement, args);
+            ResultSet resultSet = statement.executeQuery();
+            try {
+                while (resultSet.next()) {
+                    records.add(mapRun(resultSet));
+                }
+            } finally {
+                resultSet.close();
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
+        return records;
+    }
+
+    @Override
     public void appendEvent(AgentRunEventRecord event) throws Exception {
         Connection connection = database.openConnection();
         try {
@@ -465,6 +519,77 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
                     connection.prepareStatement(
                             "select * from tool_calls where run_id = ? order by started_at asc");
             statement.setString(1, runId);
+            ResultSet resultSet = statement.executeQuery();
+            try {
+                while (resultSet.next()) {
+                    records.add(mapToolCall(resultSet));
+                }
+            } finally {
+                resultSet.close();
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
+        return records;
+    }
+
+    @Override
+    public List<ToolCallRecord> searchToolCalls(
+            String sourceKey,
+            String sessionId,
+            String runId,
+            String toolName,
+            String query,
+            long timeFrom,
+            long timeTo,
+            int limit)
+            throws Exception {
+        List<ToolCallRecord> records = new ArrayList<ToolCallRecord>();
+        Connection connection = database.openConnection();
+        try {
+            StringBuilder sql = new StringBuilder("select * from tool_calls where 1 = 1");
+            List<Object> args = new ArrayList<Object>();
+            if (sourceKey != null && sourceKey.trim().length() > 0) {
+                sql.append(" and source_key = ?");
+                args.add(sourceKey);
+            }
+            if (sessionId != null && sessionId.trim().length() > 0) {
+                sql.append(" and session_id = ?");
+                args.add(sessionId);
+            }
+            if (runId != null && runId.trim().length() > 0) {
+                sql.append(" and run_id = ?");
+                args.add(runId);
+            }
+            if (toolName != null && toolName.trim().length() > 0) {
+                sql.append(" and tool_name = ?");
+                args.add(toolName);
+            }
+            if (timeFrom > 0) {
+                sql.append(" and started_at >= ?");
+                args.add(Long.valueOf(timeFrom));
+            }
+            if (timeTo > 0) {
+                sql.append(" and started_at <= ?");
+                args.add(Long.valueOf(timeTo));
+            }
+            if (query != null && query.trim().length() > 0) {
+                sql.append(
+                        " and (lower(coalesce(tool_name, '')) like ?"
+                                + " or lower(coalesce(args_preview, '')) like ?"
+                                + " or lower(coalesce(result_preview, '')) like ?"
+                                + " or lower(coalesce(error, '')) like ?)");
+                String pattern = "%" + query.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+                args.add(pattern);
+                args.add(pattern);
+                args.add(pattern);
+                args.add(pattern);
+            }
+            sql.append(" order by started_at desc limit ?");
+            args.add(Math.max(1, Math.min(limit <= 0 ? 20 : limit, 200)));
+            PreparedStatement statement = connection.prepareStatement(sql.toString());
+            bindArgs(statement, args);
             ResultSet resultSet = statement.executeQuery();
             try {
                 while (resultSet.next()) {
@@ -774,6 +899,49 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
         record.setCreatedAt(resultSet.getLong("created_at"));
         record.setResolvedAt(resultSet.getLong("resolved_at"));
         return record;
+    }
+
+    private void appendRunFilters(
+            StringBuilder sql,
+            List<Object> args,
+            String sourceKey,
+            String sessionId,
+            String runId,
+            long timeFrom,
+            long timeTo) {
+        if (sourceKey != null && sourceKey.trim().length() > 0) {
+            sql.append(" and r.source_key = ?");
+            args.add(sourceKey);
+        }
+        if (sessionId != null && sessionId.trim().length() > 0) {
+            sql.append(" and r.session_id = ?");
+            args.add(sessionId);
+        }
+        if (runId != null && runId.trim().length() > 0) {
+            sql.append(" and r.run_id = ?");
+            args.add(runId);
+        }
+        if (timeFrom > 0) {
+            sql.append(" and coalesce(nullif(r.last_activity_at, 0), r.started_at) >= ?");
+            args.add(Long.valueOf(timeFrom));
+        }
+        if (timeTo > 0) {
+            sql.append(" and coalesce(nullif(r.last_activity_at, 0), r.started_at) <= ?");
+            args.add(Long.valueOf(timeTo));
+        }
+    }
+
+    private void bindArgs(PreparedStatement statement, List<Object> args) throws Exception {
+        for (int i = 0; i < args.size(); i++) {
+            Object value = args.get(i);
+            if (value instanceof Long) {
+                statement.setLong(i + 1, ((Long) value).longValue());
+            } else if (value instanceof Integer) {
+                statement.setInt(i + 1, ((Integer) value).intValue());
+            } else {
+                statement.setString(i + 1, value == null ? null : String.valueOf(value));
+            }
+        }
     }
 
     private void appendEventFts(Connection connection, AgentRunEventRecord event) {

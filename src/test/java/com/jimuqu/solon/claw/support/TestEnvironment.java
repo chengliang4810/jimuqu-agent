@@ -248,7 +248,7 @@ public class TestEnvironment {
         DelegationService delegationService =
                 new DefaultDelegationService(holder, preferenceStore, sessionRepository);
         SessionSearchService sessionSearchService =
-                new DefaultSessionSearchService(sessionRepository, llmGateway);
+                new DefaultSessionSearchService(sessionRepository, llmGateway, agentRunRepository);
         GitHubSkillSource gitHubSkillSource =
                 new GitHubSkillSource(gitHubAuth, skillHubHttpClient, skillHubStateStore);
         SkillHubService skillHubService =

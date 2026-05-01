@@ -1,10 +1,13 @@
 package com.jimuqu.solon.claw.engine;
 
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.solon.claw.core.model.AgentRunRecord;
 import com.jimuqu.solon.claw.core.model.LlmResult;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.model.SessionSearchEntry;
 import com.jimuqu.solon.claw.core.model.SessionSearchQuery;
+import com.jimuqu.solon.claw.core.model.ToolCallRecord;
+import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
 import com.jimuqu.solon.claw.core.service.SessionSearchService;
@@ -32,10 +35,19 @@ public class DefaultSessionSearchService implements SessionSearchService {
 
     private final SessionRepository sessionRepository;
     private final LlmGateway llmGateway;
+    private final AgentRunRepository agentRunRepository;
 
     public DefaultSessionSearchService(SessionRepository sessionRepository, LlmGateway llmGateway) {
+        this(sessionRepository, llmGateway, null);
+    }
+
+    public DefaultSessionSearchService(
+            SessionRepository sessionRepository,
+            LlmGateway llmGateway,
+            AgentRunRepository agentRunRepository) {
         this.sessionRepository = sessionRepository;
         this.llmGateway = llmGateway;
+        this.agentRunRepository = agentRunRepository;
     }
 
     @Override
@@ -104,6 +116,9 @@ public class DefaultSessionSearchService implements SessionSearchService {
         if (query == null) {
             return search(null, null, DEFAULT_LIMIT);
         }
+        if (shouldSearchRuns(query)) {
+            return searchRunScope(query);
+        }
         List<SessionSearchEntry> entries =
                 search(query.getSourceKey(), query.getQuery(), query.getLimit());
         List<SessionSearchEntry> filtered = new ArrayList<SessionSearchEntry>();
@@ -118,12 +133,135 @@ public class DefaultSessionSearchService implements SessionSearchService {
             if (query.getTimeTo() > 0 && entry.getUpdatedAt() > query.getTimeTo()) {
                 continue;
             }
-            entry.setRunId(query.getRunId());
-            entry.setToolName(query.getToolName());
-            entry.setChannel(query.getChannel());
             filtered.add(entry);
         }
         return filtered;
+    }
+
+    private boolean shouldSearchRuns(SessionSearchQuery query) {
+        return agentRunRepository != null
+                && (StrUtil.isNotBlank(query.getRunId())
+                        || StrUtil.isNotBlank(query.getToolName())
+                        || StrUtil.isNotBlank(query.getChannel()));
+    }
+
+    private List<SessionSearchEntry> searchRunScope(SessionSearchQuery query) throws Exception {
+        int limit = Math.max(1, Math.min(query.getLimit() <= 0 ? DEFAULT_LIMIT : query.getLimit(), 50));
+        Map<String, SessionSearchEntry> results = new LinkedHashMap<String, SessionSearchEntry>();
+        if (StrUtil.isNotBlank(query.getToolName())) {
+            for (ToolCallRecord toolCall :
+                    agentRunRepository.searchToolCalls(
+                            firstNonBlankValue(query.getChannel(), query.getSourceKey()),
+                            query.getSessionId(),
+                            query.getRunId(),
+                            query.getToolName(),
+                            query.getQuery(),
+                            query.getTimeFrom(),
+                            query.getTimeTo(),
+                            limit)) {
+                SessionSearchEntry entry = entryFromToolCall(toolCall);
+                results.put(entryKey(entry), entry);
+                if (results.size() >= limit) {
+                    break;
+                }
+            }
+            return new ArrayList<SessionSearchEntry>(results.values());
+        }
+        for (AgentRunRecord run :
+                agentRunRepository.searchRuns(
+                        firstNonBlankValue(query.getChannel(), query.getSourceKey()),
+                        query.getSessionId(),
+                        query.getRunId(),
+                        query.getQuery(),
+                        query.getTimeFrom(),
+                        query.getTimeTo(),
+                        limit)) {
+            SessionSearchEntry entry = entryFromRun(run);
+            results.put(entryKey(entry), entry);
+            if (results.size() >= limit) {
+                break;
+            }
+        }
+        return new ArrayList<SessionSearchEntry>(results.values());
+    }
+
+    private SessionSearchEntry entryFromRun(AgentRunRecord run) throws Exception {
+        SessionRecord session =
+                StrUtil.isBlank(run.getSessionId()) ? null : sessionRepository.findById(run.getSessionId());
+        SessionSearchEntry entry = new SessionSearchEntry();
+        entry.setSessionId(run.getSessionId());
+        entry.setBranchName(session == null ? null : session.getBranchName());
+        entry.setTitle(
+                StrUtil.blankToDefault(
+                        session == null ? null : session.getTitle(), "run-" + run.getRunId()));
+        entry.setUpdatedAt(Math.max(run.getLastActivityAt(), run.getStartedAt()));
+        entry.setMatchPreview(
+                firstNonBlank(
+                        run.getFinalReplyPreview(),
+                        run.getInputPreview(),
+                        run.getError(),
+                        run.getStatus()));
+        entry.setSummary(entry.getMatchPreview());
+        entry.setRunId(run.getRunId());
+        entry.setChannel(run.getSourceKey());
+        return entry;
+    }
+
+    private SessionSearchEntry entryFromToolCall(ToolCallRecord record) throws Exception {
+        SessionRecord session =
+                StrUtil.isBlank(record.getSessionId())
+                        ? null
+                        : sessionRepository.findById(record.getSessionId());
+        SessionSearchEntry entry = new SessionSearchEntry();
+        entry.setSessionId(record.getSessionId());
+        entry.setBranchName(session == null ? null : session.getBranchName());
+        entry.setTitle(
+                StrUtil.blankToDefault(
+                        session == null ? null : session.getTitle(), "run-" + record.getRunId()));
+        entry.setUpdatedAt(Math.max(record.getFinishedAt(), record.getStartedAt()));
+        entry.setMatchPreview(
+                firstNonBlank(
+                        record.getResultPreview(),
+                        record.getArgsPreview(),
+                        record.getError(),
+                        record.getToolName()));
+        entry.setSummary(entry.getMatchPreview());
+        entry.setRunId(record.getRunId());
+        entry.setToolName(record.getToolName());
+        entry.setChannel(record.getSourceKey());
+        return entry;
+    }
+
+    private String entryKey(SessionSearchEntry entry) {
+        return StrUtil.blankToDefault(entry.getRunId(), "")
+                + ":"
+                + StrUtil.blankToDefault(entry.getToolName(), "")
+                + ":"
+                + StrUtil.blankToDefault(entry.getSessionId(), "");
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (StrUtil.isNotBlank(value)) {
+                return trim(value, 220);
+            }
+        }
+        return "";
+    }
+
+    private String firstNonBlankValue(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StrUtil.isNotBlank(value)) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private String buildSummary(
