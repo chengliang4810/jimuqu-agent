@@ -403,7 +403,8 @@ public class AgentRunSupervisor implements AgentRunControlService {
                                     + " 次尝试："
                                     + resolved.getProvider()
                                     + "/"
-                                    + resolved.getModel());
+                                    + resolved.getModel(),
+                            attemptMetadata(resolved, attemptNo, candidateIndex));
 
                     try {
                         String steer = consumeSteerInstruction(runRecord.getRunId());
@@ -517,7 +518,10 @@ public class AgentRunSupervisor implements AgentRunControlService {
                                 attemptNo,
                                 "empty",
                                 "LLM returned empty assistant content");
-                        runContext.event("attempt.empty", "模型返回空内容");
+                        runContext.event(
+                                "attempt.empty",
+                                "模型返回空内容",
+                                errorMetadata(lastError, resolved, attemptNo, candidateIndex));
                     } catch (AgentRunCancelledException e) {
                         throw e;
                     } catch (Exception e) {
@@ -529,7 +533,9 @@ public class AgentRunSupervisor implements AgentRunControlService {
                         eventSink.onAttemptCompleted(
                                 runRecord.getRunId(), attemptNo, "error", e.getMessage());
                         runContext.event(
-                                "attempt.error", "第 " + attemptNo + " 次尝试失败：" + e.getMessage());
+                                "attempt.error",
+                                "第 " + attemptNo + " 次尝试失败：" + e.getMessage(),
+                                errorMetadata(e, resolved, attemptNo, candidateIndex));
                         if (classifyRetryable(e) && attempt < maxAttempts) {
                             continue;
                         }
@@ -555,7 +561,8 @@ public class AgentRunSupervisor implements AgentRunControlService {
                             "切换 fallback provider："
                                     + previousProvider
                                     + " -> "
-                                    + next.getProvider());
+                                    + next.getProvider(),
+                            fallbackMetadata(previousProvider, next, lastError));
                 }
             }
 
@@ -858,6 +865,47 @@ public class AgentRunSupervisor implements AgentRunControlService {
 
     private boolean classifyRetryable(Throwable error) {
         return LlmErrorClassifier.classify(error).isRetryable();
+    }
+
+    private Map<String, Object> attemptMetadata(
+            AppConfig.LlmConfig resolved, int attemptNo, int candidateIndex) {
+        Map<String, Object> metadata = new java.util.LinkedHashMap<String, Object>();
+        metadata.put("attempt", Integer.valueOf(attemptNo));
+        metadata.put("candidate_index", Integer.valueOf(candidateIndex));
+        metadata.put("provider", resolved.getProvider());
+        metadata.put("model", resolved.getModel());
+        metadata.put("dialect", resolved.getDialect());
+        metadata.put("stream", Boolean.valueOf(resolved.isStream()));
+        return metadata;
+    }
+
+    private Map<String, Object> errorMetadata(
+            Throwable error, AppConfig.LlmConfig resolved, int attemptNo, int candidateIndex) {
+        LlmErrorClassifier.ClassifiedError classified = LlmErrorClassifier.classify(error);
+        Map<String, Object> metadata = attemptMetadata(resolved, attemptNo, candidateIndex);
+        metadata.put("reason", classified.getReason().name());
+        metadata.put("status_code", Integer.valueOf(classified.getStatusCode()));
+        metadata.put("retryable", Boolean.valueOf(classified.isRetryable()));
+        metadata.put("should_fallback", Boolean.valueOf(classified.isShouldFallback()));
+        metadata.put("should_compress", Boolean.valueOf(classified.isShouldCompress()));
+        metadata.put("error", error == null ? "" : error.getMessage());
+        return metadata;
+    }
+
+    private Map<String, Object> fallbackMetadata(
+            String previousProvider, AppConfig.LlmConfig next, Throwable lastError) {
+        LlmErrorClassifier.ClassifiedError classified = LlmErrorClassifier.classify(lastError);
+        Map<String, Object> metadata = new java.util.LinkedHashMap<String, Object>();
+        metadata.put("from_provider", previousProvider);
+        metadata.put("to_provider", next.getProvider());
+        metadata.put("to_model", next.getModel());
+        metadata.put("to_dialect", next.getDialect());
+        metadata.put("reason", classified.getReason().name());
+        metadata.put("status_code", Integer.valueOf(classified.getStatusCode()));
+        metadata.put("retryable", Boolean.valueOf(classified.isRetryable()));
+        metadata.put("should_compress", Boolean.valueOf(classified.isShouldCompress()));
+        metadata.put("error", lastError == null ? "empty response" : lastError.getMessage());
+        return metadata;
     }
 
     private void applyUsage(SessionRecord session, LlmResult result) {

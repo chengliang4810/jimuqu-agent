@@ -5,8 +5,10 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
 import com.jimuqu.solon.claw.config.AppConfig;
+import com.jimuqu.solon.claw.core.model.ModelMetadata;
 import com.jimuqu.solon.claw.llm.LlmProviderSupport;
 import com.jimuqu.solon.claw.support.LlmProviderService;
+import com.jimuqu.solon.claw.support.ModelMetadataService;
 import com.jimuqu.solon.claw.support.constants.LlmConstants;
 import java.io.File;
 import java.util.ArrayList;
@@ -24,6 +26,7 @@ public class DashboardProviderService {
     private final com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService
             gatewayRuntimeRefreshService;
     private final LlmProviderService llmProviderService;
+    private final ModelMetadataService modelMetadataService;
 
     public DashboardProviderService(
             AppConfig appConfig,
@@ -33,6 +36,7 @@ public class DashboardProviderService {
         this.appConfig = appConfig;
         this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
         this.llmProviderService = llmProviderService;
+        this.modelMetadataService = new ModelMetadataService(appConfig);
     }
 
     public Map<String, Object> listProviders() {
@@ -55,15 +59,17 @@ public class DashboardProviderService {
         for (Map.Entry<String, AppConfig.ProviderConfig> entry :
                 appConfig.getProviders().entrySet()) {
             AppConfig.ProviderConfig provider = entry.getValue();
+            ModelMetadata metadata = modelMetadataService.resolve(entry.getKey(), provider);
             Map<String, Object> model = new LinkedHashMap<String, Object>();
             model.put("provider", entry.getKey());
             model.put("model", provider.getDefaultModel());
             model.put("dialect", provider.getDialect());
             model.put("role", entry.getKey().equals(appConfig.getModel().getProviderKey()) ? "primary" : "auxiliary");
             model.put("status", providerStatus(provider));
-            model.put("metadata", modelMetadata(provider.getDialect()));
-            model.put("context_window", appConfig.getLlm().getContextWindowTokens());
-            model.put("max_output", appConfig.getLlm().getMaxTokens());
+            model.put("metadata", metadataMap(metadata));
+            model.put("aliases", metadata.getAliases());
+            model.put("context_window", metadata.getContextWindow());
+            model.put("max_output", metadata.getMaxOutput());
             model.put("reasoning_effort", appConfig.getLlm().getReasoningEffort());
             models.add(model);
         }
@@ -98,15 +104,20 @@ public class DashboardProviderService {
         return "configured";
     }
 
-    private Map<String, Object> modelMetadata(String dialect) {
-        Map<String, Object> metadata = new LinkedHashMap<String, Object>();
-        String normalized = LlmProviderSupport.normalizeDialect(dialect);
-        metadata.put("tool_calling", Boolean.TRUE);
-        metadata.put("streaming", Boolean.TRUE);
-        metadata.put("reasoning", Boolean.valueOf("openai-responses".equals(normalized)));
-        metadata.put("prompt_cache", Boolean.valueOf("anthropic".equals(normalized) || "openai-responses".equals(normalized)));
-        metadata.put("supported", LlmProviderSupport.isSupportedDialect(normalized));
-        return metadata;
+    private Map<String, Object> metadataMap(ModelMetadata metadata) {
+        Map<String, Object> map = new LinkedHashMap<String, Object>();
+        map.put("provider", metadata.getProvider());
+        map.put("model", metadata.getModel());
+        map.put("dialect", metadata.getDialect());
+        map.put("context_window", metadata.getContextWindow());
+        map.put("max_output", metadata.getMaxOutput());
+        map.put("tool_calling", Boolean.valueOf(metadata.isSupportsTools()));
+        map.put("streaming", Boolean.valueOf(metadata.isSupportsStreaming()));
+        map.put("reasoning", Boolean.valueOf(metadata.isSupportsReasoning()));
+        map.put("prompt_cache", Boolean.valueOf(metadata.isSupportsPromptCache()));
+        map.put("default_model", Boolean.valueOf(metadata.isDefaultModel()));
+        map.put("supported", Boolean.valueOf(metadata.isSupported()));
+        return map;
     }
 
     @SuppressWarnings("unchecked")
@@ -265,6 +276,7 @@ public class DashboardProviderService {
         item.put("dialect", StrUtil.nullToEmpty(provider.getDialect()));
         item.put("hasApiKey", StrUtil.isNotBlank(provider.getApiKey()));
         item.put("isDefault", StrUtil.equals(providerKey, appConfig.getModel().getProviderKey()));
+        item.put("metadata", metadataMap(modelMetadataService.resolve(providerKey, provider)));
         return item;
     }
 
