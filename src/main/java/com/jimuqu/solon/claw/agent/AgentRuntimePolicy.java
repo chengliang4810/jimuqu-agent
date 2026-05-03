@@ -24,6 +24,7 @@ public final class AgentRuntimePolicy {
                     ToolNameConstants.EXECUTE_JS,
                     ToolNameConstants.GET_CURRENT_TIME,
                     ToolNameConstants.TODO,
+                    ToolNameConstants.AGENT_MANAGE,
                     ToolNameConstants.DELEGATE_TASK,
                     ToolNameConstants.MEMORY,
                     ToolNameConstants.SESSION_SEARCH,
@@ -223,6 +224,10 @@ public final class AgentRuntimePolicy {
         }
         if ("delegate".equals(key) || "delegation".equals(key)) {
             output.add(ToolNameConstants.DELEGATE_TASK);
+            return;
+        }
+        if ("agent".equals(key) || "agents".equals(key)) {
+            output.add(ToolNameConstants.AGENT_MANAGE);
             return;
         }
         if ("config".equals(key)) {

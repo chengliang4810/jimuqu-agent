@@ -28,6 +28,7 @@ public class ToolRegistryExposureTest {
                         "execute_js",
                         "get_current_time",
                         "todo",
+                        "agent_manage",
                         "skills_list",
                         "skill_view",
                         "skill_manage",
@@ -55,6 +56,7 @@ public class ToolRegistryExposureTest {
         assertThat(joined).contains("NodejsSkill");
         assertThat(joined).contains("SystemClockSkill");
         assertThat(joined).contains("TodoTools");
+        assertThat(joined).contains("AgentTools");
         assertThat(joined).contains("SkillsListTool");
         assertThat(joined).contains("ConfigRefreshTool");
     }

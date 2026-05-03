@@ -1,6 +1,7 @@
 package com.jimuqu.solon.claw.bootstrap;
 
 import com.jimuqu.solon.claw.agent.AgentRuntimeService;
+import com.jimuqu.solon.claw.agent.AgentProfileService;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.context.FileContextService;
 import com.jimuqu.solon.claw.context.LocalSkillService;
@@ -70,6 +71,7 @@ public class ToolConfiguration {
             AppConfig appConfig,
             SqlitePreferenceStore preferenceStore,
             SessionRepository sessionRepository,
+            AgentProfileService agentProfileService,
             CronJobRepository cronJobRepository,
             DeliveryService deliveryService,
             MemoryService memoryService,
@@ -85,6 +87,7 @@ public class ToolConfiguration {
                 appConfig,
                 preferenceStore,
                 sessionRepository,
+                agentProfileService,
                 cronJobRepository,
                 deliveryService,
                 memoryService,

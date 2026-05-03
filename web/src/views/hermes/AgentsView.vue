@@ -177,7 +177,12 @@ function confirmDelete() {
       try {
         await agentsStore.deleteAgent(agent.name)
         message.success('Agent 已删除')
-        await selectAgent('default')
+        await agentsStore.fetchAgents(chatStore.activeSessionId)
+        if (agentsStore.selectedAgentName) {
+          await selectAgent(agentsStore.selectedAgentName)
+        } else {
+          copyAgent(null)
+        }
       } catch (err: any) {
         message.error(err?.message || '删除 Agent 失败')
       }

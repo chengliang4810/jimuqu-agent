@@ -43,7 +43,6 @@ public class DashboardAgentService {
         String active =
                 AgentRuntimeScope.normalizeName(
                         session == null ? null : session.getActiveAgentName());
-        agents.add(defaultAgent(active));
         for (AgentProfile profile : agentProfileService.listAll()) {
             agents.add(toSummary(profile, active));
         }

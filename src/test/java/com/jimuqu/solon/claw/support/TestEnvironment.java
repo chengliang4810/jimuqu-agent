@@ -266,6 +266,7 @@ public class TestEnvironment {
                         config,
                         preferenceStore,
                         sessionRepository,
+                        agentProfileService,
                         cronJobRepository,
                         deliveryService,
                         memoryService,

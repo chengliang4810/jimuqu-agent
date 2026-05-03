@@ -14,6 +14,7 @@ import com.jimuqu.solon.claw.core.service.ConversationEventSink;
 import com.jimuqu.solon.claw.gateway.feedback.ConversationFeedbackSink;
 import com.jimuqu.solon.claw.support.FakeLlmGateway;
 import com.jimuqu.solon.claw.support.TestEnvironment;
+import com.jimuqu.solon.claw.tool.runtime.AgentTools;
 import com.jimuqu.solon.claw.web.DashboardAgentService;
 import java.io.File;
 import java.util.LinkedHashMap;
@@ -203,6 +204,53 @@ public class AgentMechanismTest {
         assertThat(session).isNotNull();
         assertThat(session.getSourceKey()).isEqualTo("MEMORY:dashboard:local-empty-session");
         assertThat(session.getActiveAgentName()).isEqualTo("coder");
+    }
+
+    @Test
+    void dashboardListShouldHideBuiltinDefaultAgent() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.agentProfileService.createAgent("coder", "你是代码助手。");
+
+        Map<String, Object> response = dashboardAgentService(env).list(null);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> agents = (List<Map<String, Object>>) response.get("agents");
+        assertThat(agents).extracting(agent -> agent.get("name")).containsExactly("coder");
+        assertThat(response.get("active_agent_name")).isEqualTo("default");
+    }
+
+    @Test
+    void shouldExposeAgentManageTool() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.send("tool-agent-room", "tool-agent-user", "hello");
+
+        String joined = env.toolRegistry.resolveEnabledTools("MEMORY:tool-agent-room:tool-agent-user").toString();
+
+        assertThat(env.toolRegistry.listToolNames()).contains("agent_manage");
+        assertThat(joined).contains("AgentTools");
+    }
+
+    @Test
+    void shouldAllowAgentManageToolThroughAgentAllowlist() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.agentProfileService.createAgent("operator", "管理 Agent");
+        env.send("allow-agent-room", "allow-agent-user", "hello");
+        env.send("allow-agent-room", "allow-agent-user", "/pairing claim-admin");
+        env.send("allow-agent-room", "allow-agent-user", "/agent tools operator agent");
+        env.send("allow-agent-room", "allow-agent-user", "/agent operator");
+
+        AgentRuntimeScope scope =
+                env.agentRuntimeService.resolve(
+                        env.sessionRepository.getBoundSession(
+                                "MEMORY:allow-agent-room:allow-agent-user"));
+        List<String> names =
+                env.toolRegistry.resolveEnabledToolNames(
+                        "MEMORY:allow-agent-room:allow-agent-user", scope);
+
+        assertThat(names).containsExactly("agent_manage");
+        assertThat(env.toolRegistry.resolveEnabledTools(
+                        "MEMORY:allow-agent-room:allow-agent-user", scope))
+                .hasOnlyElementsOfType(AgentTools.class);
     }
 
     private static void claimAdmin(TestEnvironment env, String room, String user) throws Exception {
