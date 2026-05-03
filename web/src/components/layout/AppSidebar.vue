@@ -55,6 +55,11 @@ const personaItems = [
     title: '工具',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.2 2.2-3.2-3.2 2.4-2z"/></svg>',
   },
+  {
+    key: 'heartbeat',
+    title: '心跳',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 13.5A7.5 7.5 0 1 1 10.5 4"/><path d="M12 2v4h4"/><path d="M8 13h2l1.5-3 3 6 1.5-3h2"/></svg>',
+  },
 ];
 
 const collapsedGroups = reactive<Record<string, boolean>>({});
