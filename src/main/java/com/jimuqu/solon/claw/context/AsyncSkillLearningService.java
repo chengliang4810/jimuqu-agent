@@ -13,11 +13,18 @@ import com.jimuqu.solon.claw.core.service.CheckpointService;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
 import com.jimuqu.solon.claw.core.service.MemoryService;
 import com.jimuqu.solon.claw.core.service.SkillLearningService;
+import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.support.BoundedExecutorFactory;
+import com.jimuqu.solon.claw.support.IdSupport;
 import com.jimuqu.solon.claw.support.MessageSupport;
 import com.jimuqu.solon.claw.support.SecretRedactor;
+import java.io.File;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import lombok.RequiredArgsConstructor;
 import org.noear.solon.ai.chat.message.AssistantMessage;
@@ -31,8 +38,26 @@ public class AsyncSkillLearningService implements SkillLearningService {
     private final LocalSkillService localSkillService;
     private final CheckpointService checkpointService;
     private final LlmGateway llmGateway;
+    private final SqliteDatabase database;
     private final ExecutorService executorService =
             BoundedExecutorFactory.fixed("async-skill-learning", 1, 64);
+
+    public AsyncSkillLearningService(
+            AppConfig appConfig,
+            SessionRepository sessionRepository,
+            MemoryService memoryService,
+            LocalSkillService localSkillService,
+            CheckpointService checkpointService,
+            LlmGateway llmGateway) {
+        this(
+                appConfig,
+                sessionRepository,
+                memoryService,
+                localSkillService,
+                checkpointService,
+                llmGateway,
+                null);
+    }
 
     public void shutdown() {
         executorService.shutdownNow();
@@ -93,14 +118,81 @@ public class AsyncSkillLearningService implements SkillLearningService {
     private void learnSkill(
             SessionRecord session, GatewayMessage message, boolean hasRecentCheckpoint)
             throws Exception {
+        String decision = classifyImprovement(session, message, hasRecentCheckpoint);
         String skillName = inferSkillName(session);
         SkillDescriptor descriptor = findSkill(skillName);
+        if (descriptor != null && ("new_skill".equals(decision) || "update_loaded_skill".equals(decision))) {
+            decision = "update_existing_skill";
+        }
+        if ("no_change".equals(decision) || "memory_only".equals(decision)) {
+            writeImprovementReport(session, null, decision, "Rubric decision: " + decision, Collections.<String>emptyList(), false);
+            return;
+        }
         if (descriptor == null) {
             localSkillService.createSkill(
                     skillName, null, buildSkillContent(session, message, hasRecentCheckpoint));
+            writeImprovementReport(
+                    session,
+                    skillName,
+                    "new_skill",
+                    "Created a new skill after rubric/class-first evaluation.",
+                    Collections.singletonList("SKILL.md"),
+                    false);
         } else {
             patchExistingSkill(skillName, session, message, hasRecentCheckpoint);
+            writeImprovementReport(
+                    session,
+                    skillName,
+                    "update_existing_skill",
+                    "Updated existing skill after rubric/class-first evaluation.",
+                    Collections.singletonList("SKILL.md"),
+                    false);
         }
+    }
+
+    private String classifyImprovement(
+            SessionRecord session, GatewayMessage message, boolean hasRecentCheckpoint) {
+        if (llmGateway == null) {
+            return hasRecentCheckpoint ? "update_existing_skill" : "new_skill";
+        }
+        try {
+            SessionRecord rubricSession = new SessionRecord();
+            rubricSession.setSessionId(
+                    "skill-rubric-"
+                            + StrUtil.blankToDefault(session.getSessionId(), "session")
+                            + "-"
+                            + System.currentTimeMillis());
+            rubricSession.setSourceKey(session.getSourceKey());
+            LlmResult result =
+                    llmGateway.chat(
+                            rubricSession,
+                            "你是 SolonClaw 的 self-improvement rubric 分类器。只输出一个类别。",
+                            "请从以下类别中选择一个：no_change, new_skill, update_loaded_skill, update_existing_skill, memory_only。\n"
+                                    + "用户请求："
+                                    + StrUtil.blankToDefault(message == null ? "" : message.getText(), "")
+                                    + "\n工具消息数量满足阈值，checkpoint="
+                                    + hasRecentCheckpoint
+                                    + "\n会话摘要："
+                                    + SecretRedactor.redact(
+                                            StrUtil.blankToDefault(session.getCompressedSummary(), ""), 2000),
+                            Collections.emptyList());
+            String text = extractAssistantText(result).trim().toLowerCase();
+            String firstToken = text.split("[\\s,，。:：]+", 2)[0];
+            for (String candidate :
+                    new String[] {
+                        "no_change",
+                        "new_skill",
+                        "update_loaded_skill",
+                        "update_existing_skill",
+                        "memory_only"
+                    }) {
+                if (candidate.equals(firstToken) || candidate.equals(text)) {
+                    return candidate;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return hasRecentCheckpoint ? "update_existing_skill" : "new_skill";
     }
 
     private int countToolMessages(SessionRecord session) throws Exception {
@@ -432,5 +524,87 @@ public class AsyncSkillLearningService implements SkillLearningService {
             return SecretRedactor.redact(normalized, limit);
         }
         return SecretRedactor.redact(normalized.substring(0, limit) + "...", limit);
+    }
+
+    private void writeImprovementReport(
+            SessionRecord session,
+            String skillName,
+            String action,
+            String summary,
+            List<String> changedFiles,
+            boolean needsReview) {
+        try {
+            File reportDir =
+                    cn.hutool.core.io.FileUtil.file(
+                            appConfig.getRuntime().getLogsDir(), "skill-improvements");
+            cn.hutool.core.io.FileUtil.mkdir(reportDir);
+            Map<String, Object> report = new LinkedHashMap<String, Object>();
+            report.put("sessionId", session == null ? null : session.getSessionId());
+            report.put("runId", null);
+            report.put("skillName", skillName);
+            report.put("action", action);
+            report.put("summary", summary);
+            report.put("changedFiles", changedFiles);
+            report.put("needsReview", Boolean.valueOf(needsReview));
+            report.put("createdAt", Long.valueOf(System.currentTimeMillis()));
+            saveImprovement(report);
+            cn.hutool.core.io.FileUtil.writeUtf8String(
+                    org.noear.snack4.ONode.serialize(report),
+                    cn.hutool.core.io.FileUtil.file(
+                            reportDir,
+                            System.currentTimeMillis()
+                                    + "-"
+                                    + StrUtil.blankToDefault(skillName, "memory")
+                                    + ".json"));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void saveImprovement(Map<String, Object> report) {
+        if (database == null || report == null) {
+            return;
+        }
+        Connection connection = null;
+        try {
+            connection = database.openConnection();
+            PreparedStatement statement =
+                    connection.prepareStatement(
+                            "insert into skill_improvements (improvement_id, session_id, run_id, skill_name, action, summary, changed_files_json, evidence_json, needs_review, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            statement.setString(1, IdSupport.newId());
+            statement.setString(2, asString(report.get("sessionId")));
+            statement.setString(3, asString(report.get("runId")));
+            statement.setString(4, StrUtil.blankToDefault(asString(report.get("skillName")), "memory"));
+            statement.setString(5, StrUtil.blankToDefault(asString(report.get("action")), "unknown"));
+            statement.setString(6, asString(report.get("summary")));
+            statement.setString(7, org.noear.snack4.ONode.serialize(report.get("changedFiles")));
+            statement.setString(8, org.noear.snack4.ONode.serialize(report));
+            statement.setInt(9, Boolean.TRUE.equals(report.get("needsReview")) ? 1 : 0);
+            statement.setLong(10, asLong(report.get("createdAt")));
+            statement.executeUpdate();
+            statement.close();
+        } catch (Exception ignored) {
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
+    private String asString(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private long asLong(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (Exception e) {
+            return System.currentTimeMillis();
+        }
     }
 }

@@ -98,10 +98,7 @@ public class GatewayControllerHttpTest {
     @Test
     void shouldHandleStopRollbackAndCompressThroughHttpController() throws Exception {
         ProcessRegistry processRegistry = bean(ProcessRegistry.class);
-        Process process =
-                new ProcessBuilder(
-                                "powershell", "-NoProfile", "-Command", "Start-Sleep -Seconds 30")
-                        .start();
+        Process process = newSleepProcess();
         processRegistry.add(process);
 
         GatewayReply stopReply = postMessage("http-admin-chat", "http-admin", "/stop");
@@ -158,6 +155,21 @@ public class GatewayControllerHttpTest {
     private static <T> T bean(Class<T> type) {
         AppContext context = Solon.context();
         return context.getBean(type);
+    }
+
+    private static Process newSleepProcess() throws Exception {
+        return new ProcessBuilder(
+                        System.getProperty("java.home") + File.separator + "bin" + File.separator + "java",
+                        "-cp",
+                        System.getProperty("java.class.path"),
+                        SleepProcess.class.getName())
+                .start();
+    }
+
+    public static class SleepProcess {
+        public static void main(String[] args) throws Exception {
+            Thread.sleep(30000L);
+        }
     }
 
     private static GatewayReply postMessage(String chatId, String userId, String text)

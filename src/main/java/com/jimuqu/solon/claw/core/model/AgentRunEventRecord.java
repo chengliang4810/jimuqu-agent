@@ -14,6 +14,8 @@ public class AgentRunEventRecord {
     private String sessionId;
     private String sourceKey;
     private String eventType;
+    private String phase;
+    private String severity;
     private int attemptNo;
     private String provider;
     private String model;

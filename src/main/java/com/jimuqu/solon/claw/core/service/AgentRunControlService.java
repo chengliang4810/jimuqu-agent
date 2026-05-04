@@ -1,6 +1,9 @@
 package com.jimuqu.solon.claw.core.service;
 
 import com.jimuqu.solon.claw.core.model.AgentRunStopResult;
+import com.jimuqu.solon.claw.core.model.GatewayMessage;
+import com.jimuqu.solon.claw.core.model.RunBusyDecision;
+import java.util.Map;
 
 /** Controls active Agent runs without exposing engine implementation details. */
 public interface AgentRunControlService {
@@ -19,4 +22,24 @@ public interface AgentRunControlService {
     default long lastRunFinishedAt() {
         return 0L;
     }
+
+    default RunBusyDecision coordinateIncoming(
+            String sourceKey, String sessionId, GatewayMessage message) throws Exception {
+        return RunBusyDecision.runNow("queue");
+    }
+
+    default Map<String, Object> controlRun(String runId, String command, Map<String, Object> payload)
+            throws Exception {
+        throw new UnsupportedOperationException("run control unavailable");
+    }
+
+    default String consumeSteerInstruction(String runId) {
+        return null;
+    }
+
+    default void onRunFinished(
+            String sourceKey,
+            String sessionId,
+            java.util.function.Function<GatewayMessage, com.jimuqu.solon.claw.core.model.GatewayReply>
+                    runner) {}
 }

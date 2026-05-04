@@ -23,6 +23,16 @@ public class DashboardProviderController {
         return providerService.listProviders();
     }
 
+    @Mapping(value = "/api/hermes/models", method = MethodType.GET)
+    public Map<String, Object> hermesModels() {
+        return DashboardResponse.ok(providerService.hermesModels());
+    }
+
+    @Mapping(value = "/api/hermes/models/health", method = MethodType.GET)
+    public Map<String, Object> hermesModelHealth() {
+        return DashboardResponse.ok(providerService.health());
+    }
+
     @Mapping(value = "/api/providers", method = MethodType.POST)
     public Map<String, Object> create(Context context) throws Exception {
         return providerService.createProvider(

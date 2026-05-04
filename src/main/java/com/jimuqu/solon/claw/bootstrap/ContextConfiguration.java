@@ -13,6 +13,7 @@ import com.jimuqu.solon.claw.context.FileMemoryService;
 import com.jimuqu.solon.claw.context.LocalSkillService;
 import com.jimuqu.solon.claw.context.PersonaWorkspaceService;
 import com.jimuqu.solon.claw.context.SkillCuratorService;
+import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.core.repository.GlobalSettingRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.CheckpointService;
@@ -27,6 +28,7 @@ import com.jimuqu.solon.claw.core.service.SkillGuardService;
 import com.jimuqu.solon.claw.core.service.SkillHubService;
 import com.jimuqu.solon.claw.core.service.SkillImportService;
 import com.jimuqu.solon.claw.core.service.SkillLearningService;
+import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.engine.DefaultContextBudgetService;
 import com.jimuqu.solon.claw.engine.DefaultContextCompressionService;
 import com.jimuqu.solon.claw.engine.DefaultSessionSearchService;
@@ -183,8 +185,10 @@ public class ContextConfiguration {
 
     @Bean
     public SessionSearchService sessionSearchService(
-            SessionRepository sessionRepository, LlmGateway llmGateway) {
-        return new DefaultSessionSearchService(sessionRepository, llmGateway);
+            SessionRepository sessionRepository,
+            LlmGateway llmGateway,
+            AgentRunRepository agentRunRepository) {
+        return new DefaultSessionSearchService(sessionRepository, llmGateway, agentRunRepository);
     }
 
     @Bean(destroyMethod = "shutdown")
@@ -194,13 +198,15 @@ public class ContextConfiguration {
             MemoryService memoryService,
             LocalSkillService localSkillService,
             CheckpointService checkpointService,
-            LlmGateway llmGateway) {
+            LlmGateway llmGateway,
+            SqliteDatabase sqliteDatabase) {
         return new AsyncSkillLearningService(
                 appConfig,
                 sessionRepository,
                 memoryService,
                 localSkillService,
                 checkpointService,
-                llmGateway);
+                llmGateway,
+                sqliteDatabase);
     }
 }

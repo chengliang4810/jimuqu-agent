@@ -1,6 +1,7 @@
 package com.jimuqu.solon.claw.bootstrap;
 
 import com.jimuqu.solon.claw.agent.AgentRuntimeService;
+import com.jimuqu.solon.claw.agent.AgentProfileService;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.context.FileContextService;
 import com.jimuqu.solon.claw.context.LocalSkillService;
@@ -9,6 +10,7 @@ import com.jimuqu.solon.claw.core.repository.CronJobRepository;
 import com.jimuqu.solon.claw.core.repository.GlobalSettingRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.CheckpointService;
+import com.jimuqu.solon.claw.core.service.AgentRunControlService;
 import com.jimuqu.solon.claw.core.service.ContextBudgetService;
 import com.jimuqu.solon.claw.core.service.ContextCompressionService;
 import com.jimuqu.solon.claw.core.service.ConversationOrchestrator;
@@ -70,6 +72,7 @@ public class ToolConfiguration {
             AppConfig appConfig,
             SqlitePreferenceStore preferenceStore,
             SessionRepository sessionRepository,
+            AgentProfileService agentProfileService,
             CronJobRepository cronJobRepository,
             DeliveryService deliveryService,
             MemoryService memoryService,
@@ -85,6 +88,7 @@ public class ToolConfiguration {
                 appConfig,
                 preferenceStore,
                 sessionRepository,
+                agentProfileService,
                 cronJobRepository,
                 deliveryService,
                 memoryService,
@@ -100,10 +104,19 @@ public class ToolConfiguration {
 
     @Bean
     public DelegationService delegationService(
+            AppConfig appConfig,
             ConversationOrchestratorHolder holder,
             SqlitePreferenceStore preferenceStore,
-            SessionRepository sessionRepository) {
-        return new DefaultDelegationService(holder, preferenceStore, sessionRepository);
+            SessionRepository sessionRepository,
+            AgentRunRepository agentRunRepository,
+            AgentRunControlService agentRunControlService) {
+        return new DefaultDelegationService(
+                holder,
+                preferenceStore,
+                sessionRepository,
+                agentRunRepository,
+                appConfig,
+                agentRunControlService);
     }
 
     @Bean

@@ -1,6 +1,7 @@
 package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.CronJobRecord;
+import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.core.repository.CronJobRepository;
 import com.jimuqu.solon.claw.support.CronSupport;
 import com.jimuqu.solon.claw.support.IdSupport;
@@ -37,7 +38,12 @@ public class CronjobTools {
                         .append(" ")
                         .append(job.getStatus());
             }
-            return buffer.length() == 0 ? "No cron jobs" : buffer.toString();
+            String preview = buffer.length() == 0 ? "No cron jobs" : buffer.toString();
+            return ToolResultEnvelope.ok("Listed cron jobs")
+                    .data("jobs", jobs)
+                    .data("count", Integer.valueOf(jobs.size()))
+                    .preview(preview)
+                    .toJson();
         }
 
         if ("create".equalsIgnoreCase(action)) {
@@ -53,24 +59,39 @@ public class CronjobTools {
             record.setUpdatedAt(now);
             record.setNextRunAt(CronSupport.nextRunAt(cronExpr, now));
             cronJobRepository.save(record);
-            return "Created cron job: " + record.getJobId();
+            return ToolResultEnvelope.ok("Created cron job: " + record.getJobId())
+                    .data("jobId", record.getJobId())
+                    .data("name", record.getName())
+                    .data("cronExpr", record.getCronExpr())
+                    .data("nextRunAt", Long.valueOf(record.getNextRunAt()))
+                    .preview(record.getJobId() + " " + record.getName() + " ACTIVE")
+                    .toJson();
         }
 
         if ("pause".equalsIgnoreCase(action)) {
             cronJobRepository.updateStatus(name, "PAUSED");
-            return "Paused cron job: " + name;
+            return ToolResultEnvelope.ok("Paused cron job: " + name)
+                    .data("jobId", name)
+                    .data("status", "PAUSED")
+                    .toJson();
         }
 
         if ("resume".equalsIgnoreCase(action)) {
             cronJobRepository.updateStatus(name, "ACTIVE");
-            return "Resumed cron job: " + name;
+            return ToolResultEnvelope.ok("Resumed cron job: " + name)
+                    .data("jobId", name)
+                    .data("status", "ACTIVE")
+                    .toJson();
         }
 
         if ("delete".equalsIgnoreCase(action)) {
             cronJobRepository.delete(name);
-            return "Deleted cron job: " + name;
+            return ToolResultEnvelope.ok("Deleted cron job: " + name)
+                    .data("jobId", name)
+                    .data("status", "DELETED")
+                    .toJson();
         }
 
-        return "Unsupported cronjob action";
+        return ToolResultEnvelope.error("Unsupported cronjob action").toJson();
     }
 }

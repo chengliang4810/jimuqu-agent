@@ -4,6 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jimuqu.solon.claw.core.model.AgentRunEventRecord;
 import com.jimuqu.solon.claw.core.model.AgentRunRecord;
+import com.jimuqu.solon.claw.core.model.QueuedRunMessage;
+import com.jimuqu.solon.claw.core.model.RunRecoveryRecord;
+import com.jimuqu.solon.claw.core.model.RunControlCommand;
+import com.jimuqu.solon.claw.core.model.SubagentRunRecord;
+import com.jimuqu.solon.claw.core.model.ToolCallRecord;
 import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.web.DashboardRunService;
 import java.util.ArrayList;
@@ -55,6 +60,36 @@ public class DashboardRunServiceTest {
         }
 
         @Override
+        public List<AgentRunRecord> listRecoverable(int limit) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public List<AgentRunRecord> listActiveBefore(long beforeEpochMillis, int limit) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public void markStaleRuns(long beforeEpochMillis, long now) {}
+
+        @Override
+        public List<AgentRunRecord> listActiveBySource(String sourceKey, int limit) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public List<AgentRunRecord> searchRuns(
+                String sourceKey,
+                String sessionId,
+                String runId,
+                String query,
+                long timeFrom,
+                long timeTo,
+                int limit) {
+            return Collections.emptyList();
+        }
+
+        @Override
         public void appendEvent(AgentRunEventRecord event) {
             events.add(event);
         }
@@ -62,6 +97,70 @@ public class DashboardRunServiceTest {
         @Override
         public List<AgentRunEventRecord> listEvents(String runId) {
             return events;
+        }
+
+        @Override
+        public void saveRunControlCommand(RunControlCommand command) {}
+
+        @Override
+        public List<RunControlCommand> listRunControlCommands(String runId) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public RunControlCommand findLatestPendingCommand(String runId, String command) {
+            return null;
+        }
+
+        @Override
+        public void markRunControlCommandHandled(String commandId, String status, long handledAt) {}
+
+        @Override
+        public void saveQueuedMessage(QueuedRunMessage message) {}
+
+        @Override
+        public QueuedRunMessage findNextQueuedMessage(String sourceKey, String sessionId) {
+            return null;
+        }
+
+        @Override
+        public void markQueuedMessage(String queueId, String status, long timestamp, String error) {}
+
+        @Override
+        public void saveToolCall(ToolCallRecord record) {}
+
+        @Override
+        public List<ToolCallRecord> listToolCalls(String runId) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public List<ToolCallRecord> searchToolCalls(
+                String sourceKey,
+                String sessionId,
+                String runId,
+                String toolName,
+                String query,
+                long timeFrom,
+                long timeTo,
+                int limit) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public void saveSubagentRun(SubagentRunRecord record) {}
+
+        @Override
+        public List<SubagentRunRecord> listSubagents(String parentRunId) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public void saveRecovery(RunRecoveryRecord record) {}
+
+        @Override
+        public List<RunRecoveryRecord> listRecoveries(String runId) {
+            return Collections.emptyList();
         }
 
         @Override

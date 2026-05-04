@@ -81,6 +81,9 @@ public class AppConfig {
     /** Agent run 追踪配置。 */
     private TraceConfig trace = new TraceConfig();
 
+    /** 长任务控制配置。 */
+    private TaskConfig task = new TaskConfig();
+
     /** MCP 工具适配配置。 */
     private McpConfig mcp = new McpConfig();
 
@@ -964,6 +967,66 @@ public class AppConfig {
                                         overrides,
                                         "solonclaw.react.summarizationMaxTokens",
                                         32000)));
+        config.getTrace()
+                .setRetentionDays(
+                        resolveInt(
+                                readInt(props, overrides, "solonclaw.trace.retentionDays", 14)));
+        config.getTrace()
+                .setMaxAttempts(
+                        resolveInt(readInt(props, overrides, "solonclaw.trace.maxAttempts", 2)));
+        config.getTrace()
+                .setToolPreviewLength(
+                        resolveInt(
+                                readInt(
+                                        props,
+                                        overrides,
+                                        "solonclaw.trace.toolPreviewLength",
+                                        1200)));
+        config.getTask()
+                .setBusyPolicy(
+                        resolveConfigString(
+                                readString(props, overrides, "solonclaw.task.busyPolicy", "queue")));
+        config.getTask()
+                .setStaleAfterMinutes(
+                        resolveInt(
+                                readInt(
+                                        props,
+                                        overrides,
+                                        "solonclaw.task.staleAfterMinutes",
+                                        60)));
+        config.getTask()
+                .setSubagentMaxConcurrency(
+                        resolveInt(
+                                readInt(
+                                        props,
+                                        overrides,
+                                        "solonclaw.task.subagentMaxConcurrency",
+                                        3)));
+        config.getTask()
+                .setSubagentMaxDepth(
+                        resolveInt(
+                                readInt(
+                                        props, overrides, "solonclaw.task.subagentMaxDepth", 1)));
+        config.getTask()
+                .setToolOutputInlineLimit(
+                        resolveInt(
+                                readInt(
+                                        props,
+                                        overrides,
+                                        "solonclaw.task.toolOutputInlineLimit",
+                                        4000)));
+        config.getTask()
+                .setMediaCacheTtlHours(
+                        resolveInt(
+                                readInt(
+                                        props,
+                                        overrides,
+                                        "solonclaw.task.mediaCacheTtlHours",
+                                        168)));
+        config.getMcp()
+                .setEnabled(
+                        resolveBoolean(
+                                readBoolean(props, overrides, "solonclaw.mcp.enabled", false)));
 
         config.normalizePaths();
         syncRuntimeConfigExample(config.getRuntime().getHome());
@@ -1014,6 +1077,9 @@ public class AppConfig {
         copyRollback(other.getRollback());
         copyDisplay(other.getDisplay());
         copyReact(other.getReact());
+        copyTrace(other.getTrace());
+        copyTask(other.getTask());
+        copyMcp(other.getMcp());
         copyChannel(this.channels.getFeishu(), other.getChannels().getFeishu());
         copyChannel(this.channels.getDingtalk(), other.getChannels().getDingtalk());
         copyChannel(this.channels.getWecom(), other.getChannels().getWecom());
@@ -1153,6 +1219,25 @@ public class AppConfig {
         this.react.setSummarizationEnabled(other.isSummarizationEnabled());
         this.react.setSummarizationMaxMessages(other.getSummarizationMaxMessages());
         this.react.setSummarizationMaxTokens(other.getSummarizationMaxTokens());
+    }
+
+    private void copyTrace(TraceConfig other) {
+        this.trace.setRetentionDays(other.getRetentionDays());
+        this.trace.setMaxAttempts(other.getMaxAttempts());
+        this.trace.setToolPreviewLength(other.getToolPreviewLength());
+    }
+
+    private void copyTask(TaskConfig other) {
+        this.task.setBusyPolicy(other.getBusyPolicy());
+        this.task.setStaleAfterMinutes(other.getStaleAfterMinutes());
+        this.task.setSubagentMaxConcurrency(other.getSubagentMaxConcurrency());
+        this.task.setSubagentMaxDepth(other.getSubagentMaxDepth());
+        this.task.setToolOutputInlineLimit(other.getToolOutputInlineLimit());
+        this.task.setMediaCacheTtlHours(other.getMediaCacheTtlHours());
+    }
+
+    private void copyMcp(McpConfig other) {
+        this.mcp.setEnabled(other.isEnabled());
     }
 
     private void copyChannel(ChannelConfig target, ChannelConfig source) {
@@ -2266,6 +2351,29 @@ public class AppConfig {
 
         /** 工具结果预览最大长度。 */
         private int toolPreviewLength = 1200;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class TaskConfig {
+        /** 同一会话 busy 时的默认策略：queue / interrupt / steer / reject。 */
+        private String busyPolicy = "queue";
+
+        /** stale run 判定窗口，单位分钟。 */
+        private int staleAfterMinutes = 60;
+
+        /** 子 Agent 最大并发。 */
+        private int subagentMaxConcurrency = 3;
+
+        /** 子 Agent 最大 spawn 深度。 */
+        private int subagentMaxDepth = 1;
+
+        /** 工具输出超过该长度时应落盘/摘要化。 */
+        private int toolOutputInlineLimit = 4000;
+
+        /** 媒体缓存 TTL，单位小时。 */
+        private int mediaCacheTtlHours = 168;
     }
 
     @Getter

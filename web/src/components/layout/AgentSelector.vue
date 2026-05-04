@@ -11,13 +11,20 @@ const message = useMessage()
 const agentsStore = useAgentsStore()
 
 const options = computed(() =>
-  agentsStore.agents.map(agent => ({
-    label: agent.display_name && agent.display_name !== agent.name
-      ? `${agent.display_name} (${agent.name})`
-      : agent.name,
-    value: agent.name,
-    disabled: !agent.enabled,
-  })),
+  [
+    {
+      label: '默认 Agent',
+      value: 'default',
+      disabled: false,
+    },
+    ...agentsStore.agents.map(agent => ({
+      label: agent.display_name && agent.display_name !== agent.name
+        ? `${agent.display_name} (${agent.name})`
+        : agent.name,
+      value: agent.name,
+      disabled: !agent.enabled,
+    })),
+  ],
 )
 
 async function load() {

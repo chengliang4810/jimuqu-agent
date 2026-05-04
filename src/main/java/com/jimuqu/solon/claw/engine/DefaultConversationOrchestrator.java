@@ -8,6 +8,7 @@ import com.jimuqu.solon.claw.core.model.AgentRunOutcome;
 import com.jimuqu.solon.claw.core.model.GatewayMessage;
 import com.jimuqu.solon.claw.core.model.GatewayReply;
 import com.jimuqu.solon.claw.core.model.LlmResult;
+import com.jimuqu.solon.claw.core.model.RunBusyDecision;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.ContextCompressionService;
@@ -168,11 +169,34 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     public GatewayReply handleIncoming(GatewayMessage message, ConversationEventSink eventSink)
             throws Exception {
         String sourceKey = message.sourceKey();
+        SessionRecord session;
         synchronized (lockFor(sourceKey)) {
-            SessionRecord session = sessionRepository.getBoundSession(sourceKey);
+            session = sessionRepository.getBoundSession(sourceKey);
             if (session == null) {
                 session = sessionRepository.bindNewSession(sourceKey);
             }
+        }
+        RunBusyDecision decision =
+                agentRunSupervisor.coordinateIncoming(sourceKey, session.getSessionId(), message);
+        if (!decision.isShouldRunNow()) {
+            GatewayReply reply =
+                    GatewayReply.ok(StrUtil.blankToDefault(decision.getMessage(), decision.getStatus()));
+            reply.setSessionId(session.getSessionId());
+            reply.setBranchName(session.getBranchName());
+            reply.getRuntimeMetadata().put("busy_policy", decision.getPolicy());
+            reply.getRuntimeMetadata().put("busy_status", decision.getStatus());
+            if (StrUtil.isNotBlank(decision.getRunId())) {
+                reply.getRuntimeMetadata().put("run_id", decision.getRunId());
+            }
+            if (StrUtil.isNotBlank(decision.getQueueId())) {
+                reply.getRuntimeMetadata().put("queue_id", decision.getQueueId());
+            }
+            if (decision.isRejected()) {
+                reply.setError(true);
+            }
+            return reply;
+        }
+        synchronized (lockFor(sourceKey)) {
             return runOnSession(session, message, eventSink);
         }
     }
@@ -269,6 +293,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     private GatewayReply runOnSession(
             SessionRecord session, GatewayMessage message, ConversationEventSink eventSink)
             throws Exception {
+        boolean shouldDrainQueue = false;
         DangerousCommandApprovalService.PendingApproval pendingApproval =
                 dangerousCommandApprovalService == null
                         ? null
@@ -286,51 +311,67 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             return reply;
         }
 
-        String effectiveUserText = MessageAttachmentSupport.composeEffectiveUserText(message);
-        message.setText(effectiveUserText);
-        if (!message.isHeartbeat()
-                && StrUtil.isBlank(session.getTitle())
-                && StrUtil.isNotBlank(effectiveUserText)) {
-            session.setTitle(extractTitle(effectiveUserText));
-        }
-        AgentRuntimeScope agentScope = resolveAgentScope(session);
-        List<String> enabledToolNames =
-                toolRegistry.resolveEnabledToolNames(message.sourceKey(), agentScope);
-        List<Object> enabledTools =
-                toolRegistry.resolveEnabledTools(message.sourceKey(), agentScope);
-        String systemPrompt =
-                contextService.buildSystemPrompt(message.sourceKey(), agentScope)
-                        + "\n\n"
-                        + runtimeSettingsService.buildAgentRuntimePrompt(
-                                message.sourceKey(), session, enabledToolNames, agentScope);
-        session.setSystemPromptSnapshot(systemPrompt);
+        try {
+            String effectiveUserText = MessageAttachmentSupport.composeEffectiveUserText(message);
+            message.setText(effectiveUserText);
+            if (!message.isHeartbeat()
+                    && StrUtil.isBlank(session.getTitle())
+                    && StrUtil.isNotBlank(effectiveUserText)) {
+                session.setTitle(extractTitle(effectiveUserText));
+            }
+            AgentRuntimeScope agentScope = resolveAgentScope(session);
+            List<String> enabledToolNames =
+                    toolRegistry.resolveEnabledToolNames(message.sourceKey(), agentScope);
+            List<Object> enabledTools =
+                    toolRegistry.resolveEnabledTools(message.sourceKey(), agentScope);
+            String systemPrompt =
+                    contextService.buildSystemPrompt(message.sourceKey(), agentScope)
+                            + "\n\n"
+                            + runtimeSettingsService.buildAgentRuntimePrompt(
+                                    message.sourceKey(), session, enabledToolNames, agentScope);
+            session.setSystemPromptSnapshot(systemPrompt);
 
-        ConversationFeedbackSink feedbackSink = feedbackSinkFor(message);
-        AgentRunOutcome outcome =
-                agentRunSupervisor.run(
-                        session,
-                        systemPrompt,
-                        effectiveUserText,
-                        enabledTools,
-                        feedbackSink,
-                        eventSink,
-                        false,
-                        agentScope);
-        String finalReply = StrUtil.blankToDefault(outcome.getFinalReply(), EMPTY_REPLY_FALLBACK);
-        if (MessageDeliveryTracker.consumeDuplicateFinalReply(message.sourceKey(), finalReply)) {
-            finalReply = "";
-        } else {
-            finalReply = decorateFinalReply(finalReply, message.getPlatform(), outcome);
+            ConversationFeedbackSink feedbackSink = feedbackSinkFor(message);
+            AgentRunOutcome outcome =
+                    agentRunSupervisor.run(
+                            session,
+                            systemPrompt,
+                            effectiveUserText,
+                            enabledTools,
+                            feedbackSink,
+                            eventSink,
+                            false,
+                            agentScope);
+            shouldDrainQueue = true;
+            String finalReply = StrUtil.blankToDefault(outcome.getFinalReply(), EMPTY_REPLY_FALLBACK);
+            if (MessageDeliveryTracker.consumeDuplicateFinalReply(message.sourceKey(), finalReply)) {
+                finalReply = "";
+            } else {
+                finalReply = decorateFinalReply(finalReply, message.getPlatform(), outcome);
+            }
+            feedbackSink.onFinalReply(finalReply);
+            eventSink.onRunCompleted(session.getSessionId(), finalReply, outcome.getResult());
+            syncMemory(message.sourceKey(), effectiveUserText, finalReply);
+            GatewayReply reply = GatewayReply.ok(finalReply);
+            reply.setSessionId(session.getSessionId());
+            reply.setBranchName(session.getBranchName());
+            applyRuntimeMetadata(reply, outcome);
+            applyApprovalCardIfNeeded(reply, message.getPlatform(), session);
+            return reply;
+        } finally {
+            if (shouldDrainQueue || !agentRunSupervisor.isRunning(message.sourceKey())) {
+                agentRunSupervisor.onRunFinished(
+                        message.sourceKey(),
+                        session.getSessionId(),
+                        queued -> {
+                            try {
+                                return handleIncoming(queued, eventSink);
+                            } catch (Exception e) {
+                                throw new IllegalStateException(e);
+                            }
+                        });
+            }
         }
-        feedbackSink.onFinalReply(finalReply);
-        eventSink.onRunCompleted(session.getSessionId(), finalReply, outcome.getResult());
-        syncMemory(message.sourceKey(), effectiveUserText, finalReply);
-        GatewayReply reply = GatewayReply.ok(finalReply);
-        reply.setSessionId(session.getSessionId());
-        reply.setBranchName(session.getBranchName());
-        applyRuntimeMetadata(reply, outcome);
-        applyApprovalCardIfNeeded(reply, message.getPlatform(), session);
-        return reply;
     }
 
     private String decorateFinalReply(

@@ -4,6 +4,7 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.HashUtil;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
+import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -196,7 +197,11 @@ public class TodoTools {
                         .set("in_progress", inProgress)
                         .set("completed", completed)
                         .set("cancelled", cancelled);
-        return new ONode().set("todos", ONode.ofBean(items)).set("summary", summary).toJson();
+        return ToolResultEnvelope.ok("Todo list updated")
+                .data("todos", ONode.ofBean(items))
+                .data("summary", summary)
+                .preview(summary.toJson())
+                .toJson();
     }
 
     private TodoItem copy(TodoItem item) {

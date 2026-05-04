@@ -23,6 +23,7 @@ const META: Record<string, { title: string; fileName: string }> = {
   identity: { title: '身份', fileName: 'IDENTITY.md' },
   user: { title: '用户', fileName: 'USER.md' },
   tools: { title: '工具', fileName: 'TOOLS.md' },
+  heartbeat: { title: '心跳', fileName: 'HEARTBEAT.md' },
 }
 
 interface WorkspaceFile {

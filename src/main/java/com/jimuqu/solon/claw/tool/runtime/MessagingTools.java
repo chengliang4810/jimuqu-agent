@@ -5,6 +5,7 @@ import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.core.enums.PlatformType;
 import com.jimuqu.solon.claw.core.model.DeliveryRequest;
 import com.jimuqu.solon.claw.core.model.MessageAttachment;
+import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.core.service.DeliveryService;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import java.io.File;
@@ -13,7 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.noear.snack4.ONode;
 import org.noear.solon.ai.annotation.ToolMapping;
 import org.noear.solon.annotation.Param;
 
@@ -78,11 +78,17 @@ public class MessagingTools {
                 targetChatId,
                 text,
                 attachments != null && !attachments.isEmpty());
-        return "Message delivered";
+        return ToolResultEnvelope.ok("Message delivered")
+                .data("platform", targetPlatform.name())
+                .data("chatId", targetChatId)
+                .data("attachmentCount", Integer.valueOf(attachments.size()))
+                .preview(text)
+                .metadata("sourceKey", sourceKey)
+                .toJson();
     }
 
     private String error(String message) {
-        return new ONode().set("success", false).set("error", message).toJson();
+        return ToolResultEnvelope.error(message).toJson();
     }
 
     private List<MessageAttachment> resolveAttachments(
@@ -143,7 +149,7 @@ public class MessagingTools {
         if (StrUtil.isBlank(channelExtrasJson)) {
             return new LinkedHashMap<String, Object>();
         }
-        Object parsed = ONode.deserialize(channelExtrasJson.trim(), Object.class);
+        Object parsed = org.noear.snack4.ONode.deserialize(channelExtrasJson.trim(), Object.class);
         if (parsed instanceof Map) {
             return new LinkedHashMap<String, Object>((Map<String, Object>) parsed);
         }

@@ -7,7 +7,7 @@ export const useAgentsStore = defineStore('agents', () => {
   const agents = ref<HermesAgent[]>([])
   const detailMap = ref<Record<string, HermesAgent>>({})
   const activeAgentName = ref('default')
-  const selectedAgentName = ref('default')
+  const selectedAgentName = ref('')
   const loading = ref(false)
   const saving = ref(false)
   const activating = ref(false)
@@ -29,10 +29,12 @@ export const useAgentsStore = defineStore('agents', () => {
     loading.value = true
     try {
       const res = await agentsApi.fetchAgents(sessionId)
-      agents.value = res.agents || []
+      agents.value = (res.agents || []).filter(agent => agent.name !== 'default' && !agent.default_agent)
       activeAgentName.value = res.active_agent_name || 'default'
       if (!selectedAgentName.value || !agents.value.some(agent => agent.name === selectedAgentName.value)) {
-        selectedAgentName.value = activeAgentName.value || 'default'
+        selectedAgentName.value = agents.value.some(agent => agent.name === activeAgentName.value)
+          ? activeAgentName.value
+          : agents.value[0]?.name || ''
       }
       for (const agent of agents.value) {
         detailMap.value[agent.name] = {
@@ -90,7 +92,7 @@ export const useAgentsStore = defineStore('agents', () => {
     try {
       await agentsApi.deleteAgent(name)
       delete detailMap.value[name]
-      if (selectedAgentName.value === name) selectedAgentName.value = 'default'
+      if (selectedAgentName.value === name) selectedAgentName.value = ''
       await fetchAgents()
       return true
     } finally {

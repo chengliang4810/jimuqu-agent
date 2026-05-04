@@ -1,6 +1,7 @@
 package com.jimuqu.solon.claw.tool.runtime;
 
 import cn.hutool.core.util.StrUtil;
+import com.jimuqu.solon.claw.agent.AgentProfileService;
 import com.jimuqu.solon.claw.agent.AgentRuntimePolicy;
 import com.jimuqu.solon.claw.agent.AgentRuntimeScope;
 import com.jimuqu.solon.claw.config.AppConfig;
@@ -47,6 +48,7 @@ public class DefaultToolRegistry implements ToolRegistry {
                     ToolNameConstants.EXECUTE_JS,
                     ToolNameConstants.GET_CURRENT_TIME,
                     ToolNameConstants.TODO,
+                    ToolNameConstants.AGENT_MANAGE,
                     ToolNameConstants.DELEGATE_TASK,
                     ToolNameConstants.MEMORY,
                     ToolNameConstants.SESSION_SEARCH,
@@ -80,6 +82,9 @@ public class DefaultToolRegistry implements ToolRegistry {
 
     /** 会话仓储。 */
     private final SessionRepository sessionRepository;
+
+    /** Agent profile 服务。 */
+    private final AgentProfileService agentProfileService;
 
     /** 定时任务仓储。 */
     private final CronJobRepository cronJobRepository;
@@ -118,6 +123,7 @@ public class DefaultToolRegistry implements ToolRegistry {
             AppConfig appConfig,
             SqlitePreferenceStore preferenceStore,
             SessionRepository sessionRepository,
+            AgentProfileService agentProfileService,
             CronJobRepository cronJobRepository,
             DeliveryService deliveryService,
             MemoryService memoryService,
@@ -132,6 +138,7 @@ public class DefaultToolRegistry implements ToolRegistry {
         this.appConfig = appConfig;
         this.preferenceStore = preferenceStore;
         this.sessionRepository = sessionRepository;
+        this.agentProfileService = agentProfileService;
         this.cronJobRepository = cronJobRepository;
         this.deliveryService = deliveryService;
         this.memoryService = memoryService;
@@ -174,6 +181,7 @@ public class DefaultToolRegistry implements ToolRegistry {
                 new MessagingTools(deliveryService, sourceKey, attachmentCacheService, appConfig);
         CronjobTools cronjobTools = new CronjobTools(cronJobRepository, sourceKey);
         TodoTools todoTools = new TodoTools(appConfig, sourceKey);
+        AgentTools agentTools = new AgentTools(agentProfileService, sessionRepository, sourceKey);
         DelegateTools delegateTools = new DelegateTools(delegationService, sourceKey);
         ConfigTools configTools = new ConfigTools(runtimeSettingsService, gatewayRuntimeRefreshService);
         String sysWorkDir = resolveWorkDir(agentScope);
@@ -251,6 +259,8 @@ public class DefaultToolRegistry implements ToolRegistry {
                 tools.add(cronjobTools);
             } else if (ToolNameConstants.TODO.equals(toolName)) {
                 tools.add(todoTools);
+            } else if (ToolNameConstants.AGENT_MANAGE.equals(toolName)) {
+                tools.add(agentTools);
             } else if (ToolNameConstants.DELEGATE_TASK.equals(toolName)) {
                 tools.add(delegateTools);
             } else if (ToolNameConstants.WEBSEARCH.equals(toolName)) {

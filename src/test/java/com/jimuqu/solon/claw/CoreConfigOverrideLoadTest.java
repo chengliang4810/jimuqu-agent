@@ -29,6 +29,19 @@ public class CoreConfigOverrideLoadTest {
                         + "    summarizationEnabled: false\n"
                         + "    summarizationMaxMessages: 55\n"
                         + "    summarizationMaxTokens: 45000\n"
+                        + "  trace:\n"
+                        + "    retentionDays: 21\n"
+                        + "    maxAttempts: 4\n"
+                        + "    toolPreviewLength: 1600\n"
+                        + "  task:\n"
+                        + "    busyPolicy: steer\n"
+                        + "    staleAfterMinutes: 45\n"
+                        + "    subagentMaxConcurrency: 5\n"
+                        + "    subagentMaxDepth: 2\n"
+                        + "    toolOutputInlineLimit: 8000\n"
+                        + "    mediaCacheTtlHours: 72\n"
+                        + "  mcp:\n"
+                        + "    enabled: true\n"
                         + "  compression:\n"
                         + "    enabled: false\n"
                         + "    thresholdPercent: 0.75\n"
@@ -77,6 +90,16 @@ public class CoreConfigOverrideLoadTest {
         assertThat(config.getReact().isSummarizationEnabled()).isFalse();
         assertThat(config.getReact().getSummarizationMaxMessages()).isEqualTo(55);
         assertThat(config.getReact().getSummarizationMaxTokens()).isEqualTo(45000);
+        assertThat(config.getTrace().getRetentionDays()).isEqualTo(21);
+        assertThat(config.getTrace().getMaxAttempts()).isEqualTo(4);
+        assertThat(config.getTrace().getToolPreviewLength()).isEqualTo(1600);
+        assertThat(config.getTask().getBusyPolicy()).isEqualTo("steer");
+        assertThat(config.getTask().getStaleAfterMinutes()).isEqualTo(45);
+        assertThat(config.getTask().getSubagentMaxConcurrency()).isEqualTo(5);
+        assertThat(config.getTask().getSubagentMaxDepth()).isEqualTo(2);
+        assertThat(config.getTask().getToolOutputInlineLimit()).isEqualTo(8000);
+        assertThat(config.getTask().getMediaCacheTtlHours()).isEqualTo(72);
+        assertThat(config.getMcp().isEnabled()).isTrue();
         assertThat(config.getCompression().isEnabled()).isFalse();
         assertThat(config.getCompression().getThresholdPercent()).isEqualTo(0.75D);
         assertThat(config.getCompression().getSummaryModel()).isEqualTo("gpt-5.4-mini");

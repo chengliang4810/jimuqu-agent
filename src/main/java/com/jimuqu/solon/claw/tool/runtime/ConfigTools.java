@@ -1,9 +1,9 @@
 package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
+import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.RuntimeSettingsService;
 import lombok.RequiredArgsConstructor;
-import org.noear.snack4.ONode;
 import org.noear.solon.ai.annotation.ToolMapping;
 import org.noear.solon.annotation.Param;
 
@@ -19,10 +19,12 @@ public class ConfigTools {
                     "Read a whitelisted runtime config key, such as llm.model or channels.weixin.enabled.")
     public String configGet(@Param(name = "key", description = "配置键，例如 llm.model") String key) {
         try {
-            return new ONode()
-                    .set("success", true)
-                    .set("key", key)
-                    .set("value", runtimeSettingsService.getConfigValue(key))
+            Object value = runtimeSettingsService.getConfigValue(key);
+            String preview = value == null ? "" : String.valueOf(value);
+            return ToolResultEnvelope.ok("读取运行时配置：" + key)
+                    .data("key", key)
+                    .data("value", value)
+                    .preview(preview)
                     .toJson();
         } catch (Exception e) {
             return error(e);
@@ -39,11 +41,12 @@ public class ConfigTools {
             @Param(name = "value", description = "新的配置值，列表键使用逗号分隔") String value) {
         try {
             runtimeSettingsService.setConfigValue(key, value);
-            return new ONode()
-                    .set("success", true)
-                    .set("key", key)
-                    .set("value", runtimeSettingsService.getConfigValue(key))
-                    .set("note", "takes effect on the next message")
+            Object current = runtimeSettingsService.getConfigValue(key);
+            return ToolResultEnvelope.ok("已更新运行时配置：" + key)
+                    .data("key", key)
+                    .data("value", current)
+                    .data("note", "takes effect on the next message")
+                    .preview(key + "=" + current)
                     .toJson();
         } catch (Exception e) {
             return error(e);
@@ -65,12 +68,16 @@ public class ConfigTools {
                     Boolean.TRUE.equals(reconnectChannels)
                             ? gatewayRuntimeRefreshService.refreshNow()
                             : gatewayRuntimeRefreshService.refreshConfigOnly();
-            return new ONode()
-                    .set("success", result.isSuccess())
-                    .set("refreshed", result.isRefreshed())
-                    .set("reconnectedChannels", result.isReconnectedChannels())
-                    .set("configFile", result.getConfigFile())
-                    .set("message", result.getMessage())
+            ToolResultEnvelope envelope =
+                    result.isSuccess()
+                            ? ToolResultEnvelope.ok(result.getMessage())
+                            : ToolResultEnvelope.error(result.getMessage());
+            return envelope
+                    .data("refreshed", Boolean.valueOf(result.isRefreshed()))
+                    .data("reconnectedChannels", Boolean.valueOf(result.isReconnectedChannels()))
+                    .data("configFile", result.getConfigFile())
+                    .data("message", result.getMessage())
+                    .preview(result.getMessage())
                     .toJson();
         } catch (Exception e) {
             return error(e);
@@ -86,10 +93,10 @@ public class ConfigTools {
             @Param(name = "value", description = "新的密钥值") String value) {
         try {
             runtimeSettingsService.setSecretValue(key, value);
-            return new ONode()
-                    .set("success", true)
-                    .set("key", key)
-                    .set("note", "takes effect on the next message")
+            return ToolResultEnvelope.ok("已更新运行时密钥：" + key)
+                    .data("key", key)
+                    .data("note", "takes effect on the next message")
+                    .preview(key + "=***")
                     .toJson();
         } catch (Exception e) {
             return error(e);
@@ -97,10 +104,7 @@ public class ConfigTools {
     }
 
     private String error(Exception e) {
-        return new ONode()
-                .set("success", false)
-                .set(
-                        "error",
+        return ToolResultEnvelope.error(
                         e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage())
                 .toJson();
     }
