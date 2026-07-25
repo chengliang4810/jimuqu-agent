@@ -3,8 +3,10 @@ package com.jimuqu.solon.claw;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.jimuqu.solon.claw.core.model.AgentRunRecord;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.support.MessageSupport;
+import com.jimuqu.solon.claw.support.SessionArtifactService;
 import com.jimuqu.solon.claw.support.TestEnvironment;
 import com.jimuqu.solon.claw.support.ToolMessageStatusSupport;
 import com.jimuqu.solon.claw.support.constants.CompressionConstants;
@@ -25,6 +27,38 @@ import org.noear.solon.ai.chat.message.ToolMessage;
 import org.noear.solon.ai.chat.tool.ToolCall;
 
 public class DashboardSessionServiceTest {
+    /** 当前上下文估算必须来自最近运行，不能用累计计费用量冒充。 */
+    @Test
+    void shouldExposeLatestRunContextEstimate() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        SessionRecord session = env.sessionRepository.bindNewSession("MEMORY:dash-context:user");
+        session.setCumulativeInputTokens(2_485_026L);
+        session.setLastTotalTokens(137_500L);
+        env.sessionRepository.save(session);
+
+        AgentRunRecord run = new AgentRunRecord();
+        run.setRunId("run-context-estimate");
+        run.setSessionId(session.getSessionId());
+        run.setStatus("success");
+        run.setStartedAt(200L);
+        run.setContextEstimateTokens(30_933);
+        run.setContextWindowTokens(256_000);
+        env.agentRunRepository.saveRun(run);
+
+        DashboardSessionService service =
+                new DashboardSessionService(
+                        env.sessionRepository,
+                        env.checkpointService,
+                        new SessionArtifactService(),
+                        env.agentRunRepository);
+        Map<String, Object> detail = service.getSessionMessages(session.getSessionId());
+
+        assertThat(detail)
+                .containsEntry("last_total_tokens", 137_500L)
+                .containsEntry("context_estimate_tokens", 30_933)
+                .containsEntry("context_window_tokens", 256_000);
+    }
+
     /** 旧工具调用历史在 Dashboard 恢复时也必须执行阶段说明安全过滤。 */
     @Test
     void shouldSanitizeLegacyToolCallPreamblesWhenLoadingHistory() throws Exception {

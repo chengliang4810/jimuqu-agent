@@ -639,7 +639,7 @@ public class DashboardStatusService {
             result.put("fallbackProviders", safeFallbackProviders());
         }
         result.put("auto_context_length", appConfig.getLlm().getContextWindowTokens());
-        result.put("effective_context_length", appConfig.getLlm().getContextWindowTokens());
+        result.put("effective_context_length", resolved.getContextWindowTokens());
 
         Map<String, Object> capabilities = new LinkedHashMap<String, Object>();
         ModelMetadata metadata = currentModelMetadata(resolved);

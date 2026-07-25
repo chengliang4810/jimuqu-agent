@@ -54,6 +54,8 @@ export interface Session {
   inputTokens?: number
   outputTokens?: number
   lastTotalTokens?: number
+  contextEstimateTokens?: number
+  contextWindowTokens?: number
   endedAt?: number | null
   lastActiveAt?: number
   isLive?: boolean
@@ -190,6 +192,8 @@ function mapSolonClawSession(s: SessionSummary, fallbackProfile: string): Sessio
     inputTokens: s.input_tokens,
     outputTokens: s.output_tokens,
     lastTotalTokens: s.last_total_tokens || undefined,
+    contextEstimateTokens: s.context_estimate_tokens || undefined,
+    contextWindowTokens: s.context_window_tokens || undefined,
     endedAt: s.ended_at != null ? normalizeTimestampMs(s.ended_at) : null,
     lastActiveAt: s.last_active != null ? normalizeTimestampMs(s.last_active) : undefined,
     isLive: Boolean(s.is_active),
@@ -647,6 +651,8 @@ export const useChatStore = defineStore('chat', () => {
       target.inputTokens = detail.input_tokens
       target.outputTokens = detail.output_tokens
       target.lastTotalTokens = detail.last_total_tokens || undefined
+      target.contextEstimateTokens = detail.context_estimate_tokens || undefined
+      target.contextWindowTokens = detail.context_window_tokens || undefined
       if (detail.title) target.title = detail.title
       persistSessionMessages(sessionKey)
       return true
@@ -739,6 +745,8 @@ export const useChatStore = defineStore('chat', () => {
         target.inputTokens = detail.input_tokens
         target.outputTokens = detail.output_tokens
         target.lastTotalTokens = detail.last_total_tokens || undefined
+        target.contextEstimateTokens = detail.context_estimate_tokens || undefined
+        target.contextWindowTokens = detail.context_window_tokens || undefined
         // Update title: use Jimuqu title, or fallback to first user message
         if (detail.title) {
           target.title = detail.title
@@ -778,6 +786,8 @@ export const useChatStore = defineStore('chat', () => {
         target.inputTokens = usage.input_tokens
         target.outputTokens = usage.output_tokens
         target.lastTotalTokens = usage.last_total_tokens || undefined
+        target.contextEstimateTokens = usage.context_estimate_tokens || undefined
+        target.contextWindowTokens = usage.context_window_tokens || undefined
       }
     } catch { /* non-critical */ }
   }
@@ -1242,7 +1252,7 @@ export const useChatStore = defineStore('chat', () => {
                 if (activeSessionKey.value === sid) {
                   void switchSession(completedSessionKey)
                 }
-              } else if (isSlashCommand && activeSessionKey.value === sid) {
+              } else if (activeSessionKey.value === sid) {
                 void refreshActiveSession()
               }
               break

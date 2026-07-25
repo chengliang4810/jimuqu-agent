@@ -1,4 +1,5 @@
 export interface ChatContextUsageInput {
+  contextEstimateTokens?: number | null
   lastTotalTokens?: number | null
   inputTokens?: number | null
   outputTokens?: number | null
@@ -20,9 +21,7 @@ export function computeChatContextUsage(
   contextLength: number,
 ): ChatContextUsage {
   const limit = nonNegative(contextLength)
-  const lastTotal = nonNegative(session?.lastTotalTokens)
-  const cumulative = nonNegative(session?.inputTokens) + nonNegative(session?.outputTokens)
-  const usedTokens = lastTotal > 0 ? lastTotal : cumulative
+  const usedTokens = nonNegative(session?.contextEstimateTokens)
   const remainingTokens = Math.max(limit - usedTokens, 0)
   const usagePercent = limit > 0 ? Math.min((usedTokens / limit) * 100, 100) : 0
 

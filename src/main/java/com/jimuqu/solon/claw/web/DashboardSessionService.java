@@ -946,6 +946,12 @@ public class DashboardSessionService {
         result.put("cache_write_tokens", record.getCumulativeCacheWriteTokens());
         result.put("total_tokens", record.getCumulativeTotalTokens());
         result.put("last_total_tokens", record.getLastTotalTokens());
+        result.put(
+                "context_estimate_tokens",
+                runs.isEmpty() ? Integer.valueOf(0) : runs.get(0).getContextEstimateTokens());
+        result.put(
+                "context_window_tokens",
+                runs.isEmpty() ? Integer.valueOf(0) : runs.get(0).getContextWindowTokens());
         result.put("last_usage_at", record.getLastUsageAt());
         result.put("parent_session_id", safe(record.getParentSessionId(), 400));
         result.put("branch_name", safe(record.getBranchName(), 400));

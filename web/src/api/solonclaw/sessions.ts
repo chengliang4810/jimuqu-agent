@@ -21,6 +21,8 @@ export interface SessionSummary {
   cache_write_tokens: number
   reasoning_tokens: number
   last_total_tokens?: number
+  context_estimate_tokens?: number
+  context_window_tokens?: number
   provider: string | null
   parent_session_id?: string | null
   branch_name?: string | null
@@ -105,6 +107,8 @@ interface DashboardSessionSummary {
   cache_write_tokens?: number
   total_tokens?: number
   last_total_tokens?: number
+  context_estimate_tokens?: number
+  context_window_tokens?: number
   preview: string | null
   parent_session_id?: string | null
   branch_name?: string | null
@@ -135,6 +139,8 @@ interface DashboardSessionDetail {
   cache_write_tokens: number
   total_tokens: number
   last_total_tokens: number
+  context_estimate_tokens?: number
+  context_window_tokens?: number
   last_usage_at: number
   preview?: string | null
   compressed_summary?: string | null
@@ -180,6 +186,8 @@ function mapSummary(s: DashboardSessionSummary): SessionSummary {
     cache_write_tokens: s.cache_write_tokens || 0,
     reasoning_tokens: s.reasoning_tokens || 0,
     last_total_tokens: s.last_total_tokens || 0,
+    context_estimate_tokens: s.context_estimate_tokens || 0,
+    context_window_tokens: s.context_window_tokens || 0,
     provider: s.provider || null,
     parent_session_id: s.parent_session_id || null,
     branch_name: s.branch_name || null,
@@ -317,6 +325,8 @@ export async function fetchSession(id: string, profile?: string): Promise<Sessio
       cache_write_tokens: detail.cache_write_tokens,
       reasoning_tokens: detail.reasoning_tokens,
       last_total_tokens: detail.last_total_tokens || 0,
+      context_estimate_tokens: detail.context_estimate_tokens || 0,
+      context_window_tokens: detail.context_window_tokens || 0,
       preview: detail.preview || '',
       parent_session_id: detail.parent_session_id || null,
       branch_name: detail.branch_name || null,
@@ -381,13 +391,15 @@ export async function fetchSessionUsage(ids: string[]): Promise<Record<string, {
   return results
 }
 
-export async function fetchSessionUsageSingle(id: string, profile?: string): Promise<{ input_tokens: number; output_tokens: number; last_total_tokens?: number } | null> {
+export async function fetchSessionUsageSingle(id: string, profile?: string): Promise<{ input_tokens: number; output_tokens: number; last_total_tokens?: number; context_estimate_tokens?: number; context_window_tokens?: number } | null> {
   const detail = await fetchSession(id, profile)
   if (!detail) return null
   return {
     input_tokens: detail.input_tokens,
     output_tokens: detail.output_tokens,
     last_total_tokens: detail.last_total_tokens || 0,
+    context_estimate_tokens: detail.context_estimate_tokens || 0,
+    context_window_tokens: detail.context_window_tokens || 0,
   }
 }
 

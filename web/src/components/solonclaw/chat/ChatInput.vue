@@ -26,6 +26,9 @@ const canSend = computed(() => !!(inputText.value.trim() || attachments.value.le
 
 const contextLength = ref(200000)
 const FALLBACK_CONTEXT = 200000
+const effectiveContextLength = computed(
+  () => chatStore.activeSession?.contextWindowTokens || contextLength.value,
+)
 
 async function loadContextLength() {
   try {
@@ -39,7 +42,7 @@ onMounted(loadContextLength)
 watch(() => useAppStore().selectedModel, loadContextLength)
 
 const contextUsage = computed(() =>
-  computeChatContextUsage(chatStore.activeSession, contextLength.value),
+  computeChatContextUsage(chatStore.activeSession, effectiveContextLength.value),
 )
 
 const totalTokens = computed(() => contextUsage.value.usedTokens)
@@ -205,7 +208,7 @@ function isImage(type: string): boolean {
         </Button>
       </Tooltip>
       <span v-if="totalTokens > 0" class="context-info" :class="{ 'context-warning': usagePercent > 80 }">
-        {{ formatTokens(totalTokens) }} / {{ formatTokens(contextLength) }} · {{ t('chat.contextRemaining') }} {{ formatTokens(remainingTokens) }}
+        {{ formatTokens(totalTokens) }} / {{ formatTokens(effectiveContextLength) }} · {{ t('chat.contextRemaining') }} {{ formatTokens(remainingTokens) }}
       </span>
       <div v-if="totalTokens > 0" class="context-bar">
         <div

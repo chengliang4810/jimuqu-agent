@@ -115,6 +115,7 @@ public class DashboardStatusServiceTest {
         Map<String, Object> capabilities = (Map<String, Object>) modelInfo.get("capabilities");
 
         assertThat(modelInfo.get("model")).isEqualTo("custom/unknown-small-model");
+        assertThat(modelInfo.get("effective_context_length")).isEqualTo(256000);
         assertThat(capabilities.get("supports_reasoning")).isEqualTo(Boolean.FALSE);
     }
 
