@@ -24,6 +24,9 @@ public class GatewayMessage {
     /** 一次性子代理任务使用的内部运行类型。 */
     public static final String RUN_KIND_SUBAGENT = "subagent";
 
+    /** 持久目标后台启动与续轮使用的内部运行类型。 */
+    public static final String RUN_KIND_GOAL_CONTINUATION = "goal_continuation";
+
     /** 消息归属的 Profile；default 或空值保持单 Profile 旧会话键。 */
     private String profile;
 

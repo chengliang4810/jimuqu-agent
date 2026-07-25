@@ -137,6 +137,9 @@ public class AgentRunSupervisor implements AgentRunControlService {
     /** 记录Agent运行Supervisor中的最近一次运行Finished时间。 */
     private volatile long lastRunFinishedAt;
 
+    /** 记录最近一次前台用户对话完成时间，后台心跳和定时任务不得刷新。 */
+    private volatile long lastForegroundRunFinishedAt;
+
     /**
      * 创建Agent运行Supervisor实例，并注入运行所需依赖。
      *
@@ -414,7 +417,11 @@ public class AgentRunSupervisor implements AgentRunControlService {
                     || (runningRecord != null && runningRecord.isBackgrounded())) {
                 RunHandle reservation =
                         new RunHandle(
-                                "", sessionId, Thread.currentThread(), System.currentTimeMillis());
+                                "",
+                                sessionId,
+                                Thread.currentThread(),
+                                System.currentTimeMillis(),
+                                null);
                 boolean claimed =
                         handle == null
                                 ? runningRuns.putIfAbsent(key, reservation) == null
@@ -460,7 +467,11 @@ public class AgentRunSupervisor implements AgentRunControlService {
             stopHandle(handle);
             RunHandle reservation =
                     new RunHandle(
-                            "", sessionId, Thread.currentThread(), System.currentTimeMillis());
+                            "",
+                            sessionId,
+                            Thread.currentThread(),
+                            System.currentTimeMillis(),
+                            null);
             if (replaceRunHandle(key, handle, reservation)) {
                 return RunBusyDecision.runNow(policy);
             }
@@ -785,7 +796,11 @@ public class AgentRunSupervisor implements AgentRunControlService {
             }
             final RunHandle reservation =
                     new RunHandle(
-                            "", sessionId, Thread.currentThread(), System.currentTimeMillis());
+                            "",
+                            sessionId,
+                            Thread.currentThread(),
+                            System.currentTimeMillis(),
+                            null);
             boolean claimed =
                     existing == null
                             ? runningRuns.putIfAbsent(key, reservation) == null
@@ -842,6 +857,16 @@ public class AgentRunSupervisor implements AgentRunControlService {
     @Override
     public long lastRunFinishedAt() {
         return lastRunFinishedAt;
+    }
+
+    /**
+     * 返回最近一次前台用户对话完成时间。
+     *
+     * @return 最近一次 conversation 或 resume 运行完成时间戳。
+     */
+    @Override
+    public long lastForegroundRunFinishedAt() {
+        return lastForegroundRunFinishedAt;
     }
 
     /**
@@ -1178,7 +1203,11 @@ public class AgentRunSupervisor implements AgentRunControlService {
         }
         RunHandle runHandle =
                 registerRun(
-                        session.getSourceKey(), runRecord.getRunId(), session.getSessionId(), now);
+                        session.getSourceKey(),
+                        runRecord.getRunId(),
+                        session.getSessionId(),
+                        now,
+                        runRecord.getRunKind());
         final String writerSourceKey = normalizeSourceKey(session.getSourceKey());
         SingleWriterOutputGuard.WriteGate writeGate =
                 output -> writeOutput(writerSourceKey, runHandle, output);
@@ -2514,7 +2543,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
             } finally {
                 handle.outputRevoked = true;
                 runningRuns.remove(key, handle);
-                lastRunFinishedAt = System.currentTimeMillis();
+                recordRunFinished(handle);
             }
         }
     }
@@ -2544,7 +2573,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
             } finally {
                 handle.outputRevoked = true;
                 runningRuns.remove(key, handle);
-                lastRunFinishedAt = System.currentTimeMillis();
+                recordRunFinished(handle);
             }
         }
     }
@@ -2614,7 +2643,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
             handle.outputRevoked = true;
             boolean removed = runningRuns.remove(sourceKey, handle);
             if (removed) {
-                lastRunFinishedAt = System.currentTimeMillis();
+                recordRunFinished(handle);
             }
             return removed;
         }
@@ -2627,12 +2656,14 @@ public class AgentRunSupervisor implements AgentRunControlService {
      * @param runId 运行标识。
      * @param sessionId 当前会话标识。
      * @param startedAt startedAt 参数。
+     * @param runKind 本轮运行类型。
      * @return 返回运行结果。
      */
     private RunHandle registerRun(
-            String sourceKey, String runId, String sessionId, long startedAt) {
+            String sourceKey, String runId, String sessionId, long startedAt, String runKind) {
         String key = normalizeSourceKey(sourceKey);
-        RunHandle handle = new RunHandle(runId, sessionId, Thread.currentThread(), startedAt);
+        RunHandle handle =
+                new RunHandle(runId, sessionId, Thread.currentThread(), startedAt, runKind);
         while (true) {
             RunHandle existing = runningRuns.get(key);
             if (existing == null) {
@@ -2703,9 +2734,24 @@ public class AgentRunSupervisor implements AgentRunControlService {
             } finally {
                 handle.outputRevoked = true;
                 runningRuns.remove(key, handle);
-                lastRunFinishedAt = System.currentTimeMillis();
+                recordRunFinished(handle);
             }
         }
+    }
+
+    /** 记录运行完成时间，并仅让真实用户对话推进前台空闲窗口。 */
+    private void recordRunFinished(RunHandle handle) {
+        long finishedAt = System.currentTimeMillis();
+        lastRunFinishedAt = finishedAt;
+        if (handle != null && isForegroundRunKind(handle.runKind)) {
+            lastForegroundRunFinishedAt = finishedAt;
+        }
+    }
+
+    /** 判断运行类型是否属于会影响后台维护空闲窗口的前台用户对话。 */
+    private boolean isForegroundRunKind(String runKind) {
+        return "conversation".equalsIgnoreCase(StrUtil.nullToEmpty(runKind))
+                || "resume".equalsIgnoreCase(StrUtil.nullToEmpty(runKind));
     }
 
     /**
@@ -3321,7 +3367,11 @@ public class AgentRunSupervisor implements AgentRunControlService {
             }
             RunHandle reservation =
                     new RunHandle(
-                            "", sessionId, Thread.currentThread(), System.currentTimeMillis());
+                            "",
+                            sessionId,
+                            Thread.currentThread(),
+                            System.currentTimeMillis(),
+                            null);
             boolean claimed =
                     existing == null
                             ? runningRuns.putIfAbsent(key, reservation) == null
@@ -3669,6 +3719,9 @@ public class AgentRunSupervisor implements AgentRunControlService {
         /** 记录运行Handle中的started时间。 */
         private final long startedAt;
 
+        /** 记录运行Handle中的运行类型，用于区分前台对话与后台任务。 */
+        private final String runKind;
+
         /** 记录运行Handle中的cancelled。 */
         private final AtomicBoolean cancelled = new AtomicBoolean(false);
 
@@ -3685,12 +3738,15 @@ public class AgentRunSupervisor implements AgentRunControlService {
          * @param sessionId 当前会话标识。
          * @param thread thread 参数。
          * @param startedAt startedAt 参数。
+         * @param runKind 本轮运行类型。
          */
-        private RunHandle(String runId, String sessionId, Thread thread, long startedAt) {
+        private RunHandle(
+                String runId, String sessionId, Thread thread, long startedAt, String runKind) {
             this.runId = runId;
             this.sessionId = sessionId;
             this.thread = thread;
             this.startedAt = startedAt;
+            this.runKind = runKind;
         }
     }
 

@@ -1,6 +1,8 @@
 package com.jimuqu.solon.claw;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.core.enums.PlatformType;
@@ -11,17 +13,16 @@ import com.jimuqu.solon.claw.gateway.platform.weixin.WeiXinChannelAdapter;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.sun.net.httpserver.HttpServer;
 import java.io.File;
-import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -29,14 +30,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.noear.snack4.ONode;
 
-/** 验证微信出站请求串行、限流冷却和失效上下文 token 清理。 */
+/** 验证微信出站请求串行、有界重试和失效上下文 token 清理。 */
 public class WeixinOutboundReliabilityTest {
-    /** 限流后应等待冷却并重试，文字与附件均不得丢失或乱序。 */
+    /** 收到 ret=-2 后应按配置重试，文字与附件均不得丢失或乱序。 */
     @Test
-    void shouldRetryRateLimitedAttachmentWithoutDroppingOrderedDelivery() throws Exception {
+    void shouldRetryRetMinusTwoAttachmentWithoutDroppingOrderedDelivery() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         ExecutorService serverExecutor = Executors.newCachedThreadPool();
-        ExecutorService client = Executors.newSingleThreadExecutor();
         List<String> bodies = Collections.synchronizedList(new ArrayList<String>());
         AtomicInteger sendRequests = new AtomicInteger();
         server.setExecutor(serverExecutor);
@@ -58,7 +58,8 @@ public class WeixinOutboundReliabilityTest {
                 });
         server.start();
         AppConfig config = newConfig(server);
-        config.getChannels().getWeixin().setSendChunkRetries(0);
+        config.getChannels().getWeixin().setSendChunkRetries(1);
+        config.getChannels().getWeixin().setSendChunkRetryDelaySeconds(0D);
         WeiXinChannelAdapter adapter = newAdapter(config, new MemoryStateRepository());
         File attachmentFile = Files.createTempFile("solonclaw-weixin-rate-limit", ".txt").toFile();
         Files.writeString(attachmentFile.toPath(), "attachment", StandardCharsets.UTF_8);
@@ -67,9 +68,7 @@ public class WeixinOutboundReliabilityTest {
             DeliveryRequest request = textRequest("wx-user", "text-before-attachment");
             request.getAttachments()
                     .add(attachmentRequest("wx-user", attachmentFile).getAttachments().get(0));
-            Future<?> delivery = client.submit(() -> adapter.send(request));
-            shortenRateLimitCooldown(adapter);
-            delivery.get(2L, TimeUnit.SECONDS);
+            adapter.send(request);
 
             assertThat(sendRequests.get()).isEqualTo(3);
             assertThat(bodies).hasSize(3);
@@ -78,22 +77,55 @@ public class WeixinOutboundReliabilityTest {
             assertThat(bodies.get(2)).contains("\"type\":4");
         } finally {
             adapter.disconnect();
-            client.shutdownNow();
             server.stop(0);
             serverExecutor.shutdownNow();
         }
     }
 
-    /** 将真实限流窗口缩短为测试窗口，避免测试等待平台固定冷却时长。 */
-    private static void shortenRateLimitCooldown(WeiXinChannelAdapter adapter) throws Exception {
-        Field field = WeiXinChannelAdapter.class.getDeclaredField("rateLimitCooldownUntilNanos");
-        field.setAccessible(true);
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1L);
-        while (field.getLong(adapter) <= System.nanoTime() && System.nanoTime() < deadline) {
-            TimeUnit.MILLISECONDS.sleep(5L);
+    /** 持续收到平台失败响应时必须按配置停止重试，并允许后续消息继续发送。 */
+    @Test
+    void shouldBoundPersistentPlatformFailureAndReleaseOutboundGate() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        AtomicBoolean platformFailure = new AtomicBoolean(true);
+        AtomicInteger sendRequests = new AtomicInteger();
+        server.createContext(
+                "/ilink/bot/sendmessage",
+                exchange -> {
+                    sendRequests.incrementAndGet();
+                    String responseText = platformFailure.get() ? "{\"ret\":-2}" : "{}";
+                    byte[] response = responseText.getBytes(StandardCharsets.UTF_8);
+                    exchange.sendResponseHeaders(200, response.length);
+                    exchange.getResponseBody().write(response);
+                    exchange.close();
+                });
+        server.start();
+        AppConfig config = newConfig(server);
+        config.getChannels().getWeixin().setSendChunkRetries(1);
+        config.getChannels().getWeixin().setSendChunkRetryDelaySeconds(0D);
+        WeiXinChannelAdapter adapter = newAdapter(config, new MemoryStateRepository());
+
+        try {
+            assertTimeoutPreemptively(
+                    Duration.ofSeconds(1L),
+                    () ->
+                            assertThatThrownBy(
+                                            () ->
+                                                    adapter.send(
+                                                            textRequest(
+                                                                    "wx-user",
+                                                                    "persistent failure")))
+                                    .isInstanceOf(IllegalStateException.class)
+                                    .hasMessageContaining("after 2 attempt(s)")
+                                    .hasMessageContaining("\"ret\":-2"));
+            assertThat(sendRequests.get()).isEqualTo(2);
+
+            platformFailure.set(false);
+            adapter.send(textRequest("wx-user", "after failure"));
+            assertThat(sendRequests.get()).isEqualTo(3);
+        } finally {
+            adapter.disconnect();
+            server.stop(0);
         }
-        assertThat(field.getLong(adapter)).isGreaterThan(System.nanoTime());
-        field.setLong(adapter, System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(20L));
     }
 
     /** tokenless 降级成功后，下一条消息不得再次携带已失效的持久 token。 */

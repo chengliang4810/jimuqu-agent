@@ -109,6 +109,52 @@ public class AgentRunSupervisorEngineTest {
         assertThat(supervisor.lastRunFinishedAt()).isGreaterThan(0L);
     }
 
+    /** 心跳和定时任务只更新全局完成时间，只有前台对话才能推进后台维护的空闲窗口。 */
+    @Test
+    void shouldTrackForegroundCompletionSeparatelyFromBackgroundRuns() throws Exception {
+        Fixture fixture = fixture();
+        AgentRunSupervisor supervisor = supervisor(fixture, new SuccessfulGateway("engine ok"));
+
+        for (String runKind : new String[] {"heartbeat", "cron"}) {
+            SessionRecord backgroundSession =
+                    fixture.sessionRepository.bindNewSession("MEMORY:" + runKind + ":user");
+            supervisor.run(
+                    backgroundSession,
+                    "system",
+                    runKind,
+                    Collections.emptyList(),
+                    ConversationFeedbackSink.noop(),
+                    ConversationEventSink.noop(),
+                    false,
+                    null,
+                    Collections.emptyList(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    runKind);
+        }
+
+        assertThat(supervisor.lastRunFinishedAt()).isGreaterThan(0L);
+        assertThat(supervisor.lastForegroundRunFinishedAt()).isZero();
+
+        SessionRecord conversation =
+                fixture.sessionRepository.bindNewSession("MEMORY:conversation:user");
+        supervisor.run(
+                conversation,
+                "system",
+                "hello",
+                Collections.emptyList(),
+                ConversationFeedbackSink.noop(),
+                ConversationEventSink.noop(),
+                false,
+                null,
+                Collections.emptyList(),
+                null);
+
+        assertThat(supervisor.lastForegroundRunFinishedAt()).isGreaterThan(0L);
+    }
+
     /** 用量成本计算即使阻塞，也不得延迟模型运行结果返回。 */
     @Test
     void shouldRecordUsageWithoutBlockingRunOutcome() throws Exception {

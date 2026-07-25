@@ -273,13 +273,14 @@ public class GatewayResilienceTest {
         assertThat(calls.get()).isEqualTo(1);
     }
 
-    /** goal kickoff 后台线程必须继承触发消息的 Profile 作用域。 */
+    /** goal kickoff 与 continuation 后台线程必须继承 Profile 且保留后台运行类型。 */
     @Test
-    void shouldCarryProfileScopeIntoGoalKickoffThread() throws Exception {
+    void shouldCarryProfileScopeAndRunKindIntoGoalThreads() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         SessionRecord session = env.sessionRepository.bindNewSession("MEMORY:goal-room:user");
-        CountDownLatch scheduled = new CountDownLatch(1);
+        CountDownLatch scheduled = new CountDownLatch(2);
         AtomicReference<String> observedProfile = new AtomicReference<String>();
+        AtomicInteger invalidRunKinds = new AtomicInteger();
         ConversationOrchestrator orchestrator =
                 new ConversationOrchestrator() {
                     @Override
@@ -287,6 +288,9 @@ public class GatewayResilienceTest {
                         GatewayReply reply = GatewayReply.ok("started");
                         reply.setSessionId(session.getSessionId());
                         reply.getRuntimeMetadata().put("goal_kickoff", "continue");
+                        reply.getRuntimeMetadata().put("goal_should_continue", Boolean.TRUE);
+                        reply.getRuntimeMetadata()
+                                .put("goal_continuation_prompt", "continue again");
                         return reply;
                     }
 
@@ -294,6 +298,10 @@ public class GatewayResilienceTest {
                     public GatewayReply runScheduled(GatewayMessage syntheticMessage) {
                         ProfileRuntimeScope.Context current = ProfileRuntimeScope.current();
                         observedProfile.set(current == null ? null : current.getProfile());
+                        if (!GatewayMessage.RUN_KIND_GOAL_CONTINUATION.equals(
+                                syntheticMessage.getRunKind())) {
+                            invalidRunKinds.incrementAndGet();
+                        }
                         scheduled.countDown();
                         return null;
                     }
@@ -320,6 +328,7 @@ public class GatewayResilienceTest {
 
         assertThat(scheduled.await(2, TimeUnit.SECONDS)).isTrue();
         assertThat(observedProfile.get()).isEqualTo("worker");
+        assertThat(invalidRunKinds.get()).isZero();
     }
 
     @Test

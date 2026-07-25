@@ -738,6 +738,8 @@ public class DefaultGatewayService {
                                             kickoffMessage.setSourceKeyOverride(
                                                     message.sourceKey());
                                             kickoffMessage.setGoalContinuation(true); // 标记为合成续轮
+                                            kickoffMessage.setRunKind(
+                                                    GatewayMessage.RUN_KIND_GOAL_CONTINUATION);
                                             runScheduledAndDeliver(kickoffMessage);
                                         } catch (Exception e) {
                                             log.warn(
@@ -803,6 +805,8 @@ public class DefaultGatewayService {
                                             continuation.setProfile(message.getProfile());
                                             continuation.setSourceKeyOverride(message.sourceKey());
                                             continuation.setGoalContinuation(true); // 标记为合成续轮
+                                            continuation.setRunKind(
+                                                    GatewayMessage.RUN_KIND_GOAL_CONTINUATION);
                                             runScheduledAndDeliver(continuation);
                                         } catch (Exception e) {
                                             log.warn(

@@ -91,10 +91,28 @@ public class SkillCuratorService {
                                 return null;
                             });
         }
-        ReportSink sink = reportSink;
-        if (sink != null) {
-            sink.save(report);
-        }
+        publishReport(report);
+        return report;
+    }
+
+    /**
+     * 记录调度器因前台空闲窗口不足而跳过的维护检查。
+     *
+     * @param details 空闲门禁的低敏诊断字段。
+     * @return 已写入统一报告出口的跳过报告。
+     * @throws Exception 报告持久化失败时抛出。
+     */
+    public synchronized Map<String, Object> recordIdleWait(Map<String, Object> details)
+            throws Exception {
+        long now = System.currentTimeMillis();
+        Map<String, Object> report =
+                report(
+                        stateStore().read(),
+                        now,
+                        "idle_wait",
+                        new ArrayList<Map<String, Object>>(),
+                        details);
+        publishReport(report);
         return report;
     }
 
@@ -103,16 +121,16 @@ public class SkillCuratorService {
             throws Exception {
         long now = System.currentTimeMillis();
         if (Boolean.TRUE.equals(state.get("paused")) && !force) {
-            return report(state, now, "paused", new ArrayList<Map<String, Object>>());
+            return report(state, now, "paused", new ArrayList<Map<String, Object>>(), null);
         }
         if (!force && !appConfig.getCurator().isEnabled()) {
-            return report(state, now, "disabled", new ArrayList<Map<String, Object>>());
+            return report(state, now, "disabled", new ArrayList<Map<String, Object>>(), null);
         }
         long lastRunAt = asLong(state.get("lastRunAt"));
         long intervalMillis =
                 Math.max(1, appConfig.getCurator().getIntervalHours()) * 60L * 60L * 1000L;
         if (!force && lastRunAt > 0 && now - lastRunAt < intervalMillis) {
-            return report(state, now, "interval_wait", new ArrayList<Map<String, Object>>());
+            return report(state, now, "interval_wait", new ArrayList<Map<String, Object>>(), null);
         }
 
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
@@ -151,7 +169,7 @@ public class SkillCuratorService {
                 });
 
         state.put("lastRunAt", Long.valueOf(now));
-        return report(state, now, "ok", items);
+        return report(state, now, "ok", items, null);
     }
 
     /** 仅允许整理器维护明确标记为后台 Agent 创建的技能。 */
@@ -649,18 +667,34 @@ public class SkillCuratorService {
      * @param now 当前时间戳。
      * @param status 状态参数。
      * @param items items 参数。
+     * @param details 可选的调度诊断字段。
      * @return 返回report结果。
      */
     private Map<String, Object> report(
-            Map<String, Object> state, long now, String status, List<Map<String, Object>> items) {
+            Map<String, Object> state,
+            long now,
+            String status,
+            List<Map<String, Object>> items,
+            Map<String, Object> details) {
         Map<String, Object> report = new LinkedHashMap<String, Object>();
         report.put("status", status);
         report.put("startedAt", Long.valueOf(now));
         report.put("finishedAt", Long.valueOf(System.currentTimeMillis()));
         report.put("items", items);
         report.put("stateFile", "curator://state");
+        if (details != null) {
+            report.putAll(details);
+        }
         writeReport(report, now);
         return report;
+    }
+
+    /** 把报告发送到 Dashboard 注册的统一持久化出口。 */
+    private void publishReport(Map<String, Object> report) throws Exception {
+        ReportSink sink = reportSink;
+        if (sink != null) {
+            sink.save(report);
+        }
     }
 
     /**

@@ -7,6 +7,8 @@ import com.jimuqu.solon.claw.support.TestEnvironment;
 import com.jimuqu.solon.claw.web.DashboardCuratorService;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
 
@@ -22,6 +24,23 @@ public class DashboardCuratorServiceTest {
         curator.runOnce(true);
 
         assertThat(ONode.serialize(dashboard.list(10))).contains("items=").contains("status=ok");
+    }
+
+    /** 调度器空闲门禁报告必须通过既有出口进入 Dashboard 查询列表。 */
+    @Test
+    void shouldPersistIdleWaitReports() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        SkillCuratorService curator = new SkillCuratorService(env.appConfig, env.localSkillService);
+        DashboardCuratorService dashboard =
+                new DashboardCuratorService(curator, env.sqliteDatabase);
+        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        details.put("reason", "minimum_idle");
+
+        curator.recordIdleWait(details);
+
+        assertThat(ONode.serialize(dashboard.list(10)))
+                .contains("status=idle_wait")
+                .contains("items=0");
     }
 
     @Test

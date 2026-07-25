@@ -4,6 +4,8 @@ import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.context.SkillCuratorService;
 import com.jimuqu.solon.claw.core.service.AgentRunControlService;
 import com.jimuqu.solon.claw.support.ExecutorShutdownSupport;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -63,14 +65,30 @@ public class SkillCuratorScheduler {
         if (!appConfig.getCurator().isEnabled()) {
             return;
         }
-        if (!isIdleEnough()) {
+        Map<String, Object> idleWait = idleWaitDetails();
+        if (idleWait != null) {
+            try {
+                curatorService.recordIdleWait(idleWait);
+                log.info(
+                        "[CURATOR] skipped: status=idle_wait, reason={}, runningRuns={},"
+                                + " remainingIdleMillis={}",
+                        idleWait.get("reason"),
+                        idleWait.get("runningRunCount"),
+                        idleWait.get("remainingIdleMillis"));
+            } catch (Exception e) {
+                log.warn(
+                        "[CURATOR] idle wait report failed: error={}", CronJobSupport.safeError(e));
+            }
             return;
         }
         if (!running.compareAndSet(false, true)) {
             return;
         }
         try {
-            curatorService.runOnce(false);
+            Map<String, Object> report = curatorService.runOnce(false);
+            if (!"ok".equals(String.valueOf(report.get("status")))) {
+                log.info("[CURATOR] skipped: status={}", report.get("status"));
+            }
         } catch (Exception e) {
             log.warn("[CURATOR] background run failed: error={}", CronJobSupport.safeError(e));
         } finally {
@@ -79,24 +97,42 @@ public class SkillCuratorScheduler {
     }
 
     /**
-     * 判断是否Idle Enough。
+     * 返回当前空闲门禁的跳过诊断；允许执行时返回空。
      *
-     * @return 如果Idle Enough满足条件则返回 true，否则返回 false。
+     * @return 空闲不足时的低敏诊断字段，允许执行时返回 null。
      */
-    private boolean isIdleEnough() {
+    private Map<String, Object> idleWaitDetails() {
+        long now = System.currentTimeMillis();
         if (agentRunControlService != null && agentRunControlService.hasRunningRuns()) {
-            return false;
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("reason", "active_run");
+            details.put(
+                    "runningRunCount", Integer.valueOf(agentRunControlService.runningRunCount()));
+            details.put("observedAt", Long.valueOf(now));
+            return details;
         }
         double minIdleHours = Math.max(0.0D, appConfig.getCurator().getMinIdleHours());
         if (minIdleHours <= 0.0D || agentRunControlService == null) {
-            return true;
+            return null;
         }
-        long lastFinishedAt = agentRunControlService.lastRunFinishedAt();
+        long lastFinishedAt = agentRunControlService.lastForegroundRunFinishedAt();
         if (lastFinishedAt <= 0L) {
-            return true;
+            return null;
         }
         long minIdleMillis = (long) (minIdleHours * 60.0D * 60.0D * 1000.0D);
-        return System.currentTimeMillis() - lastFinishedAt >= minIdleMillis;
+        long idleMillis = Math.max(0L, now - lastFinishedAt);
+        if (idleMillis >= minIdleMillis) {
+            return null;
+        }
+        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        details.put("reason", "minimum_idle");
+        details.put("runningRunCount", Integer.valueOf(0));
+        details.put("lastForegroundRunFinishedAt", Long.valueOf(lastFinishedAt));
+        details.put("requiredIdleMillis", Long.valueOf(minIdleMillis));
+        details.put("idleMillis", Long.valueOf(idleMillis));
+        details.put("remainingIdleMillis", Long.valueOf(minIdleMillis - idleMillis));
+        details.put("observedAt", Long.valueOf(now));
+        return details;
     }
 
     /** 关闭当前组件持有的运行资源。 */

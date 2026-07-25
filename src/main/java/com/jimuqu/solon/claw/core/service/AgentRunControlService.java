@@ -120,6 +120,17 @@ public interface AgentRunControlService {
     }
 
     /**
+     * 返回最近一次前台用户对话完成时间，供后台维护任务计算真实用户空闲窗口。
+     *
+     * <p>未区分运行类型的实现继续回退全部运行完成时间，避免错误提前执行后台维护。
+     *
+     * @return 最近一次前台用户对话完成时间戳。
+     */
+    default long lastForegroundRunFinishedAt() {
+        return lastRunFinishedAt();
+    }
+
+    /**
      * 执行coordinate入站消息相关逻辑。
      *
      * @param sourceKey 渠道来源键。

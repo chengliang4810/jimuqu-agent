@@ -90,12 +90,6 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     /** 消息DEDUP最大ENTRIES的统一常量值。 */
     private static final int MESSAGE_DEDUP_MAX_ENTRIES = 512;
 
-    /** iLink sendmessage 返回该错误码时表示触发平台频率限制。 */
-    private static final int RATE_LIMIT_ERRCODE = -2;
-
-    /** 首次命中平台限流后暂停全部出站消息，避免并发请求继续放大限流。 */
-    private static final long RATE_LIMIT_COOLDOWN_NANOS = TimeUnit.SECONDS.toNanos(30L);
-
     /** 最大HTTPREDIRECTS的统一常量值。 */
     private static final int MAX_HTTP_REDIRECTS = 5;
 
@@ -223,9 +217,6 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
 
     /** 是否正在断开连接，防止清理期间重新创建输入状态心跳。 */
     private volatile boolean disconnecting;
-
-    /** 使用单调时钟记录平台限流冷却截止点，避免系统时间调整影响窗口。 */
-    private volatile long rateLimitCooldownUntilNanos;
 
     /**
      * 创建Wei Xin渠道适配器实例，并注入运行所需依赖。
@@ -359,7 +350,6 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         }
 
         synchronized (outboundSendGate) {
-            awaitSendRateLimitCooldown();
             if (StrUtil.isNotBlank(request.getText())) {
                 sendText(request.getChatId(), request.getText());
             }
@@ -395,52 +385,14 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
      * @param text 待处理文本。
      */
     private void sendTextChunk(String chatId, String text) {
-        int attempts = Math.max(1, config.getSendChunkRetries() + 1);
-        for (int attempt = 1; ; attempt++) {
-            try {
-                ONode message = baseMessage(chatId);
-                String contextToken = loadContextToken(chatId);
-                if (StrUtil.isNotBlank(contextToken)) {
-                    message.set("context_token", contextToken);
-                }
-                ONode textItem = new ONode();
-                textItem.set("text", normalizeOutboundTextForWeixin(text));
-                ONode item = new ONode();
-                item.set("type", ITEM_TEXT);
-                item.set("text_item", textItem);
-                message.get("item_list").add(item);
-                ONode response = apiPost(SEND_ENDPOINT, new ONode().set("msg", message).asObject());
-                if (hasExpiredContextToken(response) && StrUtil.isNotBlank(contextToken)) {
-                    clearContextToken(chatId);
-                    message.remove("context_token");
-                    response = apiPost(SEND_ENDPOINT, new ONode().set("msg", message).asObject());
-                }
-                if (isRateLimited(response)) {
-                    rateLimitCooldownUntilNanos = System.nanoTime() + RATE_LIMIT_COOLDOWN_NANOS;
-                    awaitSendRateLimitCooldown();
-                    attempt--;
-                    continue;
-                }
-                ensureSuccess(response, "Weixin text send failed");
-                rateLimitCooldownUntilNanos = 0L;
-                clearLastError();
-                return;
-            } catch (Exception e) {
-                setLastError("weixin_send_text_failed", safeMessage(e));
-                if (Thread.currentThread().isInterrupted()) {
-                    throw new IllegalStateException(safeMessage(e), e);
-                }
-                if (attempt >= attempts) {
-                    throw new IllegalStateException(
-                            "Weixin text send failed after "
-                                    + attempts
-                                    + " attempt(s): "
-                                    + safeMessage(e),
-                            e);
-                }
-                sleepQuietlyMillis((long) (config.getSendChunkRetryDelaySeconds() * 1000L));
-            }
-        }
+        ONode message = baseMessage(chatId);
+        ONode textItem = new ONode();
+        textItem.set("text", normalizeOutboundTextForWeixin(text));
+        ONode item = new ONode();
+        item.set("type", ITEM_TEXT);
+        item.set("text_item", textItem);
+        message.get("item_list").add(item);
+        sendMessageWithRetry(chatId, message, "weixin_send_text_failed", "Weixin text send failed");
     }
 
     /** 将出站文本统一为 LF 换行，保持与微信 iLink 文本字段兼容。 */
@@ -1012,10 +964,6 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         String encryptedParam = uploadCiphertext(uploadUrl, ciphertext);
 
         ONode message = baseMessage(chatId);
-        String contextToken = loadContextToken(chatId);
-        if (StrUtil.isNotBlank(contextToken)) {
-            message.set("context_token", contextToken);
-        }
         message.getOrNew("item_list")
                 .asArray()
                 .add(
@@ -1026,54 +974,59 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
                                 ciphertext.length,
                                 encryptedParam,
                                 aesKey));
-        while (true) {
-            ONode sendResponse = apiPost(SEND_ENDPOINT, new ONode().set("msg", message).asObject());
-            if (hasExpiredContextToken(sendResponse) && StrUtil.isNotBlank(contextToken)) {
-                clearContextToken(chatId);
-                message.remove("context_token");
-                sendResponse = apiPost(SEND_ENDPOINT, new ONode().set("msg", message).asObject());
-            }
-            if (isRateLimited(sendResponse)) {
-                rateLimitCooldownUntilNanos = System.nanoTime() + RATE_LIMIT_COOLDOWN_NANOS;
-                awaitSendRateLimitCooldown();
-                continue;
-            }
-            ensureSuccess(sendResponse, "Weixin media send failed");
-            rateLimitCooldownUntilNanos = 0L;
-            return;
-        }
+        sendMessageWithRetry(
+                chatId, message, "weixin_send_media_failed", "Weixin media send failed");
     }
 
-    /** 检查 sendmessage 是否返回平台频率限制。 */
-    private boolean isRateLimited(ONode response) {
-        return response.get("errcode").getInt(0) == RATE_LIMIT_ERRCODE
-                || response.get("ret").getInt(0) == RATE_LIMIT_ERRCODE;
+    /**
+     * 使用渠道现有重试配置发送 iLink 消息，平台持续失败时释放出站串行锁。
+     *
+     * @param chatId 聊天标识。
+     * @param message 已组装的 iLink 消息。
+     * @param errorCode 渠道错误码。
+     * @param failureMessage 失败消息前缀。
+     */
+    private void sendMessageWithRetry(
+            String chatId, ONode message, String errorCode, String failureMessage) {
+        int attempts = Math.max(1, config.getSendChunkRetries() + 1);
+        String contextToken = loadContextToken(chatId);
+        if (StrUtil.isNotBlank(contextToken)) {
+            message.set("context_token", contextToken);
+        }
+        for (int attempt = 1; ; attempt++) {
+            try {
+                ONode response = apiPost(SEND_ENDPOINT, new ONode().set("msg", message).asObject());
+                if (hasExpiredContextToken(response) && StrUtil.isNotBlank(contextToken)) {
+                    clearContextToken(chatId);
+                    contextToken = null;
+                    message.remove("context_token");
+                    response = apiPost(SEND_ENDPOINT, new ONode().set("msg", message).asObject());
+                }
+                ensureSuccess(response, failureMessage);
+                clearLastError();
+                return;
+            } catch (Exception e) {
+                setLastError(errorCode, safeMessage(e));
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new IllegalStateException(safeMessage(e), e);
+                }
+                if (attempt >= attempts) {
+                    throw new IllegalStateException(
+                            failureMessage
+                                    + " after "
+                                    + attempts
+                                    + " attempt(s): "
+                                    + safeMessage(e),
+                            e);
+                }
+                sleepQuietlyMillis((long) (config.getSendChunkRetryDelaySeconds() * 1000L));
+            }
+        }
     }
 
     /** 判断 sendmessage 是否以任一错误字段声明当前上下文 token 已失效。 */
     private boolean hasExpiredContextToken(ONode response) {
         return response.get("errcode").getInt(0) == -14 || response.get("ret").getInt(0) == -14;
-    }
-
-    /** 在出站串行锁内等待平台冷却窗口结束；线程中断时立即结束本次投递。 */
-    private void awaitSendRateLimitCooldown() {
-        try {
-            for (long remainingNanos = rateLimitCooldownRemainingNanos();
-                    remainingNanos > 0L;
-                    remainingNanos = rateLimitCooldownRemainingNanos()) {
-                TimeUnit.NANOSECONDS.sleep(
-                        Math.min(remainingNanos, TimeUnit.MILLISECONDS.toNanos(100L)));
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(
-                    "Weixin send interrupted during rate limit cooldown", e);
-        }
-    }
-
-    /** 返回当前限流冷却剩余纳秒数。 */
-    private long rateLimitCooldownRemainingNanos() {
-        return Math.max(0L, rateLimitCooldownUntilNanos - System.nanoTime());
     }
 
     /**
