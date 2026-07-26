@@ -143,9 +143,6 @@ const securityDetailGroups = computed<SecurityDetailGroup[]>(() => {
   const readOnlyAuditPolicy = objectValue(securityCoverage.value.readOnlyAuditPolicy)
   const schemaSanitizerPolicy = objectValue(securityCoverage.value.schemaSanitizerPolicy)
   const patchParserPolicy = objectValue(securityCoverage.value.patchParserPolicy)
-  const mcpRuntimePolicy = objectValue(securityCoverage.value.mcpRuntimePolicy)
-  const mcpOAuthPolicy = objectValue(securityCoverage.value.mcpOAuthPolicy)
-  const mcpPackageSecurityPolicy = objectValue(securityCoverage.value.mcpPackageSecurityPolicy)
   const attachmentPolicy = objectValue(securityCoverage.value.attachmentPolicy)
   const attachmentDownloadPolicy = objectValue(attachmentPolicy.downloadIo)
   const attachmentMediaCachePolicy = objectValue(attachmentPolicy.mediaCache)
@@ -160,7 +157,6 @@ const securityDetailGroups = computed<SecurityDetailGroup[]>(() => {
   const slashConfirmPolicy = objectValue(securityApprovals.value.slash_confirm_policy)
   const approvalCardPolicy = objectValue(securityApprovals.value.approval_card_policy)
   const approvalAuditPolicy = objectValue(securityApprovals.value.approval_audit_policy)
-  const mcpReloadPolicy = objectValue(securityApprovals.value.mcp_reload_policy)
   const terminalCredentialFilePolicy = objectValue(terminal.credential_file_policy)
   const terminalGuardrailPolicy = objectValue(terminal.terminal_guardrail_policy)
   const terminalOutputPolicy = objectValue(terminal.terminal_output_policy)
@@ -262,16 +258,13 @@ const securityDetailGroups = computed<SecurityDetailGroup[]>(() => {
       ],
     },
     {
-      title: d('detailGroups.approvalAuditAndMcp'),
+      title: d('detailGroups.approvalAudit'),
       items: [
         metric('requestEvents', approvalAuditPolicy.requestEvents),
         metric('responseEvents', approvalAuditPolicy.responseEvents),
         metric('observerFailureIsolated', approvalAuditPolicy.observerFailureIsolated),
         metric('auditApprovalKeyRedacted', approvalAuditPolicy.approvalKeyRedacted),
         metric('manualRevocationAudited', approvalAuditPolicy.manualRevocationAudited),
-        metric('confirmRequired', mcpReloadPolicy.confirmRequired),
-        metric('slashConfirmBacked', mcpReloadPolicy.slashConfirmBacked),
-        metric('oauthUrlSafetyCovered', mcpReloadPolicy.oauthUrlSafetyCovered),
       ],
     },
     {
@@ -297,7 +290,6 @@ const securityDetailGroups = computed<SecurityDetailGroup[]>(() => {
       items: [
         metric('schemaSanitizerEnabled', schemaSanitizerPolicy.enabled),
         metric('inputSchemaSanitized', schemaSanitizerPolicy.inputSchemaSanitized),
-        metric('mcpInputSchemaSanitized', schemaSanitizerPolicy.mcpInputSchemaSanitized),
         metric('invalidSchemaDefaultsToObject', schemaSanitizerPolicy.invalidSchemaDefaultsToObject),
         metric('topLevelObjectRequired', schemaSanitizerPolicy.topLevelObjectRequired),
         metric('requiredPrunedToKnownProperties', schemaSanitizerPolicy.requiredPrunedToKnownProperties),
@@ -309,22 +301,6 @@ const securityDetailGroups = computed<SecurityDetailGroup[]>(() => {
         metric('missingHunksBlocked', patchParserPolicy.missingHunksBlocked),
         metric('pathTraversalBlocked', patchParserPolicy.pathTraversalBlocked),
         metric('patchCredentialPolicyPrechecked', patchParserPolicy.credentialPolicyPrechecked),
-      ],
-    },
-    {
-      title: d('detailGroups.mcpSecurity'),
-      items: [
-        metric('remoteEndpointUrlSafety', mcpRuntimePolicy.remoteEndpointUrlSafety),
-        metric('remoteToolArgumentsForwarded', mcpRuntimePolicy.remoteToolArgumentsForwarded),
-        metric('resourceUrisForwarded', mcpRuntimePolicy.resourceUrisForwarded),
-        metric('toolNamesPrefixed', mcpRuntimePolicy.toolNamesPrefixed),
-        metric('toolsChangeNotificationPersisted', mcpRuntimePolicy.toolsChangeNotificationPersisted),
-        metric('authorizationEndpointUrlSafety', mcpOAuthPolicy.authorizationEndpointUrlSafety),
-        metric('stateValidationRequired', mcpOAuthPolicy.stateValidationRequired),
-        metric('pkceS256Required', mcpOAuthPolicy.pkceS256Required),
-        metric('accessTokenRedacted', mcpOAuthPolicy.accessTokenRedacted),
-        metric('requestFailureFailsOpen', mcpPackageSecurityPolicy.requestFailureFailsOpen),
-        metric('malwareBlocksSaveAndCheck', mcpPackageSecurityPolicy.malwareBlocksSaveAndCheck),
       ],
     },
     {
@@ -474,11 +450,6 @@ const coverageItems = [
   { key: 'toolResultStorage', label: d('coverageItems.toolResultStorage') },
   { key: 'codeExecutionGuardrails', label: d('coverageItems.codeExecutionGuardrails') },
   { key: 'codeExecutionPolicyAuditable', label: d('coverageItems.codeExecutionPolicyAuditable') },
-  { key: 'mcpUrlSafety', label: d('coverageItems.mcpUrlSafety') },
-  { key: 'mcpReloadConfirmation', label: d('coverageItems.mcpReloadConfirmation') },
-  { key: 'mcpToolChangeNotice', label: d('coverageItems.mcpToolChangeNotice') },
-  { key: 'mcpRuntimePolicyAuditable', label: d('coverageItems.mcpRuntimePolicyAuditable') },
-  { key: 'mcpPackageSecurity', label: d('coverageItems.mcpPackageSecurity') },
   { key: 'attachmentUrlSafety', label: d('coverageItems.attachmentUrlSafety') },
   { key: 'attachmentCachePathSafety', label: d('coverageItems.attachmentCachePathSafety') },
   { key: 'attachmentDisplayNameRedaction', label: d('coverageItems.attachmentDisplayNameRedaction') },
@@ -1028,17 +999,17 @@ onMounted(load)
               <div class="doctor-platform-head">
                 <strong>{{ platform.platform || '-' }}</strong>
                 <Tag size="small" :color="platform.enabled && platform.connected ? 'success' : 'warning'" :bordered="false">
-                  {{ platform.enabled ? (platform.connected ? '已连接' : '未连接') : '未启用' }}
+                  {{ platform.enabled ? (platform.connected ? t('diagnostics.doctorPlatformConnected') : t('diagnostics.doctorPlatformDisconnected')) : t('diagnostics.doctorPlatformDisabled') }}
                 </Tag>
               </div>
               <div class="doctor-platform-detail">
-                <span>配置：{{ platform.setup_state || '-' }}</span>
-                <span>连接：{{ platform.connection_mode || '-' }}</span>
-                <span v-if="platform.missing_config?.length">缺失：{{ platform.missing_config.join(', ') }}</span>
+                <span>{{ t('diagnostics.doctorPlatformSetup') }}：{{ platform.setup_state || '-' }}</span>
+                <span>{{ t('diagnostics.doctorPlatformConnection') }}：{{ platform.connection_mode || '-' }}</span>
+                <span v-if="platform.missing_config?.length">{{ t('diagnostics.doctorPlatformMissing') }}：{{ platform.missing_config.join(', ') }}</span>
                 <span v-if="platform.last_error_message || platform.last_reconnect_error">
-                  错误：{{ platform.last_error_message || platform.last_reconnect_error }}
+                  {{ t('diagnostics.doctorPlatformError') }}：{{ platform.last_error_message || platform.last_reconnect_error }}
                 </span>
-                <span>下一步：{{ platform.next_step || '-' }}</span>
+                <span>{{ t('diagnostics.doctorPlatformNextStep') }}：{{ platform.next_step || '-' }}</span>
               </div>
             </article>
           </div>
@@ -1076,8 +1047,8 @@ onMounted(load)
           <pre>{{ diagnostics?.channels }}</pre>
         </section>
         <section class="panel">
-          <h3>{{ t('diagnostics.toolsAndMcp') }}</h3>
-          <pre>{{ diagnostics?.tools }}&#10;{{ diagnostics?.mcp }}</pre>
+          <h3>{{ t('diagnostics.tools') }}</h3>
+          <pre>{{ diagnostics?.tools }}</pre>
         </section>
         <section class="panel">
           <div class="panel-title-row">
@@ -1188,14 +1159,6 @@ onMounted(load)
                 <div>
                   <dt>{{ t('diagnostics.cronApproval') }}</dt>
                   <dd>{{ valueOf(securityApprovals, 'cron_mode') }}</dd>
-                </div>
-                <div>
-                  <dt>{{ t('diagnostics.mcpReloadConfirm') }}</dt>
-                  <dd>
-                    <Tag size="small" :color="booleanTagType(securityApprovals.mcp_reload_confirm)">
-                      {{ booleanText(securityApprovals.mcp_reload_confirm) }}
-                    </Tag>
-                  </dd>
                 </div>
                 <div>
                   <dt>{{ t('diagnostics.alwaysApprovalCount') }}</dt>

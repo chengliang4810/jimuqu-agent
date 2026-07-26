@@ -182,12 +182,6 @@ public interface ToolNameConstants {
     /** 工具消息网关的统一常量值。 */
     String TOOL_GATEWAY = "tool_gateway";
 
-    /** MCP的统一常量值。 */
-    String MCP = "mcp";
-
-    /** MCP管理的统一常量值。 */
-    String MCP_MANAGE = "mcp_manage";
-
     /** 技能维护管理的统一常量值。 */
     String CURATOR_MANAGE = "curator_manage";
 

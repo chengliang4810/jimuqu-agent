@@ -16,7 +16,6 @@ import com.jimuqu.solon.claw.core.service.SessionSearchService;
 import com.jimuqu.solon.claw.core.service.SkillHubService;
 import com.jimuqu.solon.claw.core.service.ToolRegistry;
 import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.media.ImageGenerationService;
 import com.jimuqu.solon.claw.media.SpeechService;
 import com.jimuqu.solon.claw.pricing.PriceCatalog;
@@ -39,13 +38,11 @@ import com.jimuqu.solon.claw.tool.runtime.SecurityPolicyService;
 import com.jimuqu.solon.claw.usage.UsageEventRepository;
 import com.jimuqu.solon.claw.web.DashboardConfigService;
 import com.jimuqu.solon.claw.web.DashboardCuratorService;
-import com.jimuqu.solon.claw.web.DashboardMcpService;
 import com.jimuqu.solon.claw.web.DashboardProfileScope;
 import com.jimuqu.solon.claw.web.DashboardProviderService;
 import com.jimuqu.solon.claw.web.DashboardRuntimeConfigService;
 import com.jimuqu.solon.claw.web.DashboardSkillsService;
 import com.jimuqu.solon.claw.web.DashboardWorkspaceService;
-import com.jimuqu.solon.claw.web.McpPackageSecurityService;
 import java.util.List;
 import org.noear.solon.annotation.Bean;
 import org.noear.solon.annotation.Condition;
@@ -85,24 +82,6 @@ public class ProfileRuntimeSupportConfiguration {
                 null,
                 null,
                 priceCatalog);
-    }
-
-    /** 创建当前 Profile 的 MCP 管理支撑，并复用子容器自己的 MCP 运行时。 */
-    @Bean(destroyMethod = "shutdown")
-    public DashboardMcpService dashboardMcpService(
-            AppConfig appConfig,
-            SqliteDatabase sqliteDatabase,
-            McpRuntimeService mcpRuntimeService,
-            SecurityPolicyService securityPolicyService) {
-        return new DashboardMcpService(
-                appConfig,
-                sqliteDatabase,
-                new McpPackageSecurityService(
-                        new com.jimuqu.solon.claw.skillhub.support.DefaultSkillHubHttpClient(
-                                securityPolicyService),
-                        securityPolicyService),
-                mcpRuntimeService,
-                profileScope(appConfig));
     }
 
     /** 创建当前 Profile 的技能管理支撑。 */
@@ -165,8 +144,6 @@ public class ProfileRuntimeSupportConfiguration {
             SecurityPolicyService securityPolicyService,
             DangerousCommandApprovalService dangerousCommandApprovalService,
             ProcessRegistry processRegistry,
-            McpRuntimeService mcpRuntimeService,
-            DashboardMcpService dashboardMcpService,
             DashboardCuratorService dashboardCuratorService,
             DashboardProviderService dashboardProviderService,
             DashboardConfigService dashboardConfigService,
@@ -199,8 +176,6 @@ public class ProfileRuntimeSupportConfiguration {
                         securityPolicyService,
                         dangerousCommandApprovalService,
                         processRegistry,
-                        mcpRuntimeService,
-                        dashboardMcpService,
                         dashboardCuratorService)
                 .dashboardProviderService(dashboardProviderService)
                 .dashboardConfigService(dashboardConfigService)

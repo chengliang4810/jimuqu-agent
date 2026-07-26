@@ -113,11 +113,6 @@ export const MONITORING_NAV_ITEMS: readonly SidebarNavItem[] = [
     labelKey: 'sidebar.runs',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5" /><path d="M4 19h16" /><path d="M8 16l3-4 3 2 4-7" /></svg>',
   },
-  {
-    key: 'solonclaw.gateways',
-    labelKey: 'sidebar.gateways',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16" /><path d="M4 17h16" /><circle cx="8" cy="7" r="2" /><circle cx="16" cy="17" r="2" /></svg>',
-  },
 ] as const
 
 /**
@@ -143,10 +138,5 @@ export const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
     key: 'solonclaw.curator',
     labelKey: 'sidebar.curator',
     icon: '<path d="M4 5h16" /><path d="M4 12h16" /><path d="M4 19h10" /><circle cx="17" cy="19" r="2" />',
-  },
-  {
-    key: 'solonclaw.mcp',
-    labelKey: 'sidebar.mcp',
-    icon: '<path d="M8 8h8v8H8z" /><path d="M4 12h4" /><path d="M16 12h4" /><path d="M12 4v4" /><path d="M12 16v4" /><circle cx="12" cy="12" r="1.5" />',
   },
 ] as const

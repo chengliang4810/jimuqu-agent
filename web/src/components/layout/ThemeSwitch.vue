@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { useTheme } from '@/composables/useTheme'
+import { useI18n } from 'vue-i18n'
 
 const { isDark, toggleTheme } = useTheme()
+const { t } = useI18n()
 </script>
 
 <template>
-  <button class="theme-switch" :title="isDark ? 'Light mode' : 'Dark mode'" @click="toggleTheme">
+  <button
+    class="theme-switch"
+    :aria-label="isDark ? t('theme.lightMode') : t('theme.darkMode')"
+    :title="isDark ? t('theme.lightMode') : t('theme.darkMode')"
+    @click="toggleTheme"
+  >
     <!-- Sun icon (shown in dark mode) -->
     <svg v-if="isDark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="5" />

@@ -65,7 +65,6 @@ public final class CommandRegistry {
         register(core("curator", "skill", "管理技能后台维护状态与运行"));
         register(core("memory", "memory", "管理记忆写入审批与待审批变更"));
         register(core("reload-skills", "skill", "重新扫描本地技能目录"));
-        register(core("reload-mcp", "mcp", "重新加载 MCP 工具并刷新工具变更基线"));
         register(core("confirm", "security", "查看当前待确认 slash 命令"));
         register(core("cron", "automation", "管理定时任务"));
         register(core("proactive", "automation", "查看、暂停或调节主动协作"));

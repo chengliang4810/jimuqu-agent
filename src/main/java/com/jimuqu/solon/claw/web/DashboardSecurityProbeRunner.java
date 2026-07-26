@@ -15,7 +15,6 @@ import com.jimuqu.solon.claw.core.model.GatewayMessage;
 import com.jimuqu.solon.claw.core.model.MessageAttachment;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.gateway.command.SlashConfirmService;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.jimuqu.solon.claw.support.AttachmentPathResolver;
@@ -658,232 +657,6 @@ final class DashboardSecurityProbeRunner {
                     false,
                     "pattern, format, $ref, $defs, allOf",
                     "工具 Schema 清洗探针失败："
-                            + StrUtil.blankToDefault(e.getMessage(), e.getClass().getSimpleName()));
-        }
-    }
-
-    /**
-     * 执行MCP包安全Probe相关逻辑。
-     *
-     * @param key 配置键或映射键。
-     * @param label label 参数。
-     * @return 返回MCP Package安全Probe结果。
-     */
-    Map<String, Object> mcpPackageSecurityProbe(String key, String label) {
-        try {
-            String secret = "sk-dashboardmcppackageprobe12345";
-            SecurityPolicyService policy = new SecurityPolicyService(appConfig);
-            McpPackageSecurityService unsafeEndpointService =
-                    new McpPackageSecurityService(
-                            null, "http://169.254.169.254/osv?token=" + secret, policy);
-            McpPackageSecurityService.SecurityVerdict npmVerdict =
-                    unsafeEndpointService.check(
-                            "npx",
-                            Arrays.asList(
-                                    "--package", "@scope/dashboard-mcp-server@1.2.3", "server"));
-            McpPackageSecurityService.SecurityVerdict pypiVerdict =
-                    unsafeEndpointService.check(
-                            "pipx",
-                            Arrays.asList("run", "--spec", "dashboard-mcp-server[cli]==1.2.3"));
-            McpPackageSecurityService allowedService =
-                    new McpPackageSecurityService(null, "https://api.osv.dev/v1/query", policy);
-            McpPackageSecurityService.SecurityVerdict unknownVerdict =
-                    allowedService.check("node", Arrays.asList("server.js", "--token", secret));
-            Map<String, Object> summary = unsafeEndpointService.policySummary();
-            boolean endpointBlocked =
-                    !npmVerdict.isAllowed()
-                            && "unsafe_endpoint".equals(npmVerdict.getReason())
-                            && !pypiVerdict.isAllowed()
-                            && "unsafe_endpoint".equals(pypiVerdict.getReason());
-            boolean unknownLauncherIgnored =
-                    unknownVerdict.isAllowed() && "allow".equals(unknownVerdict.getReason());
-            boolean policyAdvertised =
-                    Boolean.TRUE.equals(summary.get("requestFailureFailsClosed"))
-                            && Boolean.TRUE.equals(summary.get("unsafeEndpointBlocksBeforeNetwork"))
-                            && Boolean.TRUE.equals(summary.get("scopedNpmPackageParsed"))
-                            && Boolean.TRUE.equals(summary.get("pypiExtrasIgnored"))
-                            && Boolean.TRUE.equals(summary.get("jsonArgsSupported"));
-            String serialized =
-                    SecretRedactor.redact(
-                            npmVerdict.getMessage()
-                                    + "\n"
-                                    + pypiVerdict.getMessage()
-                                    + "\n"
-                                    + ONode.serialize(summary),
-                            2000);
-            boolean secretHidden =
-                    !StrUtil.contains(serialized, secret)
-                            && StrUtil.contains(serialized, "token=***");
-            boolean passed =
-                    endpointBlocked && unknownLauncherIgnored && policyAdvertised && secretHidden;
-            String message =
-                    passed
-                            ? "MCP stdio 包安全检查会在联网前阻断不安全 OSV 端点，并在扫描失败时失败关闭。"
-                            : "MCP 包安全的端点阻断、失败关闭、launcher 解析或脱敏检查未通过。";
-            return policyProbeItem(
-                    key,
-                    label,
-                    "mcp_package_security",
-                    true,
-                    passed,
-                    "npx --package, pipx --spec, unsafe OSV endpoint",
-                    message);
-        } catch (Exception e) {
-            return policyProbeItem(
-                    key,
-                    label,
-                    "mcp_package_security",
-                    true,
-                    false,
-                    "npx --package, pipx --spec, unsafe OSV endpoint",
-                    "MCP 包安全探针失败："
-                            + StrUtil.blankToDefault(e.getMessage(), e.getClass().getSimpleName()));
-        }
-    }
-
-    /**
-     * 执行MCPOAuth 认证策略Probe相关逻辑。
-     *
-     * @param key 配置键或映射键。
-     * @param label label 参数。
-     * @return 返回MCP OAuth 认证策略Probe结果。
-     */
-    Map<String, Object> mcpOAuthPolicyProbe(String key, String label) {
-        try {
-            Map<String, Object> summary = DashboardMcpService.oauthPolicySummary();
-            boolean endpointSafety =
-                    Boolean.TRUE.equals(summary.get("authorizationEndpointUrlSafety"))
-                            && Boolean.TRUE.equals(summary.get("tokenEndpointUrlSafety"))
-                            && Boolean.TRUE.equals(summary.get("tokenEndpointRedirectUrlSafety"));
-            boolean flowSafety =
-                    Boolean.TRUE.equals(summary.get("stateValidationRequired"))
-                            && Boolean.TRUE.equals(summary.get("pkceS256Required"))
-                            && Boolean.TRUE.equals(summary.get("codeVerifierHiddenFromStatus"));
-            boolean redaction =
-                    Boolean.TRUE.equals(summary.get("accessTokenRedacted"))
-                            && Boolean.TRUE.equals(summary.get("refreshTokenRedacted"))
-                            && Boolean.TRUE.equals(summary.get("clientSecretRedacted"))
-                            && Boolean.TRUE.equals(summary.get("callbackErrorsRedacted"))
-                            && Boolean.TRUE.equals(summary.get("tokenErrorsRedacted"));
-            boolean redirectLimit =
-                    numberValue(summary.get("tokenEndpointRedirectLimit")) != null
-                            && numberValue(summary.get("tokenEndpointRedirectLimit")).intValue()
-                                    > 0;
-            boolean passed = endpointSafety && flowSafety && redaction && redirectLimit;
-            String target =
-                    "authorization_endpoint, token_endpoint, redirect_limit="
-                            + String.valueOf(summary.get("tokenEndpointRedirectLimit"));
-            return policyProbeItem(
-                    key,
-                    label,
-                    "mcp_oauth_policy",
-                    true,
-                    passed,
-                    target,
-                    passed ? "MCP OAuth endpoint、state、PKCE、重定向和脱敏策略已启用。" : "MCP OAuth 安全策略检查未通过。");
-        } catch (Exception e) {
-            return policyProbeItem(
-                    key,
-                    label,
-                    "mcp_oauth_policy",
-                    true,
-                    false,
-                    "authorization_endpoint, token_endpoint",
-                    "MCP OAuth 探针失败："
-                            + StrUtil.blankToDefault(e.getMessage(), e.getClass().getSimpleName()));
-        }
-    }
-
-    /**
-     * 执行MCP工具Change策略Probe相关逻辑。
-     *
-     * @param key 配置键或映射键。
-     * @param label label 参数。
-     * @return 返回MCP工具Change策略Probe结果。
-     */
-    Map<String, Object> mcpToolChangePolicyProbe(String key, String label) {
-        try {
-            Map<String, Object> summary = McpRuntimeService.policySummary(appConfig);
-            boolean notification =
-                    Boolean.TRUE.equals(summary.get("toolsChangeNotificationPersisted"))
-                            && Boolean.TRUE.equals(summary.get("toolChangeHashTracked"))
-                            && Boolean.TRUE.equals(summary.get("toolsChangeClearsProviderCache"));
-            boolean schemaSafety =
-                    Boolean.TRUE.equals(summary.get("inputSchemaSanitized"))
-                            && Boolean.TRUE.equals(summary.get("toolNamesPrefixed"))
-                            && Boolean.TRUE.equals(summary.get("blockedServersSuppressed"));
-            boolean executorSafety =
-                    Boolean.TRUE.equals(summary.get("toolCallExecutorBounded"))
-                            && numberValue(summary.get("toolCallExecutorMaxThreads")) != null
-                            && numberValue(summary.get("toolCallExecutorQueueCapacity")) != null;
-            boolean passed = notification && schemaSafety && executorSafety;
-            return policyProbeItem(
-                    key,
-                    label,
-                    "mcp_tool_change_policy",
-                    true,
-                    passed,
-                    "tools_hash, tool_changed_notification, provider_cache",
-                    passed ? "MCP 工具变更通知、hash 跟踪、schema 清洗和执行器边界已启用。" : "MCP 工具变更通知策略检查未通过。");
-        } catch (Exception e) {
-            return policyProbeItem(
-                    key,
-                    label,
-                    "mcp_tool_change_policy",
-                    true,
-                    false,
-                    "tools_hash, tool_changed_notification",
-                    "MCP 工具变更探针失败："
-                            + StrUtil.blankToDefault(e.getMessage(), e.getClass().getSimpleName()));
-        }
-    }
-
-    /**
-     * 执行MCP运行时参数策略Probe相关逻辑。
-     *
-     * @param key 配置键或映射键。
-     * @param label label 参数。
-     * @return 返回MCP运行时参数策略Probe结果。
-     */
-    Map<String, Object> mcpRuntimeArgumentPolicyProbe(String key, String label) {
-        try {
-            Map<String, Object> summary = McpRuntimeService.policySummary(appConfig);
-            boolean endpointSafety =
-                    Boolean.TRUE.equals(summary.get("remoteEndpointUrlSafety"))
-                            && Boolean.TRUE.equals(summary.get("blockedServersSuppressed"));
-            boolean argumentSafety =
-                    Boolean.TRUE.equals(summary.get("remoteToolArgumentUrlSafety"))
-                            && Boolean.TRUE.equals(
-                                    summary.get("remoteToolStructuredCredentialArgumentBlocked"))
-                            && Boolean.TRUE.equals(summary.get("remoteToolArgumentPathSafety"))
-                            && Boolean.TRUE.equals(summary.get("nestedUrlExtraction"));
-            boolean resourceSafety =
-                    Boolean.TRUE.equals(summary.get("resourceUriUrlSafety"))
-                            && Boolean.TRUE.equals(summary.get("resourceUriPathSafety"));
-            boolean redaction =
-                    Boolean.TRUE.equals(summary.get("blockedUrlsMasked"))
-                            && Boolean.TRUE.equals(summary.get("blockedPathsRedacted"))
-                            && Boolean.TRUE.equals(summary.get("oauthSecretsRedacted"));
-            boolean passed = endpointSafety && argumentSafety && resourceSafety && redaction;
-            return policyProbeItem(
-                    key,
-                    label,
-                    "mcp_runtime_argument_policy",
-                    true,
-                    passed,
-                    "remote endpoint, guarded tool args, guarded resource uri",
-                    passed
-                            ? "MCP 远程 endpoint、工具参数和 resource URI 的本地安全边界已启用。"
-                            : "MCP 运行时参数安全策略检查未通过。");
-        } catch (Exception e) {
-            return policyProbeItem(
-                    key,
-                    label,
-                    "mcp_runtime_argument_policy",
-                    true,
-                    false,
-                    "remote endpoint, tool args, resource uri",
-                    "MCP 运行时参数探针失败："
                             + StrUtil.blankToDefault(e.getMessage(), e.getClass().getSimpleName()));
         }
     }
@@ -2122,7 +1895,7 @@ final class DashboardSecurityProbeRunner {
         }
         String sourceKey = "dashboard-probe-slash-confirm-" + System.currentTimeMillis();
         slashConfirmService.register(
-                sourceKey, "reload-mcp", "dashboard slash confirm selector probe");
+                sourceKey, "rollback", "dashboard slash confirm selector probe");
         try {
             SlashConfirmService.PendingConfirm resolved =
                     slashConfirmService.resolve(sourceKey, "invalid confirm id");
@@ -2155,7 +1928,7 @@ final class DashboardSecurityProbeRunner {
         String sourceKey = "dashboard-probe-slash-expiry-" + System.currentTimeMillis();
         SlashConfirmService.PendingConfirm pending =
                 slashConfirmService.register(
-                        sourceKey, "reload-mcp", "dashboard slash confirm expiry probe");
+                        sourceKey, "rollback", "dashboard slash confirm expiry probe");
         pending.setCreatedAt(
                 System.currentTimeMillis() - SlashConfirmService.DEFAULT_TIMEOUT_MS - 1000L);
         SlashConfirmService.PendingConfirm resolved =

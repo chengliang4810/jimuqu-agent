@@ -624,6 +624,19 @@ onUnmounted(() => {
   height: calc(100 * var(--vh));
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.runs-view :deep(.ant-spin),
+.runs-view :deep(.ant-spin-nested-loading),
+.runs-view :deep(.ant-spin-container) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .header-actions {
@@ -644,14 +657,18 @@ onUnmounted(() => {
 .runs-layout {
   display: grid;
   grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.2fr) minmax(260px, 0.8fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 16px;
   padding: 20px;
+  flex: 1;
+  height: 100%;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .panel {
-  min-height: 520px;
+  height: 100%;
+  min-height: 0;
   min-width: 0;
   border: 1px solid $border-color;
   border-radius: $radius-sm;
@@ -846,10 +863,14 @@ h3 {
 @media (max-width: 1100px) {
   .runs-layout {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-auto-rows: clamp(320px, 60vh, 560px);
+    overflow-y: auto;
   }
 
   .panel {
-    min-height: 320px;
+    height: 100%;
+    min-height: 0;
   }
 }
 

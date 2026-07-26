@@ -147,7 +147,7 @@ const groupedSessions = computed<SessionGroup[]>(() => {
 
   return keys.map(key => ({
     source: key,
-    label: key ? getSourceLabel(key) : t('chat.other'),
+    label: key ? getSourceLabel(key, t) : t('chat.other'),
     sessions: sortSessionsWithActiveFirst(map.get(key)!),
   }))
 })
@@ -446,7 +446,7 @@ async function handleRenameConfirm() {
             </template>
           </Button>
           <span class="header-session-title">{{ headerTitle }}</span>
-          <span v-if="activeSessionSource" class="source-badge">{{ getSourceLabel(activeSessionSource) }}</span>
+          <span v-if="activeSessionSource" class="source-badge">{{ getSourceLabel(activeSessionSource, t) }}</span>
           <span
             v-if="activeGoalState"
             class="goal-badge"

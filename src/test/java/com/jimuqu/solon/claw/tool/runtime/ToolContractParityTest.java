@@ -31,7 +31,6 @@ import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.ai.chat.tool.FunctionToolDesc;
 import org.noear.solon.ai.chat.tool.ToolProvider;
 import org.noear.solon.ai.chat.tool.ToolResult;
-import org.noear.solon.ai.talents.web.WebfetchTalent;
 import org.noear.solon.annotation.Param;
 
 /** 验证模型可见工具参数与外部对标仓库的 P1 契约保持一致。 */
@@ -323,13 +322,7 @@ class ToolContractParityTest {
         SolonClawWebTools.SafeWebExtractTool tool =
                 new SolonClawWebTools.SafeWebExtractTool(
                         null,
-                        new WebfetchTalent() {
-                            @Override
-                            public String webfetch(
-                                    String url, String format, Integer timeoutSeconds) {
-                                return url.endsWith("empty") ? "" : longContent;
-                            }
-                        });
+                        (url, format, timeoutSeconds) -> url.endsWith("empty") ? "" : longContent);
         Map<String, Object> href = new LinkedHashMap<String, Object>();
         href.put("href", "https://example.com/empty");
         List<Object> urls = new ArrayList<Object>();
@@ -361,15 +354,7 @@ class ToolContractParityTest {
                         + new String(new char[1200]).replace('\0', 'z');
         SolonClawWebTools.SafeWebExtractTool tool =
                 new SolonClawWebTools.SafeWebExtractTool(
-                        null,
-                        new WebfetchTalent() {
-                            @Override
-                            public String webfetch(
-                                    String url, String format, Integer timeoutSeconds) {
-                                return longContent;
-                            }
-                        },
-                        workspace.toString());
+                        null, (url, format, timeoutSeconds) -> longContent, workspace.toString());
 
         ONode result =
                 ONode.ofJson(
@@ -399,15 +384,10 @@ class ToolContractParityTest {
         SolonClawWebTools.SafeWebfetchTool tool =
                 new SolonClawWebTools.SafeWebfetchTool(
                         new SecurityPolicyService(new AppConfig()),
-                        new WebfetchTalent() {
-                            @Override
-                            public String webfetch(
-                                    String url, String format, Integer timeoutSeconds) {
-                                return "正文引用 https://without-a-comma.example.com/path、"
+                        (url, format, timeoutSeconds) ->
+                                "正文引用 https://without-a-comma.example.com/path、"
                                         + "https://www.iana.org/assignments/http-fields]. 和"
-                                        + " http://169.254.169.254/latest/meta-data 仍应可读";
-                            }
-                        });
+                                        + " http://169.254.169.254/latest/meta-data 仍应可读");
 
         assertThat(tool.webfetch("https://example.com", "text", null).getContent())
                 .contains("仍应可读");
@@ -417,7 +397,7 @@ class ToolContractParityTest {
     @Test
     void shouldRejectWebExtractInputBeyondFiveItems() {
         SolonClawWebTools.SafeWebExtractTool tool =
-                new SolonClawWebTools.SafeWebExtractTool(null, new WebfetchTalent());
+                new SolonClawWebTools.SafeWebExtractTool(null, (url, format, timeoutSeconds) -> "");
         List<Object> urls =
                 Arrays.<Object>asList(
                         "https://example.com/1",
@@ -438,7 +418,7 @@ class ToolContractParityTest {
     @Test
     void shouldRejectWebExtractCharacterLimitBelowMinimum() {
         SolonClawWebTools.SafeWebExtractTool tool =
-                new SolonClawWebTools.SafeWebExtractTool(null, new WebfetchTalent());
+                new SolonClawWebTools.SafeWebExtractTool(null, (url, format, timeoutSeconds) -> "");
 
         ONode result =
                 ONode.ofJson(
@@ -549,9 +529,9 @@ class ToolContractParityTest {
     /** 动态工具首次占名后，后续大小写等价冲突不得覆盖先注册实现。 */
     @Test
     void shouldKeepFirstDynamicToolOnNameConflict() {
-        FunctionToolDesc first = new FunctionToolDesc("mcp_docs_read");
+        FunctionToolDesc first = new FunctionToolDesc("remote_docs_read");
         first.doHandle(args -> "first");
-        FunctionToolDesc duplicate = new FunctionToolDesc("MCP_DOCS_READ");
+        FunctionToolDesc duplicate = new FunctionToolDesc("REMOTE_DOCS_READ");
         duplicate.doHandle(args -> "duplicate");
         List<Object> target = new ArrayList<Object>();
         LinkedHashSet<String> occupied = new LinkedHashSet<String>();
@@ -560,7 +540,7 @@ class ToolContractParityTest {
                 target, Arrays.<FunctionTool>asList(first, duplicate), occupied);
 
         assertThat(target).containsExactly(first);
-        assertThat(occupied).containsExactly("mcp_docs_read");
+        assertThat(occupied).containsExactly("remote_docs_read");
     }
 
     /** 动态工具不得占用内置实际函数名或渐进披露网关保留名。 */
@@ -570,7 +550,7 @@ class ToolContractParityTest {
         builtinConflict.doHandle(args -> "builtin-conflict");
         FunctionToolDesc gatewayConflict = new FunctionToolDesc("CALL_TOOL");
         gatewayConflict.doHandle(args -> "gateway-conflict");
-        FunctionToolDesc accepted = new FunctionToolDesc("mcp_docs_search");
+        FunctionToolDesc accepted = new FunctionToolDesc("remote_docs_search");
         accepted.doHandle(args -> "accepted");
         List<Object> target = new ArrayList<Object>();
         LinkedHashSet<String> occupied =
@@ -582,7 +562,7 @@ class ToolContractParityTest {
                 occupied);
 
         assertThat(target).containsExactly(accepted);
-        assertThat(occupied).containsExactly("read_file", "call_tool", "mcp_docs_search");
+        assertThat(occupied).containsExactly("read_file", "call_tool", "remote_docs_search");
     }
 
     /** 多函数 Bean 必须只暴露选择器明确启用的函数，不能把同 Bean 的其他函数一并带出。 */

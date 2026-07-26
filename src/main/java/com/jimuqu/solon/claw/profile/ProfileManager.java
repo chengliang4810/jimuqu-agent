@@ -184,7 +184,6 @@ public class ProfileManager {
                             "TOOLS.md",
                             "HEARTBEAT.md",
                             "config.yml",
-                            "mcp.json",
                             "skills",
                             "cron",
                             "distribution.yaml"));
@@ -576,7 +575,6 @@ public class ProfileManager {
                 home.resolve("MEMORY.md"),
                 home.resolve("memory"),
                 home.resolve("skills"),
-                config,
                 config,
                 home.resolve("logs"),
                 aliases(home),
@@ -1213,7 +1211,6 @@ public class ProfileManager {
         out.println("Sessions: " + view.getSessions());
         out.println("Memory:   " + view.getMemoryFile() + ", " + view.getMemoryDir());
         out.println("Skills directory: " + view.getSkillsDir());
-        out.println("MCP:      " + view.getMcpConfig());
         out.println("Channels: " + view.getChannelsConfig() + ", " + view.getSessions());
         out.println("Logs:     " + view.getLogs());
         out.println(

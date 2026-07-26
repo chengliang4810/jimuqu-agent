@@ -243,7 +243,6 @@ public class DashboardDiagnosticOutputTest {
         assertThat(diagnosticsJson).contains("audit_policy");
         assertThat(diagnosticsJson).contains("codeExecutionPolicy");
         assertThat(diagnosticsJson).contains("credentialMountPolicy");
-        assertThat(diagnosticsJson).contains("mcpRuntimePolicy");
         assertThat(diagnosticsJson).contains("readOnlyAuditTool");
         assertThat(diagnosticsJson).contains("approval_policy");
         assertThat(diagnosticsJson).contains("hardline_policy");
@@ -255,7 +254,6 @@ public class DashboardDiagnosticOutputTest {
         assertThat(diagnosticsJson).contains("untrustedToolResultBoundary");
         assertThat(diagnosticsJson).contains("untrustedBoundaryAppliesToPersistedOutputBlocks");
         assertThat(diagnosticsJson).contains("untrustedToolNames");
-        assertThat(diagnosticsJson).contains("mcp_");
         assertThat(diagnosticsJson).contains("approval service is unavailable");
         assertThat(diagnosticsJson).contains("\"probes\"");
         assertThat(diagnosticsJson).contains("\"metadata_url\"");
@@ -920,15 +918,6 @@ public class DashboardDiagnosticOutputTest {
         Map<String, Object> policy = (Map<String, Object>) result.get("policy");
         Map<String, Object> coverage = (Map<String, Object>) policy.get("coverage");
         assertThat(coverage.get("privateUrlPolicy")).isEqualTo(Boolean.TRUE);
-        assertThat(coverage.get("mcpPackageSecurity")).isEqualTo(Boolean.TRUE);
-        assertThat(coverage.get("mcpPackageSecurityPolicy")).isInstanceOf(Map.class);
-        Map<String, Object> mcpPackagePolicy =
-                (Map<String, Object>) coverage.get("mcpPackageSecurityPolicy");
-        assertThat(mcpPackagePolicy.get("npxPackageOptionParsed")).isEqualTo(Boolean.TRUE);
-        assertThat(mcpPackagePolicy.get("pipxRunSubcommandSkipped")).isEqualTo(Boolean.TRUE);
-        assertThat(mcpPackagePolicy.get("pypiSourceOptionParsed")).isEqualTo(Boolean.TRUE);
-        assertThat(mcpPackagePolicy.get("projectEndpointOverrideEnvironment"))
-                .isEqualTo("SOLONCLAW_OSV_ENDPOINT");
         assertThat(coverage.get("toolResultStorage")).isEqualTo(Boolean.TRUE);
         Map<String, Object> storagePolicy =
                 (Map<String, Object>) coverage.get("toolResultStoragePolicy");
@@ -943,7 +932,6 @@ public class DashboardDiagnosticOutputTest {
                 .doesNotContain("tool-result-secret");
         assertThat(policy.get("activeSurfaces").toString())
                 .contains("privateUrlPolicy")
-                .contains("mcpPackageSecurity")
                 .contains("toolResultStorage");
     }
 
@@ -1271,7 +1259,7 @@ public class DashboardDiagnosticOutputTest {
         SlashConfirmService.PendingConfirm pending =
                 slashConfirmService.register(
                         "source-slash-redact",
-                        "reload-mcp token=ghp_slashcommand12345",
+                        "rollback clear token=ghp_slashcommand12345",
                         "confirm token=ghp_slashprompt12345");
         pending.setConfirmId("confirm-ghp_slashconfirm12345");
         DashboardDiagnosticsService diagnosticsService =
@@ -1356,8 +1344,8 @@ public class DashboardDiagnosticOutputTest {
     void shouldMarkSlashConfirmListTruncatedOnlyWhenMoreItemsExist() {
         AppConfig config = new AppConfig();
         SlashConfirmService slashConfirmService = new SlashConfirmService(null);
-        slashConfirmService.register("source-slash-1", "/reload-mcp one", "确认一", false);
-        slashConfirmService.register("source-slash-2", "/reload-mcp two", "确认二", false);
+        slashConfirmService.register("source-slash-1", "/rollback clear one", "确认一", false);
+        slashConfirmService.register("source-slash-2", "/rollback clear two", "确认二", false);
         DashboardDiagnosticsService diagnosticsService =
                 diagnosticsBuilder(config)
                         .deliveryService(FixedDeliveryService.empty())
@@ -1475,7 +1463,7 @@ public class DashboardDiagnosticOutputTest {
         SlashConfirmService slashConfirmService = new SlashConfirmService(null);
         slashConfirmService.register(
                 "source-slash-confirm",
-                "/reload-mcp https://example.test/callback?api%255Fkey=slash-secret",
+                "/rollback clear https://example.test/callback?api%255Fkey=slash-secret",
                 "确认执行 https://example.test/callback?api%255Fkey=slash-secret",
                 true);
         DashboardDiagnosticsService diagnosticsService =
@@ -1493,7 +1481,7 @@ public class DashboardDiagnosticOutputTest {
 
         assertThat(json)
                 .contains(
-                        "\"command_preview\":\"/reload-mcp"
+                        "\"command_preview\":\"/rollback clear"
                                 + " https://example.test/callback?api%255Fkey=***\"")
                 .contains(
                         "\"prompt_preview\":\"确认执行 https://example.test/callback?api%255Fkey=***\"")

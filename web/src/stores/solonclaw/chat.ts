@@ -5,13 +5,13 @@ import { fetchRunDetail } from '@/api/solonclaw/runs'
 import { deleteSession as deleteSessionApi, fetchLatestSessionDescendant, fetchSession, fetchSessions, fetchSessionUsageSingle, type SolonClawMessage, type SessionGoalState, type SessionSummary } from '@/api/solonclaw/sessions'
 import { shouldUseServerMessages } from '@/shared/chatMessageMerge'
 import { chatCacheKey, clearChatCacheStorage, recoverChatCacheQuota } from '@/shared/chatCacheScope'
+import { i18n } from '@/i18n'
 import { profileSessionIdentity } from '@/shared/profileScope'
 import { normalizeTimestampMs } from '@/shared/session-display'
 import { onProfileContextChange } from '@/shared/profileContext'
 import { defineStore } from 'pinia'
 import { computed, onScopeDispose, ref } from 'vue'
 import { useAppStore } from './app'
-import { useProfilesStore } from './profiles'
 
 export interface Attachment {
   id: string
@@ -577,7 +577,7 @@ export const useChatStore = defineStore('chat', () => {
 
       const list = await fetchSessions()
       if (!isCurrentAuthContext(startingAuthContextVersion)) return
-      const fallbackProfile = useProfilesStore().managedProfileName || 'default'
+      const fallbackProfile = 'default'
       const fresh = list.map(session => mapSolonClawSession(session, fallbackProfile))
       const freshKeys = new Set(fresh.map(session => session.key))
       // Preserve already-loaded messages for sessions that are still present,
@@ -666,7 +666,7 @@ export const useChatStore = defineStore('chat', () => {
 
 
   function createSession(): Session {
-    const profile = useProfilesStore().managedProfileName || getManagementProfile() || 'default'
+    const profile = 'default'
     const id = uid()
     const session: Session = {
       key: profileSessionIdentity(id, profile),
@@ -1052,7 +1052,11 @@ export const useChatStore = defineStore('chat', () => {
               addMessage(sid, {
                 id: uid(),
                 role: 'system',
-                content: `开始第 ${evt.attempt_no || 1} 次尝试：${evt.provider || '-'} / ${evt.model || '-'}`,
+                content: i18n.global.t('chat.attemptStarted', {
+                  attempt: evt.attempt_no || 1,
+                  provider: evt.provider || '-',
+                  model: evt.model || '-',
+                }),
                 timestamp: Date.now(),
               })
               schedulePersist()
@@ -1063,7 +1067,10 @@ export const useChatStore = defineStore('chat', () => {
                 addMessage(sid, {
                   id: uid(),
                   role: 'system',
-                  content: `已压缩上下文：${evt.estimated_tokens || 0} / ${evt.threshold_tokens || 0} tokens`,
+                  content: i18n.global.t('chat.contextCompressed', {
+                    estimated: evt.estimated_tokens || 0,
+                    threshold: evt.threshold_tokens || 0,
+                  }),
                   timestamp: Date.now(),
                 })
                 schedulePersist()
@@ -1074,7 +1081,10 @@ export const useChatStore = defineStore('chat', () => {
               addMessage(sid, {
                 id: uid(),
                 role: 'system',
-                content: `模型切换：${evt.from_provider || '-'} -> ${evt.to_provider || '-'}`,
+                content: i18n.global.t('chat.modelFallback', {
+                  from: evt.from_provider || '-',
+                  to: evt.to_provider || '-',
+                }),
                 timestamp: Date.now(),
               })
               schedulePersist()
@@ -1084,7 +1094,9 @@ export const useChatStore = defineStore('chat', () => {
               addMessage(sid, {
                 id: uid(),
                 role: 'system',
-                content: evt.recovery_type === 'max_steps' ? '达到步数上限，正在收敛总结' : '工具已完成，正在恢复最终答复',
+                content: i18n.global.t(
+                  evt.recovery_type === 'max_steps' ? 'chat.recoveryMaxSteps' : 'chat.recoveryToolComplete',
+                ),
                 timestamp: Date.now(),
               })
               schedulePersist()

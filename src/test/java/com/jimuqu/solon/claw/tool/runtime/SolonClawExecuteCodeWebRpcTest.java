@@ -426,8 +426,8 @@ public class SolonClawExecuteCodeWebRpcTest {
         }
     }
 
-    private static class UnsafeReturnedContentWebfetchTool
-            extends org.noear.solon.ai.talents.web.WebfetchTalent {
+    /** 返回含被阻断链接的固定正文，用于验证 execute_code 内部的 URL 安全检查。 */
+    private static class UnsafeReturnedContentWebfetchTool implements WebfetchDelegate {
         @Override
         public String webfetch(String url, String format, Integer timeoutSeconds) {
             return "{\"download\":\"https://blocked.example/files/app.jar?token=secret123\"}";

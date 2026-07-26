@@ -12,7 +12,7 @@ import org.noear.solon.annotation.Param;
 
 /** 提供 Dashboard 诊断总览只读查询工具。 */
 public class DiagnosticsManageTools {
-    /** Dashboard 诊断服务，用于读取运行、工具、MCP 和安全诊断总览。 */
+    /** Dashboard 诊断服务，用于读取运行、工具和安全诊断总览。 */
     private final Supplier<DashboardDiagnosticsService> diagnosticsService;
 
     /**

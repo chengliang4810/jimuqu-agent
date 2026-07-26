@@ -2,11 +2,13 @@ package com.jimuqu.solon.claw.web;
 
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
+import com.jimuqu.solon.claw.core.enums.PlatformType;
 import com.jimuqu.solon.claw.core.model.ProfileTaskAttemptRecord;
 import com.jimuqu.solon.claw.core.model.ProfileTaskRecord;
 import com.jimuqu.solon.claw.core.repository.ProfileTaskRepository;
 import com.jimuqu.solon.claw.profile.task.ProfileTaskCoordinator;
 import com.jimuqu.solon.claw.support.IdSupport;
+import com.jimuqu.solon.claw.support.SourceKeySupport;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +40,13 @@ public class DashboardProfileTaskService {
         task.setTaskId("pt-" + IdSupport.newId());
         task.setSourceProfile(text(body, "source_profile", "default"));
         task.setTargetProfile(text(body, "target_profile", null));
-        task.setSourceKey("MEMORY:dashboard:dashboard");
+        task.setSourceKey(
+                SourceKeySupport.build(
+                        null,
+                        PlatformType.MEMORY,
+                        "dashboard-profile-task",
+                        task.getTaskId(),
+                        "__profile_task__"));
         task.setTitle(text(body, "title", "Dashboard collaboration task"));
         task.setPrompt(text(body, "description", null));
         task.setMaxAttempts(

@@ -24,7 +24,6 @@ import com.jimuqu.solon.claw.gateway.authorization.GatewayAuthorizationService;
 import com.jimuqu.solon.claw.gateway.command.SlashConfirmService;
 import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.solon.claw.gateway.service.ProfileMultiplexRuntimeManager;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.media.SpeechService;
 import com.jimuqu.solon.claw.pricing.PriceCatalog;
 import com.jimuqu.solon.claw.proactive.ProactiveDiagnosticsService;
@@ -61,7 +60,6 @@ import com.jimuqu.solon.claw.web.DashboardDiagnosticsService;
 import com.jimuqu.solon.claw.web.DashboardGatewayDoctorService;
 import com.jimuqu.solon.claw.web.DashboardInsightsService;
 import com.jimuqu.solon.claw.web.DashboardLogsService;
-import com.jimuqu.solon.claw.web.DashboardMcpService;
 import com.jimuqu.solon.claw.web.DashboardMediaService;
 import com.jimuqu.solon.claw.web.DashboardPairingService;
 import com.jimuqu.solon.claw.web.DashboardPlatformToolsetsService;
@@ -74,7 +72,6 @@ import com.jimuqu.solon.claw.web.DashboardSessionService;
 import com.jimuqu.solon.claw.web.DashboardSkillsService;
 import com.jimuqu.solon.claw.web.DashboardStatusService;
 import com.jimuqu.solon.claw.web.DashboardWorkspaceService;
-import com.jimuqu.solon.claw.web.McpPackageSecurityService;
 import com.jimuqu.solon.claw.web.WeixinQrSetupService;
 import com.jimuqu.solon.claw.web.profile.DashboardProfileContext;
 import java.util.List;
@@ -109,7 +106,6 @@ public class DashboardConfiguration {
      * 创建 Dashboard Profile 管理服务。
      *
      * @param profileManager Profile 核心管理器。
-     * @param dashboardMcpService 跨 Profile MCP 配置服务。
      * @param dashboardSkillsService 跨 Profile 技能服务。
      * @param profileMultiplexRuntimeManager 命名 Profile 子运行时管理器。
      * @param gatewayRuntimeRefreshService default Profile 配置刷新服务。
@@ -118,13 +114,11 @@ public class DashboardConfiguration {
     @Bean
     public DashboardProfileService dashboardProfileService(
             ProfileManager profileManager,
-            DashboardMcpService dashboardMcpService,
             DashboardSkillsService dashboardSkillsService,
             ProfileMultiplexRuntimeManager profileMultiplexRuntimeManager,
             GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
         return new DashboardProfileService(
                 profileManager,
-                dashboardMcpService,
                 dashboardSkillsService,
                 profileMultiplexRuntimeManager,
                 gatewayRuntimeRefreshService);
@@ -604,33 +598,6 @@ public class DashboardConfiguration {
         return new DashboardCronService(
                 cronJobService,
                 defaultCronScheduler,
-                new com.jimuqu.solon.claw.web.DashboardProfileScope(dashboardProfileContext));
-    }
-
-    /**
-     * 执行控制台MCP服务相关逻辑。
-     *
-     * @param appConfig 应用运行配置。
-     * @param sqliteDatabase SQLiteDatabase参数。
-     * @param mcpRuntimeService MCP运行时服务依赖。
-     * @param securityPolicyService 安全策略服务依赖。
-     * @return 返回控制台MCP服务结果。
-     */
-    @Bean(destroyMethod = "shutdown")
-    public DashboardMcpService dashboardMcpService(
-            AppConfig appConfig,
-            SqliteDatabase sqliteDatabase,
-            McpRuntimeService mcpRuntimeService,
-            com.jimuqu.solon.claw.tool.runtime.SecurityPolicyService securityPolicyService,
-            DashboardProfileContext dashboardProfileContext) {
-        return new DashboardMcpService(
-                appConfig,
-                sqliteDatabase,
-                new McpPackageSecurityService(
-                        new com.jimuqu.solon.claw.skillhub.support.DefaultSkillHubHttpClient(
-                                securityPolicyService),
-                        securityPolicyService),
-                mcpRuntimeService,
                 new com.jimuqu.solon.claw.web.DashboardProfileScope(dashboardProfileContext));
     }
 

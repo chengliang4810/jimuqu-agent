@@ -7,15 +7,11 @@ import cn.hutool.core.io.IORuntimeException;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.config.RuntimeConfigResolver;
 import com.jimuqu.solon.claw.context.CuratorStateStore;
-import com.jimuqu.solon.claw.core.enums.PlatformType;
 import com.jimuqu.solon.claw.core.model.AgentRunRecord;
-import com.jimuqu.solon.claw.core.model.GatewayMessage;
-import com.jimuqu.solon.claw.core.model.GatewayReply;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.model.ToolCallRecord;
 import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
-import com.jimuqu.solon.claw.core.service.CommandService;
 import com.jimuqu.solon.claw.gateway.command.SlashConfirmService;
 import com.jimuqu.solon.claw.goal.GoalService;
 import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
@@ -237,7 +233,7 @@ public class DashboardControllerHttpTest {
         assertThat(files.status).isEqualTo(200);
         assertThat(files.body).doesNotContain("__APP_SESSION_TOKEN__");
 
-        for (String path : new String[] {"/diagnostics", "/tui-runtime", "/curator", "/mcp"}) {
+        for (String path : new String[] {"/diagnostics", "/tui-runtime", "/curator"}) {
             HttpResult alias = request("GET", path, null, null);
             assertThat(alias.status).isEqualTo(200);
             assertThat(alias.body).doesNotContain("__APP_SESSION_TOKEN__");
@@ -688,7 +684,6 @@ public class DashboardControllerHttpTest {
                 .contains("\"pathPolicyCheckedBeforeCache\":true")
                 .contains("\"credentialPathBlocked\":true")
                 .contains("\"rawPathHiddenInPrompt\":true")
-                .contains("\"mcpInputSchemaSanitized\":true")
                 .contains("\"invalidSchemaDefaultsToObject\":true")
                 .contains("\"nullableUnionCollapsed\":true")
                 .contains("\"patchFormat\":\"V4A\"")
@@ -705,25 +700,6 @@ public class DashboardControllerHttpTest {
                 .contains("\"providerBlocklistOverridesPassthrough\":true")
                 .contains("\"secretNameSubstringsBlocked\":true")
                 .contains("\"runtimeSafetyTogglesBlocked\":true")
-                .contains("\"mcp\"")
-                .contains("\"runtime_policy\"")
-                .contains("\"oauth_policy\"")
-                .contains("\"remoteEndpointUrlSafety\":true")
-                .contains("\"remoteToolArgumentUrlSafety\":true")
-                .contains("\"remoteToolArgumentPathSafety\":true")
-                .contains("\"resourceUriUrlSafety\":true")
-                .contains("\"resourceUriPathSafety\":true")
-                .contains("\"toolsChangeNotificationPersisted\":true")
-                .contains("\"oauthFailureStructuredReauth\":true")
-                .contains("\"oauthSecretsRedacted\":true")
-                .contains("\"authorizationEndpointUrlSafety\":true")
-                .contains("\"tokenEndpointUrlSafety\":true")
-                .contains("\"tokenEndpointRedirectUrlSafety\":true")
-                .contains("\"stateValidationRequired\":true")
-                .contains("\"pkceS256Required\":true")
-                .contains("\"accessTokenRedacted\":true")
-                .contains("\"refreshTokenRedacted\":true")
-                .contains("\"clientSecretRedacted\":true")
                 .contains("\"security\"")
                 .contains("\"approvals\"")
                 .contains("\"approval_policy\"")
@@ -736,7 +712,6 @@ public class DashboardControllerHttpTest {
                 .contains("\"slash_confirm_policy\"")
                 .contains("\"approval_card_policy\"")
                 .contains("\"approval_audit_policy\"")
-                .contains("\"mcp_reload_policy\"")
                 .contains("\"dangerousRuleCount\"")
                 .contains("\"hardlineRuleCount\"")
                 .contains("\"approvalBypassAllowed\":false")
@@ -763,8 +738,6 @@ public class DashboardControllerHttpTest {
                 .contains("\"observerEventsRedacted\":true")
                 .contains("\"encodedUrlParameterRedacted\":true")
                 .contains("\"fragmentUrlParameterRedacted\":true")
-                .contains("\"toolChangeNoticeInjected\":true")
-                .contains("\"oauthUrlSafetyCovered\":true")
                 .contains("\"path_policy\"")
                 .contains("\"credential_policy\"")
                 .contains("\"tool_args_policy\"")
@@ -892,8 +865,6 @@ public class DashboardControllerHttpTest {
                 .isTrue();
         assertThat(approvalCardDiagnostics.get("qqbotSessionActionSupported").getBoolean())
                 .isTrue();
-        ONode mcpDiagnostics = ONode.ofJson(diagnostics.body).get("data").get("mcp");
-        assertThat(mcpDiagnostics.toJson()).doesNotContain("\"oauthFailureMarkers\"");
         ONode toolPolicies =
                 ONode.ofJson(diagnostics.body).get("data").get("tools").get("policies");
         assertThat(toolPolicies.toJson())
@@ -973,15 +944,10 @@ public class DashboardControllerHttpTest {
                 .contains("\"approvalCardPolicy\"")
                 .contains("\"approvalLifecyclePolicy\"")
                 .contains("\"approvalAuditPolicy\"")
-                .contains("\"mcpReloadPolicy\"")
                 .contains("\"hardlineCommandBlocks\":true")
                 .contains("\"urlSafety\":true")
                 .contains("\"privateUrlPolicy\":true")
                 .contains("\"credentialFilePolicy\":true")
-                .contains("\"mcpUrlSafety\":true")
-                .contains("mcpOauthUrlSafety")
-                .contains("\"mcpPackageSecurity\":true")
-                .contains("\"mcpPackageSecurityPolicy\"")
                 .contains("\"approvalCardPlatforms\":[\"FEISHU\",\"QQBOT\"]")
                 .contains("\"permanentApprovalAllowedExceptTirith\":true")
                 .contains("\"tirithPermanentApprovalHidden\":true")
@@ -990,7 +956,6 @@ public class DashboardControllerHttpTest {
                 .contains("\"rawCommandRedactedInExtras\":true")
                 .contains("\"observerEventsRedacted\":true")
                 .contains("\"fragmentUrlParameterRedacted\":true")
-                .contains("\"reloadHistoryNoticeRedacted\":true")
                 .doesNotContain("\"sudo_password\"")
                 .doesNotContain("\"credential_files\"")
                 .doesNotContain("\"env_passthrough\"")
@@ -1304,451 +1269,6 @@ public class DashboardControllerHttpTest {
         assertThat(retryCron.status).isEqualTo(200);
         assertThat(ONode.ofJson(retryCron.body).get("data").get("id").getString())
                 .isEqualTo(dashboardCronId);
-        HttpResult invalidMcp =
-                request(
-                        "POST",
-                        "/api/mcp",
-                        "{\"serverId\":\"bad-mcp\",\"token\":\"ghp_invalidmcp12345\"",
-                        token);
-        assertThat(invalidMcp.status).isEqualTo(400);
-        assertThat(invalidMcp.body)
-                .contains("\"success\":false")
-                .contains("\"code\":\"MCP_BAD_REQUEST\"")
-                .contains("请求体 JSON 解析失败")
-                .doesNotContain("ghp_invalidmcp12345")
-                .doesNotContain("bad-mcp");
-
-        HttpResult createMcp =
-                request(
-                        "POST",
-                        "/api/mcp",
-                        "{\"serverId\":\"dashboard-local-docs\",\"name\":\"Local Docs\",\"transport\":\"stdio\",\"command\":\"docs-mcp\",\"args\":[\"--stdio\"],\"oauth\":{\"enabled\":true,\"provider\":\"github\",\"status\":\"pending\"},\"capabilities\":{\"resources\":true,\"tools\":true},\"tools\":[{\"name\":\"docs_search\",\"description\":\"Search docs\"}]}",
-                        token);
-        assertThat(createMcp.status).isEqualTo(200);
-
-        HttpResult checkMcp = request("POST", "/api/mcp/dashboard-local-docs/check", "{}", token);
-        assertThat(checkMcp.status).isEqualTo(200);
-        assertThat(checkMcp.body).contains("\"status\":\"disabled\"");
-        assertThat(checkMcp.body)
-                .contains("\"tool_changed_notification\"")
-                .contains("\"added_tools\"")
-                .contains("\"removed_tools\"")
-                .contains("\"schema_sanitizer\":\"snack4\"")
-                .contains("\"security\":{\"allowed\":true,\"reason\":\"allow\"}");
-
-        HttpResult checkMcpAgain =
-                request("POST", "/api/mcp/dashboard-local-docs/check", "{}", token);
-        assertThat(checkMcpAgain.status).isEqualTo(200);
-        assertThat(checkMcpAgain.body).contains("\"tool_changed_notification\":false");
-
-        HttpResult updateMcp =
-                request(
-                        "POST",
-                        "/api/mcp",
-                        "{\"serverId\":\"dashboard-local-docs\",\"name\":\"Local Docs\",\"transport\":\"stdio\",\"command\":\"docs-mcp\",\"args\":[\"--stdio\"],\"oauth\":{\"enabled\":true,\"provider\":\"github\",\"status\":\"pending\"},\"capabilities\":{\"resources\":true,\"tools\":true},\"tools\":[{\"name\":\"docs_search\",\"description\":\"Search docs\"},{\"name\":\"docs_fetch\",\"description\":\"Fetch docs\"}]}",
-                        token);
-        assertThat(updateMcp.status).isEqualTo(200);
-
-        HttpResult changedMcp = request("POST", "/api/mcp/dashboard-local-docs/check", "{}", token);
-        assertThat(changedMcp.status).isEqualTo(200);
-        assertThat(changedMcp.body).contains("\"status\":\"disabled\"");
-        assertThat(changedMcp.body)
-                .contains("\"tool_changed_notification\"")
-                .contains("\"schema_sanitizer\":\"snack4\"");
-
-        HttpResult removeMcpTool =
-                request(
-                        "POST",
-                        "/api/mcp",
-                        "{\"serverId\":\"dashboard-local-docs\",\"name\":\"Local Docs\",\"transport\":\"stdio\",\"command\":\"docs-mcp\",\"args\":[\"--stdio\"],\"oauth\":{\"enabled\":true,\"provider\":\"github\",\"status\":\"pending\"},\"capabilities\":{\"resources\":true,\"tools\":true},\"tools\":[{\"name\":\"docs_fetch\",\"description\":\"Fetch docs\"}]}",
-                        token);
-        assertThat(removeMcpTool.status).isEqualTo(200);
-
-        HttpResult removedMcp = request("POST", "/api/mcp/dashboard-local-docs/check", "{}", token);
-        assertThat(removedMcp.status).isEqualTo(200);
-        assertThat(removedMcp.body)
-                .contains("\"tool_changed_notification\"")
-                .contains("\"added_tools\"")
-                .contains("\"removed_tools\"");
-
-        HttpResult updateMcpForReloadAll =
-                request(
-                        "POST",
-                        "/api/mcp",
-                        "{\"serverId\":\"dashboard-local-docs\",\"name\":\"Local Docs\",\"transport\":\"stdio\",\"command\":\"docs-mcp\",\"args\":[\"--stdio\"],\"oauth\":{\"enabled\":true,\"provider\":\"github\",\"status\":\"pending\"},\"capabilities\":{\"resources\":true,\"tools\":true},\"tools\":[{\"name\":\"docs_search\",\"description\":\"Search docs\"},{\"name\":\"docs_fetch\",\"description\":\"Fetch docs\"},{\"name\":\"docs_rank\",\"description\":\"Rank docs\"}]}",
-                        token);
-        assertThat(updateMcpForReloadAll.status).isEqualTo(200);
-
-        HttpResult reloadAllMcp = request("POST", "/api/mcp/reload", "{}", token);
-        assertThat(reloadAllMcp.status).isEqualTo(200);
-        ONode reloadAllMcpData = ONode.ofJson(reloadAllMcp.body).get("data");
-        assertThat(reloadAllMcpData.get("tool_count").getInt()).isGreaterThanOrEqualTo(3);
-        assertThat(reloadAllMcpData.get("server_count").getInt()).isGreaterThanOrEqualTo(1);
-        assertThat(stringsAt(reloadAllMcp.body, "changed_servers"))
-                .contains("dashboard-local-docs");
-        assertThat(reloadAllMcp.body).contains("\"tool_changed_notification\":true");
-
-        HttpResult reloadAllMcpAgain = request("POST", "/api/mcp/reload", "{}", token);
-        assertThat(reloadAllMcpAgain.status).isEqualTo(200);
-        assertThat(stringsAt(reloadAllMcpAgain.body, "unchanged_servers"))
-                .contains("dashboard-local-docs");
-
-        HttpResult mcpList = request("GET", "/api/mcp", null, token);
-        assertThat(mcpList.status).isEqualTo(200);
-        assertThat(mcpList.body).contains("Local Docs");
-        assertThat(mcpList.body).contains("\"oauth\"");
-        assertThat(mcpList.body).contains("\"capabilities\"");
-        assertThat(mcpList.body).contains("\"last_tools_hash\"");
-
-        HttpResult secretToolMcp =
-                request(
-                        "POST",
-                        "/api/mcp",
-                        "{\"serverId\":\"secret-tool-docs\",\"name\":\"Secret Tool Docs\",\"transport\":\"stdio\",\"command\":\"docs-mcp\",\"tools\":[{\"name\":\"docs_secret\",\"title\":\"Read with token=secret-title-token\",\"description\":\"Use bearer ghp_toolsecret12345\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"api_key\":{\"type\":\"string\",\"description\":\"OPENAI_API_KEY=sk-test-tool-secret\"}}},\"output_schema\":{\"type\":\"object\",\"properties\":{\"access_token\":{\"type\":\"string\",\"description\":\"secret-output-token\"}}}}]}",
-                        token);
-        assertThat(secretToolMcp.status).isEqualTo(200);
-        HttpResult secretToolMcpList = request("GET", "/api/mcp", null, token);
-        assertThat(secretToolMcpList.status).isEqualTo(200);
-        assertThat(secretToolMcpList.body)
-                .contains("token=***")
-                .contains("bearer ***")
-                .contains("\"description\":\"***\"")
-                .doesNotContain("secret-title-token")
-                .doesNotContain("ghp_toolsecret12345")
-                .doesNotContain("OPENAI_API_KEY")
-                .doesNotContain("sk-test-tool-secret")
-                .doesNotContain("secret-output-token");
-
-        HttpResult secretChangedToolMcp =
-                request(
-                        "POST",
-                        "/api/mcp",
-                        "{\"serverId\":\"secret-changed-tool-docs\",\"name\":\"Secret Changed Tool Docs\",\"transport\":\"stdio\",\"command\":\"docs-mcp\",\"tools\":[{\"name\":\"docs_token_ghp_mcpchanged12345\",\"description\":\"Search docs\"}]}",
-                        token);
-        assertThat(secretChangedToolMcp.status).isEqualTo(200);
-        HttpResult secretChangedToolCheck =
-                request("POST", "/api/mcp/secret-changed-tool-docs/check", "{}", token);
-        assertThat(secretChangedToolCheck.status).isEqualTo(200);
-        assertThat(stringsAt(secretChangedToolCheck.body, "added_tools"))
-                .containsExactly("docs_token_ghp_***");
-        assertThat(secretChangedToolCheck.body).doesNotContain("ghp_mcpchanged12345");
-
-        HttpResult secretMcp =
-                request(
-                        "POST",
-                        "/api/mcp",
-                        "{\"serverId\":\"secret-stdio-docs\",\"name\":\"Secret Stdio\",\"transport\":\"stdio\",\"command\":\"OPENAI_API_KEY=sk-test-dashboard-secret docs-mcp\",\"args\":[\"--token=secret-arg-value\",\"--stdio\"],\"auth\":{\"header\":\"Authorization: Bearer ghp_mcpsecret12345\"}}",
-                        token);
-        assertThat(secretMcp.status).as(secretMcp.body).isEqualTo(200);
-        HttpResult userInfoMcp =
-                request(
-                        "POST",
-                        "/api/mcp",
-                        "{\"serverId\":\"userinfo-docs\",\"name\":\"Userinfo Docs\",\"transport\":\"http\",\"endpoint\":\"https://user:secret-endpoint-pass@example.com/sse?token=secret-userinfo-token\",\"tools\":[{\"name\":\"docs_search\"}]}",
-                        token);
-        assertThat(userInfoMcp.status).isEqualTo(200);
-        assertThat(userInfoMcp.body)
-                .doesNotContain("secret-endpoint-pass")
-                .doesNotContain("secret-userinfo-token");
-        HttpResult secretMcpList = request("GET", "/api/mcp", null, token);
-        assertThat(secretMcpList.status).isEqualTo(200);
-        assertThat(secretMcpList.body)
-                .contains("OPENAI_API_KEY=***")
-                .contains("--token=***")
-                .contains("Authorization: Bearer ***")
-                .doesNotContain("sk-test-dashboard-secret")
-                .doesNotContain("secret-arg-value")
-                .doesNotContain("secret-endpoint-pass")
-                .doesNotContain("secret-userinfo-token")
-                .doesNotContain("ghp_mcpsecret12345");
-
-        HttpResult updateMcpOAuth =
-                request(
-                        "POST",
-                        "/api/mcp",
-                        "{\"serverId\":\"oauth-docs\",\"name\":\"OAuth Docs\",\"transport\":\"stdio\",\"command\":\"docs-mcp\",\"oauth\":{\"enabled\":true,\"provider\":\"github\",\"auth_type\":\"oauth_pkce\",\"access_token\":\"secret-access\",\"refresh_token\":\"secret-refresh\",\"client_secret\":\"secret-client\",\"expires_at\":4102444800000,\"scopes\":[\"repo\"]},\"tools\":[{\"name\":\"docs_search\"}]}",
-                        token);
-        assertThat(updateMcpOAuth.status).isEqualTo(200);
-
-        HttpResult oauthStatus = request("GET", "/api/mcp/oauth-docs/oauth/status", null, token);
-        assertThat(oauthStatus.status).isEqualTo(200);
-        assertThat(oauthStatus.body).contains("\"status\":\"authenticated\"");
-        assertThat(oauthStatus.body).contains("\"has_access_token\":true");
-        assertThat(oauthStatus.body).contains("\"has_refresh_token\":true");
-        assertThat(oauthStatus.body).contains("\"has_client_secret\":true");
-        assertThat(oauthStatus.body).doesNotContain("secret-access");
-        assertThat(oauthStatus.body).doesNotContain("secret-refresh");
-
-        HttpResult oauthErrorServer =
-                request(
-                        "POST",
-                        "/api/mcp",
-                        "{\"serverId\":\"oauth-error-docs\",\"name\":\"OAuth Error Docs\",\"transport\":\"stdio\",\"command\":\"docs-mcp\",\"oauth\":{\"enabled\":true,\"status\":\"pending\",\"error\":\"access_token=ghp_oautherror12345&callback=http://localhost/cb?api%255Fkey=oauth-encoded-secret&token=secret-oauth-error\",\"message\":\"client_secret=oauth-message-secret https://example.test/callback#refresh_token=oauth-fragment-secret\"},\"tools\":[{\"name\":\"docs_search\"}]}",
-                        token);
-        assertThat(oauthErrorServer.status).isEqualTo(200);
-        HttpResult oauthErrorStatus =
-                request("GET", "/api/mcp/oauth-error-docs/oauth/status", null, token);
-        assertThat(oauthErrorStatus.status).isEqualTo(200);
-        assertThat(oauthErrorStatus.body).contains("access_token=***");
-        assertThat(oauthErrorStatus.body).contains("api%255Fkey=***");
-        assertThat(oauthErrorStatus.body).contains("refresh_token=***");
-        assertThat(oauthErrorStatus.body).contains("client_secret=***");
-        assertThat(oauthErrorStatus.body)
-                .doesNotContain("ghp_oautherror12345")
-                .doesNotContain("secret-oauth-error")
-                .doesNotContain("oauth-encoded-secret")
-                .doesNotContain("oauth-fragment-secret")
-                .doesNotContain("oauth-message-secret");
-
-        HttpResult mcpListWithOAuth = request("GET", "/api/mcp", null, token);
-        assertThat(mcpListWithOAuth.body).contains("\"has_access_token\":true");
-        assertThat(mcpListWithOAuth.body).doesNotContain("secret-access");
-
-        HttpResult beginOAuth =
-                request(
-                        "POST",
-                        "/api/mcp/oauth-docs/oauth/begin",
-                        "{\"authorization_endpoint\":\""
-                                + LOCAL_OAUTH_AUTHORIZATION_ENDPOINT
-                                + "\",\"token_endpoint\":\""
-                                + LOCAL_OAUTH_TOKEN_ENDPOINT
-                                + "\",\"client_id\":\"client-1\",\"redirect_uri\":\"http://127.0.0.1:8765/callback\",\"scopes\":[\"repo\",\"read:user\"]}",
-                        token);
-        assertThat(beginOAuth.status).isEqualTo(200);
-        assertThat(beginOAuth.body).contains("\"status\":\"pending\"");
-        assertThat(beginOAuth.body).contains(LOCAL_OAUTH_AUTHORIZATION_ENDPOINT);
-        assertThat(beginOAuth.body).contains("code_challenge_method=S256");
-        assertThat(beginOAuth.body).contains("scope=repo%20read%3Auser");
-        assertThat(beginOAuth.body).contains("\"has_code_verifier\":true");
-        assertThat(beginOAuth.body).doesNotContain("\"code_verifier\":\"");
-
-        HttpResult oauthCallbackError =
-                request(
-                        "GET",
-                        "/api/mcp/oauth-docs/oauth/callback?error="
-                                + URLEncoder.encode(
-                                        "access_token=ghp_callbackerror12345&redirect_uri=http://localhost/cb?token=secret-callback-error",
-                                        "UTF-8"),
-                        null,
-                        null);
-        assertThat(oauthCallbackError.status).isEqualTo(400);
-        assertThat(oauthCallbackError.body)
-                .contains("MCP_BAD_REQUEST")
-                .contains("access_token=***")
-                .contains("token=***")
-                .doesNotContain("ghp_callbackerror12345")
-                .doesNotContain("secret-callback-error");
-
-        HttpResult stateMismatch =
-                request(
-                        "POST",
-                        "/api/mcp/oauth-docs/oauth/callback",
-                        "{\"code\":\"bad-code\",\"state\":\"wrong\",\"token_endpoint\":\"http://127.0.0.1:1/token\"}",
-                        token);
-        assertThat(stateMismatch.status).isEqualTo(400);
-        assertThat(stateMismatch.body).contains("MCP_BAD_REQUEST");
-
-        TokenEndpointStub tokenEndpoint = TokenEndpointStub.start();
-        try {
-            beginOAuth =
-                    request(
-                            "POST",
-                            "/api/mcp/oauth-docs/oauth/begin",
-                            "{\"authorization_endpoint\":\""
-                                    + LOCAL_OAUTH_AUTHORIZATION_ENDPOINT
-                                    + "\",\"token_endpoint\":\""
-                                    + tokenEndpoint.url()
-                                    + "\",\"client_id\":\"client-1\",\"redirect_uri\":\"http://127.0.0.1:8765/callback\",\"scopes\":[\"repo\",\"read:user\"]}",
-                            token);
-            HttpResult pendingStatus =
-                    request("GET", "/api/mcp/oauth-docs/oauth/status", null, token);
-            String pendingState =
-                    ONode.ofJson(pendingStatus.body)
-                            .get("data")
-                            .get("oauth")
-                            .get("state")
-                            .getString();
-            tokenEndpoint.failNextTokenResponse();
-            HttpResult tokenEndpointError =
-                    request(
-                            "GET",
-                            "/api/mcp/oauth-docs/oauth/callback"
-                                    + "?code=auth-code-error&state="
-                                    + URLEncoder.encode(pendingState, "UTF-8"),
-                            null,
-                            null);
-            assertThat(tokenEndpointError.status).isEqualTo(400);
-            assertThat(tokenEndpointError.body)
-                    .contains("MCP_BAD_REQUEST")
-                    .contains("api%255Fkey=***")
-                    .contains("token=***")
-                    .contains("refresh_token=***")
-                    .contains("client_secret=***")
-                    .doesNotContain("ghp_tokenerror12345")
-                    .doesNotContain("token-error-encoded")
-                    .doesNotContain("token-error-secret")
-                    .doesNotContain("token-error-client")
-                    .doesNotContain("token-error-fragment");
-
-            beginOAuth =
-                    request(
-                            "POST",
-                            "/api/mcp/oauth-docs/oauth/begin",
-                            "{\"authorization_endpoint\":\""
-                                    + LOCAL_OAUTH_AUTHORIZATION_ENDPOINT
-                                    + "\",\"token_endpoint\":\""
-                                    + tokenEndpoint.url()
-                                    + "\",\"client_id\":\"client-1\",\"redirect_uri\":\"http://127.0.0.1:8765/callback\",\"scopes\":[\"repo\",\"read:user\"]}",
-                            token);
-            pendingStatus = request("GET", "/api/mcp/oauth-docs/oauth/status", null, token);
-            pendingState =
-                    ONode.ofJson(pendingStatus.body)
-                            .get("data")
-                            .get("oauth")
-                            .get("state")
-                            .getString();
-            HttpResult completeOAuth =
-                    request(
-                            "GET",
-                            "/api/mcp/oauth-docs/oauth/callback"
-                                    + "?code=auth-code-1&state="
-                                    + URLEncoder.encode(pendingState, "UTF-8"),
-                            null,
-                            null);
-            assertThat(completeOAuth.status).isEqualTo(200);
-            assertThat(completeOAuth.body).contains("\"status\":\"authenticated\"");
-            assertThat(completeOAuth.body).contains("\"has_access_token\":true");
-            assertThat(completeOAuth.body).contains("\"has_refresh_token\":true");
-            assertThat(completeOAuth.body).doesNotContain("token-secret-1");
-            assertThat(completeOAuth.body).doesNotContain("refresh-secret-1");
-            assertThat(completeOAuth.body).doesNotContain("code_verifier");
-            assertThat(tokenEndpoint.lastForm.get("grant_type")).isEqualTo("authorization_code");
-            assertThat(tokenEndpoint.lastForm.get("code")).isEqualTo("auth-code-1");
-            assertThat(tokenEndpoint.lastForm.get("client_id")).isEqualTo("client-1");
-            assertThat(tokenEndpoint.lastForm.get("code_verifier")).isNotBlank();
-
-            HttpResult authenticatedStatus =
-                    request("GET", "/api/mcp/oauth-docs/oauth/status", null, token);
-            assertThat(authenticatedStatus.body).contains("\"status\":\"authenticated\"");
-            assertThat(authenticatedStatus.body).contains("\"has_access_token\":true");
-            assertThat(authenticatedStatus.body).doesNotContain("token-secret-1");
-
-            tokenEndpoint.failNextTokenResponse();
-            HttpResult refreshTokenEndpointError =
-                    request("POST", "/api/mcp/oauth-docs/oauth/refresh", "{}", token);
-            assertThat(refreshTokenEndpointError.status).isEqualTo(400);
-            assertThat(refreshTokenEndpointError.body)
-                    .contains("MCP_BAD_REQUEST")
-                    .contains("api%255Fkey=***")
-                    .contains("token=***")
-                    .contains("refresh_token=***")
-                    .contains("client_secret=***")
-                    .doesNotContain("ghp_tokenerror12345")
-                    .doesNotContain("token-error-encoded")
-                    .doesNotContain("token-error-secret")
-                    .doesNotContain("token-error-client")
-                    .doesNotContain("token-error-fragment");
-
-            HttpResult refreshOAuth =
-                    request("POST", "/api/mcp/oauth-docs/oauth/refresh", "{}", token);
-            assertThat(refreshOAuth.status).isEqualTo(200);
-            assertThat(refreshOAuth.body).contains("\"refreshed\":true");
-            assertThat(refreshOAuth.body).contains("\"reconnect_required\":true");
-            assertThat(refreshOAuth.body).contains("\"has_access_token\":true");
-            assertThat(refreshOAuth.body).doesNotContain("token-secret-");
-            assertThat(refreshOAuth.body).doesNotContain("refresh-secret-");
-            Map<String, String> firstRefreshForm =
-                    tokenEndpoint.firstFormByRefreshToken("refresh-secret-1");
-            assertThat(firstRefreshForm).isNotNull();
-            assertThat(firstRefreshForm.get("grant_type")).isEqualTo("refresh_token");
-            String refreshedToken = tokenEndpoint.lastIssuedRefreshToken();
-            assertThat(refreshedToken).isNotBlank();
-            assertThat(refreshedToken).isNotEqualTo("refresh-secret-1");
-
-            tokenEndpoint.failNextTokenResponse();
-            HttpResult handle401RefreshError =
-                    request("POST", "/api/mcp/oauth-docs/oauth/handle-401", "{}", token);
-            assertThat(handle401RefreshError.status).isEqualTo(200);
-            assertThat(handle401RefreshError.body)
-                    .contains("\"recovered\":false")
-                    .contains("\"needs_reauth\":true")
-                    .contains("\"reason\":\"refresh_failed\"")
-                    .contains("api%255Fkey=***")
-                    .contains("token=***")
-                    .contains("refresh_token=***")
-                    .contains("client_secret=***")
-                    .doesNotContain("ghp_tokenerror12345")
-                    .doesNotContain("token-error-encoded")
-                    .doesNotContain("token-error-secret")
-                    .doesNotContain("token-error-client")
-                    .doesNotContain("token-error-fragment");
-
-            request(
-                    "GET",
-                    "/api/mcp/oauth-docs/oauth/callback"
-                            + "?error="
-                            + URLEncoder.encode("reset-pending-after-refresh-error", "UTF-8"),
-                    null,
-                    null);
-            beginOAuth =
-                    request(
-                            "POST",
-                            "/api/mcp/oauth-docs/oauth/begin",
-                            "{\"authorization_endpoint\":\""
-                                    + LOCAL_OAUTH_AUTHORIZATION_ENDPOINT
-                                    + "\",\"token_endpoint\":\""
-                                    + tokenEndpoint.url()
-                                    + "\",\"client_id\":\"client-1\",\"redirect_uri\":\"http://127.0.0.1:8765/callback\",\"scopes\":[\"repo\",\"read:user\"]}",
-                            token);
-            pendingStatus = request("GET", "/api/mcp/oauth-docs/oauth/status", null, token);
-            pendingState =
-                    ONode.ofJson(pendingStatus.body)
-                            .get("data")
-                            .get("oauth")
-                            .get("state")
-                            .getString();
-            completeOAuth =
-                    request(
-                            "GET",
-                            "/api/mcp/oauth-docs/oauth/callback"
-                                    + "?code=auth-code-recover&state="
-                                    + URLEncoder.encode(pendingState, "UTF-8"),
-                            null,
-                            null);
-            assertThat(completeOAuth.status).isEqualTo(200);
-            refreshedToken = tokenEndpoint.lastIssuedRefreshToken();
-
-            HttpResult handle401 =
-                    request("POST", "/api/mcp/oauth-docs/oauth/handle-401", "{}", token);
-            assertThat(handle401.status).isEqualTo(200);
-            assertThat(handle401.body).contains("\"recovered\":true");
-            assertThat(handle401.body).contains("\"needs_reauth\":false");
-            assertThat(handle401.body).contains("\"reconnect_required\":true");
-            assertThat(handle401.body).doesNotContain("token-secret-");
-            assertThat(handle401.body).doesNotContain("refresh-secret-");
-            Map<String, String> recoveryRefreshForm =
-                    tokenEndpoint.firstFormByRefreshToken(refreshedToken);
-            assertThat(recoveryRefreshForm).isNotNull();
-
-        } finally {
-            tokenEndpoint.stop();
-        }
-
-        HttpResult clearOAuth = request("POST", "/api/mcp/oauth-docs/oauth/clear", "{}", token);
-        assertThat(clearOAuth.status).isEqualTo(200);
-        assertThat(clearOAuth.body).contains("\"cleared\":true");
-        assertThat(clearOAuth.body).doesNotContain("secret-refresh");
-
-        HttpResult clearedStatus = request("GET", "/api/mcp/oauth-docs/oauth/status", null, token);
-        assertThat(clearedStatus.body).contains("\"status\":\"cleared\"");
-        assertThat(clearedStatus.body).contains("\"has_access_token\":false");
-
-        HttpResult handle401AfterClear =
-                request("POST", "/api/mcp/oauth-docs/oauth/handle-401", "{}", token);
-        assertThat(handle401AfterClear.status).isEqualTo(200);
-        assertThat(handle401AfterClear.body).contains("\"needs_reauth\":true");
-        assertThat(handle401AfterClear.body).contains("\"reconnect_required\":false");
-
         HttpResult logs = request("GET", "/api/logs?file=agent&lines=20", null, token);
         assertThat(logs.status).isEqualTo(200);
         assertThat(logs.body).contains("\"lines\"");
@@ -2102,35 +1622,31 @@ public class DashboardControllerHttpTest {
     @Test
     void shouldListAndResolvePendingSlashConfirmsFromDashboard() throws Exception {
         String token = DASHBOARD_TEST_TOKEN;
-
-        GatewayMessage commandMessage =
-                new GatewayMessage(
-                        PlatformType.MEMORY,
-                        "dashboard-confirm-chat",
-                        "dashboard-confirm-user",
-                        "/reload-mcp");
-        GatewayReply prompt = bean(CommandService.class).handle(commandMessage, "/reload-mcp");
-        assertThat(prompt.getContent()).contains("确认编号");
+        bean(SlashConfirmService.class)
+                .register(
+                        "MEMORY:dashboard-confirm-chat:dashboard-confirm-user",
+                        "rollback clear",
+                        "确认清理 checkpoint？");
 
         HttpResult confirms =
                 request("GET", "/api/diagnostics/slash-confirms?limit=20", null, token);
         assertThat(confirms.status).isEqualTo(200);
         assertThat(confirms.body)
-                .contains("\"command_preview\":\"reload-mcp\"")
+                .contains("\"command_preview\":\"rollback clear\"")
                 .contains("\"confirm_ref\"")
                 .contains("\"source_ref\"")
                 .contains("\"allow_always\":true")
                 .contains("\"action_options\":[\"approve\",\"deny\",\"always\"]")
                 .contains("\"expires_in_seconds\"")
                 .contains("\"expired\":false")
-                .doesNotContain("\"command\":\"reload-mcp\"")
+                .doesNotContain("\"command\":\"rollback clear\"")
                 .doesNotContain("\"prompt\":")
                 .doesNotContain("MEMORY:dashboard-confirm-chat:dashboard-confirm-user");
         ONode confirm =
                 findItemByStringField(
                         ONode.ofJson(confirms.body).get("data").get("items"),
                         "command_preview",
-                        "reload-mcp");
+                        "rollback clear");
         assertThat(confirm).isNotNull();
         String confirmId = confirm.get("confirm_id").getString();
         assertThat(confirmId).isNotBlank();
@@ -2147,7 +1663,7 @@ public class DashboardControllerHttpTest {
                                 + "\",\"action\":\"deny\"}",
                         token);
         assertThat(resolve.status).isEqualTo(200);
-        assertThat(resolve.body).contains("\"success\":true").contains("已取消 /reload-mcp");
+        assertThat(resolve.body).contains("\"success\":true").contains("已取消 /rollback");
 
         HttpResult after = request("GET", "/api/diagnostics/slash-confirms?limit=20", null, token);
         assertThat(after.status).isEqualTo(200);
@@ -2205,20 +1721,20 @@ public class DashboardControllerHttpTest {
         bean(SlashConfirmService.class)
                 .register(
                         "MEMORY:dashboard-secret-confirm:user",
-                        "reload-mcp --token=ghp_slashcommandsecret12345",
-                        "确认刷新 Authorization: Bearer ghp_slashsecret12345");
+                        "rollback clear --token=ghp_slashcommandsecret12345",
+                        "确认清理 Authorization: Bearer ghp_slashsecret12345");
 
         HttpResult confirms =
                 request("GET", "/api/diagnostics/slash-confirms?limit=20", null, token);
 
         assertThat(confirms.status).isEqualTo(200);
         assertThat(confirms.body)
-                .contains("\"prompt_preview\":\"确认刷新 Authorization: Bearer ***\"")
-                .contains("\"command_preview\":\"reload-mcp --token=***\"")
+                .contains("\"prompt_preview\":\"确认清理 Authorization: Bearer ***\"")
+                .contains("\"command_preview\":\"rollback clear --token=***\"")
                 .contains("\"source_ref\"")
                 .doesNotContain("\\u202E")
                 .contains("Authorization: Bearer ***")
-                .contains("reload-mcp --token=***")
+                .contains("rollback clear --token=***")
                 .doesNotContain("\"prompt\":")
                 .doesNotContain("\"command\":")
                 .doesNotContain("MEMORY:dashboard-secret-confirm:user")
@@ -2228,7 +1744,7 @@ public class DashboardControllerHttpTest {
         String confirmId = "";
         for (int i = 0; i < items.size(); i++) {
             ONode item = items.get(i);
-            if ("reload-mcp --token=***".equals(item.get("command_preview").getString())) {
+            if ("rollback clear --token=***".equals(item.get("command_preview").getString())) {
                 confirmId = item.get("confirm_id").getString();
             }
         }
@@ -2306,9 +1822,9 @@ public class DashboardControllerHttpTest {
         String sourceA = "MEMORY:dashboard-source-isolated-a:user-a";
         String sourceB = "MEMORY:dashboard-source-isolated-b:user-token=ghp_sourceisolation12345";
         SlashConfirmService.PendingConfirm confirmA =
-                service.register(sourceA, "reload-mcp", "确认刷新 A");
+                service.register(sourceA, "rollback clear", "确认清理 A");
         SlashConfirmService.PendingConfirm confirmB =
-                service.register(sourceB, "reload-mcp", "确认刷新 B");
+                service.register(sourceB, "rollback clear", "确认清理 B");
 
         HttpResult rejected =
                 request(

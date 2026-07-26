@@ -4,7 +4,7 @@ import { findSlashCommand, SLASH_COMMANDS } from '../app/slash/registry.js'
 
 type CommandRoute = 'fallback' | 'local' | 'native'
 
-const NATIVE_MUTATING_COMMANDS = new Set(['browser', 'busy', 'fast', 'reload-mcp', 'rollback', 'stop'])
+const NATIVE_MUTATING_COMMANDS = new Set(['browser', 'busy', 'fast', 'rollback', 'stop'])
 
 const MUTATING_COMMANDS = [
   'background',
@@ -18,7 +18,6 @@ const MUTATING_COMMANDS = [
   'new',
   'queue',
   'reasoning',
-  'reload-mcp',
   'retry',
   'rollback',
   'steer',
@@ -57,7 +56,6 @@ describe('slash parity matrix', () => {
 
     expect(routes['model']).toBe('local')
     expect(routes['browser']).toBe('native')
-    expect(routes['reload-mcp']).toBe('native')
     expect(routes['rollback']).toBe('native')
     expect(routes['stop']).toBe('native')
   })

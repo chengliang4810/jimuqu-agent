@@ -145,7 +145,6 @@ final class DangerousCommandApprovalPolicySummaries {
         summary.put("slashConfirmPolicy", slashConfirmPolicySummary());
         summary.put("approvalCardPolicy", approvalCardPolicySummary());
         summary.put("auditLogPolicy", approvalAuditPolicySummary());
-        summary.put("mcpReloadPolicy", mcpReloadPolicySummary());
         summary.put("approvalLifecyclePolicy", approvalLifecyclePolicySummary());
         summary.put(
                 "description",
@@ -478,37 +477,6 @@ final class DangerousCommandApprovalPolicySummaries {
         summary.put(
                 "description",
                 "Approval request and response events can be persisted with redacted command previews, approvers, descriptions, pattern keys, command hashes, and approval timestamps.");
-        return summary;
-    }
-
-    /**
-     * 执行MCPReload策略摘要相关逻辑。
-     *
-     * @return 返回MCP Reload策略Summary结果。
-     */
-    Map<String, Object> mcpReloadPolicySummary() {
-        Map<String, Object> summary = new LinkedHashMap<String, Object>();
-        boolean confirmRequired =
-                appConfig == null
-                        || appConfig.getApprovals() == null
-                        || appConfig.getApprovals().isMcpReloadConfirm();
-        summary.put("command", "/reload-mcp");
-        summary.put("confirmRequired", Boolean.valueOf(confirmRequired));
-        summary.put("configKey", "approvals.mcpReloadConfirm");
-        summary.put("slashConfirmBacked", Boolean.TRUE);
-        summary.put("directRunArgument", "now");
-        summary.put("alwaysConfirmArgument", "always");
-        summary.put("persistentDisableSupported", Boolean.TRUE);
-        summary.put("runtimeConfigPersisted", Boolean.TRUE);
-        summary.put("toolChangeNoticeInjected", Boolean.TRUE);
-        summary.put("changedServerSummary", Boolean.TRUE);
-        summary.put("toolCountSummary", Boolean.TRUE);
-        summary.put("oauthUrlSafetyCovered", Boolean.TRUE);
-        summary.put("encodedUrlParameterRedacted", Boolean.TRUE);
-        summary.put("reloadHistoryNoticeRedacted", Boolean.TRUE);
-        summary.put(
-                "description",
-                "MCP reload can require slash confirmation, supports now/always arguments, persists the confirmation flag, and records tool-change notices for the next model turn.");
         return summary;
     }
 

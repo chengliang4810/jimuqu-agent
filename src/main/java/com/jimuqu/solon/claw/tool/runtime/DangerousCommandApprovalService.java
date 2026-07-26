@@ -1017,11 +1017,6 @@ public class DangerousCommandApprovalService {
         return policySummaries().approvalAuditPolicySummary();
     }
 
-    /** 执行MCP Reload策略摘要相关逻辑。 */
-    public Map<String, Object> mcpReloadPolicySummary() {
-        return policySummaries().mcpReloadPolicySummary();
-    }
-
     /** 执行审批生命周期策略摘要相关逻辑。 */
     public Map<String, Object> approvalLifecyclePolicySummary() {
         return policySummaries().approvalLifecyclePolicySummary();

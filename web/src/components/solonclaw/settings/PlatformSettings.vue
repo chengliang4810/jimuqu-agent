@@ -24,7 +24,7 @@ const { t } = useI18n()
 const saving = reactive<Record<string, boolean>>({})
 
 const platformSettingsItems = computed(() =>
-  normalizePlatformSettingsItems(settingsStore.platformCatalog),
+  normalizePlatformSettingsItems(settingsStore.platformCatalog, key => t(key)),
 )
 
 function savingKey(platform: string, field: string) {
@@ -85,7 +85,8 @@ interface PrimaryTextSetting {
   readonly labelKey?: string
   readonly hint?: string
   readonly hintKey?: string
-  readonly placeholder: string
+  readonly placeholder?: string
+  readonly placeholderKey?: string
 }
 
 interface PrimarySwitchSetting {
@@ -101,27 +102,27 @@ type PrimarySetting = PrimaryTextSetting | PrimarySwitchSetting
 
 const primarySettingConfigs: Record<ChannelQrPlatform, PrimarySetting[]> = {
   feishu: [
-    { type: 'text', field: 'app_id', source: 'credentials', labelKey: 'platform.appId', hintKey: 'platform.appIdHint', placeholder: '请输入飞书应用 ID' },
-    { type: 'text', field: 'app_secret', source: 'credentials', labelKey: 'platform.appSecret', hintKey: 'platform.appSecretHint', placeholder: '请输入应用密钥' },
+    { type: 'text', field: 'app_id', source: 'credentials', labelKey: 'platform.appId', hintKey: 'platform.appIdHint', placeholderKey: 'platform.appIdPlaceholder' },
+    { type: 'text', field: 'app_secret', source: 'credentials', labelKey: 'platform.appSecret', hintKey: 'platform.appSecretHint', placeholderKey: 'platform.appSecretPlaceholder' },
     { type: 'switch', field: 'requireMention', labelKey: 'platform.requireMention', hintKey: 'platform.requireMentionGroup' },
     { type: 'text', field: 'freeResponseChats', source: 'channelList', labelKey: 'platform.freeResponseChats', hintKey: 'platform.freeResponseChatsHint', placeholder: 'chat_id1,chat_id2' },
   ],
   dingtalk: [
-    { type: 'text', field: 'client_id', source: 'credentials', labelKey: 'platform.clientId', hintKey: 'platform.clientIdHint', placeholder: '请输入客户端 ID' },
-    { type: 'text', field: 'client_secret', source: 'credentials', labelKey: 'platform.clientSecret', hintKey: 'platform.clientSecretHint', placeholder: '请输入客户端密钥' },
-    { type: 'text', field: 'robot_code', source: 'credentials', label: '机器人编码', hint: '钉钉机器人编码', placeholder: '请输入机器人编码' },
+    { type: 'text', field: 'client_id', source: 'credentials', labelKey: 'platform.clientId', hintKey: 'platform.clientIdHint', placeholderKey: 'platform.clientIdPlaceholder' },
+    { type: 'text', field: 'client_secret', source: 'credentials', labelKey: 'platform.clientSecret', hintKey: 'platform.clientSecretHint', placeholderKey: 'platform.clientSecretPlaceholder' },
+    { type: 'text', field: 'robot_code', source: 'credentials', labelKey: 'platform.robotCode', hintKey: 'platform.robotCodeHint', placeholderKey: 'platform.robotCodePlaceholder' },
     { type: 'switch', field: 'requireMention', labelKey: 'platform.requireMention', hintKey: 'platform.requireMentionGroup' },
     { type: 'text', field: 'freeResponseChats', source: 'channelList', labelKey: 'platform.freeResponseChats', hintKey: 'platform.freeResponseChatsHint', placeholder: 'chat_id1,chat_id2' },
-    { type: 'text', field: 'mentionPatterns', source: 'channelList', labelKey: 'platform.mentionPatterns', hintKey: 'platform.mentionPatternsHint', placeholder: '^小马,^solonclaw' },
+    { type: 'text', field: 'mentionPatterns', source: 'channelList', labelKey: 'platform.mentionPatterns', hintKey: 'platform.mentionPatternsHint', placeholder: '^assistant,^solonclaw' },
   ],
   wecom: [],
   qqbot: [
-    { type: 'text', field: 'app_id', source: 'credentials', label: '应用 ID', hint: 'QQBot 机器人应用 ID', placeholder: '请输入 QQBot App ID' },
-    { type: 'text', field: 'client_secret', source: 'credentials', label: '客户端密钥', hint: 'QQBot 机器人 Client Secret', placeholder: '请输入 QQBot Client Secret' },
+    { type: 'text', field: 'app_id', source: 'credentials', labelKey: 'platform.appId', hintKey: 'platform.qqbotAppIdHint', placeholderKey: 'platform.qqbotAppIdPlaceholder' },
+    { type: 'text', field: 'client_secret', source: 'credentials', labelKey: 'platform.clientSecret', hintKey: 'platform.qqbotClientSecretHint', placeholderKey: 'platform.qqbotClientSecretPlaceholder' },
   ],
   weixin: [
-    { type: 'text', field: 'token', source: 'credentialRoot', labelKey: 'platform.weixinToken', hintKey: 'platform.weixinTokenHint', placeholder: '请输入令牌' },
-    { type: 'text', field: 'account_id', source: 'credentials', labelKey: 'platform.accountId', hintKey: 'platform.accountIdHint', placeholder: '请输入账号 ID' },
+    { type: 'text', field: 'token', source: 'credentialRoot', labelKey: 'platform.weixinToken', hintKey: 'platform.weixinTokenHint', placeholderKey: 'platform.weixinTokenPlaceholder' },
+    { type: 'text', field: 'account_id', source: 'credentials', labelKey: 'platform.accountId', hintKey: 'platform.accountIdHint', placeholderKey: 'platform.accountIdPlaceholder' },
   ],
 }
 
@@ -131,6 +132,10 @@ function primarySettingLabel(field: PrimarySetting) {
 
 function primarySettingHint(field: PrimarySetting) {
   return field.hintKey ? t(field.hintKey) : field.hint || ''
+}
+
+function primarySettingPlaceholder(field: PrimaryTextSetting) {
+  return field.placeholderKey ? t(field.placeholderKey) : field.placeholder || ''
 }
 
 function primaryChannelConfig(platform: ChannelQrPlatform) {
@@ -222,7 +227,7 @@ function shouldShowQrEmptyStatus(platform: string) {
           @start="startQrLogin(p.key)"
         />
         <template v-for="field in primarySettingConfigs[p.key]" :key="`${field.type}:${field.field}`">
-          <PlatformTextSettingRow v-if="field.type === 'text'" :label="primarySettingLabel(field)" :hint="primarySettingHint(field)" :value="primaryTextValue(p.key, field)" :loading="isSaving(p.key, field.field)" :placeholder="field.placeholder" @change="v => savePrimaryText(p.key, field, v)" />
+          <PlatformTextSettingRow v-if="field.type === 'text'" :label="primarySettingLabel(field)" :hint="primarySettingHint(field)" :value="primaryTextValue(p.key, field)" :loading="isSaving(p.key, field.field)" :placeholder="primarySettingPlaceholder(field)" @change="v => savePrimaryText(p.key, field, v)" />
           <PlatformSwitchSettingRow v-else :label="primarySettingLabel(field)" :hint="primarySettingHint(field)" :value="primarySwitchValue(p.key, field)" :loading="isSaving(p.key, field.field)" @change="v => savePrimarySwitch(p.key, field, v)" />
         </template>
       </template>

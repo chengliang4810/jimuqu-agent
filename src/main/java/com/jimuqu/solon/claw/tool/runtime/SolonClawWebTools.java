@@ -35,9 +35,6 @@ import java.util.regex.Pattern;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.annotation.ToolMapping;
 import org.noear.solon.ai.rag.Document;
-import org.noear.solon.ai.talents.web.CodeSearchTalent;
-import org.noear.solon.ai.talents.web.WebfetchTalent;
-import org.noear.solon.ai.talents.web.WebsearchTalent;
 import org.noear.solon.annotation.Param;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -250,7 +247,7 @@ public class SolonClawWebTools {
         private final SecurityPolicyService securityPolicyService;
 
         /** 记录安全Webfetch中的委托。 */
-        private final WebfetchTalent delegate;
+        private final WebfetchDelegate delegate;
 
         /**
          * 创建Safe Webfetch工具实例，并注入运行所需依赖。
@@ -268,7 +265,7 @@ public class SolonClawWebTools {
          * @param delegate 委派参数。
          */
         public SafeWebfetchTool(
-                SecurityPolicyService securityPolicyService, WebfetchTalent delegate) {
+                SecurityPolicyService securityPolicyService, WebfetchDelegate delegate) {
             this.securityPolicyService = securityPolicyService;
             this.delegate = delegate;
         }
@@ -299,7 +296,7 @@ public class SolonClawWebTools {
             args.put("url", url);
             check(securityPolicyService, ToolNameConstants.WEBFETCH, args);
             Document document =
-                    documentFromTalent(
+                    documentFromContent(
                             delegate.webfetch(url, format, timeoutSeconds), "Web fetch: " + url);
             checkReturnedUrls(securityPolicyService, document);
             return safeDocument(document);
@@ -345,7 +342,7 @@ public class SolonClawWebTools {
          * @param delegate 单页网页提取后端。
          */
         public SafeWebExtractTool(
-                SecurityPolicyService securityPolicyService, WebfetchTalent delegate) {
+                SecurityPolicyService securityPolicyService, WebfetchDelegate delegate) {
             this(securityPolicyService, delegate, null);
         }
 
@@ -358,7 +355,7 @@ public class SolonClawWebTools {
          */
         public SafeWebExtractTool(
                 SecurityPolicyService securityPolicyService,
-                WebfetchTalent delegate,
+                WebfetchDelegate delegate,
                 String workspaceDir) {
             this(new SafeWebfetchTool(securityPolicyService, delegate), workspaceDir);
         }
@@ -648,9 +645,6 @@ public class SolonClawWebTools {
         /** 注入安全策略服务，用于调用对应业务能力。 */
         private final SecurityPolicyService securityPolicyService;
 
-        /** 记录安全Websearch中的委托；为空时按需延迟创建 Solon AI 后端，避免非 Solon AI 后端提前初始化 MCP。 */
-        private WebsearchTalent delegate;
-
         /** 注入应用配置，用于安全Websearch。 */
         private final AppConfig appConfig;
 
@@ -663,33 +657,17 @@ public class SolonClawWebTools {
          * @param securityPolicyService 安全策略服务依赖。
          */
         public SafeWebsearchTool(SecurityPolicyService securityPolicyService) {
-            this(securityPolicyService, null, null);
+            this(securityPolicyService, null);
         }
 
         /**
          * 创建Safe Websearch工具实例，并注入运行所需依赖。
          *
          * @param securityPolicyService 安全策略服务依赖。
-         * @param delegate 委派参数。
-         */
-        public SafeWebsearchTool(
-                SecurityPolicyService securityPolicyService, WebsearchTalent delegate) {
-            this(securityPolicyService, delegate, null);
-        }
-
-        /**
-         * 创建Safe Websearch工具实例，并注入运行所需依赖。
-         *
-         * @param securityPolicyService 安全策略服务依赖。
-         * @param delegate 委派参数。
          * @param appConfig 应用运行配置。
          */
-        public SafeWebsearchTool(
-                SecurityPolicyService securityPolicyService,
-                WebsearchTalent delegate,
-                AppConfig appConfig) {
+        public SafeWebsearchTool(SecurityPolicyService securityPolicyService, AppConfig appConfig) {
             this.securityPolicyService = securityPolicyService;
-            this.delegate = delegate;
             this.appConfig = appConfig;
         }
 
@@ -705,34 +683,6 @@ public class SolonClawWebTools {
                             ? Collections
                                     .<com.jimuqu.solon.claw.provider.WebSearchProvider>emptyList()
                             : providers;
-        }
-
-        /**
-         * 创建 Solon AI websearch 委托，集中封装延迟初始化边界，便于附加后端绕过 MCP/Jackson 初始化。
-         *
-         * @return 返回 Solon AI websearch 委托。
-         */
-        protected WebsearchTalent createSolonAiWebsearchTalent() {
-            return new WebsearchTalent();
-        }
-
-        /**
-         * 读取或创建 Solon AI websearch 委托，初始化失败时转换为低敏业务错误。
-         *
-         * @return 返回可调用的 Solon AI websearch 委托。
-         */
-        private WebsearchTalent solonAiDelegate() {
-            if (delegate != null) {
-                return delegate;
-            }
-            try {
-                delegate = createSolonAiWebsearchTalent();
-                return delegate;
-            } catch (Throwable e) {
-                throw new IllegalStateException(
-                        "Solon AI websearch backend is unavailable; configure searchBackend=brave-free or ddgs, then retry.",
-                        e);
-            }
         }
 
         /**
@@ -793,28 +743,10 @@ public class SolonClawWebTools {
                 checkReturnedUrls(securityPolicyService, document);
                 return safeDocument(document);
             }
-            try {
-                Document document =
-                        documentFromTalent(
-                                solonAiDelegate()
-                                        .websearch(
-                                                query,
-                                                numResults,
-                                                livecrawl,
-                                                type,
-                                                contextMaxCharacters),
-                                "Web search: " + query);
-                checkReturnedUrls(securityPolicyService, document);
-                return safeDocument(document);
-            } catch (IllegalStateException e) {
-                throw e;
-            } catch (IllegalArgumentException e) {
-                throw e;
-            } catch (Throwable e) {
-                throw new IllegalStateException(
-                        "Solon AI websearch backend is unavailable; configure searchBackend=brave-free or ddgs, then retry.",
-                        e);
-            }
+            throw new IllegalArgumentException(
+                    "Unsupported web search backend: "
+                            + backend
+                            + ". Configure searchBackend=ddgs or brave-free.");
         }
 
         /**
@@ -840,9 +772,7 @@ public class SolonClawWebTools {
                     return result;
                 }
             }
-            if (BRAVE_FREE_BACKEND.equals(backend)
-                    || DDGS_BACKEND.equals(backend)
-                    || "solon-ai".equals(backend)) {
+            if (BRAVE_FREE_BACKEND.equals(backend) || DDGS_BACKEND.equals(backend)) {
                 return null;
             }
             return null;
@@ -924,13 +854,16 @@ public class SolonClawWebTools {
          * @return 返回normalized搜索Backend结果。
          */
         private String normalizedSearchBackend() {
-            if (appConfig == null || appConfig.getWeb() == null) {
-                return "";
-            }
-            return StrUtil.nullToEmpty(appConfig.getWeb().getSearchBackend())
-                    .trim()
-                    .replace('_', '-')
-                    .toLowerCase(Locale.ROOT);
+            String configured =
+                    appConfig == null || appConfig.getWeb() == null
+                            ? DDGS_BACKEND
+                            : appConfig.getWeb().getSearchBackend();
+            String normalized =
+                    StrUtil.nullToEmpty(configured)
+                            .trim()
+                            .replace('_', '-')
+                            .toLowerCase(Locale.ROOT);
+            return StrUtil.blankToDefault(normalized, DDGS_BACKEND);
         }
 
         /**
@@ -1201,8 +1134,8 @@ public class SolonClawWebTools {
         /** 注入安全策略服务，用于调用对应业务能力。 */
         private final SecurityPolicyService securityPolicyService;
 
-        /** 记录安全Code搜索中的委托。 */
-        private final CodeSearchTalent delegate;
+        /** 复用项目内置 Web 搜索后端，不再创建外部 MCP Code Search 客户端。 */
+        private final SafeWebsearchTool delegate;
 
         /**
          * 创建Safe Code搜索工具实例，并注入运行所需依赖。
@@ -1210,18 +1143,21 @@ public class SolonClawWebTools {
          * @param securityPolicyService 安全策略服务依赖。
          */
         public SafeCodeSearchTool(SecurityPolicyService securityPolicyService) {
-            this(securityPolicyService, new CodeSearchTalent());
+            this(securityPolicyService, new SafeWebsearchTool(securityPolicyService));
         }
 
         /**
          * 创建Safe Code搜索工具实例，并注入运行所需依赖。
          *
          * @param securityPolicyService 安全策略服务依赖。
-         * @param delegate 委派参数。
+         * @param delegate 已配置的项目内置 Web 搜索工具。
          */
         public SafeCodeSearchTool(
-                SecurityPolicyService securityPolicyService, CodeSearchTalent delegate) {
+                SecurityPolicyService securityPolicyService, SafeWebsearchTool delegate) {
             this.securityPolicyService = securityPolicyService;
+            if (delegate == null) {
+                throw new IllegalArgumentException("websearch delegate is required");
+            }
             this.delegate = delegate;
         }
 
@@ -1232,9 +1168,7 @@ public class SolonClawWebTools {
          * @param tokensNum tokenNum参数。
          * @return 返回codesearch结果。
          */
-        @ToolMapping(
-                name = "codesearch",
-                description = "使用 Exa Code API 搜索并获取任何编程任务的相关上下文。适用于框架、库、SDK、API 和代码模式查询。")
+        @ToolMapping(name = "codesearch", description = "搜索编程任务所需的框架、库、SDK、API 和代码模式资料。")
         public Object codesearch(
                 @Param(name = "query", description = "搜索查询词，用于查找 API、库和 SDK 的相关上下文。") String query,
                 @Param(
@@ -1243,12 +1177,23 @@ public class SolonClawWebTools {
                                 defaultValue = "5000",
                                 description = "返回的 Token 数量 (1000-50000)。默认为 5000。")
                         Integer tokensNum)
-                throws Throwable {
+                throws Exception {
             Map<String, Object> args = new LinkedHashMap<String, Object>();
             args.put("query", query);
             args.put("tokensNum", tokensNum);
             check(securityPolicyService, ToolNameConstants.CODESEARCH, args);
-            Object result = delegate.codesearch(query, tokensNum);
+            int tokenBudget =
+                    Math.max(
+                            1000, Math.min(tokensNum == null ? 5000 : tokensNum.intValue(), 50000));
+            int resultLimit = Math.max(3, Math.min(20, tokenBudget / 1000));
+            Document document =
+                    delegate.websearch(
+                            query,
+                            Integer.valueOf(resultLimit),
+                            "preferred",
+                            "deep",
+                            Integer.valueOf(tokenBudget * 4));
+            Object result = document == null ? "" : StrUtil.nullToEmpty(document.getContent());
             checkReturnedUrls(securityPolicyService, result);
             return safeValue(result);
         }
@@ -1281,7 +1226,7 @@ public class SolonClawWebTools {
      * @param title 文档标题。
      * @return 返回可继续执行安全扫描的 Document。
      */
-    private static Document documentFromTalent(String content, String title) {
+    private static Document documentFromContent(String content, String title) {
         return new Document(StrUtil.nullToEmpty(content)).title(title);
     }
 

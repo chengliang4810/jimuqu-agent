@@ -1,26 +1,28 @@
-const SOURCE_LABELS: Record<string, string> = {
-  telegram: 'Telegram',
-  api_server: 'API 接入',
-  cli: '本地命令行',
-  discord: 'Discord',
-  slack: 'Slack',
-  matrix: 'Matrix',
-  whatsapp: 'WhatsApp',
-  signal: 'Signal',
-  email: 'Email',
-  sms: '短信',
-  dingtalk: '钉钉',
-  feishu: '飞书',
-  wecom: '企业微信',
-  weixin: '微信',
-  bluebubbles: 'iMessage',
-  mattermost: 'Mattermost',
-  cron: '定时任务',
+const SOURCE_LABEL_KEYS: Record<string, string> = {
+  telegram: 'sessionSources.telegram',
+  api_server: 'sessionSources.apiServer',
+  cli: 'sessionSources.cli',
+  discord: 'sessionSources.discord',
+  slack: 'sessionSources.slack',
+  matrix: 'sessionSources.matrix',
+  whatsapp: 'sessionSources.whatsapp',
+  signal: 'sessionSources.signal',
+  email: 'sessionSources.email',
+  sms: 'sessionSources.sms',
+  dingtalk: 'sessionSources.dingtalk',
+  feishu: 'sessionSources.feishu',
+  wecom: 'sessionSources.wecom',
+  weixin: 'sessionSources.weixin',
+  bluebubbles: 'sessionSources.bluebubbles',
+  mattermost: 'sessionSources.mattermost',
+  cron: 'sessionSources.cron',
 }
 
-export function getSourceLabel(source?: string): string {
+/** 返回按当前语言翻译后的会话来源名称。 */
+export function getSourceLabel(source: string | undefined, translate: (key: string) => string): string {
   if (!source) return ''
-  return SOURCE_LABELS[source] || source
+  const key = SOURCE_LABEL_KEYS[source]
+  return key ? translate(key) : source
 }
 
 export function formatTimestampMs(timestamp: number): string {

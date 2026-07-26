@@ -782,33 +782,6 @@ public class SqliteDatabase {
             statement.execute(
                     "create index if not exists idx_task_todos_session on task_todos(session_id, sort_order asc)");
             statement.execute(
-                    "create table if not exists mcp_servers ("
-                            + "server_id text primary key,"
-                            + "name text not null,"
-                            + "transport text not null,"
-                            + "endpoint text,"
-                            + "command text,"
-                            + "args_json text,"
-                            + "auth_json text,"
-                            + "oauth_json text,"
-                            + "capabilities_json text,"
-                            + "status text not null,"
-                            + "tools_json text,"
-                            + "last_tools_hash text,"
-                            + "last_tools_json text,"
-                            + "last_error text,"
-                            + "enabled integer not null default 1,"
-                            + "created_at integer not null,"
-                            + "updated_at integer not null,"
-                            + "last_checked_at integer not null default 0,"
-                            + "last_tools_changed_at integer not null default 0"
-                            + ")");
-            addColumn(statement, "mcp_servers", "oauth_json text");
-            addColumn(statement, "mcp_servers", "capabilities_json text");
-            addColumn(statement, "mcp_servers", "last_tools_hash text");
-            addColumn(statement, "mcp_servers", "last_tools_json text");
-            addColumn(statement, "mcp_servers", "last_tools_changed_at integer not null default 0");
-            statement.execute(
                     "create table if not exists curator_reports ("
                             + "report_id text primary key,"
                             + "status text not null,"

@@ -73,11 +73,7 @@ public class DashboardAuthService {
      * @return 如果公开Api路径满足条件则返回 true，否则返回 false。
      */
     public boolean isPublicApiPath(String path, String method) {
-        return isPublicApiPath(path)
-                || ("GET".equalsIgnoreCase(method)
-                        && path != null
-                        && path.startsWith("/api/mcp/")
-                        && path.endsWith("/oauth/callback"));
+        return isPublicApiPath(path);
     }
 
     /**

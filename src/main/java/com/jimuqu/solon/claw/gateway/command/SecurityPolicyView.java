@@ -3,7 +3,6 @@ package com.jimuqu.solon.claw.gateway.command;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.context.SkillCredentialFileService;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.jimuqu.solon.claw.support.AttachmentPathResolver;
 import com.jimuqu.solon.claw.support.BoundedAttachmentIO;
@@ -18,8 +17,6 @@ import com.jimuqu.solon.claw.tool.runtime.SolonClawToolSchemaSanitizer;
 import com.jimuqu.solon.claw.tool.runtime.SubprocessEnvironmentSanitizer;
 import com.jimuqu.solon.claw.tool.runtime.TirithSecurityService;
 import com.jimuqu.solon.claw.tool.runtime.ToolResultStorageService;
-import com.jimuqu.solon.claw.web.DashboardMcpService;
-import com.jimuqu.solon.claw.web.McpPackageSecurityService;
 import java.util.Map;
 
 /** 呈现终端安全策略交互视图，封装终端侧输入输出细节。 */
@@ -72,9 +69,6 @@ public final class SecurityPolicyView {
         if ("approval-audit".equals(mode)) {
             return renderApprovalAuditPolicy(approvalService.approvalAuditPolicySummary());
         }
-        if ("mcp-reload".equals(mode)) {
-            return renderMcpReloadApprovalPolicy(approvalService.mcpReloadPolicySummary());
-        }
         if ("lifecycle".equals(mode)) {
             return renderApprovalLifecyclePolicy(approvalService.approvalLifecyclePolicySummary());
         }
@@ -111,15 +105,6 @@ public final class SecurityPolicyView {
         }
         if ("tool-args".equals(mode)) {
             return renderToolArgsPolicy(securityPolicyService.toolArgsPolicySummary());
-        }
-        if ("mcp".equals(mode)) {
-            return renderMcpPolicy(McpRuntimeService.policySummary(config));
-        }
-        if ("mcp-oauth".equals(mode)) {
-            return renderMcpOAuthPolicy(DashboardMcpService.oauthPolicySummary());
-        }
-        if ("mcp-package".equals(mode)) {
-            return renderMcpPackagePolicy(new McpPackageSecurityService(null).policySummary());
         }
         if ("audit-tool".equals(mode)) {
             return renderAuditToolPolicy(SecurityAuditTools.readOnlyAuditPolicySummary());
@@ -199,9 +184,6 @@ public final class SecurityPolicyView {
         if (rest.startsWith("approval-audit") || rest.startsWith("audit-log")) {
             return "approval-audit";
         }
-        if (rest.startsWith("mcp-reload")) {
-            return "mcp-reload";
-        }
         if (rest.startsWith("approval")) {
             return "approvals";
         }
@@ -240,15 +222,6 @@ public final class SecurityPolicyView {
         }
         if (rest.startsWith("tool-arg") || rest.startsWith("tools")) {
             return "tool-args";
-        }
-        if (rest.startsWith("mcp-oauth")) {
-            return "mcp-oauth";
-        }
-        if (rest.startsWith("mcp-package") || rest.startsWith("mcp-osv")) {
-            return "mcp-package";
-        }
-        if (rest.startsWith("mcp")) {
-            return "mcp";
         }
         if (rest.startsWith("audit-tool") || rest.startsWith("security-audit-tool")) {
             return "audit-tool";
@@ -368,7 +341,7 @@ public final class SecurityPolicyView {
                 .append(value(guardrail, "managedBackgroundProcessRequired"));
         buffer.append('\n')
                 .append(
-                        "可用命令：/security audit、/security status、/security policy、/security audit-tool、/security approvals、/security slash-confirm、/security approval-card、/security approval-audit、/security mcp-reload、/security lifecycle、/security hardline、/security terminal-guardrails、/security tirith、/security tirith-approval、/security cron-approvals、/security subagent-approvals、/security smart-approval、/security urls、/security private-urls、/security website、/security paths、/security credentials、/security skill-credentials、/security tool-args、/security mcp、/security mcp-oauth、/security mcp-package、/security schema、/security attachments、/security terminal-paste、/security media-cache、/security tool-results、/security patch、/security code-execution、/security subprocess-env、/security terminal-output、/security sudo、/security process");
+                        "可用命令：/security audit、/security status、/security policy、/security audit-tool、/security approvals、/security slash-confirm、/security approval-card、/security approval-audit、/security lifecycle、/security hardline、/security terminal-guardrails、/security tirith、/security tirith-approval、/security cron-approvals、/security subagent-approvals、/security smart-approval、/security urls、/security private-urls、/security website、/security paths、/security credentials、/security skill-credentials、/security tool-args、/security schema、/security attachments、/security terminal-paste、/security media-cache、/security tool-results、/security patch、/security code-execution、/security subprocess-env、/security terminal-output、/security sudo、/security process");
         return buffer.toString();
     }
 
@@ -504,36 +477,6 @@ public final class SecurityPolicyView {
                 .append(value(audit, "responseEvents"))
                 .append(" keyRedacted=")
                 .append(value(audit, "approvalKeyRedacted"));
-        Map<String, Object> mcpReload = approvalService.mcpReloadPolicySummary();
-        buffer.append('\n')
-                .append("- MCP 重载审批：confirm=")
-                .append(value(mcpReload, "confirmRequired"))
-                .append(" persistentDisable=")
-                .append(value(mcpReload, "persistentDisableSupported"))
-                .append(" toolNotice=")
-                .append(value(mcpReload, "toolChangeNoticeInjected"));
-        Map<String, Object> oauth = DashboardMcpService.oauthPolicySummary();
-        buffer.append('\n')
-                .append("- MCP OAuth：authUrlSafe=")
-                .append(value(oauth, "authorizationEndpointUrlSafety"))
-                .append(" pkce=")
-                .append(value(oauth, "pkceS256Required"))
-                .append(" tokenRedacted=")
-                .append(value(oauth, "accessTokenRedacted"));
-        Map<String, Object> mcpPackage = new McpPackageSecurityService(null).policySummary();
-        buffer.append('\n')
-                .append("- MCP 包安全：launchers=")
-                .append(value(mcpPackage, "checkedLaunchers"))
-                .append(" malwareBlocks=")
-                .append(value(mcpPackage, "malwareBlocksSaveAndCheck"))
-                .append(" npxPackageOption=")
-                .append(value(mcpPackage, "npxPackageOptionParsed"))
-                .append(" pypiSourceOption=")
-                .append(value(mcpPackage, "pypiSourceOptionParsed"))
-                .append(" persistedReason=")
-                .append(value(mcpPackage, "persistedListReasonExposed"))
-                .append(" failClosed=")
-                .append(value(mcpPackage, "requestFailureFailsClosed"));
         Map<String, Object> auditTool = SecurityAuditTools.readOnlyAuditPolicySummary();
         buffer.append('\n')
                 .append("- 审计工具：executesCommand=")
@@ -753,47 +696,6 @@ public final class SecurityPolicyView {
                 .append(value(audit, "recentDashboardViewSupported"))
                 .append(" revocationAudited=")
                 .append(value(audit, "manualRevocationAudited"));
-        return buffer.toString();
-    }
-
-    /**
-     * 渲染MCPReload审批策略。
-     *
-     * @param reload reload 参数。
-     * @return 返回render MCP Reload审批策略结果。
-     */
-    private static String renderMcpReloadApprovalPolicy(Map<String, Object> reload) {
-        StringBuilder buffer = new StringBuilder("MCP 重载审批策略摘要：");
-        buffer.append('\n')
-                .append("- 命令：command=")
-                .append(value(reload, "command"))
-                .append(" confirmRequired=")
-                .append(value(reload, "confirmRequired"))
-                .append(" configKey=")
-                .append(value(reload, "configKey"));
-        buffer.append('\n')
-                .append("- 确认：slashConfirm=")
-                .append(value(reload, "slashConfirmBacked"))
-                .append(" directArgument=")
-                .append(value(reload, "directRunArgument"))
-                .append(" alwaysArgument=")
-                .append(value(reload, "alwaysConfirmArgument"))
-                .append(" persisted=")
-                .append(value(reload, "runtimeConfigPersisted"));
-        buffer.append('\n')
-                .append("- 变更：toolNotice=")
-                .append(value(reload, "toolChangeNoticeInjected"))
-                .append(" serverSummary=")
-                .append(value(reload, "changedServerSummary"))
-                .append(" toolCount=")
-                .append(value(reload, "toolCountSummary"));
-        buffer.append('\n')
-                .append("- 安全：oauthUrlSafe=")
-                .append(value(reload, "oauthUrlSafetyCovered"))
-                .append(" encodedRedacted=")
-                .append(value(reload, "encodedUrlParameterRedacted"))
-                .append(" historyRedacted=")
-                .append(value(reload, "reloadHistoryNoticeRedacted"));
         return buffer.toString();
     }
 
@@ -1438,131 +1340,6 @@ public final class SecurityPolicyView {
     }
 
     /**
-     * 渲染MCP策略。
-     *
-     * @param mcp MCP参数。
-     * @return 返回render MCP策略结果。
-     */
-    private static String renderMcpPolicy(Map<String, Object> mcp) {
-        StringBuilder buffer = new StringBuilder("MCP 安全策略摘要：");
-        buffer.append('\n')
-                .append("- 传输：enabled=")
-                .append(value(mcp, "enabled"))
-                .append(" supported=")
-                .append(value(mcp, "supportedTransports"))
-                .append(" boundedExecutor=")
-                .append(value(mcp, "toolCallExecutorBounded"));
-        buffer.append('\n')
-                .append("- 远端调用：endpointUrlSafety=")
-                .append(value(mcp, "remoteEndpointUrlSafety"))
-                .append(" toolArgsUrlSafe=")
-                .append(value(mcp, "remoteToolArgumentUrlSafety"))
-                .append(" toolArgsPathSafe=")
-                .append(value(mcp, "remoteToolArgumentPathSafety"))
-                .append(" resourceUrisSafe=")
-                .append(value(mcp, "resourceUriUrlSafety"));
-        buffer.append('\n')
-                .append("- OAuth：structuredReauth=")
-                .append(value(mcp, "oauthFailureStructuredReauth"))
-                .append(" secretsRedacted=")
-                .append(value(mcp, "oauthSecretsRedacted"));
-        return buffer.toString();
-    }
-
-    /**
-     * 渲染MCPOAuth 认证策略。
-     *
-     * @param oauth oauth 参数。
-     * @return 返回render MCP OAuth 认证策略结果。
-     */
-    private static String renderMcpOAuthPolicy(Map<String, Object> oauth) {
-        StringBuilder buffer = new StringBuilder("MCP OAuth 安全策略摘要：");
-        buffer.append('\n')
-                .append("- URL：authorization=")
-                .append(value(oauth, "authorizationEndpointUrlSafety"))
-                .append(" token=")
-                .append(value(oauth, "tokenEndpointUrlSafety"))
-                .append(" redirect=")
-                .append(value(oauth, "tokenEndpointRedirectUrlSafety"))
-                .append(" maxRedirects=")
-                .append(value(oauth, "tokenEndpointRedirectLimit"));
-        buffer.append('\n')
-                .append("- 授权：stateRequired=")
-                .append(value(oauth, "stateValidationRequired"))
-                .append(" pkceS256=")
-                .append(value(oauth, "pkceS256Required"))
-                .append(" verifierHidden=")
-                .append(value(oauth, "codeVerifierHiddenFromStatus"));
-        buffer.append('\n')
-                .append("- 密钥：accessRedacted=")
-                .append(value(oauth, "accessTokenRedacted"))
-                .append(" refreshRedacted=")
-                .append(value(oauth, "refreshTokenRedacted"))
-                .append(" clientSecretRedacted=")
-                .append(value(oauth, "clientSecretRedacted"))
-                .append(" statusFields=")
-                .append(value(oauth, "statusPresenceFields"));
-        buffer.append('\n')
-                .append("- 错误和重授权：callbackRedacted=")
-                .append(value(oauth, "callbackErrorsRedacted"))
-                .append(" tokenErrorsRedacted=")
-                .append(value(oauth, "tokenErrorsRedacted"))
-                .append(" handle401=")
-                .append(value(oauth, "handle401RefreshThenReauth"));
-        return buffer.toString();
-    }
-
-    /**
-     * 渲染MCP包策略。
-     *
-     * @param mcpPackage MCP包参数。
-     * @return 返回render MCP Package策略结果。
-     */
-    private static String renderMcpPackagePolicy(Map<String, Object> mcpPackage) {
-        StringBuilder buffer = new StringBuilder("MCP 包安全策略摘要：");
-        buffer.append('\n')
-                .append("- 范围：transport=")
-                .append(value(mcpPackage, "enabledForTransport"))
-                .append(" launchers=")
-                .append(value(mcpPackage, "checkedLaunchers"))
-                .append(" ecosystems=")
-                .append(value(mcpPackage, "supportedEcosystems"));
-        buffer.append('\n')
-                .append("- OSV：env=")
-                .append(value(mcpPackage, "endpointOverrideEnvironment"))
-                .append(" requestFailuresFailClosed=")
-                .append(value(mcpPackage, "requestFailureFailsClosed"));
-        buffer.append('\n')
-                .append("- 判定：malwarePrefix=")
-                .append(value(mcpPackage, "malwareAdvisoryPrefix"))
-                .append(" ignoreNonMalware=")
-                .append(value(mcpPackage, "nonMalwareVulnerabilitiesIgnored"))
-                .append(" malwareBlocks=")
-                .append(value(mcpPackage, "malwareBlocksSaveAndCheck"))
-                .append(" unsafeEndpointBlocked=")
-                .append(value(mcpPackage, "unsafeEndpointBlocksBeforeNetwork"));
-        buffer.append('\n')
-                .append("- 结构化原因：reasons=")
-                .append(value(mcpPackage, "structuredReasons"))
-                .append(" listReason=")
-                .append(value(mcpPackage, "persistedListReasonExposed"));
-        buffer.append('\n')
-                .append("- 解析和脱敏：versionParsed=")
-                .append(value(mcpPackage, "packageVersionParsed"))
-                .append(" npxPackageOption=")
-                .append(value(mcpPackage, "npxPackageOptionParsed"))
-                .append(" pypiSourceOption=")
-                .append(value(mcpPackage, "pypiSourceOptionParsed"))
-                .append(" pipxRunSkipped=")
-                .append(value(mcpPackage, "pipxRunSubcommandSkipped"))
-                .append(" jsonArgs=")
-                .append(value(mcpPackage, "jsonArgsSupported"))
-                .append(" messageRedacted=")
-                .append(value(mcpPackage, "messageRedacted"));
-        return buffer.toString();
-    }
-
-    /**
      * 渲染审计工具策略。
      *
      * @param auditTool audit工具参数。
@@ -2031,14 +1808,6 @@ public final class SecurityPolicyView {
      * @param config 当前模块使用的配置对象。
      */
     private static void appendExtendedPolicyLines(StringBuilder buffer, AppConfig config) {
-        Map<String, Object> mcp = McpRuntimeService.policySummary(config);
-        buffer.append('\n')
-                .append("- MCP：enabled=")
-                .append(value(mcp, "enabled"))
-                .append(" oauthReauth=")
-                .append(value(mcp, "oauthFailureStructuredReauth"))
-                .append(" schemaSanitized=")
-                .append(value(mcp, "inputSchemaSanitized"));
         Map<String, Object> schema = SolonClawToolSchemaSanitizer.policySummary();
         buffer.append('\n')
                 .append("- Tool schema：enabled=")

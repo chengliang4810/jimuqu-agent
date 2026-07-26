@@ -1893,10 +1893,6 @@ final class AppConfigLoader {
                                 resolveInt(
                                         readInt(props, overrides, "approvals.timeoutSeconds", 60)),
                                 60));
-        config.getApprovals()
-                .setMcpReloadConfirm(
-                        resolveBoolean(
-                                readBoolean(props, overrides, "approvals.mcpReloadConfirm", true)));
         config.getApprovals().setDeny(resolveList(readRaw(props, overrides, "approvals.deny", "")));
         config.getApprovals()
                 .setModelProvider(
@@ -1905,18 +1901,11 @@ final class AppConfigLoader {
         config.getApprovals()
                 .setModel(resolveConfigString(readString(props, overrides, "approvals.model", "")));
         validateConfiguredTaskModels(config);
-        config.getMcp()
-                .setEnabled(
-                        resolveBoolean(
-                                readBoolean(props, overrides, "solonclaw.mcp.enabled", false)));
         config.getWeb()
                 .setSearchBackend(
                         resolveConfigString(
                                 readString(
-                                        props,
-                                        overrides,
-                                        "solonclaw.web.searchBackend",
-                                        "solon-ai")));
+                                        props, overrides, "solonclaw.web.searchBackend", "ddgs")));
         config.getWeb()
                 .setBraveSearchApiKey(
                         resolveConfigString(

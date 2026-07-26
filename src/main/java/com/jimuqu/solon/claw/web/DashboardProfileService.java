@@ -5,7 +5,6 @@ import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.solon.claw.gateway.service.ProfileMultiplexRuntimeManager;
 import com.jimuqu.solon.claw.profile.ProfileCreateOptions;
 import com.jimuqu.solon.claw.profile.ProfileDescriptionService;
-import com.jimuqu.solon.claw.profile.ProfileGatewayMultiplexGuard;
 import com.jimuqu.solon.claw.profile.ProfileManager;
 import com.jimuqu.solon.claw.profile.ProfileMutationLock;
 import com.jimuqu.solon.claw.profile.ProfileView;
@@ -30,7 +29,7 @@ import org.noear.solon.core.Props;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** 为机器级 Dashboard 提供 Profile 列表、生命周期和网关状态管理。 */
+/** 为机器级 Dashboard 提供 Profile 专业执行单元管理。 */
 public class DashboardProfileService {
     /** 记录 Builder 后处理降级，日志只包含 Profile 名、阶段和异常类型。 */
     private static final Logger log = LoggerFactory.getLogger(DashboardProfileService.class);
@@ -55,9 +54,6 @@ public class DashboardProfileService {
     /** Profile 核心管理器。 */
     private final ProfileManager profileManager;
 
-    /** 复用 Dashboard 已有的跨 Profile MCP 写入能力。 */
-    private final DashboardMcpService mcpService;
-
     /** 复用 Dashboard 已有的跨 Profile 技能启停能力。 */
     private final DashboardSkillsService skillsService;
 
@@ -73,56 +69,49 @@ public class DashboardProfileService {
      * @param profileManager Profile 核心管理器。
      */
     public DashboardProfileService(ProfileManager profileManager) {
-        this(profileManager, null, null, null, null);
+        this(profileManager, null, null, null);
     }
 
     /**
      * 创建支持 Builder 后处理的 Dashboard Profile 服务。
      *
      * @param profileManager Profile 核心管理器。
-     * @param mcpService 跨 Profile MCP 服务。
      * @param skillsService 跨 Profile 技能服务。
      */
     public DashboardProfileService(
-            ProfileManager profileManager,
-            DashboardMcpService mcpService,
-            DashboardSkillsService skillsService) {
-        this(profileManager, mcpService, skillsService, null, null);
+            ProfileManager profileManager, DashboardSkillsService skillsService) {
+        this(profileManager, skillsService, null, null);
     }
 
     /** 创建同时支持 Profile 子运行时释放的 Dashboard 管理服务。 */
     public DashboardProfileService(
             ProfileManager profileManager,
-            DashboardMcpService mcpService,
             DashboardSkillsService skillsService,
             ProfileMultiplexRuntimeManager profileRuntimeManager) {
-        this(profileManager, mcpService, skillsService, profileRuntimeManager, null);
+        this(profileManager, skillsService, profileRuntimeManager, null);
     }
 
     /**
      * 创建同时支持 default 与命名 Profile 配置热刷新的 Dashboard 管理服务。
      *
      * @param profileManager Profile 核心管理器。
-     * @param mcpService 跨 Profile MCP 服务。
      * @param skillsService 跨 Profile 技能服务。
      * @param profileRuntimeManager 命名 Profile 子运行时管理器。
      * @param gatewayRuntimeRefreshService default Profile 配置刷新服务。
      */
     public DashboardProfileService(
             ProfileManager profileManager,
-            DashboardMcpService mcpService,
             DashboardSkillsService skillsService,
             ProfileMultiplexRuntimeManager profileRuntimeManager,
             GatewayRuntimeRefreshService gatewayRuntimeRefreshService) {
         this.profileManager = profileManager;
-        this.mcpService = mcpService;
         this.skillsService = skillsService;
         this.profileRuntimeManager = profileRuntimeManager;
         this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
     }
 
     /**
-     * 返回机器上的全部 Profile，以及 sticky 活动项和当前 Dashboard 运行项。
+     * 返回机器上的全部 Profile。
      *
      * @return 不包含凭据内容的 Profile 列表响应。
      * @throws Exception Profile 状态读取失败。
@@ -130,31 +119,11 @@ public class DashboardProfileService {
     public Map<String, Object> listProfiles() throws Exception {
         List<ProfileView> views = profileManager.listProfileViews();
         List<Map<String, Object>> profiles = new ArrayList<Map<String, Object>>();
-        String current = "default";
         for (ProfileView view : views) {
             profiles.add(profileMap(view));
-            if (view.isCurrent()) {
-                current = view.getName();
-            }
         }
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("profiles", profiles);
-        result.put("active", profileManager.activeProfile());
-        result.put("current", current);
-        return result;
-    }
-
-    /**
-     * 返回 sticky 活动 Profile 与当前 Dashboard 实际运行 Profile。
-     *
-     * @return 活动与当前 Profile 名。
-     * @throws Exception Profile 状态读取失败。
-     */
-    public Map<String, Object> activeProfile() throws Exception {
-        Map<String, Object> list = listProfiles();
-        Map<String, Object> result = new LinkedHashMap<String, Object>();
-        result.put("active", list.get("active"));
-        result.put("current", list.get("current"));
         return result;
     }
 
@@ -172,21 +141,17 @@ public class DashboardProfileService {
     /**
      * 按 Dashboard 请求创建空白或克隆 Profile。
      *
-     * @param body 创建参数，除基础克隆参数外还支持 provider、model、mcp_servers、keep_skills、hub_skills。
+     * @param body 创建参数，除基础克隆参数外还支持 provider、model、keep_skills、hub_skills。
      * @return 新 Profile 视图与路径。
      * @throws Exception 参数或文件操作失败。
      */
     public Map<String, Object> createProfile(Map<String, Object> body) throws Exception {
         Map<String, Object> values = body == null ? new LinkedHashMap<String, Object>() : body;
         String name = text(values.get("name"));
-        rejectNullCollection(values, "mcp_servers");
         rejectNullCollection(values, "keep_skills");
         rejectNullCollection(values, "hub_skills");
-        List<Map<String, Object>> mcpServers =
-                objectMapList(values.get("mcp_servers"), "mcp_servers");
         List<String> keepSkills = strictStringList(values.get("keep_skills"), "keep_skills");
         List<String> hubSkills = strictStringList(values.get("hub_skills"), "hub_skills");
-        validateMcpServers(mcpServers);
         ProfileCreateOptions options =
                 new ProfileCreateOptions()
                         .setClone(booleanValue(values.get("clone_from_default")))
@@ -219,64 +184,15 @@ public class DashboardProfileService {
                 throw e;
             }
         }
-        int mcpWritten = writeMcpServers(name, mcpServers);
         int skillsDisabled = disableUnselectedSkills(name, keepSkills);
         List<Map<String, Object>> hubInstalls = spawnHubInstalls(name, hubSkills, home);
         Map<String, Object> result = profileMap(profileManager.profileView(name));
         result.put("ok", Boolean.TRUE);
         result.put("path", home.toString());
         result.put("model_set", Boolean.valueOf(modelSet));
-        result.put("mcp_written", Integer.valueOf(mcpWritten));
         result.put("skills_disabled", Integer.valueOf(skillsDisabled));
         result.put("hub_installs", hubInstalls);
         return result;
-    }
-
-    /** 尽力写入 Builder 指定的 MCP 服务，无效或失败的单项不影响其他服务。 */
-    private int writeMcpServers(String profile, List<Map<String, Object>> servers) {
-        if (mcpService == null || servers.isEmpty()) {
-            return 0;
-        }
-        int written = 0;
-        for (Map<String, Object> source : servers) {
-            String name = text(source.get("name"));
-            String url = text(source.get("url"));
-            String command = text(source.get("command"));
-            if (name.length() == 0 || (url.length() == 0 && command.length() == 0)) {
-                continue;
-            }
-            Map<String, Object> body = new LinkedHashMap<String, Object>();
-            body.put("serverId", name);
-            body.put("name", name);
-            if (url.length() > 0) {
-                body.put("transport", "streamable");
-                body.put("endpoint", url);
-            } else {
-                body.put("transport", "stdio");
-                body.put("command", command);
-                if (source.get("args") != null) {
-                    body.put("args", source.get("args"));
-                }
-            }
-            Map<String, Object> auth = new LinkedHashMap<String, Object>();
-            if (source.get("env") != null) {
-                auth.put("env", source.get("env"));
-            }
-            String authMode = text(source.get("auth"));
-            if (authMode.length() > 0) {
-                auth.put("type", authMode);
-            }
-            if (!auth.isEmpty()) {
-                body.put("auth", auth);
-            }
-            try {
-                mcpService.save(profile, body);
-                written++;
-            } catch (Exception e) {
-                logBuilderFailure(profile, "mcp", e);
-            }
-        }
-        return written;
     }
 
     /** 非空保留列表使用替换语义，禁用目标 Profile 中未被保留且当前启用的技能。 */
@@ -795,18 +711,6 @@ public class DashboardProfileService {
     }
 
     /**
-     * 设置未来 CLI 与网关启动默认使用的 sticky Profile，不重定向当前 Dashboard 进程。
-     *
-     * @param name Profile 名。
-     * @return 更新后的活动 Profile 信息。
-     * @throws Exception Profile 不存在或活动标记写入失败。
-     */
-    public Map<String, Object> useProfile(String name) throws Exception {
-        profileManager.useProfile(name);
-        return activeProfile();
-    }
-
-    /**
      * 重命名非默认 Profile。
      *
      * @param name 原 Profile 名。
@@ -863,63 +767,6 @@ public class DashboardProfileService {
         return profileMap(profileManager.profileView(home.getFileName().toString()));
     }
 
-    /**
-     * 返回单个 Profile 独立网关的真实进程状态。
-     *
-     * @param name Profile 名。
-     * @return 网关 PID、状态文件和日志路径。
-     * @throws Exception Profile 不存在或状态读取失败。
-     */
-    public Map<String, Object> gatewayStatus(String name) throws Exception {
-        return profileManager.gatewayStatus(name).toMap();
-    }
-
-    /** 启动指定 Profile 的独立网关，并返回完成后的真实状态。 */
-    public Map<String, Object> startGateway(String name, Map<String, Object> body)
-            throws Exception {
-        ProfileGatewayMultiplexGuard.requireIndependentGatewayAllowed(
-                profileManager, name, booleanValue(body == null ? null : body.get("force")));
-        profileManager.startGateway(name, stringList(body == null ? null : body.get("args")));
-        return profileManager.gatewayStatus(name).toMap();
-    }
-
-    /** 停止指定 Profile 的独立网关，并返回完成后的真实状态。 */
-    public Map<String, Object> stopGateway(String name) throws Exception {
-        profileManager.stopGateway(name);
-        return profileManager.gatewayStatus(name).toMap();
-    }
-
-    /** 重启指定 Profile 的独立网关，并返回完成后的真实状态。 */
-    public Map<String, Object> restartGateway(String name, Map<String, Object> body)
-            throws Exception {
-        ProfileGatewayMultiplexGuard.requireIndependentGatewayAllowed(
-                profileManager, name, booleanValue(body == null ? null : body.get("force")));
-        profileManager.stopGateway(name);
-        profileManager.startGateway(name, stringList(body == null ? null : body.get("args")));
-        return profileManager.gatewayStatus(name).toMap();
-    }
-
-    /** 将请求正文中的字符串数组转换为网关附加参数。 */
-    private static List<String> stringList(Object value) {
-        if (value == null) {
-            return Collections.emptyList();
-        }
-        if (!(value instanceof Iterable)) {
-            throw new IllegalArgumentException("Profile gateway args must be a string list.");
-        }
-        List<String> result = new ArrayList<String>();
-        for (Object item : (Iterable<?>) value) {
-            if (item == null) {
-                continue;
-            }
-            String text = String.valueOf(item).trim();
-            if (text.length() > 0) {
-                result.add(text);
-            }
-        }
-        return result;
-    }
-
     /** 严格解析 Builder 的字符串数组，避免对象被静默转成无效标识。 */
     private static List<String> strictStringList(Object value, String field) {
         if (value == null) {
@@ -941,30 +788,6 @@ public class DashboardProfileService {
         return result;
     }
 
-    /** 严格解析 Builder 的对象数组，返回与请求映射隔离的浅拷贝。 */
-    private static List<Map<String, Object>> objectMapList(Object value, String field) {
-        if (value == null) {
-            return Collections.emptyList();
-        }
-        if (!(value instanceof Iterable)) {
-            throw new IllegalArgumentException("Profile " + field + " must be an object list.");
-        }
-        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
-        for (Object item : (Iterable<?>) value) {
-            if (!(item instanceof Map)) {
-                throw new IllegalArgumentException("Profile " + field + " must be an object list.");
-            }
-            Map<String, Object> copy = new LinkedHashMap<String, Object>();
-            for (Map.Entry<?, ?> entry : ((Map<?, ?>) item).entrySet()) {
-                if (entry.getKey() != null) {
-                    copy.put(String.valueOf(entry.getKey()), entry.getValue());
-                }
-            }
-            result.add(copy);
-        }
-        return result;
-    }
-
     /** 把配置中的对象映射复制为字符串键映射；非对象值按空映射处理。 */
     private static Map<String, Object> stringObjectMap(Object value) {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
@@ -979,60 +802,10 @@ public class DashboardProfileService {
         return result;
     }
 
-    /** 校验 MCP Builder 嵌套字段类型，错误请求不得先创建 Profile 再失败。 */
-    private static void validateMcpServers(List<Map<String, Object>> servers) {
-        for (Map<String, Object> server : servers) {
-            requireStringField(server, "name", false);
-            requireStringField(server, "url", true);
-            requireStringField(server, "command", true);
-            requireStringField(server, "auth", true);
-            if (server.containsKey("args") && server.get("args") == null) {
-                throw new IllegalArgumentException(
-                        "Profile mcp_servers.args must be a string list.");
-            }
-            strictStringList(server.get("args"), "mcp_servers.args");
-            Object env = server.get("env");
-            if (server.containsKey("env") && env == null) {
-                throw new IllegalArgumentException("Profile mcp_servers.env must be an object.");
-            }
-            if (env != null && !(env instanceof Map)) {
-                throw new IllegalArgumentException("Profile mcp_servers.env must be an object.");
-            }
-            if (env instanceof Map) {
-                for (Map.Entry<?, ?> entry : ((Map<?, ?>) env).entrySet()) {
-                    if (!(entry.getKey() instanceof String)
-                            || !(entry.getValue() instanceof String)) {
-                        throw new IllegalArgumentException(
-                                "Profile mcp_servers.env must contain string values.");
-                    }
-                }
-            }
-        }
-    }
-
     /** 显式 null 不等同于字段缺失，保持 Builder 数组字段的请求模型约束。 */
     private static void rejectNullCollection(Map<String, Object> values, String field) {
         if (values.containsKey(field) && values.get(field) == null) {
             throw new IllegalArgumentException("Profile " + field + " must be a list.");
-        }
-    }
-
-    /** 校验 MCP 文本字段；可选字段缺失或为 null 时保持默认值。 */
-    private static void requireStringField(
-            Map<String, Object> server, String field, boolean optional) {
-        if (!server.containsKey(field)) {
-            if (optional) {
-                return;
-            }
-            throw new IllegalArgumentException("Profile mcp_servers." + field + " is required.");
-        }
-        Object value = server.get(field);
-        if (value == null && optional) {
-            return;
-        }
-        if (!(value instanceof String)) {
-            throw new IllegalArgumentException(
-                    "Profile mcp_servers." + field + " must be a string.");
         }
     }
 

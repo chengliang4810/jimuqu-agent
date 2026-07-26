@@ -7,46 +7,40 @@ import type {
   CreateProfileResult,
   InstallProfileDistributionRequest,
   ProfileDescribeAutoResult,
-  ProfileGatewayOptions,
-  ProfileGatewayStatus,
   SolonClawProfile,
 } from '@/api/solonclaw/profiles'
 import { normalizeManagementProfile } from '@/shared/profileScope'
-import { currentProfileContextVersion, updateProfileContext } from '@/shared/profileContext'
+import { updateProfileContext } from '@/shared/profileContext'
 
 export const useProfilesStore = defineStore('profiles', () => {
   const profiles = ref<SolonClawProfile[]>([])
-  const activeProfileName = ref('default')
-  const currentProfileName = ref('default')
   const managementProfile = ref('')
   const loading = ref(false)
   const mutating = ref(false)
   const initialized = ref(false)
   const loadError = ref<string | null>(null)
 
-  const managedProfileName = computed(() => managementProfile.value || currentProfileName.value)
+  const managedProfileName = computed(() => managementProfile.value || 'default')
 
+  /** 更新由 Profile 卡片深链选中的管理目标；空值与 default 均使用默认上下文。 */
   function setManagementProfile(name: string): void {
-    const normalized = normalizeManagementProfile(name, currentProfileName.value)
+    const normalized = normalizeManagementProfile(name)
     managementProfile.value = normalized
     setApiManagementProfile(normalized)
-    updateProfileContext(normalized || currentProfileName.value)
+    updateProfileContext(normalized || 'default')
   }
 
-  async function fetchProfiles(alignWithActive = false): Promise<void> {
+  /** 加载专业执行单元列表，并清理已经不存在的深链目标。 */
+  async function fetchProfiles(): Promise<void> {
     loading.value = true
     loadError.value = null
     try {
       const response = await profilesApi.fetchProfiles()
       profiles.value = response.profiles || []
-      activeProfileName.value = response.active || 'default'
-      currentProfileName.value = response.current || 'default'
 
       const known = new Set(profiles.value.map(profile => profile.name))
       if (managementProfile.value && !known.has(managementProfile.value)) {
         setManagementProfile('')
-      } else if (alignWithActive && activeProfileName.value !== currentProfileName.value) {
-        setManagementProfile(activeProfileName.value)
       } else {
         setManagementProfile(managementProfile.value)
       }
@@ -59,9 +53,10 @@ export const useProfilesStore = defineStore('profiles', () => {
     }
   }
 
-  async function initialize(alignWithActive: boolean): Promise<void> {
+  /** 首次进入 Dashboard 时加载 Profile 列表。 */
+  async function initialize(): Promise<void> {
     if (initialized.value || loading.value) return
-    await fetchProfiles(alignWithActive)
+    await fetchProfiles()
   }
 
   async function mutate<T>(action: () => Promise<T>): Promise<T> {
@@ -135,33 +130,6 @@ export const useProfilesStore = defineStore('profiles', () => {
     })
   }
 
-  async function updateGateway(
-    name: string,
-    action: 'start' | 'stop' | 'restart',
-    options: ProfileGatewayOptions = {},
-  ): Promise<ProfileGatewayStatus> {
-    return mutate(async () => {
-      const gateway = action === 'start'
-        ? await profilesApi.startProfileGateway(name, options)
-        : action === 'restart'
-          ? await profilesApi.restartProfileGateway(name, options)
-          : await profilesApi.stopProfileGateway(name)
-      await fetchProfiles()
-      return gateway
-    })
-  }
-
-  async function setActiveProfile(name: string): Promise<void> {
-    const contextVersion = currentProfileContextVersion()
-    await mutate(async () => {
-      const result = await profilesApi.setActiveProfile(name)
-      activeProfileName.value = result.active
-      currentProfileName.value = result.current
-      if (currentProfileContextVersion() === contextVersion) setManagementProfile(name)
-      await fetchProfiles()
-    })
-  }
-
   async function renameProfile(name: string, newName: string): Promise<void> {
     await mutate(async () => {
       await profilesApi.renameProfile(name, newName)
@@ -187,8 +155,6 @@ export const useProfilesStore = defineStore('profiles', () => {
 
   return {
     profiles,
-    activeProfileName,
-    currentProfileName,
     managementProfile,
     managedProfileName,
     loading,
@@ -208,8 +174,6 @@ export const useProfilesStore = defineStore('profiles', () => {
     removeAlias,
     installDistribution,
     updateDistribution,
-    updateGateway,
-    setActiveProfile,
     renameProfile,
     deleteProfile,
     importProfile,

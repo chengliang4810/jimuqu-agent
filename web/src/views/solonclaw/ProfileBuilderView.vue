@@ -7,7 +7,6 @@ import {
   fetchProfileModelChoices,
   searchProfileHubSkills,
   type ProfileHubSkill,
-  type ProfileMcpServerCreate,
   type ProfileModelChoice,
 } from '@/api/solonclaw/profiles'
 import { fetchSkills } from '@/api/solonclaw/skills'
@@ -15,7 +14,7 @@ import { useProfilesStore } from '@/stores/solonclaw/profiles'
 
 const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 
-type BuilderStep = 'identity' | 'model' | 'skills' | 'mcp' | 'review'
+type BuilderStep = 'identity' | 'model' | 'skills' | 'review'
 
 interface BuilderSkill {
   name: string
@@ -28,7 +27,7 @@ const { t } = useI18n()
 const router = useRouter()
 const profilesStore = useProfilesStore()
 
-const stepOrder: BuilderStep[] = ['identity', 'model', 'skills', 'mcp', 'review']
+const stepOrder: BuilderStep[] = ['identity', 'model', 'skills', 'review']
 const currentStep = ref<BuilderStep>('identity')
 const name = ref('')
 const description = ref('')
@@ -45,11 +44,6 @@ const hubQuery = ref('')
 const hubResults = ref<ProfileHubSkill[]>([])
 const hubSkills = ref<ProfileHubSkill[]>([])
 const hubSearching = ref(false)
-const mcpServers = ref<ProfileMcpServerCreate[]>([])
-const mcpDraftName = ref('')
-const mcpDraftUrl = ref('')
-const mcpDraftCommand = ref('')
-const mcpDraftArgs = ref('')
 
 const steps = computed(() => stepOrder.map(id => ({ id, label: t(`profiles.builder.steps.${id}`) })))
 const currentStepIndex = computed(() => stepOrder.indexOf(currentStep.value))
@@ -167,36 +161,6 @@ function removeHubSkill(identifier: string): void {
   hubSkills.value = hubSkills.value.filter(skill => skill.identifier !== identifier)
 }
 
-function addMcpServer(): void {
-  const serverName = mcpDraftName.value.trim()
-  const url = mcpDraftUrl.value.trim()
-  const command = mcpDraftCommand.value.trim()
-  if (!serverName) {
-    message.warning(t('profiles.builder.mcpNameRequired'))
-    return
-  }
-  if (!url && !command) {
-    message.warning(t('profiles.builder.mcpEndpointRequired'))
-    return
-  }
-  const server: ProfileMcpServerCreate = { name: serverName }
-  if (url) server.url = url
-  if (command) {
-    server.command = command
-    const args = mcpDraftArgs.value.trim()
-    if (args) server.args = args.split(/\s+/)
-  }
-  mcpServers.value = [...mcpServers.value.filter(item => item.name !== serverName), server]
-  mcpDraftName.value = ''
-  mcpDraftUrl.value = ''
-  mcpDraftCommand.value = ''
-  mcpDraftArgs.value = ''
-}
-
-function removeMcpServer(serverName: string): void {
-  mcpServers.value = mcpServers.value.filter(server => server.name !== serverName)
-}
-
 async function createProfile(): Promise<void> {
   const profileName = name.value.trim()
   if (!PROFILE_NAME_RE.test(profileName)) {
@@ -211,7 +175,6 @@ async function createProfile(): Promise<void> {
       description: description.value.trim() || undefined,
       provider: selectedModel.value?.provider,
       model: selectedModel.value?.model,
-      mcp_servers: mcpServers.value.length ? mcpServers.value : undefined,
       keep_skills: keepAllSkills.value ? undefined : Array.from(keptSkills.value),
       hub_skills: hubSkills.value.length ? hubSkills.value.map(skill => skill.identifier) : undefined,
     })
@@ -348,26 +311,6 @@ function cancel(): void {
         </div>
       </div>
 
-      <div v-else-if="currentStep === 'mcp'" class="builder-section">
-        <p class="section-hint">{{ t('profiles.builder.mcpHint') }}</p>
-        <div class="mcp-fields">
-          <Input v-model:value="mcpDraftName" :placeholder="t('profiles.builder.mcpName')" />
-          <Input v-model:value="mcpDraftUrl" :placeholder="t('profiles.builder.mcpUrl')" />
-          <Input v-model:value="mcpDraftCommand" :placeholder="t('profiles.builder.mcpCommand')" />
-          <Input v-model:value="mcpDraftArgs" :placeholder="t('profiles.builder.mcpArgs')" @keyup.enter="addMcpServer" />
-        </div>
-        <Button @click="addMcpServer">{{ t('profiles.builder.addMcp') }}</Button>
-        <div v-if="mcpServers.length" class="mcp-list">
-          <div v-for="server in mcpServers" :key="server.name">
-            <span>
-              <strong>{{ server.name }}</strong>
-              <small>{{ server.url || `${server.command || ''} ${(server.args || []).join(' ')}` }}</small>
-            </span>
-            <Button size="small" danger @click="removeMcpServer(server.name)">{{ t('common.remove') }}</Button>
-          </div>
-        </div>
-      </div>
-
       <div v-else class="builder-section review-section">
         <dl>
           <div><dt>{{ t('profiles.name') }}</dt><dd>{{ name.trim() || '-' }}</dd></div>
@@ -378,7 +321,6 @@ function cancel(): void {
             <dd>{{ keepAllSkills ? t('profiles.builder.fullSkillBundle') : t('profiles.builder.keptSkillCount', { count: keptSkills.size }) }}</dd>
           </div>
           <div><dt>{{ t('profiles.builder.hubTitle') }}</dt><dd>{{ hubSkills.map(skill => skill.name).join(', ') || t('common.none') }}</dd></div>
-          <div><dt>{{ t('profiles.builder.mcpServers') }}</dt><dd>{{ mcpServers.map(server => server.name).join(', ') || t('common.none') }}</dd></div>
         </dl>
       </div>
     </section>
@@ -414,8 +356,7 @@ function cancel(): void {
 .builder-footer,
 .inline-form,
 .checkbox-row,
-.hub-result,
-.mcp-list > div {
+.hub-result {
   display: flex;
   align-items: center;
 }
@@ -605,8 +546,7 @@ function cancel(): void {
   gap: 8px;
 }
 
-.hub-results,
-.mcp-list {
+.hub-results {
   display: grid;
   max-height: 200px;
   overflow: auto;
@@ -614,8 +554,7 @@ function cancel(): void {
   border-radius: 6px;
 }
 
-.hub-result,
-.mcp-list > div {
+.hub-result {
   justify-content: space-between;
   gap: 12px;
   padding: 9px 10px;
@@ -663,12 +602,6 @@ function cancel(): void {
     background: transparent;
     cursor: pointer;
   }
-}
-
-.mcp-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
 }
 
 .review-section dl {
@@ -721,8 +654,7 @@ function cancel(): void {
     padding: 16px;
   }
 
-  .model-picker,
-  .mcp-fields {
+  .model-picker {
     grid-template-columns: 1fr;
   }
 

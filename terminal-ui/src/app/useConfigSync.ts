@@ -3,11 +3,7 @@ import { useEffect, useRef } from 'react'
 
 import { resolveDetailsMode, resolveSections } from '../domain/details.js'
 import type { GatewayClient } from '../gatewayClient.js'
-import type {
-  ConfigFullResponse,
-  ConfigMtimeResponse,
-  ReloadMcpResponse
-} from '../gatewayTypes.js'
+import type { ConfigFullResponse, ConfigMtimeResponse } from '../gatewayTypes.js'
 import {
   DEFAULT_VOICE_RECORD_KEY,
   type ParsedVoiceRecordKey,
@@ -22,7 +18,6 @@ import {
   type IndicatorStyle,
   type StatusBarMode
 } from './interfaces.js'
-import { turnController } from './turnController.js'
 import { patchUiState } from './uiStore.js'
 
 const STATUSBAR_MODES: Record<string, StatusBarMode> = {
@@ -272,16 +267,6 @@ export function useConfigSync({
         }
 
         mtimeRef.current = next
-
-        const reload = await quietRpc<ReloadMcpResponse>(gw, 'reload.mcp', { session_id: sid, confirm: true })
-
-        if (stopped) {
-          return
-        }
-
-        if (reload) {
-          turnController.pushActivity('MCP reloaded after config change')
-        }
 
         await hydrateFullConfig(gw, setBellOnComplete, setVoiceRecordKey, 'config.full', () => !stopped)
       } finally {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Button, Input, Spin, Switch, Tag, message } from 'antdv-next'
+import { useI18n } from 'vue-i18n'
 import {
   fetchTuiRuntimeOverview,
   fetchTuiRuntimeChannelQr,
@@ -25,48 +26,53 @@ import {
   statusTone,
 } from '@/shared/tuiRuntimeDisplay'
 
-const text = {
-  apiKey: 'API Key',
-  authenticated: '已认证',
-  channelConfigSaved: '渠道配置已保存',
-  channelRuntime: '渠道运行时',
-  configMtime: '配置更新时间',
-  configSnapshot: '配置快照',
-  configured: '已配置',
-  current: '当前',
-  currentModel: '当前模型',
-  currentProvider: '当前 Provider',
-  defaultModel: '默认模型',
-  description: '查看并配置独立终端前端使用的模型、国内渠道和工作区配置快照。',
-  disabled: '已停用',
-  emptyState: '暂无终端运行时数据',
-  enableChannel: '启用渠道',
-  enabledChannels: '已启用渠道',
-  enterApiKey: '输入新的 API Key',
-  loadFailed: '加载终端运行时状态失败',
-  loading: '加载中...',
-  missingConfig: '缺少配置',
-  model: '模型',
-  modelKeySaved: '模型密钥已保存',
-  modelRuntime: '模型运行时',
-  models: '个模型',
-  needsSetup: '需要配置',
-  noData: '暂无数据',
-  noWritableValue: '请至少填写一个配置值',
-  provider: 'Provider',
-  providerBaseUrl: '接口地址',
-  providerWarning: '警告',
-  readOnly: '只读',
-  ready: '已就绪',
-  refresh: '刷新',
-  requiredFields: '必填字段',
-  saveChannel: '保存渠道配置',
-  saveModelKey: '保存密钥',
-  setupStatus: '初始化状态',
-  title: '终端运行时',
-  unauthenticated: '未认证',
-  workspaceConfig: '工作区配置',
-} as const
+const { t } = useI18n()
+const textKeys = [
+  'apiKey',
+  'authenticated',
+  'channelConfigSaved',
+  'channelRuntime',
+  'configMtime',
+  'configSnapshot',
+  'configured',
+  'current',
+  'currentModel',
+  'currentProvider',
+  'defaultModel',
+  'description',
+  'disabled',
+  'emptyState',
+  'enableChannel',
+  'enabledChannels',
+  'enterApiKey',
+  'loadFailed',
+  'loading',
+  'missingConfig',
+  'model',
+  'modelKeySaved',
+  'modelRuntime',
+  'models',
+  'needsSetup',
+  'noData',
+  'noWritableValue',
+  'provider',
+  'providerBaseUrl',
+  'providerWarning',
+  'readOnly',
+  'ready',
+  'refresh',
+  'requiredFields',
+  'saveChannel',
+  'saveModelKey',
+  'setupStatus',
+  'title',
+  'unauthenticated',
+  'workspaceConfig',
+] as const
+type TuiRuntimeTextKey = typeof textKeys[number]
+const text = new Proxy({} as Record<TuiRuntimeTextKey, string>, {
+  get: (_target, key) => t(`tuiRuntime.${String(key)}`),
+})
 
 const overview = ref<TuiRuntimeOverview | null>(null)
 const loading = ref(false)

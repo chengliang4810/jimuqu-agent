@@ -127,7 +127,6 @@ security:
 approvals:
   subagentAutoApprove: false
   timeoutSeconds: 60
-  mcpReloadConfirm: true
 solonclaw:
   workspace: ./workspace
   dashboard:
@@ -161,7 +160,6 @@ Common workspace settings:
 | `security.hardlineAllowlist` | empty | Explicitly allowlisted hardline categories; none are allowed by default |
 | `approvals.subagentAutoApprove` | `false` | Automatically approves one approvable dangerous command for sub-agents |
 | `approvals.timeoutSeconds` | `60` | Shared approval timeout in seconds, including messaging channels |
-| `approvals.mcpReloadConfirm` | `true` | Whether `/reload-mcp` requires confirmation |
 | `solonclaw.terminal.credentialFiles` | empty | Workspace-relative credential files available to isolated execution |
 | `solonclaw.terminal.envPassthrough` | empty | Third-party environment variables allowed for local subprocesses |
 | `solonclaw.terminal.sudoPassword` | empty | Optional sudo password for `sudo -S` rewriting; can also be supplied with `SOLONCLAW_SUDO_PASSWORD` |
@@ -175,8 +173,7 @@ Common workspace settings:
 | `solonclaw.skills.externalDirs` | empty | Additional read-only skill directories |
 | `solonclaw.skills.templateVars` | `true` | Enables SKILL.md template variable replacement |
 | `solonclaw.gateway.filterSilenceNarration` | `true` | Drops short silence narration before channel delivery |
-| `solonclaw.mcp.enabled` | `false` | Enables MCP tool adapters |
-| `solonclaw.web.searchBackend` | `solon-ai` | Web search backend: `solon-ai`, `brave-free`, or `ddgs` |
+| `solonclaw.web.searchBackend` | `ddgs` | Web search backend: built-in `ddgs` or `brave-free` |
 | `solonclaw.pricing.prices` | empty | Model pricing configuration; empty means token-only usage without cost calculation |
 
 Prefer the Dashboard for provider and default-model management, or edit `workspace/config.yml` directly. Keep secrets out of Git.

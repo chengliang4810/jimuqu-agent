@@ -6,10 +6,8 @@ import { useAppStore } from "@/stores/solonclaw/app";
 import ThemeSwitch from "./ThemeSwitch.vue";
 import LanguageSwitch from "./LanguageSwitch.vue";
 import SystemNavItems from "./SystemNavItems.vue";
-import ProfileSwitcher from "./ProfileSwitcher.vue";
 
 import { clearApiKey } from "@/api/client";
-import { getPersonaMeta } from "@/shared/personaMeta";
 import { MONITORING_NAV_ITEMS, PERSONA_NAV_ITEMS, PRIMARY_NAV_ITEMS } from "@/shared/sidebarNav";
 
 const { t } = useI18n();
@@ -21,7 +19,7 @@ const logoPath = '/logo.png';
 const sidebarNavRef = ref<HTMLElement | null>(null);
 const personaItems = computed(() => PERSONA_NAV_ITEMS.map(item => ({
   ...item,
-  title: getPersonaMeta(item.metaKey).title,
+  title: t(`personaMeta.${item.metaKey}.title`),
 })));
 
 const collapsedGroups = reactive<Record<string, boolean>>({});
@@ -72,8 +70,6 @@ watch(
       <img :src="logoPath" alt="solonclaw" class="logo-img" />
       <span class="logo-text">solonclaw</span>
     </div>
-
-    <ProfileSwitcher />
 
     <nav ref="sidebarNavRef" class="sidebar-nav">
       <button

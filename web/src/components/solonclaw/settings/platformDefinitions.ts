@@ -13,7 +13,7 @@ type PlatformSettingsItem = {
 
 type PlatformFallback = {
   readonly key: PlatformSettingsKey
-  readonly name: string
+  readonly labelKey: string
   readonly iconKey: PlatformSettingsKey
   readonly order: number
 }
@@ -24,12 +24,12 @@ type PlatformCatalogSourceItem = PlatformFallback & {
 }
 
 const PLATFORM_FALLBACKS = [
-  { key: 'feishu', name: '飞书', iconKey: 'feishu', order: 10 },
-  { key: 'dingtalk', name: '钉钉', iconKey: 'dingtalk', order: 20 },
-  { key: 'wecom', name: '企业微信', iconKey: 'wecom', order: 30 },
-  { key: 'weixin', name: '微信', iconKey: 'weixin', order: 40 },
-  { key: 'qqbot', name: 'QQBot', iconKey: 'qqbot', order: 50 },
-  { key: 'yuanbao', name: '腾讯元宝', iconKey: 'yuanbao', order: 60 },
+  { key: 'feishu', labelKey: 'platform.nameFeishu', iconKey: 'feishu', order: 10 },
+  { key: 'dingtalk', labelKey: 'platform.nameDingtalk', iconKey: 'dingtalk', order: 20 },
+  { key: 'wecom', labelKey: 'platform.nameWecom', iconKey: 'wecom', order: 30 },
+  { key: 'weixin', labelKey: 'platform.nameWeixin', iconKey: 'weixin', order: 40 },
+  { key: 'qqbot', labelKey: 'platform.nameQqbot', iconKey: 'qqbot', order: 50 },
+  { key: 'yuanbao', labelKey: 'platform.nameYuanbao', iconKey: 'yuanbao', order: 60 },
 ] as const satisfies readonly PlatformFallback[]
 
 const DEFAULT_PLATFORM_CATALOG_SOURCE: readonly PlatformCatalogSourceItem[] = PLATFORM_FALLBACKS.map(item => ({
@@ -53,6 +53,7 @@ export const PLATFORM_ICON_SVG_BY_KEY: Record<PlatformSettingsKey, string> = {
 
 export function normalizePlatformSettingsItems(
   catalog: readonly PlatformCatalogItem[],
+  translate: (key: string) => string = key => key,
 ): readonly PlatformSettingsItem[] {
   const fallbackByKey = new Map(PLATFORM_FALLBACKS.map(item => [item.key, item]))
   const source = catalog.length > 0
@@ -65,9 +66,13 @@ export function normalizePlatformSettingsItems(
     .map(item => {
       const fallback = fallbackByKey.get(item.key)
       const iconKey = isDomesticPlatformKey(item.iconKey) ? item.iconKey : fallback?.iconKey
+      const labelKey = fallback?.labelKey || ''
+      const translatedName = labelKey ? translate(labelKey).trim() : ''
       return {
         key: item.key,
-        name: item.displayName || fallback?.name || item.key,
+        name: (translatedName && translatedName !== labelKey)
+          ? translatedName
+          : item.displayName || item.key,
         icon: PLATFORM_ICON_SVG_BY_KEY[iconKey || item.key],
         order: item.order ?? fallback?.order ?? 0,
       }

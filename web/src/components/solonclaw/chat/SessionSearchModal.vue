@@ -44,7 +44,7 @@ const items = computed<SearchItem[]>(() => {
 })
 
 function formatSource(source: string): string {
-  return getSourceLabel(source)
+  return getSourceLabel(source, t)
 }
 
 function formatTime(ts?: number): string {

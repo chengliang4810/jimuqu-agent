@@ -152,7 +152,7 @@ public class DefaultSkillGuardService implements SkillGuardService {
                             "workspace_env_access",
                             "critical",
                             "exfiltration",
-                            "\\$HOME/\\.solonclaw/\\.env|~/\\.solonclaw/\\.env|workspace/\\.env|workspace/auth\\.json|workspace/cache/bws_cache\\.json|workspace/mcp-tokens",
+                            "\\$HOME/\\.solonclaw/\\.env|~/\\.solonclaw/\\.env|workspace/\\.env|workspace/auth\\.json|workspace/cache/bws_cache\\.json",
                             "directly references local workspace secrets or token stores"),
                     new ThreatPattern(
                             "read_secrets_file",

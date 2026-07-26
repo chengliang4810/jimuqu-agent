@@ -19,10 +19,7 @@ interface JobsMock {
 interface ProfilesMock {
   fetchProfiles: () => Promise<{
     profiles: Array<{ name: string }>
-    active: string
-    current: string
   }>
-  setActiveProfile: (name: string) => Promise<{ active: string, current: string }>
 }
 
 declare global {
@@ -62,7 +59,6 @@ function profileApiMocks(): Plugin {
     `,
     '@/api/solonclaw/profiles': `
       export function fetchProfiles() { return globalThis.__PROFILE_PROFILES_MOCK__.fetchProfiles() }
-      export function setActiveProfile(name) { return globalThis.__PROFILE_PROFILES_MOCK__.setActiveProfile(name) }
     `,
   }
 
@@ -111,10 +107,7 @@ try {
   globalThis.__PROFILE_PROFILES_MOCK__ = {
     fetchProfiles: async () => ({
       profiles: [{ name: 'profile-a' }, { name: 'profile-b' }],
-      active: 'profile-a',
-      current: 'profile-a',
     }),
-    setActiveProfile: async name => ({ active: name, current: name }),
   }
 
   const { currentProfileContextVersion, updateProfileContext } = await server.ssrLoadModule('/src/shared/profileContext.ts') as typeof import('../src/shared/profileContext.ts')
@@ -160,8 +153,11 @@ try {
 
   const initialVersion = currentProfileContextVersion()
   await profilesStore.fetchProfiles()
-  assert.equal(profilesStore.managedProfileName, 'profile-a', 'server current profile should become the managed profile')
-  assert.ok(currentProfileContextVersion() > initialVersion, 'server current profile should publish a new context generation')
+  assert.equal(profilesStore.managedProfileName, 'default', 'Dashboard should use default when no Profile deep link is selected')
+  assert.ok(
+    currentProfileContextVersion() > initialVersion,
+    'loading Profile metadata should restore the default context when no deep link is selected',
+  )
   const appSource = readFileSync(resolve(webRoot, 'src/App.vue'), 'utf8')
   assert.match(
     appSource,
@@ -169,21 +165,14 @@ try {
     'server current profile changes should remount the active route',
   )
 
-  let resolveActiveProfile!: (value: { active: string, current: string }) => void
-  globalThis.__PROFILE_PROFILES_MOCK__.setActiveProfile = () => new Promise(resolve => {
-    resolveActiveProfile = resolve
-  })
-  const lateActiveProfile = profilesStore.setActiveProfile('profile-a')
   profilesStore.setManagementProfile('profile-b')
-  resolveActiveProfile({ active: 'profile-a', current: 'profile-a' })
-  await lateActiveProfile
   assert.equal(
     profilesStore.managedProfileName,
     'profile-b',
-    'late active-profile response must not override a newer management selection',
+    'a Profile card deep link should select its scoped management context',
   )
 
-  const guardedStores = ['app.ts', 'chat.ts', 'files.ts', 'gateways.ts', 'jobs.ts', 'models.ts', 'settings.ts']
+  const guardedStores = ['app.ts', 'chat.ts', 'files.ts', 'jobs.ts', 'models.ts', 'settings.ts']
   for (const file of guardedStores) {
     const source = readFileSync(resolve(webRoot, 'src/stores/solonclaw', file), 'utf8')
     assert.match(source, /ProfileContext/, `${file} should invalidate Profile-scoped state`)

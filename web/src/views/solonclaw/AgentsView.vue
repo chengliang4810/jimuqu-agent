@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { Button, Form, FormItem, Input, InputNumber, Modal, Select, Spin, Tag, TextArea, Tooltip, message } from 'antdv-next'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { Button, Form, FormItem, Input, InputNumber, Modal, Select, Spin, Tag, TextArea, message } from 'antdv-next'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { createProfileTask, fetchProfileTasks, type ProfileTask } from '@/api/solonclaw/profileTasks'
 import type { SolonClawProfile } from '@/api/solonclaw/profiles'
 import { useProfilesStore } from '@/stores/solonclaw/profiles'
 
-type Health = 'healthy' | 'error' | 'unloaded'
 type Activity = 'idle' | 'working' | 'waiting' | 'blocked'
 
 const { t } = useI18n()
@@ -24,6 +23,18 @@ const taskSubmitting = ref(false)
 const tasksLoading = ref(false)
 const tasks = ref<ProfileTask[]>([])
 const tasksByProfile = ref<Record<string, ProfileTask[]>>({})
+/** Profile 活动状态的刷新周期，避免任务状态长期停留在首次加载结果。 */
+const activityRefreshIntervalMs = 5000
+/** Profile 活动状态的定时刷新句柄。 */
+const activityRefreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
+/** 防止慢请求期间重复刷新同一批 ProfileTask。 */
+const tasksRefreshInFlight = ref(false)
+const surfaceRoutes = computed(() => [
+  { label: t('profileAgents.viewSkills'), name: 'solonclaw.skills' },
+  { label: t('profileAgents.viewMemory'), name: 'solonclaw.persona.journal' },
+  { label: t('profileAgents.viewSessions'), name: 'solonclaw.runs' },
+  { label: t('profileAgents.viewChannels'), name: 'solonclaw.channels' },
+])
 
 const statusOptions = computed(() => [
   { label: t('profileAgents.allStatuses'), value: 'all' },
@@ -44,36 +55,46 @@ const agents = computed(() => {
 
 onMounted(async () => {
   try {
-    await profilesStore.fetchProfiles(false)
+    await profilesStore.fetchProfiles()
     await loadAgentTasks()
   } catch {
     // Profile store already exposes its loading error; task activity can degrade to idle.
+  } finally {
+    activityRefreshTimer.value = setInterval(() => {
+      void loadAgentTasks()
+    }, activityRefreshIntervalMs)
   }
 })
 
-async function loadAgentTasks(): Promise<void> {
-  const entries = await Promise.all(profilesStore.profiles.map(async profile => {
-    try {
-      return [profile.name, await fetchProfileTasks(profile.name)] as const
-    } catch {
-      return [profile.name, []] as const
-    }
-  }))
-  tasksByProfile.value = Object.fromEntries(entries)
-}
+onUnmounted(() => {
+  if (activityRefreshTimer.value) {
+    clearInterval(activityRefreshTimer.value)
+  }
+})
 
-function health(profile: SolonClawProfile): Health {
-  if (profile.runtime_status) return profile.runtime_status
-  if (profile.current || profile.gateway.running) return 'healthy'
-  return 'unloaded'
+/** 读取各专业执行单元的任务状态，并原子替换活动状态快照。 */
+async function loadAgentTasks(): Promise<void> {
+  if (tasksRefreshInFlight.value) return
+  tasksRefreshInFlight.value = true
+  try {
+    const entries = await Promise.all(profilesStore.profiles.map(async profile => {
+      try {
+        return [profile.name, await fetchProfileTasks(profile.name)] as const
+      } catch {
+        return [profile.name, []] as const
+      }
+    }))
+    tasksByProfile.value = Object.fromEntries(entries)
+  } finally {
+    tasksRefreshInFlight.value = false
+  }
 }
 
 function activity(profile: SolonClawProfile): Activity {
-  if (profile.activity_status) return profile.activity_status
   const profileTasks = tasksByProfile.value[profile.name] || []
   if (profileTasks.some(task => task.status === 'RUNNING')) return 'working'
-  if (profileTasks.some(task => task.status === 'BLOCKED')) return 'blocked'
   if (profileTasks.some(task => task.status === 'PENDING' || task.status === 'READY')) return 'waiting'
+  if (profileTasks.some(task => task.status === 'BLOCKED')) return 'blocked'
   return 'idle'
 }
 
@@ -103,7 +124,7 @@ async function submitTask(): Promise<void> {
   taskSubmitting.value = true
   try {
     await createProfileTask({
-      source_profile: profilesStore.currentProfileName || 'default',
+      source_profile: 'default',
       target_profile: profile.name,
       description,
       depends_on: [],
@@ -111,7 +132,7 @@ async function submitTask(): Promise<void> {
     })
     assignOpen.value = false
     message.success(t('profileAgents.taskCreated'))
-    await profilesStore.fetchProfiles(false)
+    await profilesStore.fetchProfiles()
     await loadAgentTasks()
   } catch (error) {
     message.error(error instanceof Error ? error.message : t('profileAgents.taskCreateFailed'))
@@ -134,9 +155,9 @@ async function openTasks(profile: SolonClawProfile): Promise<void> {
   }
 }
 
-function configure(profile: SolonClawProfile): void {
+function openSurface(profile: SolonClawProfile, routeName: string): void {
   profilesStore.setManagementProfile(profile.name)
-  void router.push({ name: 'solonclaw.profiles', query: { profile: profile.name } })
+  void router.push({ name: routeName, query: { profile: profile.name } })
 }
 
 function taskTagColor(status: ProfileTask['status']): string {
@@ -180,18 +201,9 @@ function taskTagColor(status: ProfileTask['status']): string {
                   <p>{{ profile.description || (profile.name === 'default' ? t('profileAgents.defaultDescription') : t('profiles.noDescription')) }}</p>
                 </div>
               </div>
-              <Tooltip :title="t('profileAgents.configure')">
-                <button class="icon-button" type="button" :aria-label="t('profileAgents.configure')" @click="configure(profile)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5v.2h-4v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1-2.8-2.8.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3v-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1 2.8-2.8.1.1a1.7 1.7 0 0 0 1.8.3 1.7 1.7 0 0 0 1-1.5V3h4v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1 2.8 2.8-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.2v4h-.2a1.7 1.7 0 0 0-1.4 1z"/></svg>
-                </button>
-              </Tooltip>
             </header>
 
             <div class="status-row">
-              <div>
-                <span class="field-label">{{ t('profileAgents.health') }}</span>
-                <span class="status" :class="health(profile)"><i />{{ t(`profileAgents.${health(profile)}`) }}</span>
-              </div>
               <div>
                 <span class="field-label">{{ t('profileAgents.activity') }}</span>
                 <span class="status" :class="activity(profile)"><i />{{ t(`profileAgents.${activity(profile)}`) }}</span>
@@ -203,9 +215,9 @@ function taskTagColor(status: ProfileTask['status']): string {
               <div><span>{{ t('profileAgents.skills') }}</span><strong>{{ profile.skills_count }}</strong></div>
             </div>
 
-            <div v-if="profile.current_task || activeTask(profile)" class="current-task">
+            <div v-if="activeTask(profile)" class="current-task">
               <span>{{ t('profileAgents.currentTask') }}</span>
-                  <strong>{{ profile.current_task || activeTask(profile)?.prompt }}</strong>
+              <strong>{{ activeTask(profile)?.prompt }}</strong>
             </div>
             <p v-if="taskCount(profile, ['RUNNING']) || taskCount(profile, ['PENDING', 'READY'])" class="task-summary">
               {{ t('profileAgents.taskSummary', { running: taskCount(profile, ['RUNNING']), waiting: taskCount(profile, ['PENDING', 'READY']) }) }}
@@ -214,6 +226,13 @@ function taskTagColor(status: ProfileTask['status']): string {
             <footer>
               <Button type="primary" :disabled="profile.name === 'default'" @click="openAssign(profile)">{{ t('profileAgents.assignTask') }}</Button>
               <Button @click="openTasks(profile)">{{ t('profileAgents.viewTasks') }}</Button>
+              <Button
+                v-for="surface in surfaceRoutes"
+                :key="surface.name"
+                @click="openSurface(profile, surface.name)"
+              >
+                {{ surface.label }}
+              </Button>
             </footer>
           </article>
         </div>
@@ -272,19 +291,14 @@ function taskTagColor(status: ProfileTask['status']): string {
 .name-row { flex-wrap: wrap; gap: 6px; }
 .name-row h2 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
 .agent-identity p { display: -webkit-box; margin: 4px 0 0; overflow: hidden; color: $text-secondary; font-size: 12px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.icon-button { display: grid; width: 32px; height: 32px; flex: 0 0 32px; padding: 7px; place-items: center; border: 0; border-radius: 6px; color: $text-secondary; background: transparent; cursor: pointer; }
-.icon-button:hover { color: $text-primary; background: $bg-card-hover; }
-.icon-button svg { width: 18px; height: 18px; }
 .status-row { gap: 24px; padding: 11px 0; border-block: 1px solid $border-color; }
 .status-row > div { display: grid; gap: 4px; }
 .field-label, .agent-meta span, .current-task span { color: $text-muted; font-size: 11px; }
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
 .status i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.status.healthy, .status.idle { color: $success; }
+.status.idle { color: $success; }
 .status.working { color: $accent-primary; }
 .status.waiting, .status.blocked { color: $warning; }
-.status.error { color: $error; }
-.status.unloaded { color: $text-muted; }
 .agent-meta { gap: 18px; }
 .agent-meta div { display: grid; min-width: 0; gap: 3px; }
 .agent-meta div:first-child { flex: 1; }
@@ -292,7 +306,7 @@ function taskTagColor(status: ProfileTask['status']): string {
 .current-task { display: grid; gap: 4px; padding: 10px; border-radius: 6px; background: $bg-secondary; }
 .current-task strong { font-size: 12px; font-weight: 600; }
 .task-summary { margin: -6px 0 0; color: $text-secondary; font-size: 12px; }
-.agent-card footer { gap: 8px; margin-top: auto; }
+.agent-card footer { flex-wrap: wrap; gap: 8px; margin-top: auto; }
 .empty-state { padding: 32px; border: 1px dashed $border-color; border-radius: 8px; color: $text-secondary; text-align: center; }
 .empty-state.compact { padding: 18px; }
 .task-list { display: grid; max-height: min(60vh, 560px); gap: 10px; overflow: auto; }

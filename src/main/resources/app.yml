@@ -181,8 +181,6 @@ security.hardlineAllowlist:
 approvals.subagentAutoApprove: false
 # 所有审批（包括消息渠道）的统一超时秒数；超时后旧审批令牌不再放行。
 approvals.timeoutSeconds: 60
-# /reload-mcp 默认需要确认，避免工具 schema 变更影响下一轮模型调用。
-approvals.mcpReloadConfirm: true
 # 危险操作智能审批 Provider 与模型必须同时填写；两项都空时沿用当前 Profile 主模型。
 approvals.modelProvider:
 approvals.model:

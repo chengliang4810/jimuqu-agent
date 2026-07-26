@@ -96,17 +96,6 @@ public class DashboardPageController {
     }
 
     /**
-     * 将MCP页面短路径交给Dashboard单页应用，由前端Hash路由定位MCP页面。
-     *
-     * @param context 当前请求上下文，用于复用Dashboard入口文件响应。
-     * @return 返回Dashboard页面入口。
-     */
-    @Mapping("/mcp")
-    public DownloadedFile mcp(Context context) {
-        return renderIndex(context);
-    }
-
-    /**
      * 执行login相关逻辑。
      *
      * @param context 当前请求或运行上下文。
@@ -180,17 +169,6 @@ public class DashboardPageController {
      */
     @Mapping("/logs")
     public DownloadedFile logs(Context context) {
-        return renderIndex(context);
-    }
-
-    /**
-     * 执行gateways相关逻辑。
-     *
-     * @param context 当前请求或运行上下文。
-     * @return 返回gateways结果。
-     */
-    @Mapping("/gateways")
-    public DownloadedFile gateways(Context context) {
         return renderIndex(context);
     }
 

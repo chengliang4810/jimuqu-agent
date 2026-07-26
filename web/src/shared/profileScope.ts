@@ -10,12 +10,10 @@ const PROFILE_SCOPED_API_PREFIXES = [
   '/api/solonclaw/download',
   '/api/skills',
   '/api/tools',
-  '/api/mcp',
   '/api/model',
   '/api/models',
   '/api/providers',
   '/api/cron',
-  '/api/media',
   '/api/logs',
   '/api/gateway',
   '/api/status',
@@ -38,9 +36,10 @@ export function appendManagementProfile(path: string, profile: string): string {
   return absolute ? url.toString() : `${url.pathname}${url.search}${url.hash}`
 }
 
-export function normalizeManagementProfile(name: string, currentProfile: string): string {
+/** 规范化 Profile 深链参数；default 使用无查询参数的默认上下文。 */
+export function normalizeManagementProfile(name: string): string {
   const target = name.trim()
-  return !target || target === currentProfile ? '' : target
+  return !target || target === 'default' ? '' : target
 }
 
 /**

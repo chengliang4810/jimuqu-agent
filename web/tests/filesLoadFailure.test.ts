@@ -140,7 +140,7 @@ export async function listFiles(path = ''): Promise<ListResult> {
   assert.match(html, /stale\.txt/, 'FileList should keep stale rows visible while loadError is visible')
   assert.doesNotMatch(html, /Empty directory/, 'FileList should not show the empty state while loadError is visible')
 
-  for (const locale of ['zh', 'en', 'ja', 'ko', 'pt', 'fr', 'de', 'es']) {
+  for (const locale of ['zh', 'en']) {
     const messages = await import(`../src/i18n/locales/${locale}.ts`)
     assert.equal(typeof messages.default.files.loadFailed, 'string', `${locale} locale should define files.loadFailed`)
     assert.notEqual(messages.default.files.loadFailed.trim(), '', `${locale} locale files.loadFailed should not be empty`)

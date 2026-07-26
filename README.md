@@ -148,7 +148,6 @@ security:
 approvals:
   subagentAutoApprove: false
   timeoutSeconds: 60
-  mcpReloadConfirm: true
 solonclaw:
   dashboard:
     accessToken: ""
@@ -196,7 +195,6 @@ solonclaw:
 | `security.hardlineAllowlist` | 空 | 显式允许跳过的 hardline 类别；默认不放行 |
 | `approvals.subagentAutoApprove` | `false` | 子 Agent 是否自动批准一次可审批危险命令 |
 | `approvals.timeoutSeconds` | `60` | 所有审批（包括消息渠道）的统一超时秒数 |
-| `approvals.mcpReloadConfirm` | `true` | `/reload-mcp` 是否需要确认 |
 | `solonclaw.terminal.credentialFiles` | 空 | 可挂载到隔离执行环境的 workspace 相对凭据文件列表 |
 | `solonclaw.terminal.envPassthrough` | 空 | 允许传给本地子进程的第三方环境变量名 |
 | `solonclaw.terminal.sudoPassword` | 空 | 可选 sudo 密码，用于 `sudo -S` 改写；也可通过 `SOLONCLAW_SUDO_PASSWORD` 提供 |
@@ -210,8 +208,7 @@ solonclaw:
 | `solonclaw.skills.externalDirs` | 空 | 额外只读技能目录列表 |
 | `solonclaw.skills.templateVars` | `true` | 是否启用 SKILL.md 模板变量替换 |
 | `solonclaw.gateway.filterSilenceNarration` | `true` | 是否过滤短静默旁白，避免渠道收到无意义状态文本 |
-| `solonclaw.mcp.enabled` | `false` | 是否启用 MCP 工具适配 |
-| `solonclaw.web.searchBackend` | `solon-ai` | Web 搜索后端；当前使用 Solon AI 内置实现 |
+| `solonclaw.web.searchBackend` | `ddgs` | Web 搜索后端；可选内置 `ddgs` 或 `brave-free` |
 | `solonclaw.pricing.prices` | 空 | 模型价格配置；为空时只统计 token，不计算价格 |
 
 ## 消息渠道

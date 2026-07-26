@@ -180,9 +180,6 @@ public interface GatewayCommandConstants {
     /** 命令RELOAD技能的统一常量值。 */
     String COMMAND_RELOAD_SKILLS = "reload-skills";
 
-    /** 命令RELOADMCP的统一常量值。 */
-    String COMMAND_RELOAD_MCP = "reload-mcp";
-
     /** 命令定时任务的统一常量值。 */
     String COMMAND_CRON = "cron";
 
@@ -330,9 +327,6 @@ public interface GatewayCommandConstants {
 
     /** 斜杠命令RELOAD技能的统一常量值。 */
     String SLASH_RELOAD_SKILLS = COMMAND_PREFIX + COMMAND_RELOAD_SKILLS;
-
-    /** 斜杠命令RELOADMCP的统一常量值。 */
-    String SLASH_RELOAD_MCP = COMMAND_PREFIX + COMMAND_RELOAD_MCP;
 
     /** 斜杠命令定时任务的统一常量值。 */
     String SLASH_CRON = COMMAND_PREFIX + COMMAND_CRON;

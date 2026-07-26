@@ -48,7 +48,7 @@ interface WorkspaceConfigInfo {
 function configPreview(config: Record<string, WorkspaceConfigInfo>, key: string): string {
   const item = config[key]
   if (!item || !item.is_set) return ''
-  return item.redacted_value || '已设置'
+  return item.redacted_value || '********'
 }
 
 function configBoolean(value: unknown): boolean {

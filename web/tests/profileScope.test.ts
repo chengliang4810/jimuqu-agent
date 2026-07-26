@@ -11,11 +11,11 @@ assert.equal(isProfileScopedApiPath('/api/profiles'), false)
 assert.equal(appendManagementProfile('/api/config?raw=true', 'coder'), '/api/config?raw=true&profile=coder')
 assert.equal(appendManagementProfile('/api/profiles', 'coder'), '/api/profiles')
 assert.equal(
-  appendManagementProfile('http://127.0.0.1:8080/api/mcp?profile=old', 'coder'),
-  'http://127.0.0.1:8080/api/mcp?profile=old',
+  appendManagementProfile('http://127.0.0.1:8080/api/profiles?profile=old', 'coder'),
+  'http://127.0.0.1:8080/api/profiles?profile=old',
 )
 assert.equal(appendManagementProfile('/api/sessions/id?profile=worker', 'coder'), '/api/sessions/id?profile=worker')
-assert.equal(normalizeManagementProfile('default', 'default'), '')
-assert.equal(normalizeManagementProfile('coder', 'default'), 'coder')
+assert.equal(normalizeManagementProfile('default'), '')
+assert.equal(normalizeManagementProfile('coder'), 'coder')
 assert.notEqual(profileSessionIdentity('same-id', 'default'), profileSessionIdentity('same-id', 'worker'))
 assert.equal(profileSessionIdentity('same:id', 'worker/name'), 'worker%2Fname:same%3Aid')

@@ -29,6 +29,8 @@
         <lombok.version>1.18.46</lombok.version>
         <jline.version>4.2.1</jline.version>
         <jackson.version>2.22.1</jackson.version>
+        <jsoup.version>1.18.3</jsoup.version>
+        <flexmark.version>0.50.50</flexmark.version>
     </properties>
 
     <dependencyManagement>
@@ -60,19 +62,26 @@
             <version>${solon.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.noear</groupId>
-            <artifactId>solon-ai-harness</artifactId>
-            <version>${solon.version}</version>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>${jsoup.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.noear</groupId>
-            <artifactId>solon-ai-talent-web</artifactId>
-            <version>${solon.version}</version>
+            <groupId>com.vladsch.flexmark</groupId>
+            <artifactId>flexmark-html2md-converter</artifactId>
+            <version>${flexmark.version}</version>
         </dependency>
         <dependency>
             <groupId>org.noear</groupId>
             <artifactId>solon-ai-talent-gateway</artifactId>
             <version>${solon.version}</version>
+            <exclusions>
+                <!-- 仅保留项目正在使用的 ToolGatewayTalent，不打包 MCP Gateway 运行时。 -->
+                <exclusion>
+                    <groupId>org.noear</groupId>
+                    <artifactId>solon-ai-mcp</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.noear</groupId>
@@ -87,11 +96,6 @@
         <dependency>
             <groupId>org.noear</groupId>
             <artifactId>solon-ai-talent-sys</artifactId>
-            <version>${solon.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.noear</groupId>
-            <artifactId>solon-ai-mcp</artifactId>
             <version>${solon.version}</version>
         </dependency>
         <dependency>

@@ -16,7 +16,6 @@ public final class SetupGuidanceCommands {
                             "fallback",
                             "secrets",
                             "proxy",
-                            "mcp",
                             "send",
                             "hooks",
                             "dump",

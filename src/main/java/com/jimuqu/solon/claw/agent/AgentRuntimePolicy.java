@@ -81,8 +81,6 @@ public final class AgentRuntimePolicy {
                     ToolNameConstants.CONFIG_SET_SECRET,
                     ToolNameConstants.CONFIG_REFRESH,
                     ToolNameConstants.TOOL_GATEWAY,
-                    ToolNameConstants.MCP,
-                    ToolNameConstants.MCP_MANAGE,
                     ToolNameConstants.CURATOR_MANAGE,
                     ToolNameConstants.PLATFORM_TOOLSETS_MANAGE,
                     ToolNameConstants.PROVIDER_MANAGE,
@@ -335,10 +333,6 @@ public final class AgentRuntimePolicy {
         }
         if ("gateway".equals(key) || "tool_gateway".equals(key) || "managed_tools".equals(key)) {
             output.add(ToolNameConstants.TOOL_GATEWAY);
-            return;
-        }
-        if ("mcp".equals(key) || "mcp_tools".equals(key)) {
-            output.add(ToolNameConstants.MCP);
             return;
         }
         if ("message".equals(key) || "messaging".equals(key) || "send".equals(key)) {

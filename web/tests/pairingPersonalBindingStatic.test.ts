@@ -19,6 +19,8 @@ assert.ok(control.includes('primaryNotificationChannel'), 'the primary platform 
 assert.ok(control.includes('retryPairingWelcome'), 'failed welcome delivery should offer a retry action')
 assert.ok(control.includes('canRetryWelcome'), 'a bound owner should always be able to resend the welcome message')
 assert.ok(control.includes('watch(() => props.profileName'), 'switching the managed Profile should refresh pairing state')
+assert.ok(control.includes("t('common.refresh')"), 'the binding refresh action should use the shared translation key')
+assert.equal(control.includes('channels.mediaRefresh'), false, 'removed media-cache translations must not remain referenced')
 assert.equal(control.includes('revokePairing'), false, 'personal assistant binding must not expose shared-user revoke controls')
 assert.equal(control.includes('setPairingAdmin'), false, 'personal assistant binding must not accept manually entered administrator identities')
 assert.ok(view.includes('profilesStore.managedProfileName'), 'the channels page should pass the managed Profile to the binding control')

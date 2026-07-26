@@ -23,7 +23,6 @@ import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
 import com.jimuqu.solon.claw.support.BlockingLlmGateway;
 import com.jimuqu.solon.claw.support.MessageSupport;
 import com.jimuqu.solon.claw.support.TestEnvironment;
-import com.jimuqu.solon.claw.web.DashboardMcpService;
 import com.jimuqu.solon.claw.web.DashboardRunService;
 import java.io.File;
 import java.util.Arrays;
@@ -1493,154 +1492,18 @@ public class CommandEnhancementTest {
     }
 
     @Test
-    void shouldSupportReloadMcpCommandWithConfirmationTextAndToolBaseline() throws Exception {
-        TestEnvironment env = TestEnvironment.withFakeLlm();
-        bootstrapAdmin(env);
-        DashboardMcpService mcpService = new DashboardMcpService(env.appConfig, env.sqliteDatabase);
-        Map<String, Object> body = new LinkedHashMap<String, Object>();
-        body.put("serverId", "local-docs");
-        body.put("name", "Local Docs");
-        body.put("transport", "stdio");
-        body.put("command", "docs-mcp");
-        body.put(
-                "tools",
-                Collections.singletonList(Collections.singletonMap("name", "docs_search")));
-        mcpService.save(body);
-
-        GatewayReply prompt = env.send("admin-chat", "admin-user", "/reload-mcp");
-        assertThat(prompt.getContent())
-                .contains("/approve")
-                .contains("/approve always")
-                .contains("/cancel")
-                .contains("工具 schema");
-
-        GatewayReply reloaded = env.send("admin-chat", "admin-user", "/reload-mcp now");
-        assertThat(reloaded.getContent())
-                .contains("MCP reload completed")
-                .contains("tools=1")
-                .contains("changed_servers=[]")
-                .contains("unchanged_servers=[local-docs]");
-
-        SessionRecord reloadedSession =
-                env.sessionRepository.getBoundSession("MEMORY:admin-chat:admin-user");
-        List<ChatMessage> reloadedMessages =
-                com.jimuqu.solon.claw.support.MessageSupport.loadMessages(
-                        reloadedSession.getNdjson());
-        ChatMessage reloadReply = reloadedMessages.get(reloadedMessages.size() - 1);
-        assertThat(reloadReply.getRole()).isEqualTo(ChatRole.ASSISTANT);
-        assertThat(reloadReply.getContent()).contains("MCP reload completed");
-        ChatMessage reloadNotice = reloadedMessages.get(reloadedMessages.size() - 2);
-        assertThat(reloadNotice.getRole()).isEqualTo(ChatRole.USER);
-        assertThat(reloadNotice.getContent())
-                .contains("[IMPORTANT: MCP servers have been reloaded.")
-                .contains("Reconnected servers: [local-docs]")
-                .contains("1 MCP tool(s) now available")
-                .contains("The tool list for this conversation has been updated accordingly.");
-
-        assertThat(mcpService.check("local-docs").get("tool_changed_notification"))
-                .isEqualTo(false);
-
-        Map<String, Object> updated = new LinkedHashMap<String, Object>(body);
-        updated.put(
-                "tools",
-                java.util.Arrays.asList(
-                        Collections.singletonMap("name", "docs_search"),
-                        Collections.singletonMap("name", "docs_fetch")));
-        mcpService.save(updated);
-        assertThat(mcpService.check("local-docs").get("tool_changed_notification")).isEqualTo(true);
-
-        GatewayReply help = env.send("admin-chat", "admin-user", "/help");
-        assertThat(help.getContent()).contains("/reload-mcp [now|always]");
-        assertThat(help.getContent()).contains("/approve [确认编号]");
-    }
-
-    @Test
-    void shouldResolveReloadMcpWithSlashConfirmFallbacks() throws Exception {
-        TestEnvironment env = TestEnvironment.withFakeLlm();
-        bootstrapAdmin(env);
-        DashboardMcpService mcpService = new DashboardMcpService(env.appConfig, env.sqliteDatabase);
-        Map<String, Object> body = new LinkedHashMap<String, Object>();
-        body.put("serverId", "slash-confirm-docs");
-        body.put("name", "Slash Confirm Docs");
-        body.put("transport", "stdio");
-        body.put("command", "docs-mcp");
-        body.put(
-                "tools",
-                Collections.singletonList(Collections.singletonMap("name", "docs_search")));
-        mcpService.save(body);
-
-        GatewayReply prompt = env.send("admin-chat", "admin-user", "/reload-mcp");
-        assertThat(prompt.getContent()).contains("确认编号").contains("/approve [确认编号]");
-
-        GatewayReply status = env.send("admin-chat", "admin-user", "/confirm");
-        assertThat(status.getContent())
-                .contains("当前待确认 slash 命令：/reload-mcp")
-                .contains(extractSlashConfirmId(prompt))
-                .contains("/approve [确认编号]");
-
-        GatewayReply cancelled = env.send("admin-chat", "admin-user", "/cancel");
-        assertThat(cancelled.getContent()).contains("已取消 /reload-mcp");
-
-        GatewayReply emptyStatus = env.send("admin-chat", "admin-user", "/confirm");
-        assertThat(emptyStatus.getContent()).contains("当前没有待确认的 slash 命令");
-
-        GatewayReply promptAgain = env.send("admin-chat", "admin-user", "/reload-mcp");
-        assertThat(promptAgain.getContent()).contains("/approve");
-
-        GatewayReply approvedWithAlias =
-                env.send(
-                        "admin-chat",
-                        "admin-user",
-                        "/approve "
-                                + disguisedConfirmId(extractSlashConfirmId(promptAgain))
-                                + " yes");
-        assertThat(approvedWithAlias.getContent())
-                .contains("MCP reload completed")
-                .contains("tools=1");
-
-        GatewayReply okPrompt = env.send("admin-chat", "admin-user", "/reload-mcp");
-        assertThat(okPrompt.getContent()).contains("确认编号");
-        GatewayReply approvedWithOk = env.send("admin-chat", "admin-user", "/approve ok");
-        assertThat(approvedWithOk.getContent()).contains("MCP reload completed");
-
-        GatewayReply confirmPrompt = env.send("admin-chat", "admin-user", "/reload-mcp");
-        assertThat(confirmPrompt.getContent()).contains("确认编号");
-        GatewayReply approvedWithConfirm = env.send("admin-chat", "admin-user", "/approve confirm");
-        assertThat(approvedWithConfirm.getContent()).contains("MCP reload completed");
-
-        GatewayReply alwaysPrompt = env.send("admin-chat", "admin-user", "/reload-mcp");
-        assertThat(alwaysPrompt.getContent()).contains("/approve always");
-
-        GatewayReply always =
-                env.send(
-                        "admin-chat",
-                        "admin-user",
-                        "/approve always "
-                                + disguisedConfirmId(extractSlashConfirmId(alwaysPrompt)));
-        assertThat(always.getContent()).contains("已永久确认 /reload-mcp");
-        assertThat(env.appConfig.getApprovals().isMcpReloadConfirm()).isFalse();
-        assertThat(
-                        RuntimeConfigResolver.initialize(env.appConfig.getRuntime().getHome())
-                                .get("approvals.mcpReloadConfirm"))
-                .isEqualTo("false");
-
-        GatewayReply direct = env.send("admin-chat", "admin-user", "/reload-mcp");
-        assertThat(direct.getContent()).contains("MCP reload completed").doesNotContain("确认编号");
-    }
-
-    @Test
     void shouldRedactSlashConfirmStatusText() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         bootstrapAdmin(env);
         env.slashConfirmService.register(
                 "MEMORY:admin-chat:admin-user",
-                "reload-mcp --token=ghp_slashstatuscommand12345",
-                "确认刷新 Authorization: Bearer ghp_slashstatusprompt12345");
+                "rollback clear --token=ghp_slashstatuscommand12345",
+                "确认清理 Authorization: Bearer ghp_slashstatusprompt12345");
 
         GatewayReply status = env.send("admin-chat", "admin-user", "/confirm");
 
         assertThat(status.getContent())
-                .contains("reload-mcp --token=***")
+                .contains("rollback clear --token=***")
                 .contains("Authorization: Bearer ***")
                 .doesNotContain("ghp_slashstatuscommand12345")
                 .doesNotContain("ghp_slashstatusprompt12345");
@@ -1652,8 +1515,8 @@ public class CommandEnhancementTest {
         bootstrapAdmin(env);
         env.slashConfirmService.register(
                 "MEMORY:admin-chat:admin-user",
-                "reload-mcp --token=ghp_slashunsafecommand12345",
-                "确认刷新 Authorization: Bearer ghp_slashunsafeprompt12345");
+                "rollback clear --token=ghp_slashunsafecommand12345",
+                "确认清理 Authorization: Bearer ghp_slashunsafeprompt12345");
 
         GatewayReply rejected =
                 env.send(
@@ -1669,39 +1532,28 @@ public class CommandEnhancementTest {
                 .doesNotContain("ghp_slashunsafecommand12345")
                 .doesNotContain("ghp_slashunsafeprompt12345");
         assertThat(status.getContent())
-                .contains("reload-mcp --token=***")
+                .contains("rollback clear --token=***")
                 .contains("Authorization: Bearer ***")
                 .doesNotContain("ghp_slashunsafecommand12345")
                 .doesNotContain("ghp_slashunsafeprompt12345");
 
         GatewayReply cancelled = env.send("admin-chat", "admin-user", "/deny");
-        assertThat(cancelled.getContent()).contains("已取消 /reload-mcp");
+        assertThat(cancelled.getContent()).contains("已取消 /rollback");
     }
 
     @Test
-    void shouldSupersedePendingReloadMcpSlashConfirm() throws Exception {
+    void shouldSupersedePendingSlashConfirm() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         bootstrapAdmin(env);
-        DashboardMcpService mcpService = new DashboardMcpService(env.appConfig, env.sqliteDatabase);
-        Map<String, Object> body = new LinkedHashMap<String, Object>();
-        body.put("serverId", "slash-confirm-supersede");
-        body.put("name", "Slash Confirm Supersede");
-        body.put("transport", "stdio");
-        body.put("command", "docs-mcp");
-        body.put(
-                "tools",
-                Collections.singletonList(Collections.singletonMap("name", "docs_search")));
-        mcpService.save(body);
-
-        GatewayReply first = env.send("admin-chat", "admin-user", "/reload-mcp");
-        GatewayReply second = env.send("admin-chat", "admin-user", "/reload-mcp");
+        GatewayReply first = env.send("admin-chat", "admin-user", "/rollback clear");
+        GatewayReply second = env.send("admin-chat", "admin-user", "/rollback clear");
 
         assertThat(first.getContent()).contains("确认编号");
         assertThat(second.getContent()).contains("确认编号");
         assertThat(second.getContent()).isNotEqualTo(first.getContent());
 
         GatewayReply cancelled = env.send("admin-chat", "admin-user", "/cancel");
-        assertThat(cancelled.getContent()).contains("已取消 /reload-mcp");
+        assertThat(cancelled.getContent()).contains("已取消 /rollback");
 
         GatewayReply stale = env.send("admin-chat", "admin-user", "/cancel");
         assertThat(stale.getContent()).contains("当前没有待确认的 slash 命令");
@@ -1711,18 +1563,7 @@ public class CommandEnhancementTest {
     void shouldPrioritizeDangerousApprovalOverSlashConfirmFallback() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         bootstrapAdmin(env);
-        DashboardMcpService mcpService = new DashboardMcpService(env.appConfig, env.sqliteDatabase);
-        Map<String, Object> body = new LinkedHashMap<String, Object>();
-        body.put("serverId", "slash-confirm-priority");
-        body.put("name", "Slash Confirm Priority");
-        body.put("transport", "stdio");
-        body.put("command", "docs-mcp");
-        body.put(
-                "tools",
-                Collections.singletonList(Collections.singletonMap("name", "docs_search")));
-        mcpService.save(body);
-
-        GatewayReply prompt = env.send("admin-chat", "admin-user", "/reload-mcp");
+        GatewayReply prompt = env.send("admin-chat", "admin-user", "/rollback clear");
         assertThat(prompt.getContent()).contains("确认编号");
 
         SessionRecord session =
@@ -1750,7 +1591,7 @@ public class CommandEnhancementTest {
                 .isTrue();
 
         GatewayReply stillPendingSlashConfirm = env.send("admin-chat", "admin-user", "/cancel");
-        assertThat(stillPendingSlashConfirm.getContent()).contains("已取消 /reload-mcp");
+        assertThat(stillPendingSlashConfirm.getContent()).contains("已取消 /rollback");
     }
 
     @Test
@@ -1841,18 +1682,7 @@ public class CommandEnhancementTest {
     void shouldPrioritizeDangerousApprovalWhenCancelIsUsedLikeJimuqu() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         bootstrapAdmin(env);
-        DashboardMcpService mcpService = new DashboardMcpService(env.appConfig, env.sqliteDatabase);
-        Map<String, Object> body = new LinkedHashMap<String, Object>();
-        body.put("serverId", "slash-confirm-cancel-priority");
-        body.put("name", "Slash Confirm Cancel Priority");
-        body.put("transport", "stdio");
-        body.put("command", "docs-mcp");
-        body.put(
-                "tools",
-                Collections.singletonList(Collections.singletonMap("name", "docs_search")));
-        mcpService.save(body);
-
-        GatewayReply prompt = env.send("admin-chat", "admin-user", "/reload-mcp");
+        GatewayReply prompt = env.send("admin-chat", "admin-user", "/rollback clear");
         assertThat(prompt.getContent()).contains("确认编号");
 
         SessionRecord session =
@@ -1876,31 +1706,7 @@ public class CommandEnhancementTest {
                 .isNull();
 
         GatewayReply stillPendingSlashConfirm = env.send("admin-chat", "admin-user", "/cancel");
-        assertThat(stillPendingSlashConfirm.getContent()).contains("已取消 /reload-mcp");
-    }
-
-    @Test
-    void shouldSkipReloadMcpPromptWhenConfigDisablesConfirm() throws Exception {
-        TestEnvironment env = TestEnvironment.withFakeLlm();
-        bootstrapAdmin(env);
-        DashboardMcpService mcpService = new DashboardMcpService(env.appConfig, env.sqliteDatabase);
-        Map<String, Object> body = new LinkedHashMap<String, Object>();
-        body.put("serverId", "no-confirm-docs");
-        body.put("name", "No Confirm Docs");
-        body.put("transport", "stdio");
-        body.put("command", "docs-mcp");
-        body.put(
-                "tools",
-                Collections.singletonList(Collections.singletonMap("name", "docs_search")));
-        mcpService.save(body);
-        env.appConfig.getApprovals().setMcpReloadConfirm(false);
-
-        GatewayReply direct = env.send("admin-chat", "admin-user", "/reload-mcp");
-
-        assertThat(direct.getContent())
-                .contains("MCP reload completed")
-                .contains("tools=1")
-                .doesNotContain("确认编号");
+        assertThat(stillPendingSlashConfirm.getContent()).contains("已取消 /rollback");
     }
 
     @Test

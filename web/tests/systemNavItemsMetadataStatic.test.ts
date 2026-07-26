@@ -28,7 +28,6 @@ assert.ok(
 assert.ok(!systemNav.includes("key: 'solonclaw.settings'"), 'system navigation component should not inline route keys')
 assert.ok(sidebarNav.includes("key: 'solonclaw.settings'"), 'shared sidebar catalog should include settings route')
 assert.ok(sidebarNav.includes("key: 'solonclaw.tuiRuntime'"), 'shared sidebar catalog should include TUI runtime route')
-assert.ok(sidebarNav.includes("key: 'solonclaw.mcp'"), 'shared sidebar catalog should include MCP route')
 assert.equal(
   (systemNav.match(/class="nav-item"/g) || []).length,
   1,

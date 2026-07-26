@@ -249,8 +249,6 @@ final class DefaultDiagnosticsCommandHandler {
         }
         summary.toolCount = toolRegistry == null ? 0 : toolRegistry.listToolNames().size();
         summary.sessionCount = sessionRepository == null ? 0 : sessionRepository.countAll();
-        summary.mcpStatus =
-                appConfig != null && appConfig.getMcp().isEnabled() ? "enabled" : "disabled";
         summary.guardrailMode =
                 appConfig == null || appConfig.getSecurity() == null
                         ? ""
@@ -281,8 +279,6 @@ final class DefaultDiagnosticsCommandHandler {
                 + summary.toolCount
                 + "\nsessions="
                 + summary.sessionCount
-                + "\nmcp="
-                + summary.mcpStatus
                 + "\nguardrail_mode="
                 + summary.guardrailMode
                 + "\nsecurity_probes_passed="
@@ -322,9 +318,6 @@ final class DefaultDiagnosticsCommandHandler {
 
         /** 记录Debug摘要中的会话次数。 */
         private int sessionCount;
-
-        /** 记录Debug摘要中的MCP状态。 */
-        private String mcpStatus;
 
         /** 记录Debug摘要中的安全护栏模式。 */
         private String guardrailMode;

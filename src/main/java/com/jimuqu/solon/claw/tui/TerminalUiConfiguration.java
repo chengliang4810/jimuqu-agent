@@ -14,7 +14,6 @@ import com.jimuqu.solon.claw.core.service.DelegationService;
 import com.jimuqu.solon.claw.core.service.SkillHubService;
 import com.jimuqu.solon.claw.core.service.SkillLearningService;
 import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.jimuqu.solon.claw.support.AttachmentPathResolver;
@@ -50,7 +49,6 @@ public class TerminalUiConfiguration {
             BrowserRuntimeService browserRuntimeService,
             ContextCompressionService contextCompressionService,
             AttachmentCacheService attachmentCacheService,
-            McpRuntimeService mcpRuntimeService,
             GatewayRuntimeRefreshService gatewayRuntimeRefreshService,
             DelegationService delegationService,
             AgentRunControlService agentRunControlService,
@@ -85,7 +83,6 @@ public class TerminalUiConfiguration {
                         browserRuntimeService,
                         contextCompressionService,
                         new AttachmentPathResolver(attachmentCacheService, securityPolicyService),
-                        mcpRuntimeService,
                         gatewayRuntimeRefreshService,
                         delegationService,
                         agentRunControlService,

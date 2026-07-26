@@ -676,7 +676,6 @@ class TerminalUiApprovalRespondTest {
                 null,
                 null,
                 null,
-                null,
                 env.agentRunRepository,
                 env.runtimeSettingsService,
                 env.globalSettingRepository);

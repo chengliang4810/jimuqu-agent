@@ -252,7 +252,7 @@ public class SecurityPolicyServiceTest {
         Map<String, Object> args = new LinkedHashMap<String, Object>();
         args.put("config", nested);
 
-        SecurityPolicyService.UrlVerdict verdict = policy.checkToolArgs("mcp_proxy", args);
+        SecurityPolicyService.UrlVerdict verdict = policy.checkToolArgs("remote_proxy", args);
 
         assertThat(policy.extractUrlishValues(args)).contains("http://localhost:8080/admin");
         assertThat(verdict.isAllowed()).isFalse();
@@ -271,7 +271,7 @@ public class SecurityPolicyServiceTest {
         Map<String, Object> args = new LinkedHashMap<String, Object>();
         args.put("transport", nested);
 
-        SecurityPolicyService.UrlVerdict verdict = policy.checkToolArgs("mcp_proxy", args);
+        SecurityPolicyService.UrlVerdict verdict = policy.checkToolArgs("remote_proxy", args);
 
         assertThat(policy.extractUrlishValues(args))
                 .contains("http://internal.example", "http://proxy.example:8080");

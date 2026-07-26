@@ -94,7 +94,7 @@ public class DangerousCommandFilePolicyTest {
         SecurityPolicyService.FileVerdict zero =
                 securityPolicyService.checkFileToolArgs("file_read", zeroArgs);
         SecurityPolicyService.FileVerdict procFd =
-                securityPolicyService.checkFileToolArgs("mcp_remote_tool", procFdArgs);
+                securityPolicyService.checkFileToolArgs("remote_proxy_tool", procFdArgs);
         SecurityPolicyService.FileVerdict project =
                 securityPolicyService.checkFileToolArgs("file_read", projectArgs);
 
@@ -365,17 +365,17 @@ public class DangerousCommandFilePolicyTest {
         destinationWrite.put("destination", ".env.local");
 
         SecurityPolicyService.FileVerdict write =
-                securityPolicyService.checkFileToolArgs("mcp_remote_tool", genericWrite);
+                securityPolicyService.checkFileToolArgs("remote_proxy_tool", genericWrite);
         SecurityPolicyService.FileVerdict patch =
                 securityPolicyService.checkFileToolArgs("tool_gateway", nestedPatch);
         SecurityPolicyService.FileVerdict read =
-                securityPolicyService.checkFileToolArgs("mcp_remote_tool", genericRead);
+                securityPolicyService.checkFileToolArgs("remote_proxy_tool", genericRead);
         SecurityPolicyService.FileVerdict toolNameWrite =
                 securityPolicyService.checkFileToolArgs("tool_gateway", nestedWriteTool);
         SecurityPolicyService.FileVerdict outputFile =
-                securityPolicyService.checkFileToolArgs("mcp_remote_tool", outputFileWrite);
+                securityPolicyService.checkFileToolArgs("remote_proxy_tool", outputFileWrite);
         SecurityPolicyService.FileVerdict destination =
-                securityPolicyService.checkFileToolArgs("mcp_remote_tool", destinationWrite);
+                securityPolicyService.checkFileToolArgs("remote_proxy_tool", destinationWrite);
 
         assertThat(write.isAllowed()).isTrue();
         assertThat(patch.isAllowed()).isFalse();
@@ -440,7 +440,7 @@ public class DangerousCommandFilePolicyTest {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         SecurityPolicyService securityPolicyService = new SecurityPolicyService(env.appConfig);
 
-        // mcp_remote_tool 为非 write-like 工具，嵌套/数组读凭据路径（.env.local、~/.ssh/id_ed25519）
+        // remote_proxy_tool 为非 write-like 工具，嵌套/数组读凭据路径（.env.local、~/.ssh/id_ed25519）
         // 已放宽（对齐 外部对标仓库"读非安全边界"），nested/array 读阻断断言已移除。
         // 下方嵌套 patch 写凭据文件（.env）仍阻断，保留。
         Map<String, Object> nestedPatchCall = new LinkedHashMap<String, Object>();
@@ -758,7 +758,7 @@ public class DangerousCommandFilePolicyTest {
         nested.put("metadata", metadata);
 
         SecurityPolicyService.UrlVerdict verdict =
-                securityPolicyService.checkToolArgs("mcp_remote_tool", nested);
+                securityPolicyService.checkToolArgs("remote_proxy_tool", nested);
 
         assertThat(verdict.isAllowed()).isFalse();
         assertThat(verdict.getMessage()).contains("blocked.example");

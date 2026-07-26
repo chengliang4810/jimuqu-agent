@@ -76,7 +76,10 @@ public class GatewayConfigurationInboundRecoveryTest {
 
             assertThat(adapter.awaitSend()).isTrue();
             ChannelInboundMessageRecord completed =
-                    env.channelInboundMessageRepository.findByMessageKey(record.getMessageKey());
+                    awaitStatus(
+                            env.channelInboundMessageRepository,
+                            record.getMessageKey(),
+                            ChannelInboundMessageRecord.STATUS_COMPLETED);
             assertThat(order).containsExactly("connect", "send");
             assertThat(completed.getStatus())
                     .isEqualTo(ChannelInboundMessageRecord.STATUS_COMPLETED);
@@ -170,7 +173,10 @@ public class GatewayConfigurationInboundRecoveryTest {
 
             assertThat(adapter.awaitSend()).isTrue();
             ChannelInboundMessageRecord completed =
-                    env.channelInboundMessageRepository.findByMessageKey(record.getMessageKey());
+                    awaitStatus(
+                            env.channelInboundMessageRepository,
+                            record.getMessageKey(),
+                            ChannelInboundMessageRecord.STATUS_COMPLETED);
             assertThat(order).containsExactly("connect", "send");
             assertThat(completed.getStatus())
                     .isEqualTo(ChannelInboundMessageRecord.STATUS_COMPLETED);
@@ -229,7 +235,12 @@ public class GatewayConfigurationInboundRecoveryTest {
             assertThat(repository.captureCalls.get()).isGreaterThanOrEqualTo(3);
             assertThat(repository.platformListCalls.get()).isEqualTo(2);
             assertThat(order).containsExactly("connect", "send");
-            assertThat(repository.findByMessageKey(record.getMessageKey()).getStatus())
+            assertThat(
+                            awaitStatus(
+                                            repository,
+                                            record.getMessageKey(),
+                                            ChannelInboundMessageRecord.STATUS_COMPLETED)
+                                    .getStatus())
                     .isEqualTo(ChannelInboundMessageRecord.STATUS_COMPLETED);
         } finally {
             connectionManager.shutdown();
@@ -250,6 +261,21 @@ public class GatewayConfigurationInboundRecoveryTest {
         record.setCreatedAt(1L);
         record.setUpdatedAt(1L);
         return record;
+    }
+
+    /** 有界等待异步恢复流程写入预期终态，避免发送回调与总账更新之间的竞态。 */
+    private ChannelInboundMessageRecord awaitStatus(
+            ChannelInboundMessageRepository repository, String messageKey, String expectedStatus)
+            throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5L);
+        ChannelInboundMessageRecord current = repository.findByMessageKey(messageKey);
+        while (current != null
+                && !expectedStatus.equals(current.getStatus())
+                && System.nanoTime() < deadline) {
+            Thread.sleep(10L);
+            current = repository.findByMessageKey(messageKey);
+        }
+        return current;
     }
 
     /** 只有 connect 成功后才允许发送的测试渠道适配器。 */

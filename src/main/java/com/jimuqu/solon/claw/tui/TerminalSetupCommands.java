@@ -203,9 +203,6 @@ public class TerminalSetupCommands {
         if ("proxy".equals(value) || value.startsWith("proxy ")) {
             return renderProxyGuidance();
         }
-        if ("mcp".equals(value) || value.startsWith("mcp ")) {
-            return renderMcpGuidance(rawValue);
-        }
         if ("send".equals(value) || value.startsWith("send ")) {
             return renderSendGuidance();
         }
@@ -255,32 +252,6 @@ public class TerminalSetupCommands {
             }
         }
         return false;
-    }
-
-    /**
-     * 渲染 MCP 顶层命令说明；当前本地终端只给出配置路径和刷新入口，不伪造连接测试结果。
-     *
-     * @param rawValue 用户输入的 MCP 命令。
-     * @return MCP 配置引导文本。
-     */
-    private String renderMcpGuidance(String rawValue) {
-        String rest = StrUtil.nullToEmpty(rawValue).trim();
-        if (rest.toLowerCase(java.util.Locale.ROOT).startsWith("mcp")) {
-            rest = rest.length() <= "mcp".length() ? "" : rest.substring("mcp".length()).trim();
-        }
-        String action = StrUtil.isBlank(rest) ? "list" : shellTokens(rest).get(0);
-        return "MCP 配置\n"
-                + "action="
-                + action
-                + "\n当前本地终端不直接启动或探测 MCP server；请通过 Dashboard 的 MCP 页面或 "
-                + "workspace/config.yml 写入 mcp.servers 配置。\n"
-                + "config="
-                + configResolver().configFile().getPath()
-                + "\n可用入口：\n"
-                + "1. solonclaw config set mcp.servers.<name>.command <command>\n"
-                + "2. solonclaw config set mcp.servers.<name>.url <url>\n"
-                + "3. /reload-mcp now - 配置后刷新 MCP 工具 schema\n"
-                + "4. /security mcp、/security mcp-oauth、/security mcp-package - 查看 MCP 安全策略。";
     }
 
     /** 渲染 setup 总览。 */
@@ -387,13 +358,12 @@ public class TerminalSetupCommands {
                 + "可在终端内继续使用 /help、/tips、/sessions、/history。";
     }
 
-    /** 渲染工具初始化分节，聚焦安全策略、MCP 与内置工具可见性。 */
+    /** 渲染工具初始化分节，聚焦安全策略与内置工具可见性。 */
     private String renderSetupTools() {
         return "工具初始化\n"
                 + "1. /security policy - 查看工具审批、路径、URL 与终端执行策略\n"
-                + "2. /reload-mcp now - 立即重载 MCP 工具 schema\n"
-                + "3. /tools、/toolsets、/browser - 查看工具与浏览器自动化状态\n"
-                + "4. solonclaw config set <key> <value> - 写入工具相关 workspace/config.yml 覆盖项";
+                + "2. /tools、/toolsets、/browser - 查看工具与浏览器自动化状态\n"
+                + "3. solonclaw config set <key> <value> - 写入工具相关 workspace/config.yml 覆盖项";
     }
 
     /** 渲染 Agent 初始化分节，说明目标与会话管理入口。 */

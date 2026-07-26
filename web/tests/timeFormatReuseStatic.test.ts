@@ -7,7 +7,6 @@ const files = [
   '../src/views/solonclaw/DiagnosticsView.vue',
   '../src/views/solonclaw/TuiRuntimeView.vue',
   '../src/shared/jobsDisplay.ts',
-  '../src/shared/mcpDisplay.ts',
   '../src/shared/runsDisplay.ts',
 ]
 

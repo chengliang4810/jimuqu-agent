@@ -70,7 +70,6 @@ public class AppConfigProviderLoadTest {
         assertThat(config.getApprovals().getTimeoutSeconds()).isEqualTo(180);
         assertThat(config.getTerminal().getMaxForegroundTimeoutSeconds()).isEqualTo(600);
         assertThat(config.getTask().getMediaCacheTtlHours()).isEqualTo(168);
-        assertThat(config.getMcp().isEnabled()).isFalse();
         assertThat(config.getPricing().getPrices()).isEmpty();
         assertThat(config.getReflection().isEnabled()).isTrue();
         assertThat(config.getReflection().getIntervalHours()).isEqualTo(24);

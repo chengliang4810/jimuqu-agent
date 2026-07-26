@@ -88,10 +88,6 @@ final class SlashCommandHelpRenderer {
         put(usages, "curator", "/curator [status|list|improvements|run|pause|resume]");
         put(
                 usages,
-                "reload-mcp",
-                "/reload-mcp [now|always]；确认：/approve [确认编号]|/approve always [确认编号]|/cancel");
-        put(
-                usages,
                 "cron",
                 "/cron [list"
                         + " [--all]|inspect|show|next|upcoming|guide|tutorial|capabilities|policy|add|edit|pause|disable|stop|resume|enable|start|remove|delete|run|trigger|retry|rerun|history|status|tick]");

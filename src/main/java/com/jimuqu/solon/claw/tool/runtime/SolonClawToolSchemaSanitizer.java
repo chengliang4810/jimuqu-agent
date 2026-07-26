@@ -59,16 +59,9 @@ public final class SolonClawToolSchemaSanitizer {
     public static Map<String, Object> policySummary() {
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
         summary.put("enabled", Boolean.TRUE);
-        summary.put(
-                "appliesTo",
-                Arrays.asList(
-                        "localFunctionTools",
-                        "toolProviders",
-                        "mcpLocalToolListing",
-                        "mcpRemoteToolImport"));
+        summary.put("appliesTo", Arrays.asList("localFunctionTools", "toolProviders"));
         summary.put("inputSchemaSanitized", Boolean.TRUE);
         summary.put("outputFunctionToolSchemaSanitized", Boolean.TRUE);
-        summary.put("mcpInputSchemaSanitized", Boolean.TRUE);
         summary.put("invalidSchemaDefaultsToObject", Boolean.TRUE);
         summary.put("topLevelObjectRequired", Boolean.TRUE);
         summary.put("propertiesInjectedForObject", Boolean.TRUE);

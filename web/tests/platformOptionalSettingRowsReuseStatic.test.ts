@@ -37,7 +37,7 @@ assert.equal(
   'Optional platform credential fields should stay covered without duplicating QR primary credentials',
 )
 assert.equal(
-  (platformSettings.match(/\{ type: 'text', field: '(?:app_id|client_secret)', source: 'credentials', label:/g) || []).length,
+  (platformSettings.match(/\{ type: 'text', field: '(?:app_id|client_secret)', source: 'credentials', labelKey: '[^']+', hintKey: 'platform\.qqbot/g) || []).length,
   2,
   'QQBot QR primary settings should retain its two credential fields',
 )

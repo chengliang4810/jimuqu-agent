@@ -1,4 +1,5 @@
 import { request } from '../client'
+import { profileSessionIdentity } from '@/shared/profileScope'
 
 export interface SessionSummary {
   id: string
@@ -234,6 +235,8 @@ export async function searchSessions(q: string, source?: string, limit?: number)
   const params = new URLSearchParams()
   params.set('q', q)
   params.set('limit', String(limit || 10))
+  params.set('conversation_only', 'true')
+  params.set('profile', 'all')
   if (source) {
     params.set('source', source)
   }
@@ -244,18 +247,20 @@ export async function searchSessions(q: string, source?: string, limit?: number)
     updated_at?: number
     match_preview?: string | null
     summary?: string | null
+    profile?: string | null
   }> }>(`/api/search?${params}`)
 
   const sessions = await fetchSessions(source, limit || 200)
-  const map = new Map(sessions.map((session) => [session.id, session]))
+  const map = new Map(sessions.map((session) => [profileSessionIdentity(session.id, session.profile), session]))
 
   return res.results
     .slice(0, limit || 200)
     .map((item, index) => {
-      const base = map.get(item.session_id)
+      const base = map.get(profileSessionIdentity(item.session_id, item.profile || undefined))
       return {
         ...(base || {
           id: item.session_id,
+          profile: item.profile || undefined,
           source: source || 'local',
           model: '',
           title: item.title || null,

@@ -51,6 +51,9 @@ public class SessionSearchQuery {
     /** 是否启用summarize。 */
     private boolean summarize;
 
+    /** 是否仅返回用户主动发起且未归档的对话。 */
+    private boolean conversationOnly;
+
     /** 记录会话搜索查询中的限制。 */
     private int limit = 10;
 }

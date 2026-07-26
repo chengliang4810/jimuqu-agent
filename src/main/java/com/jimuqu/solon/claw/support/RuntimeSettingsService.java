@@ -130,7 +130,6 @@ public class RuntimeSettingsService {
                     "security.guardrailCronScope",
                     "approvals.subagentAutoApprove",
                     "approvals.timeoutSeconds",
-                    "approvals.mcpReloadConfirm",
                     "approvals.deny",
                     "solonclaw.terminal.credentialFiles",
                     "solonclaw.terminal.envPassthrough",
@@ -555,8 +554,7 @@ public class RuntimeSettingsService {
                 || "security.tirithEnabled".equals(key)
                 || "security.tirithFailOpen".equals(key)
                 || "security.websiteBlocklist.enabled".equals(key)
-                || "approvals.subagentAutoApprove".equals(key)
-                || "approvals.mcpReloadConfirm".equals(key)) {
+                || "approvals.subagentAutoApprove".equals(key)) {
             return "true".equalsIgnoreCase(value)
                     || "1".equals(value)
                     || "yes".equalsIgnoreCase(value);

@@ -122,9 +122,6 @@ public class AppConfig {
     /** 审批/确认策略配置。 */
     private ApprovalsConfig approvals = new ApprovalsConfig();
 
-    /** MCP 工具适配配置。 */
-    private McpConfig mcp = new McpConfig();
-
     /**
      * 从 Solon Props 构建应用配置。
      *
@@ -207,7 +204,6 @@ public class AppConfig {
         copyWeb(other.getWeb());
         copyPricing(other.getPricing());
         copyApprovals(other.getApprovals());
-        copyMcp(other.getMcp());
         copyProactive(other.getProactive());
         copyChannel(this.channels.getFeishu(), other.getChannels().getFeishu());
         copyChannel(this.channels.getDingtalk(), other.getChannels().getDingtalk());
@@ -675,25 +671,9 @@ public class AppConfig {
     private void copyApprovals(ApprovalsConfig other) {
         this.approvals.setSubagentAutoApprove(other.isSubagentAutoApprove());
         this.approvals.setTimeoutSeconds(other.getTimeoutSeconds());
-        this.approvals.setMcpReloadConfirm(other.isMcpReloadConfirm());
         this.approvals.setDeny(other.getDeny());
         this.approvals.setModelProvider(other.getModelProvider());
         this.approvals.setModel(other.getModel());
-    }
-
-    /**
-     * 复制MCP。
-     *
-     * @param other 待比较对象。
-     */
-    private void copyMcp(McpConfig other) {
-        this.mcp.setEnabled(other.isEnabled());
-        if (other.getOauth() != null) {
-            this.mcp.getOauth().setClientId(other.getOauth().getClientId());
-            this.mcp.getOauth().setClientSecret(other.getOauth().getClientSecret());
-            this.mcp.getOauth().setTokenUrl(other.getOauth().getTokenUrl());
-            this.mcp.getOauth().setScope(other.getOauth().getScope());
-        }
     }
 
     /**
@@ -1699,8 +1679,8 @@ public class AppConfig {
     @Setter
     @NoArgsConstructor
     public static class WebConfig {
-        /** Websearch 后端；当前使用 solon-ai 内置实现。 */
-        private String searchBackend = "solon-ai";
+        /** Websearch 后端；默认使用项目内置的 DuckDuckGo HTTP 实现。 */
+        private String searchBackend = "ddgs";
 
         /** Brave Search API key；为空时也会尝试读取 BRAVE_SEARCH_API_KEY 环境变量。 */
         private String braveSearchApiKey;
@@ -1717,9 +1697,6 @@ public class AppConfig {
         /** 所有审批（包括消息渠道待审批）的统一超时秒数。 */
         private int timeoutSeconds = 180;
 
-        /** /reload-mcp 是否需要确认，默认开启。 */
-        private boolean mcpReloadConfirm = true;
-
         /** 危险操作智能审批使用的 provider；留空时沿用 Profile 主模型。 */
         private String modelProvider = "";
 
@@ -1733,36 +1710,6 @@ public class AppConfig {
          * --force*"}、{@code "*rm -rf*"}。
          */
         private java.util.List<String> deny = new java.util.ArrayList<>();
-    }
-
-    /** 承载MCP配置并集中创建运行组件。 */
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    public static class McpConfig {
-        /** MCP 工具适配默认关闭。 */
-        private boolean enabled = false;
-
-        /** MCP 服务器 OAuth 认证配置。 */
-        private McpOAuth oauth = new McpOAuth();
-    }
-
-    /** MCP 服务器 OAuth 认证配置。 */
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    public static class McpOAuth {
-        /** OAuth 客户端 ID。 */
-        private String clientId;
-
-        /** OAuth 客户端密钥。 */
-        private String clientSecret;
-
-        /** OAuth token 端点 URL。 */
-        private String tokenUrl;
-
-        /** OAuth 请求的 scope。 */
-        private String scope;
     }
 
     /** 全部渠道配置集合。 */

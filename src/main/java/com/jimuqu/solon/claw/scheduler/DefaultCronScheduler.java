@@ -20,11 +20,9 @@ import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.AgentRunControlService;
 import com.jimuqu.solon.claw.core.service.ConversationOrchestrator;
 import com.jimuqu.solon.claw.core.service.DeliveryService;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.profile.ProfileRuntimeScope;
 import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
-import com.jimuqu.solon.claw.support.BoundedExecutorFactory;
 import com.jimuqu.solon.claw.support.CronSupport;
 import com.jimuqu.solon.claw.support.IdSupport;
 import com.jimuqu.solon.claw.support.MediaDirectiveSupport;
@@ -44,7 +42,6 @@ import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -54,7 +51,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -63,8 +59,6 @@ import java.util.regex.Pattern;
 import org.noear.snack4.ONode;
 import org.noear.solon.Utils;
 import org.noear.solon.ai.chat.message.ChatMessage;
-import org.noear.solon.ai.chat.tool.FunctionTool;
-import org.noear.solon.ai.chat.tool.ToolProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,10 +88,6 @@ public class DefaultCronScheduler {
 
     /** AgentTIMEOUTPOLLMILLIS的统一常量值。 */
     private static final long AGENT_TIMEOUT_POLL_MILLIS = 500L;
-
-    /** MCPWARMUP执行器的统一常量值。 */
-    private static final ExecutorService MCP_WARMUP_EXECUTOR =
-            BoundedExecutorFactory.fixed("cron-mcp-warmup", 1, 16);
 
     /** 安全上下文任务标识的统一常量值。 */
     private static final Pattern SAFE_CONTEXT_JOB_ID =
@@ -145,9 +135,6 @@ public class DefaultCronScheduler {
 
     /** 注入Agent运行控制服务，用于调用对应业务能力。 */
     private final AgentRunControlService agentRunControlService;
-
-    /** 注入MCP运行时服务，用于调用对应业务能力。 */
-    private final McpRuntimeService mcpRuntimeService;
 
     /** 保存会话仓储依赖，用于访问持久化数据。 */
     private final SessionRepository sessionRepository;
@@ -339,49 +326,6 @@ public class DefaultCronScheduler {
      * @param attachmentCacheService 附件缓存服务依赖。
      * @param localSkillService 本地技能服务依赖。
      * @param agentRunControlService Agent运行控制服务依赖。
-     * @param mcpRuntimeService MCP运行时服务依赖。
-     */
-    public DefaultCronScheduler(
-            AppConfig appConfig,
-            CronJobRepository cronJobRepository,
-            CronJobService cronJobService,
-            ConversationOrchestrator conversationOrchestrator,
-            DeliveryService deliveryService,
-            GatewayPolicyRepository gatewayPolicyRepository,
-            DangerousCommandApprovalService dangerousCommandApprovalService,
-            AttachmentCacheService attachmentCacheService,
-            LocalSkillService localSkillService,
-            AgentRunControlService agentRunControlService,
-            McpRuntimeService mcpRuntimeService) {
-        this(
-                appConfig,
-                cronJobRepository,
-                cronJobService,
-                conversationOrchestrator,
-                deliveryService,
-                gatewayPolicyRepository,
-                dangerousCommandApprovalService,
-                attachmentCacheService,
-                localSkillService,
-                agentRunControlService,
-                mcpRuntimeService,
-                null);
-    }
-
-    /**
-     * 创建默认定时任务调度器实例，并注入运行所需依赖。
-     *
-     * @param appConfig 应用运行配置。
-     * @param cronJobRepository 定时任务Job仓储依赖。
-     * @param cronJobService 定时任务Job服务依赖。
-     * @param conversationOrchestrator conversationOrchestrator 参数。
-     * @param deliveryService 投递服务依赖。
-     * @param gatewayPolicyRepository 网关策略仓储依赖。
-     * @param dangerousCommandApprovalService dangerous命令审批服务依赖。
-     * @param attachmentCacheService 附件缓存服务依赖。
-     * @param localSkillService 本地技能服务依赖。
-     * @param agentRunControlService Agent运行控制服务依赖。
-     * @param mcpRuntimeService MCP运行时服务依赖。
      * @param sessionRepository 会话仓储依赖。
      */
     public DefaultCronScheduler(
@@ -395,7 +339,6 @@ public class DefaultCronScheduler {
             AttachmentCacheService attachmentCacheService,
             LocalSkillService localSkillService,
             AgentRunControlService agentRunControlService,
-            McpRuntimeService mcpRuntimeService,
             SessionRepository sessionRepository) {
         this.appConfig = appConfig;
         this.cronJobRepository = cronJobRepository;
@@ -407,7 +350,6 @@ public class DefaultCronScheduler {
         this.attachmentCacheService = attachmentCacheService;
         this.localSkillService = localSkillService;
         this.agentRunControlService = agentRunControlService;
-        this.mcpRuntimeService = mcpRuntimeService;
         this.sessionRepository = sessionRepository;
     }
 
@@ -836,7 +778,6 @@ public class DefaultCronScheduler {
                 synthetic.setEnabledToolsetsOverride(resolveCronEnabledToolsets(job));
                 synthetic.setDisabledToolsetsOverride(
                         new ArrayList<String>(CRON_DISABLED_TOOLSETS));
-                warmupMcpTools(job);
                 reply = runScheduledWithAutoDeliveryContext(job, synthetic);
                 output = reply == null ? "" : reply.getContent();
                 if (reply != null && reply.isError()) {
@@ -1055,67 +996,6 @@ public class DefaultCronScheduler {
         return StrUtil.isNotBlank(message)
                 && (message.startsWith("Cron script not found under workspace/scripts")
                         || message.startsWith("定时任务脚本不在 workspace/scripts 下"));
-    }
-
-    /**
-     * 执行warmupMCP工具相关逻辑。
-     *
-     * @param job job 参数。
-     */
-    private void warmupMcpTools(CronJobRecord job) {
-        if (mcpRuntimeService == null) {
-            return;
-        }
-        try {
-            MCP_WARMUP_EXECUTOR.submit(
-                    ProfileRuntimeScope.capture(
-                            new Runnable() {
-                                /** 执行异步任务主体。 */
-                                @Override
-                                public void run() {
-                                    warmupMcpToolsNow(job);
-                                }
-                            }));
-        } catch (RejectedExecutionException e) {
-            log.warn(
-                    "Cron job '{}' MCP initialization skipped: {}",
-                    job == null
-                            ? "<unknown>"
-                            : StrUtil.blankToDefault(job.getName(), job.getJobId()),
-                    safeError(e));
-        }
-    }
-
-    /**
-     * 执行warmupMCP工具Now相关逻辑。
-     *
-     * @param job job 参数。
-     */
-    private void warmupMcpToolsNow(CronJobRecord job) {
-        try {
-            int count = 0;
-            List<ToolProvider> providers = mcpRuntimeService.resolveEnabledToolProviders();
-            for (ToolProvider provider : providers) {
-                if (provider == null) {
-                    continue;
-                }
-                Collection<FunctionTool> tools = provider.getTools();
-                count += tools == null ? 0 : tools.size();
-            }
-            if (count > 0) {
-                log.info(
-                        "Cron job '{}' warmed {} MCP tool(s)",
-                        StrUtil.blankToDefault(job.getName(), job.getJobId()),
-                        Integer.valueOf(count));
-            }
-        } catch (Exception e) {
-            log.warn(
-                    "Cron job '{}' MCP initialization failed (non-fatal): {}",
-                    job == null
-                            ? "<unknown>"
-                            : StrUtil.blankToDefault(job.getName(), job.getJobId()),
-                    safeError(e));
-        }
     }
 
     /**

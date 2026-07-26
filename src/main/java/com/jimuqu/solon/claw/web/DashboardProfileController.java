@@ -14,7 +14,7 @@ import org.noear.solon.core.handle.DownloadedFile;
 import org.noear.solon.core.handle.MethodType;
 import org.noear.solon.core.handle.UploadedFile;
 
-/** 暴露机器级 Profile 管理与独立网关状态 REST 接口。 */
+/** 暴露机器级 Profile 专业执行单元管理 REST 接口。 */
 @Controller
 public class DashboardProfileController {
     /** 单个导入归档允许的最大压缩文件大小，解压上限由 Profile 归档层继续约束。 */
@@ -36,7 +36,7 @@ public class DashboardProfileController {
      * 列出机器上的全部 Profile。
      *
      * @param context 当前请求上下文。
-     * @return Profile 列表、sticky 活动项和当前 Dashboard 运行项。
+     * @return Profile 列表。
      */
     @Mapping(value = "/api/profiles", method = MethodType.GET)
     public Map<String, Object> list(Context context) {
@@ -65,43 +65,6 @@ public class DashboardProfileController {
                     public Map<String, Object> run() throws Exception {
                         return profileService.createProfile(
                                 DashboardRequestBodies.jsonObjectMap(context));
-                    }
-                });
-    }
-
-    /**
-     * 返回 sticky 活动项和当前 Dashboard 运行项。
-     *
-     * @param context 当前请求上下文。
-     * @return 活动 Profile 信息。
-     */
-    @Mapping(value = "/api/profiles/active", method = MethodType.GET)
-    public Map<String, Object> active(Context context) {
-        return execute(
-                context,
-                new ProfileAction() {
-                    @Override
-                    public Map<String, Object> run() throws Exception {
-                        return profileService.activeProfile();
-                    }
-                });
-    }
-
-    /**
-     * 设置未来 CLI 和网关启动使用的 sticky Profile。
-     *
-     * @param context 当前请求上下文。
-     * @return 更新后的活动 Profile 信息。
-     */
-    @Mapping(value = "/api/profiles/active", method = MethodType.POST)
-    public Map<String, Object> use(final Context context) {
-        return execute(
-                context,
-                new ProfileAction() {
-                    @Override
-                    public Map<String, Object> run() throws Exception {
-                        return profileService.useProfile(
-                                DashboardRequestBodies.jsonObject(context).get("name").getString());
                     }
                 });
     }
@@ -393,66 +356,6 @@ public class DashboardProfileController {
             }
             return profileError(context, e);
         }
-    }
-
-    /**
-     * 返回指定 Profile 独立网关的真实进程状态。
-     *
-     * @param context 当前请求上下文。
-     * @param name Profile 名。
-     * @return 网关 PID、状态文件和日志路径。
-     */
-    @Mapping(value = "/api/profiles/{name}/gateway", method = MethodType.GET)
-    public Map<String, Object> gateway(Context context, final String name) {
-        return execute(
-                context,
-                new ProfileAction() {
-                    @Override
-                    public Map<String, Object> run() throws Exception {
-                        return profileService.gatewayStatus(name);
-                    }
-                });
-    }
-
-    /** 启动指定 Profile 的独立网关。 */
-    @Mapping(value = "/api/profiles/{name}/gateway/start", method = MethodType.POST)
-    public Map<String, Object> startGateway(final Context context, final String name) {
-        return execute(
-                context,
-                new ProfileAction() {
-                    @Override
-                    public Map<String, Object> run() throws Exception {
-                        return profileService.startGateway(
-                                name, DashboardRequestBodies.jsonObjectMap(context));
-                    }
-                });
-    }
-
-    /** 停止指定 Profile 的独立网关。 */
-    @Mapping(value = "/api/profiles/{name}/gateway/stop", method = MethodType.POST)
-    public Map<String, Object> stopGateway(final Context context, final String name) {
-        return execute(
-                context,
-                new ProfileAction() {
-                    @Override
-                    public Map<String, Object> run() throws Exception {
-                        return profileService.stopGateway(name);
-                    }
-                });
-    }
-
-    /** 重启指定 Profile 的独立网关。 */
-    @Mapping(value = "/api/profiles/{name}/gateway/restart", method = MethodType.POST)
-    public Map<String, Object> restartGateway(final Context context, final String name) {
-        return execute(
-                context,
-                new ProfileAction() {
-                    @Override
-                    public Map<String, Object> run() throws Exception {
-                        return profileService.restartGateway(
-                                name, DashboardRequestBodies.jsonObjectMap(context));
-                    }
-                });
     }
 
     /** 执行 Profile 操作并统一输出 Dashboard 响应。 */

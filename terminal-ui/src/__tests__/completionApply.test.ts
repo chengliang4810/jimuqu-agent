@@ -43,7 +43,7 @@ describe('completionToApplyOnSubmit', () => {
 
   it('submits an exact slash command even when a longer command is selected', () => {
     expect(completionToApplyOnSubmit('/status', '/statusbar', 0, ['/status', '/statusbar'], true)).toBeNull()
-    expect(completionToApplyOnSubmit('/reload', '/reload-skills', 0, ['/reload-skills', '/reload-mcp'], true)).toBeNull()
+    expect(completionToApplyOnSubmit('/reload', '/reload-skills', 0, ['/reload-skills'], true)).toBeNull()
   })
 
   it('still applies longer slash completion when the current value is not an exact command', () => {

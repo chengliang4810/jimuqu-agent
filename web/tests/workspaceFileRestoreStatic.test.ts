@@ -20,7 +20,7 @@ assert.ok(contextMenuActions.includes("key: 'restoreDefault'"), 'file context me
 assert.ok(contextMenu.includes('Modal.confirm'), 'restore default should ask for confirmation')
 assert.ok(contextMenu.includes("filesStore.restoreFile(entry.path)"), 'restore default should call the store action')
 
-for (const locale of ['zh', 'en', 'ja', 'ko', 'pt', 'fr', 'de', 'es']) {
+for (const locale of ['zh', 'en']) {
   const content = readFileSync(new URL(`../src/i18n/locales/${locale}.ts`, import.meta.url), 'utf8')
   for (const key of ['restoreDefault', 'confirmRestore', 'restored']) {
     assert.ok(content.includes(`${key}:`), `${locale} locale should define files.${key}`)

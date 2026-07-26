@@ -25,7 +25,6 @@ import com.jimuqu.solon.claw.core.service.ContextCompressionService;
 import com.jimuqu.solon.claw.core.service.DelegationService;
 import com.jimuqu.solon.claw.core.service.SkillHubService;
 import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.skillhub.model.HubInstallRecord;
 import com.jimuqu.solon.claw.skillhub.model.SkillBrowseResult;
 import com.jimuqu.solon.claw.skillhub.model.SkillMeta;
@@ -56,7 +55,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.ChatRole;
 import org.noear.solon.ai.chat.message.AssistantMessage;
@@ -117,9 +115,6 @@ public class TerminalUiRpcService {
     /** 后台进程注册表，用于驱动终端 UI /stop 操作。 */
     private final ProcessRegistry processRegistry;
 
-    /** MCP 运行时，用于驱动终端 UI /reload-mcp 操作。 */
-    private final McpRuntimeService mcpRuntimeService;
-
     /** 配置刷新服务，用于驱动终端 UI /reload 操作。 */
     private final GatewayRuntimeRefreshService gatewayRuntimeRefreshService;
 
@@ -171,7 +166,6 @@ public class TerminalUiRpcService {
                 null,
                 null,
                 null,
-                null,
                 null);
     }
 
@@ -188,7 +182,6 @@ public class TerminalUiRpcService {
             ContextCompressionService contextCompressionService,
             AttachmentPathResolver attachmentResolver,
             ProcessRegistry processRegistry,
-            McpRuntimeService mcpRuntimeService,
             GatewayRuntimeRefreshService gatewayRuntimeRefreshService,
             DelegationService delegationService,
             AgentRunControlService agentRunControlService,
@@ -207,7 +200,6 @@ public class TerminalUiRpcService {
                 contextCompressionService,
                 attachmentResolver,
                 processRegistry,
-                mcpRuntimeService,
                 gatewayRuntimeRefreshService,
                 delegationService,
                 agentRunControlService,
@@ -231,7 +223,6 @@ public class TerminalUiRpcService {
             ContextCompressionService contextCompressionService,
             AttachmentPathResolver attachmentResolver,
             ProcessRegistry processRegistry,
-            McpRuntimeService mcpRuntimeService,
             GatewayRuntimeRefreshService gatewayRuntimeRefreshService,
             DelegationService delegationService,
             AgentRunControlService agentRunControlService,
@@ -252,7 +243,6 @@ public class TerminalUiRpcService {
                 contextCompressionService,
                 attachmentResolver,
                 processRegistry,
-                mcpRuntimeService,
                 gatewayRuntimeRefreshService,
                 delegationService,
                 agentRunControlService,
@@ -278,7 +268,6 @@ public class TerminalUiRpcService {
             ContextCompressionService contextCompressionService,
             AttachmentPathResolver attachmentResolver,
             ProcessRegistry processRegistry,
-            McpRuntimeService mcpRuntimeService,
             GatewayRuntimeRefreshService gatewayRuntimeRefreshService,
             DelegationService delegationService,
             AgentRunControlService agentRunControlService,
@@ -305,7 +294,6 @@ public class TerminalUiRpcService {
                         ? new TerminalUiPendingAttachmentService()
                         : pendingAttachmentService;
         this.processRegistry = processRegistry;
-        this.mcpRuntimeService = mcpRuntimeService;
         this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
         this.delegationService = delegationService;
         this.agentRunControlService = agentRunControlService;
@@ -1164,56 +1152,6 @@ public class TerminalUiRpcService {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put(
                 "killed", Integer.valueOf(processRegistry == null ? 0 : processRegistry.stopAll()));
-        return result;
-    }
-
-    /** 重新发现已启用 MCP 服务的工具列表。 */
-    public Map<String, Object> reloadMcp() {
-        return reloadMcp(false, false);
-    }
-
-    /**
-     * 按 TUI 明确确认参数重新发现 MCP 工具，避免误触发会改变下一轮工具 schema 的操作。
-     *
-     * @param confirmed 用户是否已在本次请求中明确确认。
-     * @param rememberAlways 是否把确认要求持久关闭。
-     * @return 返回 MCP 重载状态。
-     */
-    public Map<String, Object> reloadMcp(boolean confirmed, boolean rememberAlways) {
-        Map<String, Object> result = new LinkedHashMap<String, Object>();
-        if (appConfig != null
-                && appConfig.getApprovals() != null
-                && appConfig.getApprovals().isMcpReloadConfirm()
-                && !confirmed) {
-            result.put("status", "confirm_required");
-            result.put(
-                    "message",
-                    "/reload-mcp 会刷新下一轮工具 schema。请使用 /reload-mcp now 确认本次执行，或 /reload-mcp always 以后不再提示。");
-            return result;
-        }
-        if (rememberAlways && appConfig != null && appConfig.getApprovals() != null) {
-            appConfig.getApprovals().setMcpReloadConfirm(false);
-            if (runtimeSettingsService != null) {
-                runtimeSettingsService.setConfigValue("approvals.mcpReloadConfirm", "false");
-            }
-        }
-        if (mcpRuntimeService == null) {
-            result.put("status", "reloaded");
-            result.put("message", "MCP runtime is not configured");
-            return result;
-        }
-        try {
-            List<McpRuntimeService.McpToolRefreshResult> refreshed =
-                    mcpRuntimeService
-                            .refreshAllEnabledLiveToolsAsync(false)
-                            .get(30, TimeUnit.SECONDS);
-            result.put("status", "reloaded");
-            result.put("message", "MCP servers reloaded: " + refreshed.size());
-            result.put("servers", Integer.valueOf(refreshed.size()));
-        } catch (Exception e) {
-            result.put("status", "error");
-            result.put("message", StrUtil.blankToDefault(e.getMessage(), "MCP reload failed"));
-        }
         return result;
     }
 
@@ -2584,8 +2522,6 @@ public class TerminalUiRpcService {
         appendLocalSlashCompletion(items, query, "verbose", "切换工具输出详细模式");
         appendLocalSlashCompletion(items, query, "usage", "显示当前会话用量");
         appendLocalSlashCompletion(items, query, "stop", "停止后台进程");
-        appendLocalSlashCompletion(items, query, "reload-mcp", "刷新 MCP 服务器");
-        appendLocalSlashCompletion(items, query, "reload_mcp", "刷新 MCP 服务器");
         appendLocalSlashCompletion(items, query, "reload", "重新读取本地环境变量");
         appendLocalSlashCompletion(items, query, "browser", "管理浏览器 CDP 连接");
         appendLocalSlashCompletion(items, query, "rollback", "查看或恢复检查点");

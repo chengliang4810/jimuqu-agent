@@ -21,6 +21,9 @@ assert.ok(chatApi.includes("withProfile(`/api/chat/runs/${encodeURIComponent(run
 assert.ok(chatApi.includes("withProfile(`/api/chat/runs/${encodeURIComponent(runId)}/events`, profile)"))
 
 assert.ok(chatStore.includes("const profile = s.profile || fallbackProfile || 'default'"))
+assert.ok(chatStore.includes("const fallbackProfile = 'default'"))
+assert.ok(chatStore.includes("const profile = 'default'"))
+assert.ok(!chatStore.includes('useProfilesStore'), 'new Dashboard conversations must not inherit a viewed Profile')
 assert.ok(chatStore.includes('deleteSessionApi(target.id, target.profile)'))
 assert.ok(chatStore.includes('fetchSession(target.id, target.profile)'))
 assert.ok(chatStore.includes('profile: startingProfile'))

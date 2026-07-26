@@ -35,9 +35,6 @@ import org.noear.solon.ai.chat.talent.Talent;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.ai.chat.tool.ToolProvider;
 import org.noear.solon.ai.rag.Document;
-import org.noear.solon.ai.talents.web.CodeSearchTalent;
-import org.noear.solon.ai.talents.web.WebfetchTalent;
-import org.noear.solon.ai.talents.web.WebsearchTalent;
 
 /** Web、代码执行和文件工具安全测试，从工具注册测试中拆出以控制单文件行数。 */
 class ToolRegistryWebAndCodeToolsTest {
@@ -72,13 +69,8 @@ class ToolRegistryWebAndCodeToolsTest {
         SolonClawWebTools.SafeWebfetchTool webfetch =
                 new SolonClawWebTools.SafeWebfetchTool(
                         new SecurityPolicyService(env.appConfig),
-                        new WebfetchTalent() {
-                            @Override
-                            public String webfetch(
-                                    String url, String format, Integer timeoutSeconds) {
-                                return "Fetched api_key=sk-webfetch-secret token=ghp_webfetchcontent12345 doc-ghp_webfetchid12345 title ghp_webfetchtitle12345 https://example.com/docs api_key=sk-webfetch-meta";
-                            }
-                        });
+                        (url, format, timeoutSeconds) ->
+                                "Fetched api_key=sk-webfetch-secret token=ghp_webfetchcontent12345 doc-ghp_webfetchid12345 title ghp_webfetchtitle12345 https://example.com/docs api_key=sk-webfetch-meta");
 
         Document document =
                 webfetch.webfetch("https://example.com/docs", "markdown", Integer.valueOf(1));
@@ -111,13 +103,9 @@ class ToolRegistryWebAndCodeToolsTest {
                                 return UrlVerdict.allow();
                             }
                         },
-                        new WebfetchTalent() {
-                            @Override
-                            public String webfetch(
-                                    String url, String format, Integer timeoutSeconds) {
-                                delegateCalls.incrementAndGet();
-                                return "unexpected";
-                            }
+                        (url, format, timeoutSeconds) -> {
+                            delegateCalls.incrementAndGet();
+                            return "unexpected";
                         });
 
         for (String invalidUrl :
@@ -139,13 +127,8 @@ class ToolRegistryWebAndCodeToolsTest {
         SolonClawWebTools.SafeWebfetchTool webfetch =
                 new SolonClawWebTools.SafeWebfetchTool(
                         new SecurityPolicyService(env.appConfig),
-                        new WebfetchTalent() {
-                            @Override
-                            public String webfetch(
-                                    String url, String format, Integer timeoutSeconds) {
-                                return "Asset https://uploads.github.com/repos/example/releases/1/assets{?name,label}";
-                            }
-                        });
+                        (url, format, timeoutSeconds) ->
+                                "Asset https://uploads.github.com/repos/example/releases/1/assets{?name,label}");
 
         Document document = webfetch.webfetch("https://example.com/docs", "markdown", 10);
 
@@ -155,20 +138,18 @@ class ToolRegistryWebAndCodeToolsTest {
     @Test
     void shouldRedactSecretsFromWebsearchSuccessDocument() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.appConfig.getWeb().setSearchBackend("ddgs");
         SolonClawWebTools.SafeWebsearchTool websearch =
-                new SolonClawWebTools.SafeWebsearchTool(
-                        new SecurityPolicyService(env.appConfig),
-                        new WebsearchTalent() {
-                            @Override
-                            public String websearch(
-                                    String query,
-                                    Integer numResults,
-                                    String livecrawl,
-                                    String type,
-                                    Integer contextMaxCharacters) {
-                                return "Search api_key=sk-websearch-secret token=ghp_websearchcontent12345 doc-ghp_websearchid12345 title ghp_websearchtitle12345 https://example.com/search api_key=sk-websearch-meta";
-                            }
-                        });
+                new SolonClawWebTools.SafeWebsearchTool(fixedPublicDnsPolicy(env), env.appConfig) {
+                    @Override
+                    protected String executeDdgsSearchRequest(String query, int limit) {
+                        return "<a class=\"result__a\" href=\"https://example.com/search?token=ghp_websearchcontent12345\">"
+                                + "Search api_key=sk-websearch-secret doc-ghp_websearchid12345"
+                                + "</a><a class=\"result__snippet\">"
+                                + "title ghp_websearchtitle12345 api_key=sk-websearch-meta"
+                                + "</a>";
+                    }
+                };
 
         Document document =
                 websearch.websearch(
@@ -194,29 +175,31 @@ class ToolRegistryWebAndCodeToolsTest {
     @Test
     void shouldIgnoreNonUrlTextInWebsearchResults() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.appConfig.getWeb().setSearchBackend("ddgs");
         SecurityPolicyService policy =
                 new SecurityPolicyService(env.appConfig) {
                     @Override
                     protected java.net.InetAddress[] resolveHost(String host) throws Exception {
+                        if ("html.duckduckgo.com".equalsIgnoreCase(host)
+                                || "example.com".equalsIgnoreCase(host)) {
+                            return new java.net.InetAddress[] {
+                                java.net.InetAddress.getByName("93.184.216.34")
+                            };
+                        }
                         return new java.net.InetAddress[] {
                             java.net.InetAddress.getByName("0.0.1.199")
                         };
                     }
                 };
         SolonClawWebTools.SafeWebsearchTool websearch =
-                new SolonClawWebTools.SafeWebsearchTool(
-                        policy,
-                        new WebsearchTalent() {
-                            @Override
-                            public String websearch(
-                                    String query,
-                                    Integer numResults,
-                                    String livecrawl,
-                                    String type,
-                                    Integer contextMaxCharacters) {
-                                return "status 455, actor github-actions[bot]";
-                            }
-                        });
+                new SolonClawWebTools.SafeWebsearchTool(policy, env.appConfig) {
+                    @Override
+                    protected String executeDdgsSearchRequest(String query, int limit) {
+                        return "<a class=\"result__a\" href=\"https://example.com/result\">"
+                                + "status 455, actor github-actions[bot]"
+                                + "</a>";
+                    }
+                };
 
         Document document =
                 websearch.websearch(
@@ -232,27 +215,30 @@ class ToolRegistryWebAndCodeToolsTest {
     @Test
     void shouldRedactSecretsFromCodesearchSuccessContainers() throws Throwable {
         TestEnvironment env = TestEnvironment.withFakeLlm();
+        SolonClawWebTools.SafeWebsearchTool delegate =
+                new SolonClawWebTools.SafeWebsearchTool(null) {
+                    @Override
+                    public Document websearch(
+                            String query,
+                            Integer numResults,
+                            String livecrawl,
+                            String type,
+                            Integer contextMaxCharacters) {
+                        Map<String, Object> hit = new LinkedHashMap<String, Object>();
+                        hit.put("title", "code ghp_codesearchtitle12345");
+                        hit.put(
+                                "document",
+                                new Document("code api_key=sk-codesearch-secret")
+                                        .id("doc-ghp_codesearchid12345")
+                                        .metadata("note", "token=ghp_codesearchnote12345"));
+                        Map<String, Object> result = new LinkedHashMap<String, Object>();
+                        result.put("results", Arrays.asList(hit));
+                        return new Document(ONode.serialize(result));
+                    }
+                };
         SolonClawWebTools.SafeCodeSearchTool codesearch =
                 new SolonClawWebTools.SafeCodeSearchTool(
-                        new SecurityPolicyService(env.appConfig),
-                        new CodeSearchTalent() {
-                            @Override
-                            public String codesearch(String query, Integer tokensNum)
-                                    throws Throwable {
-                                Map<String, Object> hit =
-                                        new java.util.LinkedHashMap<String, Object>();
-                                hit.put("title", "code ghp_codesearchtitle12345");
-                                hit.put(
-                                        "document",
-                                        new Document("code api_key=sk-codesearch-secret")
-                                                .id("doc-ghp_codesearchid12345")
-                                                .metadata("note", "token=ghp_codesearchnote12345"));
-                                Map<String, Object> result =
-                                        new java.util.LinkedHashMap<String, Object>();
-                                result.put("results", Arrays.asList(hit));
-                                return ONode.serialize(result);
-                            }
-                        });
+                        new SecurityPolicyService(env.appConfig), delegate);
 
         Object result = codesearch.codesearch("allowed code query", Integer.valueOf(5000));
         String text = String.valueOf(result);
@@ -340,7 +326,7 @@ class ToolRegistryWebAndCodeToolsTest {
         env.appConfig.getWeb().setBraveSearchApiKey("brv-test-secret");
         SolonClawWebTools.SafeWebsearchTool websearch =
                 new SolonClawWebTools.SafeWebsearchTool(
-                        new SecurityPolicyService(env.appConfig), null, env.appConfig) {
+                        new SecurityPolicyService(env.appConfig), env.appConfig) {
                     @Override
                     protected String executeBraveSearchRequest(
                             String query, int limit, String apiKey) {
@@ -366,19 +352,7 @@ class ToolRegistryWebAndCodeToolsTest {
         env.appConfig.getWeb().setSearchBackend("primary-search");
         SolonClawWebTools.SafeWebsearchTool websearch =
                 new SolonClawWebTools.SafeWebsearchTool(
-                        new SecurityPolicyService(env.appConfig),
-                        new WebsearchTalent() {
-                            @Override
-                            public String websearch(
-                                    String query,
-                                    Integer numResults,
-                                    String livecrawl,
-                                    String type,
-                                    Integer contextMaxCharacters) {
-                                return "Built-in fallback https://example.com/builtin-fallback";
-                            }
-                        },
-                        env.appConfig);
+                        new SecurityPolicyService(env.appConfig), env.appConfig);
         websearch.setWebSearchProviders(
                 Arrays.asList(
                         new WebSearchProvider() {
@@ -400,12 +374,16 @@ class ToolRegistryWebAndCodeToolsTest {
                         unavailableWebSearchProvider("primary-search"),
                         successfulWebSearchProvider("backup_search")));
 
-        Document document =
-                websearch.websearch(
-                        "solon ai", Integer.valueOf(2), "fallback", "auto", Integer.valueOf(1000));
-        assertThat(document.getContent())
-                .contains("Built-in fallback", "https://example.com/builtin-fallback")
-                .doesNotContain("https://example.com/backup");
+        assertThatThrownBy(
+                        () ->
+                                websearch.websearch(
+                                        "solon ai",
+                                        Integer.valueOf(2),
+                                        "fallback",
+                                        "auto",
+                                        Integer.valueOf(1000)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unsupported web search backend: primary-search");
     }
 
     /** 构造不可用的搜索提供方，验证显式配置失败后不会把查询转发给未选择提供方。 */
@@ -473,17 +451,21 @@ class ToolRegistryWebAndCodeToolsTest {
     }
 
     @Test
-    void shouldReportSolonAiWebsearchInitializationFailureWithoutRawObjectMapperCrash()
-            throws Exception {
+    void shouldRejectRemovedSolonAiWebsearchBackendWithoutImplicitMcpFallback() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         env.appConfig.getWeb().setSearchBackend("solon-ai");
         SolonClawWebTools.SafeWebsearchTool websearch =
                 new SolonClawWebTools.SafeWebsearchTool(
-                        new SecurityPolicyService(env.appConfig), null, env.appConfig) {
+                        new SecurityPolicyService(env.appConfig), env.appConfig) {
                     @Override
-                    protected WebsearchTalent createSolonAiWebsearchTalent() {
-                        throw new NoClassDefFoundError(
-                                "Could not initialize class com.fasterxml.jackson.databind.ObjectMapper");
+                    protected String executeBraveSearchRequest(
+                            String query, int limit, String apiKey) {
+                        throw new AssertionError("不应隐式回退到 Brave Search");
+                    }
+
+                    @Override
+                    protected String executeDdgsSearchRequest(String query, int limit) {
+                        throw new AssertionError("不应隐式回退到 DuckDuckGo 或 MCP");
                     }
                 };
 
@@ -495,10 +477,9 @@ class ToolRegistryWebAndCodeToolsTest {
                                         "fallback",
                                         "auto",
                                         Integer.valueOf(1000)))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Solon AI websearch backend")
-                .hasMessageNotContaining("ObjectMapper")
-                .hasRootCauseInstanceOf(NoClassDefFoundError.class);
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unsupported web search backend: solon-ai")
+                .hasMessageContaining("searchBackend=ddgs or brave-free");
     }
 
     @Test
@@ -508,7 +489,7 @@ class ToolRegistryWebAndCodeToolsTest {
         env.appConfig.getWeb().setBraveSearchApiKey("brv-test-secret");
         SolonClawWebTools.SafeWebsearchTool websearch =
                 new SolonClawWebTools.SafeWebsearchTool(
-                        new SecurityPolicyService(env.appConfig), null, env.appConfig) {
+                        new SecurityPolicyService(env.appConfig), env.appConfig) {
                     @Override
                     protected String executeBraveSearchRequest(
                             String query, int limit, String apiKey) {
@@ -537,7 +518,7 @@ class ToolRegistryWebAndCodeToolsTest {
         env.appConfig.getWeb().setBraveSearchApiKey("");
         SolonClawWebTools.SafeWebsearchTool websearch =
                 new SolonClawWebTools.SafeWebsearchTool(
-                        new SecurityPolicyService(env.appConfig), null, env.appConfig);
+                        new SecurityPolicyService(env.appConfig), env.appConfig);
 
         assertThatThrownBy(
                         () ->
@@ -551,12 +532,13 @@ class ToolRegistryWebAndCodeToolsTest {
                 .hasMessageContaining("BRAVE_SEARCH_API_KEY");
     }
 
+    @Test
     void shouldUseDdgsSearchBackendWhenConfigured() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         env.appConfig.getWeb().setSearchBackend("ddgs");
         SecurityPolicyService policy = fixedPublicDnsPolicy(env);
         SolonClawWebTools.SafeWebsearchTool websearch =
-                new SolonClawWebTools.SafeWebsearchTool(policy, null, env.appConfig) {
+                new SolonClawWebTools.SafeWebsearchTool(policy, env.appConfig) {
                     @Override
                     protected String executeDdgsSearchRequest(String query, int limit) {
                         assertThat(query).isEqualTo("solon ai");
@@ -589,16 +571,20 @@ class ToolRegistryWebAndCodeToolsTest {
     void shouldRedactCodesearchReturnedPojoFields() throws Throwable {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         SecurityPolicyService policy = fixedPublicDnsPolicy(env);
+        SolonClawWebTools.SafeWebsearchTool delegate =
+                new SolonClawWebTools.SafeWebsearchTool(null) {
+                    @Override
+                    public Document websearch(
+                            String query,
+                            Integer numResults,
+                            String livecrawl,
+                            String type,
+                            Integer contextMaxCharacters) {
+                        return new Document("token=ghp_pojoresult12345 https://example.com/code");
+                    }
+                };
         SolonClawWebTools.SafeCodeSearchTool codesearch =
-                new SolonClawWebTools.SafeCodeSearchTool(
-                        policy,
-                        new CodeSearchTalent() {
-                            @Override
-                            public String codesearch(String query, Integer tokensNum)
-                                    throws Throwable {
-                                return "token=ghp_pojoresult12345 https://example.com/code";
-                            }
-                        });
+                new SolonClawWebTools.SafeCodeSearchTool(policy, delegate);
 
         Object result = codesearch.codesearch("allowed code query", Integer.valueOf(5000));
 
@@ -612,16 +598,20 @@ class ToolRegistryWebAndCodeToolsTest {
     void shouldRedactCodesearchUnstructuredObjectStringFields() throws Throwable {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         SecurityPolicyService policy = fixedPublicDnsPolicy(env);
+        SolonClawWebTools.SafeWebsearchTool delegate =
+                new SolonClawWebTools.SafeWebsearchTool(null) {
+                    @Override
+                    public Document websearch(
+                            String query,
+                            Integer numResults,
+                            String livecrawl,
+                            String type,
+                            Integer contextMaxCharacters) {
+                        return new Document(new SecretStringReturnedObject().toString());
+                    }
+                };
         SolonClawWebTools.SafeCodeSearchTool codesearch =
-                new SolonClawWebTools.SafeCodeSearchTool(
-                        policy,
-                        new CodeSearchTalent() {
-                            @Override
-                            public String codesearch(String query, Integer tokensNum)
-                                    throws Throwable {
-                                return new SecretStringReturnedObject().toString();
-                            }
-                        });
+                new SolonClawWebTools.SafeCodeSearchTool(policy, delegate);
 
         Object result = codesearch.codesearch("allowed code query", Integer.valueOf(5000));
 

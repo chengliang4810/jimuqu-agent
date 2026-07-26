@@ -765,7 +765,6 @@ class ProfileManagerTest {
         assertThat(view.getSessions().toString()).endsWith("data/state.db");
         assertThat(view.getMemoryDir().toString()).endsWith("memory");
         assertThat(view.getSkillsDir().toString()).endsWith("skills");
-        assertThat(view.getMcpConfig().toString()).endsWith("config.yml");
         assertThat(view.getChannelsConfig().toString()).endsWith("config.yml");
         assertThat(view.getLogs().toString()).endsWith("logs");
         assertThat(runOk("default", "describe", "router").stdout).contains("Routes focused tasks.");

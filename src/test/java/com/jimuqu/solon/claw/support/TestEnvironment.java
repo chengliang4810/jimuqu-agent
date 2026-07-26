@@ -92,7 +92,6 @@ import com.jimuqu.solon.claw.web.DashboardCuratorService;
 import com.jimuqu.solon.claw.web.DashboardDiagnosticsService;
 import com.jimuqu.solon.claw.web.DashboardGatewayDoctorService;
 import com.jimuqu.solon.claw.web.DashboardInsightsService;
-import com.jimuqu.solon.claw.web.DashboardMcpService;
 import com.jimuqu.solon.claw.web.DashboardPlatformToolsetsService;
 import com.jimuqu.solon.claw.web.DashboardProviderService;
 import com.jimuqu.solon.claw.web.DashboardRunService;
@@ -312,7 +311,6 @@ public class TestEnvironment {
                         gitHubAuth,
                         gitHubSkillSource);
         CronJobService cronJobService = new CronJobService(config, cronJobRepository);
-        DashboardMcpService dashboardMcpService = new DashboardMcpService(config, database);
         DashboardCuratorService dashboardCuratorService =
                 new DashboardCuratorService(
                         new SkillCuratorService(config, localSkillService), database);
@@ -392,7 +390,6 @@ public class TestEnvironment {
                         .securityPolicyService(securityPolicyService)
                         .approvalService(dangerousCommandApprovalService)
                         .processRegistry(processRegistry)
-                        .dashboardMcpService(dashboardMcpService)
                         .dashboardCuratorService(dashboardCuratorService)
                         .dashboardPlatformToolsetsService(dashboardPlatformToolsetsService)
                         .dashboardProviderService(dashboardProviderService)
@@ -484,7 +481,6 @@ public class TestEnvironment {
                         dangerousCommandApprovalService,
                         agentRunSupervisor,
                         agentRunRepository,
-                        dashboardMcpService,
                         goalService,
                         new GoalContractDrafter(llmGateway, config.getGoal()),
                         new SessionArtifactService(config),

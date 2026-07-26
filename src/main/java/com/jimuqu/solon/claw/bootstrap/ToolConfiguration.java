@@ -27,7 +27,6 @@ import com.jimuqu.solon.claw.engine.DefaultDelegationService;
 import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.solon.claw.goal.GoalService;
 import com.jimuqu.solon.claw.llm.SolonAiLlmGateway;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.media.ImageGenerationService;
 import com.jimuqu.solon.claw.media.SpeechService;
 import com.jimuqu.solon.claw.media.VisionAnalysisService;
@@ -69,7 +68,6 @@ import com.jimuqu.solon.claw.web.DashboardConfigService;
 import com.jimuqu.solon.claw.web.DashboardCuratorService;
 import com.jimuqu.solon.claw.web.DashboardGatewayDoctorService;
 import com.jimuqu.solon.claw.web.DashboardInsightsService;
-import com.jimuqu.solon.claw.web.DashboardMcpService;
 import com.jimuqu.solon.claw.web.DashboardPlatformToolsetsService;
 import com.jimuqu.solon.claw.web.DashboardProviderService;
 import com.jimuqu.solon.claw.web.DashboardRunService;
@@ -231,25 +229,6 @@ public class ToolConfiguration {
     }
 
     /**
-     * 执行MCP运行时服务相关逻辑。
-     *
-     * @param appConfig 应用运行配置。
-     * @param sqliteDatabase SQLiteDatabase参数。
-     * @param securityPolicyService 安全策略服务依赖。
-     * @return 返回MCP运行时服务结果。
-     */
-    @Bean(destroyMethod = "shutdown")
-    public McpRuntimeService mcpRuntimeService(
-            AppConfig appConfig,
-            SqliteDatabase sqliteDatabase,
-            SecurityPolicyService securityPolicyService) {
-        McpRuntimeService service =
-                new McpRuntimeService(appConfig, sqliteDatabase, null, securityPolicyService);
-        service.startInitialDiscoveryAsync();
-        return service;
-    }
-
-    /**
      * 执行浏览器运行时服务相关逻辑。
      *
      * @param appConfig 应用运行配置。
@@ -310,8 +289,6 @@ public class ToolConfiguration {
      * @param securityPolicyService 安全策略服务依赖。
      * @param dangerousCommandApprovalService 危险或外部操作审批服务依赖。
      * @param processRegistry 进程注册表依赖组件。
-     * @param mcpRuntimeService MCP运行时服务依赖。
-     * @param dashboardMcpService Dashboard MCP服务依赖。
      * @param dashboardCuratorService Dashboard技能维护服务依赖。
      * @param dashboardPlatformToolsetsService Dashboard平台工具集服务依赖。
      * @param dashboardProviderService Dashboard provider服务依赖。
@@ -355,8 +332,6 @@ public class ToolConfiguration {
             SecurityPolicyService securityPolicyService,
             DangerousCommandApprovalService dangerousCommandApprovalService,
             ProcessRegistry processRegistry,
-            McpRuntimeService mcpRuntimeService,
-            DashboardMcpService dashboardMcpService,
             DashboardCuratorService dashboardCuratorService,
             DashboardPlatformToolsetsService dashboardPlatformToolsetsService,
             DashboardProviderService dashboardProviderService,
@@ -397,8 +372,6 @@ public class ToolConfiguration {
                         securityPolicyService,
                         dangerousCommandApprovalService,
                         processRegistry,
-                        mcpRuntimeService,
-                        dashboardMcpService,
                         dashboardCuratorService)
                 .dashboardPlatformToolsetsService(dashboardPlatformToolsetsService)
                 .dashboardProviderService(dashboardProviderService)
@@ -443,8 +416,6 @@ public class ToolConfiguration {
             SecurityPolicyService securityPolicyService,
             DangerousCommandApprovalService dangerousCommandApprovalService,
             ProcessRegistry processRegistry,
-            McpRuntimeService mcpRuntimeService,
-            DashboardMcpService dashboardMcpService,
             DashboardCuratorService dashboardCuratorService) {
         return builder.appConfig(appConfig)
                 .preferenceStore(preferenceStore)
@@ -463,8 +434,6 @@ public class ToolConfiguration {
                 .securityPolicyService(securityPolicyService)
                 .approvalService(dangerousCommandApprovalService)
                 .processRegistry(processRegistry)
-                .mcpRuntimeService(mcpRuntimeService)
-                .dashboardMcpService(dashboardMcpService)
                 .dashboardCuratorService(dashboardCuratorService);
     }
 

@@ -53,9 +53,6 @@ public class ProfileView {
     /** 技能目录。 */
     private final Path skillsDir;
 
-    /** MCP 配置边界。 */
-    private final Path mcpConfig;
-
     /** 国内渠道配置边界。 */
     private final Path channelsConfig;
 
@@ -89,7 +86,6 @@ public class ProfileView {
      * @param memoryFile 主记忆文件。
      * @param memoryDir 增量记忆目录。
      * @param skillsDir 技能目录。
-     * @param mcpConfig MCP 配置文件。
      * @param channelsConfig 国内渠道配置文件。
      * @param logs 日志目录。
      * @param aliases 快捷命令别名。
@@ -112,7 +108,6 @@ public class ProfileView {
             Path memoryFile,
             Path memoryDir,
             Path skillsDir,
-            Path mcpConfig,
             Path channelsConfig,
             Path logs,
             List<String> aliases,
@@ -133,7 +128,6 @@ public class ProfileView {
         this.memoryFile = memoryFile;
         this.memoryDir = memoryDir;
         this.skillsDir = skillsDir;
-        this.mcpConfig = mcpConfig;
         this.channelsConfig = channelsConfig;
         this.logs = logs;
         this.aliases = aliases == null ? new ArrayList<String>() : new ArrayList<String>(aliases);
@@ -271,13 +265,6 @@ public class ProfileView {
     }
 
     /**
-     * @return MCP 配置文件边界。
-     */
-    public Path getMcpConfig() {
-        return mcpConfig;
-    }
-
-    /**
      * @return 国内渠道配置文件边界。
      */
     public Path getChannelsConfig() {
@@ -320,13 +307,9 @@ public class ProfileView {
     public Map<String, Object> toMap() {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("name", name);
-        result.put("active", Boolean.valueOf(active));
-        result.put("current", Boolean.valueOf(current));
         result.put("home", path(home));
         result.put("description", description);
         result.put("model", model);
-        result.put(
-                "gateway", gateway == null ? new LinkedHashMap<String, Object>() : gateway.toMap());
         result.put("skills_count", Long.valueOf(skillsCount));
         result.put("config", path(config));
         result.put("config_exists", Boolean.valueOf(isConfigExists()));
@@ -338,7 +321,6 @@ public class ProfileView {
         result.put("memory_file", path(memoryFile));
         result.put("memory_dir", path(memoryDir));
         result.put("skills_dir", path(skillsDir));
-        result.put("mcp_config", path(mcpConfig));
         result.put("channels_config", path(channelsConfig));
         result.put("logs", path(logs));
         result.put("aliases", getAliases());

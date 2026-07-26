@@ -5,7 +5,7 @@ import unicodeSpinners from 'unicode-animations'
 import { artWidth, caduceus, CADUCEUS_WIDTH, logo, LOGO_WIDTH } from '../banner.js'
 import { flat } from '../lib/text.js'
 import type { Theme } from '../theme.js'
-import type { McpServerStatus, PanelSection, SessionInfo } from '../types.js'
+import type { PanelSection, SessionInfo } from '../types.js'
 
 const LOADER_TICK_MS = 120
 
@@ -68,12 +68,6 @@ const ruleIn = (label: string, w: number) => {
 
   return `${'─'.repeat(left)} ${f} ${'─'.repeat(extra - left)}`
 }
-
-/** 标题摘要只统计已连接的 MCP 服务，避免把已配置但未启用的服务算成可用能力。 */
-export const connectedMcpServerCount = (servers: readonly McpServerStatus[] = []) =>
-  servers.filter(s => s.connected).length
-
-export const mcpHeadlineSuffix = (connected: number) => (connected ? ` · ${connected} MCP` : '')
 
 export const collapseToggleMeta = (count?: number, suffix?: string) => {
   const countLabel = typeof count === 'number' ? ` (${count})` : ''
@@ -181,7 +175,6 @@ export function SessionPanel({ info, maxWidth, sid, t }: SessionPanelProps) {
   const [toolsOpen, setToolsOpen] = useState(true)
   const [skillsOpen, setSkillsOpen] = useState(false)
   const [systemOpen, setSystemOpen] = useState(false)
-  const [mcpOpen, setMcpOpen] = useState(false)
 
   const truncLine = (pfx: string, items: string[]) => {
     let line = ''
@@ -232,8 +225,6 @@ export function SessionPanel({ info, maxWidth, sid, t }: SessionPanelProps) {
   // ── Collapsible tools section ──
   const toolEntries = Object.entries(info.tools).sort()
   const toolsTotal = flat(info.tools).length
-  const mcpServers = info.mcp_servers ?? []
-  const mcpConnected = connectedMcpServerCount(mcpServers)
 
   const toolsBody = () => {
     const shown = toolEntries.slice(0, TOOLSETS_MAX)
@@ -253,26 +244,6 @@ export function SessionPanel({ info, maxWidth, sid, t }: SessionPanelProps) {
       </>
     )
   }
-
-  // ── Collapsible MCP section ──
-  const mcpBody = () => (
-    <>
-      {mcpServers.map(s => (
-        <Text key={s.name} wrap="truncate">
-          <Text color={t.color.muted}>{`  ${s.name} `}</Text>
-          <Text color={t.color.muted}>{`[${s.transport}]`}</Text>
-          <Text color={t.color.muted}>: </Text>
-          {s.connected ? (
-            <Text color={t.color.text}>
-              {s.tools} tool{s.tools === 1 ? '' : 's'}
-            </Text>
-          ) : (
-            <Text color={t.color.error}>failed</Text>
-          )}
-        </Text>
-      ))}
-    </>
-  )
 
   // ── System prompt body ──
   const sysPromptLen = (info.system_prompt ?? '').length
@@ -381,27 +352,11 @@ export function SessionPanel({ info, maxWidth, sid, t }: SessionPanelProps) {
           </Box>
         )}
 
-        {/* ── MCP Servers (collapsed by default) ── */}
-        {mcpServers.length > 0 && (
-          <Box flexDirection="column" marginTop={1}>
-            <CollapseToggle
-              count={mcpConnected}
-              onToggle={() => setMcpOpen(v => !v)}
-              open={mcpOpen}
-              suffix="connected"
-              t={t}
-              title="MCP Servers"
-            />
-            {mcpOpen && mcpBody()}
-          </Box>
-        )}
-
         <Text />
 
         <Text color={t.color.text}>
           {toolsTotal} tools{' · '}
           {skillsTotal} skills
-          {mcpHeadlineSuffix(mcpConnected)}
           {' · '}
           <Text color={t.color.muted}>/help for commands</Text>
         </Text>

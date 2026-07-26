@@ -439,7 +439,6 @@ export interface ToolsConfigureResponse {
   changed?: string[]
   enabled_toolsets?: string[]
   info?: SessionInfo
-  missing_servers?: string[]
   reset?: boolean
   unknown?: string[]
 }
@@ -463,13 +462,6 @@ export interface ModelOptionsResponse {
   provider?: string
   providers?: ModelOptionProvider[]
   session_id?: string
-}
-
-// ── MCP ──────────────────────────────────────────────────────────────
-
-export interface ReloadMcpResponse {
-  status?: string
-  message?: string
 }
 
 export interface ReloadEnvResponse {

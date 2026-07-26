@@ -886,7 +886,6 @@ public class GatewayRuntimeRefreshService {
                     "solonclaw.task",
                     "solonclaw.browser",
                     "solonclaw.security",
-                    "solonclaw.mcp",
                     "solonclaw.channels",
                     "solonclaw.channels.feishu",
                     "solonclaw.channels.dingtalk",
@@ -998,12 +997,9 @@ public class GatewayRuntimeRefreshService {
                     "security.tirith_fail_open",
                     "approvals.subagentAutoApprove",
                     "approvals.subagent_auto_approve",
-                    "approvals.mcpReloadConfirm",
-                    "approvals.mcp_reload_confirm",
                     "security.websiteBlocklist.enabled",
                     "security.website_blocklist.enabled",
-                    "solonclaw.llm.modelsDevRefreshEnabled",
-                    "solonclaw.mcp.enabled");
+                    "solonclaw.llm.modelsDevRefreshEnabled");
 
     /** 列表KEYS的统一常量值。 */
     private static final Set<String> LIST_KEYS =

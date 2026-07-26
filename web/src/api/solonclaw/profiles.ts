@@ -1,18 +1,6 @@
 import { dashboardFetch, getApiKey, getBaseUrlValue, request } from '../client'
 import { fetchAvailableModels } from './system'
 
-export interface ProfileGatewayStatus {
-  profile: string
-  home: string
-  running: boolean
-  pid?: number | null
-  port?: number | null
-  state: Record<string, unknown>
-  pid_file: string
-  state_file: string
-  log_file: string
-}
-
 export interface ProfileDistribution {
   name?: string
   version?: string
@@ -29,14 +17,11 @@ export interface ProfileDistribution {
 
 export interface SolonClawProfile {
   name: string
-  active: boolean
-  current: boolean
   home: string
   description: string
   description_auto?: boolean
   model: string
   provider?: string
-  gateway: ProfileGatewayStatus
   skills_count: number
   config: string
   config_exists: boolean
@@ -48,28 +33,11 @@ export interface SolonClawProfile {
   memory_file: string
   memory_dir: string
   skills_dir: string
-  mcp_config: string
   channels_config: string
   logs: string
   aliases: string[]
   distribution: ProfileDistribution
   no_bundled_skills: boolean
-  /** 多 Profile 运行时健康状态；旧后端未返回时由 gateway 状态降级展示。 */
-  runtime_status?: 'healthy' | 'error' | 'unloaded'
-  /** 当前协作活动；旧后端未返回时展示为空闲。 */
-  activity_status?: 'idle' | 'working' | 'waiting' | 'blocked'
-  current_task?: string
-  running_task_count?: number
-  waiting_task_count?: number
-}
-
-export interface ProfileMcpServerCreate {
-  name: string
-  url?: string
-  command?: string
-  args?: string[]
-  env?: Record<string, string>
-  auth?: string
 }
 
 export interface ProfileHubSkill {
@@ -99,8 +67,6 @@ export interface ProfileModelChoice {
 
 export interface ProfilesResponse {
   profiles: SolonClawProfile[]
-  active: string
-  current: string
 }
 
 export interface CreateProfileRequest {
@@ -113,7 +79,6 @@ export interface CreateProfileRequest {
   description?: string
   provider?: string
   model?: string
-  mcp_servers?: ProfileMcpServerCreate[]
   keep_skills?: string[]
   hub_skills?: string[]
 }
@@ -123,7 +88,6 @@ export interface CreateProfileResult extends Partial<SolonClawProfile> {
   name: string
   path?: string
   model_set?: boolean
-  mcp_written?: number
   skills_disabled?: number
   hub_installs?: Array<{ identifier: string; pid: number | null }>
 }
@@ -141,11 +105,6 @@ export interface ProfileDescribeAutoResult extends ProfileDescriptionResult {
 export interface ProfileSoulResult {
   content: string
   exists: boolean
-}
-
-export interface ProfileGatewayOptions {
-  args?: string[]
-  force?: boolean
 }
 
 export interface InstallProfileDistributionRequest {
@@ -182,13 +141,6 @@ export async function fetchProfileModelChoices(): Promise<ProfileModelChoice[]> 
   )
 }
 
-export async function setActiveProfile(name: string): Promise<{ active: string; current: string }> {
-  return request('/api/profiles/active', {
-    method: 'POST',
-    body: JSON.stringify({ name }),
-  })
-}
-
 export async function renameProfile(name: string, newName: string): Promise<SolonClawProfile> {
   return request(`/api/profiles/${encodeURIComponent(name)}`, {
     method: 'PATCH',
@@ -198,10 +150,6 @@ export async function renameProfile(name: string, newName: string): Promise<Solo
 
 export async function deleteProfile(name: string): Promise<void> {
   await request(`/api/profiles/${encodeURIComponent(name)}`, { method: 'DELETE' })
-}
-
-export async function fetchProfileGateway(name: string): Promise<ProfileGatewayStatus> {
-  return request(`/api/profiles/${encodeURIComponent(name)}/gateway`)
 }
 
 export async function updateProfileDescription(name: string, description: string): Promise<ProfileDescriptionResult> {
@@ -265,27 +213,6 @@ export async function updateProfileDistribution(name: string, forceConfig = fals
   return request(`/api/profiles/${encodeURIComponent(name)}/distribution/update`, {
     method: 'POST',
     body: JSON.stringify({ force_config: forceConfig }),
-  })
-}
-
-export async function startProfileGateway(name: string, options: ProfileGatewayOptions = {}): Promise<ProfileGatewayStatus> {
-  return request(`/api/profiles/${encodeURIComponent(name)}/gateway/start`, {
-    method: 'POST',
-    body: JSON.stringify(options),
-  })
-}
-
-export async function stopProfileGateway(name: string): Promise<ProfileGatewayStatus> {
-  return request(`/api/profiles/${encodeURIComponent(name)}/gateway/stop`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  })
-}
-
-export async function restartProfileGateway(name: string, options: ProfileGatewayOptions = {}): Promise<ProfileGatewayStatus> {
-  return request(`/api/profiles/${encodeURIComponent(name)}/gateway/restart`, {
-    method: 'POST',
-    body: JSON.stringify(options),
   })
 }
 

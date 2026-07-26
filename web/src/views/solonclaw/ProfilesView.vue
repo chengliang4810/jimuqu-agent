@@ -13,7 +13,6 @@ import { useProfilesStore } from '@/stores/solonclaw/profiles'
 const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 
 type EditorKind = 'description' | 'model' | 'soul' | 'alias'
-type GatewayAction = 'start' | 'stop' | 'restart'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -24,7 +23,6 @@ const renameOpen = ref(false)
 const importOpen = ref(false)
 const editorOpen = ref(false)
 const distributionOpen = ref(false)
-const gatewayOpen = ref(false)
 const createName = ref('')
 const createDescription = ref('')
 const cloneFrom = ref('default')
@@ -56,10 +54,6 @@ const distributionName = ref('')
 const distributionAlias = ref(false)
 const distributionForce = ref(false)
 const distributionForceConfig = ref(false)
-const gatewayProfile = ref<SolonClawProfile | null>(null)
-const gatewayAction = ref<GatewayAction>('start')
-const gatewayArgs = ref('')
-const gatewayForce = ref(false)
 let editorRequestId = 0
 
 const cloneOptions = computed(() => [
@@ -70,16 +64,6 @@ const cloneOptions = computed(() => [
 const registeredProviderOptions = computed(() => Array.from(
   new Map((modelChoices.value || []).map(choice => [choice.provider, choice.providerLabel])).entries(),
 ).map(([value, label]) => ({ value, label, disabled: false })))
-
-const surfaceRoutes = computed(() => [
-  { label: t('profiles.surfaceConfig'), name: 'solonclaw.settings' },
-  { label: t('profiles.surfaceSessions'), name: 'solonclaw.runs' },
-  { label: t('profiles.surfaceMemory'), name: 'solonclaw.persona.journal' },
-  { label: t('profiles.surfaceSkills'), name: 'solonclaw.skills' },
-  { label: t('profiles.surfaceMcp'), name: 'solonclaw.mcp' },
-  { label: t('profiles.surfaceChannels'), name: 'solonclaw.channels' },
-  { label: t('profiles.surfaceGateway'), name: 'solonclaw.gateways' },
-])
 
 const editorTitle = computed(() => {
   const profileName = editorProfile.value?.name || ''
@@ -94,7 +78,7 @@ const editorTitle = computed(() => {
 })
 
 onMounted(() => {
-  void profilesStore.fetchProfiles(false).catch(() => {})
+  void profilesStore.fetchProfiles().catch(() => {})
 })
 
 watch(cloneFrom, source => {
@@ -213,31 +197,10 @@ async function submitRename(): Promise<void> {
   }
 }
 
-function confirmSetActive(profile: SolonClawProfile): void {
-  Modal.confirm({
-    title: t('profiles.setActive'),
-    content: t('profiles.activeConfirm', { name: profile.name }),
-    okText: t('common.confirm'),
-    cancelText: t('common.cancel'),
-    async onOk() {
-      try {
-        await profilesStore.setActiveProfile(profile.name)
-        message.success(t('profiles.switchSuccess', { name: profile.name }))
-      } catch (error) {
-        message.error(error instanceof Error ? error.message : t('profiles.switchFailed'))
-        throw error
-      }
-    },
-  })
-}
-
 function confirmDelete(profile: SolonClawProfile): void {
-  const content = profile.gateway.running
-    ? `${t('profiles.deleteConfirm', { name: profile.name })}\n\n${t('profiles.gatewayDeleteWarning')}`
-    : t('profiles.deleteConfirm', { name: profile.name })
   Modal.confirm({
     title: t('profiles.delete'),
-    content,
+    content: t('profiles.deleteConfirm', { name: profile.name }),
     okText: t('common.delete'),
     okType: 'danger',
     cancelText: t('common.cancel'),
@@ -301,14 +264,6 @@ async function submitImport(): Promise<void> {
   } catch (error) {
     message.error(error instanceof Error ? error.message : t('profiles.importFailed'))
   }
-}
-
-function manageSurface(profile: SolonClawProfile, routeName: string): void {
-  profilesStore.setManagementProfile(profile.name)
-  void router.push({
-    name: routeName,
-    query: profilesStore.managementProfile ? { profile: profilesStore.managementProfile } : {},
-  })
 }
 
 async function openEditor(profile: SolonClawProfile, kind: EditorKind): Promise<void> {
@@ -496,52 +451,12 @@ async function submitDistribution(): Promise<void> {
   }
 }
 
-function requestGateway(profile: SolonClawProfile, action: GatewayAction): void {
-  if (action === 'stop') {
-    Modal.confirm({
-      title: t('profiles.gatewayStop'),
-      content: t('profiles.gatewayStopConfirm', { name: profile.name }),
-      okText: t('common.stop'),
-      cancelText: t('common.cancel'),
-      async onOk() {
-        await profilesStore.updateGateway(profile.name, 'stop')
-        message.success(t('profiles.gatewayStopped'))
-      },
-    })
-    return
-  }
-  gatewayProfile.value = profile
-  gatewayAction.value = action
-  gatewayArgs.value = ''
-  gatewayForce.value = false
-  gatewayOpen.value = true
-}
-
-async function submitGateway(): Promise<void> {
-  const profile = gatewayProfile.value
-  if (!profile) return
-  const args = gatewayArgs.value
-    .split(/\r?\n/)
-    .map(item => item.trim())
-    .filter(Boolean)
-  try {
-    await profilesStore.updateGateway(profile.name, gatewayAction.value, {
-      args: args.length ? args : undefined,
-      force: gatewayForce.value,
-    })
-    gatewayOpen.value = false
-    message.success(gatewayAction.value === 'start' ? t('profiles.gatewayStarted') : t('profiles.gatewayRestarted'))
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : t('profiles.gatewayActionFailed'))
-  }
-}
-
 function canRename(profile: SolonClawProfile): boolean {
-  return profile.name !== 'default' && !profile.current
+  return profile.name !== 'default'
 }
 
 function canDelete(profile: SolonClawProfile): boolean {
-  return profile.name !== 'default' && !profile.active && !profile.current
+  return profile.name !== 'default'
 }
 
 function hasDistribution(profile: SolonClawProfile): boolean {
@@ -572,20 +487,9 @@ function distributionLabel(profile: SolonClawProfile): string {
     </header>
 
     <main class="profiles-content">
-      <div class="scope-summary">
-        <span>{{ t('profiles.managementTarget') }}</span>
-        <strong>{{ profilesStore.managedProfileName }}</strong>
-        <span class="summary-divider">/</span>
-        <span>{{ t('profiles.activeDefault') }}</span>
-        <strong>{{ profilesStore.activeProfileName }}</strong>
-        <span class="summary-divider">/</span>
-        <span>{{ t('profiles.dashboardRunsAs') }}</span>
-        <strong>{{ profilesStore.currentProfileName }}</strong>
-      </div>
-
       <div v-if="profilesStore.loadError" class="load-error">
         <span>{{ profilesStore.loadError }}</span>
-        <Button size="small" @click="profilesStore.fetchProfiles(false)">{{ t('common.retry') }}</Button>
+        <Button size="small" @click="profilesStore.fetchProfiles()">{{ t('common.retry') }}</Button>
       </div>
 
       <Spin :spinning="profilesStore.loading && profilesStore.profiles.length === 0" size="large">
@@ -598,56 +502,18 @@ function distributionLabel(profile: SolonClawProfile): string {
             v-for="profile in profilesStore.profiles"
             :key="profile.name"
             class="profile-card"
-            :class="{ managed: profilesStore.managedProfileName === profile.name }"
           >
             <header class="profile-header">
               <div class="profile-identity">
                 <h3>{{ profile.name }}</h3>
                 <div class="profile-badges">
-                  <Tag v-if="profile.active" color="success">{{ t('profiles.active') }}</Tag>
                   <Tag v-if="profile.name === 'default'">{{ t('profiles.default') }}</Tag>
-                  <Tag v-if="profile.current" color="processing">{{ t('profiles.current') }}</Tag>
                   <Tag v-if="profile.aliases.length">{{ t('profiles.aliasBadge') }}</Tag>
                   <Tag v-if="profile.credentials_exists">{{ t('profiles.hasEnv') }}</Tag>
                   <Tag v-if="hasDistribution(profile)">{{ distributionLabel(profile) }}</Tag>
                 </div>
               </div>
-              <div class="profile-actions">
-                <Button v-if="!profile.active" size="small" @click="confirmSetActive(profile)">{{ t('profiles.setActive') }}</Button>
-                <Button
-                  v-if="profile.gateway.running"
-                  size="small"
-                  danger
-                  :disabled="profilesStore.mutating"
-                  @click="requestGateway(profile, 'stop')"
-                >
-                  {{ t('common.stop') }}
-                </Button>
-                <Button
-                  v-else
-                  size="small"
-                  :disabled="profilesStore.mutating"
-                  @click="requestGateway(profile, 'start')"
-                >
-                  {{ t('common.start') }}
-                </Button>
-                <Button
-                  v-if="profile.gateway.running"
-                  size="small"
-                  :disabled="profilesStore.mutating"
-                  @click="requestGateway(profile, 'restart')"
-                >
-                  {{ t('common.restart') }}
-                </Button>
-              </div>
             </header>
-
-            <div class="gateway-status" :class="{ running: profile.gateway.running }">
-              <span class="status-dot" />
-              <span>{{ profile.gateway.running ? t('profiles.gatewayRunning') : t('profiles.gatewayStopped') }}</span>
-              <span v-if="profile.gateway.port">:{{ profile.gateway.port }}</span>
-              <span v-if="profile.gateway.pid">PID {{ profile.gateway.pid }}</span>
-            </div>
 
             <div class="description-row">
               <p :class="{ empty: !profile.description }">{{ profile.description || t('profiles.noDescription') }}</p>
@@ -687,12 +553,6 @@ function distributionLabel(profile: SolonClawProfile): string {
               <Button size="small" @click="openEditor(profile, 'description')">{{ t('profiles.editDescription') }}</Button>
               <Button size="small" @click="openEditor(profile, 'soul')">{{ t('profiles.editSoul') }}</Button>
               <Button size="small" @click="openEditor(profile, 'alias')">{{ t('profiles.manageAliases') }}</Button>
-            </div>
-
-            <div class="surface-links" :aria-label="t('profiles.scopedSurfaces')">
-              <Button v-for="surface in surfaceRoutes" :key="surface.name" size="small" type="text" @click="manageSurface(profile, surface.name)">
-                {{ surface.label }}
-              </Button>
             </div>
 
             <footer class="card-footer">
@@ -878,27 +738,6 @@ function distributionLabel(profile: SolonClawProfile): string {
       </template>
     </Modal>
 
-    <Modal
-      v-model:open="gatewayOpen"
-      :title="gatewayAction === 'start' ? t('profiles.gatewayStart') : t('profiles.gatewayRestart')"
-      :style="{ width: 'min(520px, calc(100vw - 32px))' }"
-    >
-      <Form layout="vertical">
-        <FormItem :label="t('profiles.gatewayArgs')">
-          <TextArea v-model:value="gatewayArgs" :autosize="{ minRows: 4, maxRows: 10 }" :placeholder="t('profiles.gatewayArgsPlaceholder')" />
-          <small class="field-help">{{ t('profiles.gatewayArgsHint') }}</small>
-        </FormItem>
-        <Checkbox v-model:checked="gatewayForce">{{ t('profiles.gatewayForce') }}</Checkbox>
-      </Form>
-      <template #footer>
-        <div class="modal-footer">
-          <Button @click="gatewayOpen = false">{{ t('common.cancel') }}</Button>
-          <Button type="primary" :loading="profilesStore.mutating" @click="submitGateway">
-            {{ gatewayAction === 'start' ? t('common.start') : t('common.restart') }}
-          </Button>
-        </div>
-      </template>
-    </Modal>
   </div>
 </template>
 
@@ -912,15 +751,12 @@ function distributionLabel(profile: SolonClawProfile): string {
 
 .page-header,
 .header-actions,
-.profile-actions,
 .profile-badges,
 .editor-actions,
-.surface-links,
 .card-footer,
 .modal-footer,
 .file-picker-row,
 .editor-toolbar,
-.gateway-status,
 .description-row,
 .distribution-row,
 .alias-list {
@@ -948,10 +784,8 @@ function distributionLabel(profile: SolonClawProfile): string {
 }
 
 .header-actions,
-.profile-actions,
 .profile-badges,
 .editor-actions,
-.surface-links,
 .card-footer,
 .modal-footer,
 .file-picker-row,
@@ -962,24 +796,6 @@ function distributionLabel(profile: SolonClawProfile): string {
 
 .profiles-content {
   padding: 18px 24px 28px;
-}
-
-.scope-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin-bottom: 14px;
-  color: $text-secondary;
-  font-size: 12px;
-
-  strong {
-    color: $text-primary;
-  }
-}
-
-.summary-divider {
-  color: $border-color;
 }
 
 .load-error,
@@ -1020,10 +836,6 @@ function distributionLabel(profile: SolonClawProfile): string {
   border-radius: 8px;
   background: $bg-primary;
 
-  &.managed {
-    border-color: rgba(var(--accent-primary-rgb), 0.55);
-    box-shadow: inset 3px 0 0 $accent-primary;
-  }
 }
 
 .profile-header {
@@ -1042,27 +854,6 @@ function distributionLabel(profile: SolonClawProfile): string {
     font-size: 15px;
     text-overflow: ellipsis;
   }
-}
-
-.gateway-status {
-  gap: 6px;
-  color: $text-secondary;
-  font-size: 12px;
-
-  &.running {
-    color: $success;
-  }
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: $text-muted;
-}
-
-.gateway-status.running .status-dot {
-  background: $success;
 }
 
 .description-row {
@@ -1146,14 +937,9 @@ function distributionLabel(profile: SolonClawProfile): string {
   }
 }
 
-.editor-actions,
-.surface-links {
+.editor-actions {
   padding-top: 10px;
   border-top: 1px solid $border-color;
-}
-
-.surface-links {
-  gap: 2px;
 }
 
 .card-footer {

@@ -61,7 +61,6 @@ class TerminalUiRpcServiceTest {
                 null,
                 null,
                 null,
-                null,
                 null);
     }
 
@@ -79,7 +78,6 @@ class TerminalUiRpcServiceTest {
                 env.contextCompressionService,
                 null,
                 env.processRegistry,
-                null,
                 env.gatewayRuntimeRefreshService,
                 env.delegationService,
                 env.agentRunControlService,
@@ -125,7 +123,7 @@ class TerminalUiRpcServiceTest {
         TerminalUiRpcService service =
                 new TerminalUiRpcService(
                         config, sessions, null, null, null, null, null, null, null, null, null,
-                        null, null, null, null, runs, null, null);
+                        null, null, null, runs, null, null);
 
         Map<String, Object> response = service.sessionResume(session.getSessionId());
 
@@ -213,7 +211,7 @@ class TerminalUiRpcServiceTest {
         TerminalUiRpcService service =
                 new TerminalUiRpcService(
                         config, sessions, null, null, null, null, null, null, null, null, null,
-                        null, null, null, null, runs, null, null);
+                        null, null, null, runs, null, null);
         service.sessionResume("session-a");
         service.sessionResume("session-b");
 
@@ -258,7 +256,6 @@ class TerminalUiRpcServiceTest {
                         null,
                         null,
                         null,
-                        null,
                         new FixedDelegationService(2),
                         null,
                         null,
@@ -288,7 +285,7 @@ class TerminalUiRpcServiceTest {
         TerminalUiRpcService service =
                 new TerminalUiRpcService(
                         config, sessions, null, null, null, null, null, null, null, null, null,
-                        null, null, null, null, runs, null, null);
+                        null, null, null, runs, null, null);
 
         Map<String, Object> usage = service.sessionUsage(session.getSessionId());
 
@@ -327,7 +324,7 @@ class TerminalUiRpcServiceTest {
         TerminalUiRpcService service =
                 new TerminalUiRpcService(
                         config, sessions, null, null, null, null, null, null, null, null, null,
-                        null, null, null, null, runs, null, null);
+                        null, null, null, runs, null, null);
 
         Map<String, Object> usage = service.sessionUsage(session.getSessionId());
 
@@ -335,35 +332,6 @@ class TerminalUiRpcServiceTest {
         assertThat(usage.get("input")).isEqualTo(0L);
         assertThat(usage.get("output")).isEqualTo(0L);
         assertThat(usage.get("total")).isEqualTo(0L);
-    }
-
-    @Test
-    void reloadMcpRequiresExplicitConfirmationWhenPolicyRequiresIt() throws Exception {
-        AppConfig config = testConfig();
-        config.getApprovals().setMcpReloadConfirm(true);
-        TerminalUiRpcService service = new TerminalUiRpcService(config);
-
-        Map<String, Object> response = service.reloadMcp();
-
-        assertThat(response.get("status")).isEqualTo("confirm_required");
-        assertThat(response.get("message")).asString().contains("/reload-mcp now");
-    }
-
-    @Test
-    void reloadMcpRunsWhenConfirmedAndCanRememberAlways() throws Exception {
-        AppConfig config = testConfig();
-        config.getApprovals().setMcpReloadConfirm(true);
-        TerminalUiRpcService service = new TerminalUiRpcService(config);
-
-        Map<String, Object> once = service.reloadMcp(true, false);
-
-        assertThat(once.get("status")).isEqualTo("reloaded");
-        assertThat(config.getApprovals().isMcpReloadConfirm()).isTrue();
-
-        Map<String, Object> always = service.reloadMcp(true, true);
-
-        assertThat(always.get("status")).isEqualTo("reloaded");
-        assertThat(config.getApprovals().isMcpReloadConfirm()).isFalse();
     }
 
     @Test
@@ -384,7 +352,6 @@ class TerminalUiRpcServiceTest {
         TerminalUiRpcService service =
                 new TerminalUiRpcService(
                         config,
-                        null,
                         null,
                         null,
                         null,
@@ -689,7 +656,6 @@ class TerminalUiRpcServiceTest {
                         null,
                         null,
                         new AttachmentPathResolver(cache, new SecurityPolicyService(config)),
-                        null,
                         null,
                         null,
                         null,

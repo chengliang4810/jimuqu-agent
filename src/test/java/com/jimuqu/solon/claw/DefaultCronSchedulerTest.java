@@ -26,13 +26,11 @@ import com.jimuqu.solon.claw.core.service.ConversationOrchestrator;
 import com.jimuqu.solon.claw.core.service.DeliveryService;
 import com.jimuqu.solon.claw.gateway.command.DefaultCommandService;
 import com.jimuqu.solon.claw.gateway.feedback.ConversationFeedbackSink;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.scheduler.CronApprovalResumeObserver;
 import com.jimuqu.solon.claw.scheduler.CronJobService;
 import com.jimuqu.solon.claw.scheduler.CronJobSupport;
 import com.jimuqu.solon.claw.scheduler.CronScriptApprovalService;
 import com.jimuqu.solon.claw.scheduler.DefaultCronScheduler;
-import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.jimuqu.solon.claw.support.CronSupport;
@@ -48,20 +46,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Calendar;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.message.ChatMessage;
-import org.noear.solon.ai.chat.tool.FunctionTool;
-import org.noear.solon.ai.chat.tool.FunctionToolDesc;
-import org.noear.solon.ai.chat.tool.ToolProvider;
 
 public class DefaultCronSchedulerTest {
 
@@ -78,7 +70,6 @@ public class DefaultCronSchedulerTest {
                 new AttachmentCacheService(env.appConfig),
                 env.localSkillService,
                 env.agentRunControlService,
-                null,
                 env.sessionRepository);
     }
 
@@ -832,7 +823,6 @@ public class DefaultCronSchedulerTest {
                         new AttachmentCacheService(env.appConfig),
                         env.localSkillService,
                         env.agentRunControlService,
-                        null,
                         env.sessionRepository);
         scheduler.tick();
 
@@ -1794,7 +1784,6 @@ public class DefaultCronSchedulerTest {
                         null,
                         null,
                         null,
-                        null,
                         env.sessionRepository);
 
         scheduler.tick();
@@ -1871,7 +1860,6 @@ public class DefaultCronSchedulerTest {
                         env.deliveryService,
                         env.gatewayPolicyRepository,
                         env.dangerousCommandApprovalService,
-                        null,
                         null,
                         null,
                         null,
@@ -3371,7 +3359,6 @@ public class DefaultCronSchedulerTest {
                         env.agentRunRepository,
                         null,
                         null,
-                        null,
                         new SessionArtifactService(env.appConfig),
                         scheduler,
                         null,
@@ -3416,132 +3403,6 @@ public class DefaultCronSchedulerTest {
                                 .get(0)
                                 .getTriggerType())
                 .isEqualTo("failed");
-    }
-
-    @Test
-    void shouldWarmMcpToolsBeforeScheduledAgentRun() throws Exception {
-        TestEnvironment env = TestEnvironment.withFakeLlm();
-        List<String> order = new java.util.ArrayList<String>();
-        RecordingMcpRuntimeService mcpRuntimeService =
-                new RecordingMcpRuntimeService(env.appConfig, env.sqliteDatabase, order, false);
-        CronJobRecord job = job("mcp-cron", "MEMORY:mcp-room:user");
-        env.cronJobRepository.save(job);
-
-        DefaultCronScheduler scheduler =
-                new DefaultCronScheduler(
-                        env.appConfig,
-                        env.cronJobRepository,
-                        new CronJobService(env.appConfig, env.cronJobRepository),
-                        new OrderedConversationOrchestrator(order),
-                        env.deliveryService,
-                        env.gatewayPolicyRepository,
-                        env.dangerousCommandApprovalService,
-                        null,
-                        null,
-                        null,
-                        mcpRuntimeService);
-
-        scheduler.runNow("mcp-cron");
-
-        assertThat(order).contains("mcp-resolve", "mcp-tools", "orchestrator");
-        assertThat(env.cronJobRepository.findById("mcp-cron").getLastStatus()).isEqualTo("ok");
-    }
-
-    @Test
-    void shouldTreatMcpWarmupFailureAsNonFatalForScheduledAgentRun() throws Exception {
-        TestEnvironment env = TestEnvironment.withFakeLlm();
-        List<String> order = new java.util.ArrayList<String>();
-        RecordingMcpRuntimeService mcpRuntimeService =
-                new RecordingMcpRuntimeService(env.appConfig, env.sqliteDatabase, order, true);
-        CronJobRecord job = job("mcp-cron-failure", "MEMORY:mcp-failure-room:user");
-        env.cronJobRepository.save(job);
-
-        DefaultCronScheduler scheduler =
-                new DefaultCronScheduler(
-                        env.appConfig,
-                        env.cronJobRepository,
-                        new CronJobService(env.appConfig, env.cronJobRepository),
-                        new OrderedConversationOrchestrator(order),
-                        env.deliveryService,
-                        env.gatewayPolicyRepository,
-                        env.dangerousCommandApprovalService,
-                        null,
-                        null,
-                        null,
-                        mcpRuntimeService);
-
-        scheduler.runNow("mcp-cron-failure");
-
-        assertThat(order).contains("mcp-resolve", "orchestrator");
-        assertThat(env.cronJobRepository.findById("mcp-cron-failure").getLastStatus())
-                .isEqualTo("ok");
-    }
-
-    @Test
-    void shouldNotBlockScheduledAgentRunOnSlowMcpWarmup() throws Exception {
-        TestEnvironment env = TestEnvironment.withFakeLlm();
-        List<String> order =
-                java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
-        CountDownLatch releaseWarmup = new CountDownLatch(1);
-        BlockingWarmupMcpRuntimeService mcpRuntimeService =
-                new BlockingWarmupMcpRuntimeService(
-                        env.appConfig, env.sqliteDatabase, order, releaseWarmup);
-        CronJobRecord job = job("mcp-cron-slow", "MEMORY:mcp-slow-room:user");
-        env.cronJobRepository.save(job);
-
-        DefaultCronScheduler scheduler =
-                new DefaultCronScheduler(
-                        env.appConfig,
-                        env.cronJobRepository,
-                        new CronJobService(env.appConfig, env.cronJobRepository),
-                        new OrderedConversationOrchestrator(order),
-                        env.deliveryService,
-                        env.gatewayPolicyRepository,
-                        env.dangerousCommandApprovalService,
-                        null,
-                        null,
-                        null,
-                        mcpRuntimeService);
-
-        try {
-            scheduler.runNow("mcp-cron-slow");
-            assertThat(order).contains("orchestrator");
-            assertThat(order).contains("mcp-tools-start");
-            assertThat(order).doesNotContain("mcp-tools");
-            assertThat(env.cronJobRepository.findById("mcp-cron-slow").getLastStatus())
-                    .isEqualTo("ok");
-        } finally {
-            releaseWarmup.countDown();
-        }
-    }
-
-    @Test
-    void shouldSkipMcpWarmupForNoAgentCronJobs() throws Exception {
-        TestEnvironment env = TestEnvironment.withFakeLlm();
-        List<String> order = new java.util.ArrayList<String>();
-        RecordingMcpRuntimeService mcpRuntimeService =
-                new RecordingMcpRuntimeService(env.appConfig, env.sqliteDatabase, order, true);
-        CronJobService service = new CronJobService(env.appConfig, env.cronJobRepository);
-        CronJobRecord job = createNoAgentScriptJob(env, service, "mcp-no-agent", "30m");
-
-        DefaultCronScheduler scheduler =
-                new DefaultCronScheduler(
-                        env.appConfig,
-                        env.cronJobRepository,
-                        service,
-                        env.conversationOrchestrator,
-                        env.deliveryService,
-                        env.gatewayPolicyRepository,
-                        env.dangerousCommandApprovalService,
-                        null,
-                        null,
-                        null,
-                        mcpRuntimeService);
-
-        scheduler.runNow(job.getJobId());
-
-        assertThat(order).isEmpty();
-        assertThat(env.cronJobRepository.findById(job.getJobId()).getLastStatus()).isEqualTo("ok");
     }
 
     private CronJobRecord createNoAgentScriptJob(
@@ -3814,120 +3675,6 @@ public class DefaultCronSchedulerTest {
         @Override
         public GatewayReply resumePending(String sourceKey) {
             return GatewayReply.ok("");
-        }
-    }
-
-    private static class OrderedConversationOrchestrator implements ConversationOrchestrator {
-        private final List<String> order;
-
-        private OrderedConversationOrchestrator(List<String> order) {
-            this.order = order;
-        }
-
-        @Override
-        public GatewayReply handleIncoming(GatewayMessage message) {
-            return GatewayReply.ok("");
-        }
-
-        @Override
-        public GatewayReply runScheduled(GatewayMessage syntheticMessage) {
-            order.add("orchestrator");
-            return GatewayReply.ok("ordered ok");
-        }
-
-        @Override
-        public GatewayReply resumePending(String sourceKey) {
-            return GatewayReply.ok("");
-        }
-    }
-
-    private static class RecordingMcpRuntimeService extends McpRuntimeService {
-        private final List<String> order;
-        private final boolean fail;
-
-        private RecordingMcpRuntimeService(
-                AppConfig appConfig, SqliteDatabase database, List<String> order, boolean fail) {
-            super(appConfig, database);
-            this.order = order;
-            this.fail = fail;
-        }
-
-        @Override
-        public List<ToolProvider> resolveEnabledToolProviders() {
-            order.add("mcp-resolve");
-            if (fail) {
-                throw new IllegalStateException("MCP server unreachable");
-            }
-            return Collections.<ToolProvider>singletonList(new RecordingToolProvider(order));
-        }
-    }
-
-    private static class RecordingToolProvider implements ToolProvider {
-        private final List<String> order;
-
-        private RecordingToolProvider(List<String> order) {
-            this.order = order;
-        }
-
-        @Override
-        public Collection<FunctionTool> getTools() {
-            order.add("mcp-tools");
-            FunctionToolDesc tool = new FunctionToolDesc("mcp_docs_search");
-            tool.title("MCP Docs Search");
-            tool.description("Search docs");
-            tool.inputSchema("{\"type\":\"object\",\"properties\":{}}");
-            tool.doHandle(args -> Collections.singletonMap("ok", Boolean.TRUE));
-            return Collections.<FunctionTool>singletonList(tool);
-        }
-    }
-
-    private static class BlockingWarmupMcpRuntimeService extends McpRuntimeService {
-        private final List<String> order;
-        private final CountDownLatch releaseWarmup;
-
-        private BlockingWarmupMcpRuntimeService(
-                AppConfig appConfig,
-                SqliteDatabase database,
-                List<String> order,
-                CountDownLatch releaseWarmup) {
-            super(appConfig, database);
-            this.order = order;
-            this.releaseWarmup = releaseWarmup;
-        }
-
-        @Override
-        public List<ToolProvider> resolveEnabledToolProviders() {
-            order.add("mcp-resolve");
-            return Collections.<ToolProvider>singletonList(
-                    new BlockingWarmupToolProvider(order, releaseWarmup));
-        }
-    }
-
-    private static class BlockingWarmupToolProvider implements ToolProvider {
-        private final List<String> order;
-        private final CountDownLatch releaseWarmup;
-
-        private BlockingWarmupToolProvider(List<String> order, CountDownLatch releaseWarmup) {
-            this.order = order;
-            this.releaseWarmup = releaseWarmup;
-        }
-
-        @Override
-        public Collection<FunctionTool> getTools() {
-            order.add("mcp-tools-start");
-            try {
-                releaseWarmup.await(30, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("interrupted", e);
-            }
-            order.add("mcp-tools");
-            FunctionToolDesc tool = new FunctionToolDesc("mcp_docs_search");
-            tool.title("MCP Docs Search");
-            tool.description("Search docs");
-            tool.inputSchema("{\"type\":\"object\",\"properties\":{}}");
-            tool.doHandle(args -> Collections.singletonMap("ok", Boolean.TRUE));
-            return Collections.<FunctionTool>singletonList(tool);
         }
     }
 

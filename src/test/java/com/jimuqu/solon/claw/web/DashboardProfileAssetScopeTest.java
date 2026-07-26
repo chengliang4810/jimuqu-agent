@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.noear.solon.core.Props;
 
-/** 验证 Dashboard 技能、上下文、MCP 与 Cron 按 Profile 独立读写。 */
+/** 验证 Dashboard 技能、上下文与 Cron 按 Profile 独立读写。 */
 class DashboardProfileAssetScopeTest {
     /** 每个测试独占的 Profile 根目录。 */
     @TempDir Path tempDir;
@@ -43,9 +43,6 @@ class DashboardProfileAssetScopeTest {
     /** 默认 Profile 数据库。 */
     private SqliteDatabase defaultDatabase;
 
-    /** 测试后需要关闭的 MCP 根服务。 */
-    private DashboardMcpService mcpService;
-
     /** 测试后需要关闭的 Cron 根服务。 */
     private DashboardCronService cronService;
 
@@ -55,8 +52,8 @@ class DashboardProfileAssetScopeTest {
         root = tempDir.resolve("workspace");
         worker = root.resolve("profiles/worker");
         Files.createDirectories(worker);
-        write(root.resolve("config.yml"), "mcp:\n  enabled: true\n");
-        write(worker.resolve("config.yml"), "mcp:\n  enabled: true\n");
+        write(root.resolve("config.yml"), "");
+        write(worker.resolve("config.yml"), "");
         writeSkill(root, "default-skill", "default skill");
         writeSkill(worker, "worker-skill", "worker skill");
 
@@ -69,9 +66,6 @@ class DashboardProfileAssetScopeTest {
     /** 释放测试创建的数据库和独立运行时。 */
     @AfterEach
     void tearDown() {
-        if (mcpService != null) {
-            mcpService.shutdown();
-        }
         if (cronService != null) {
             cronService.shutdown();
         }
@@ -138,32 +132,6 @@ class DashboardProfileAssetScopeTest {
         assertThat(worker.resolve("USER.md")).hasContent("worker user");
         assertThat(worker.resolve("SOUL.md")).hasContent("worker soul");
         assertThat(Files.readString(root.resolve("MEMORY.md"))).doesNotContain("worker memory");
-    }
-
-    /** MCP 配置和 OAuth token 必须写入目标 Profile 的 state.db。 */
-    @Test
-    void mcpServersAndOAuthAreIsolatedByProfile() throws Exception {
-        mcpService =
-                new DashboardMcpService(defaultConfig, defaultDatabase, null, null, profileScope);
-        Map<String, Object> body = new LinkedHashMap<String, Object>();
-        body.put("serverId", "worker-server");
-        body.put("name", "worker-server");
-        body.put("transport", "stdio");
-        body.put("command", "echo");
-        Map<String, Object> oauth = new LinkedHashMap<String, Object>();
-        oauth.put("enabled", Boolean.TRUE);
-        oauth.put("access_token", "worker-token");
-        body.put("oauth", oauth);
-
-        mcpService.save("worker", body);
-
-        assertThat(servers(mcpService.list("worker")))
-                .extracting("server_id")
-                .containsExactly("worker-server");
-        assertThat(servers(mcpService.list(null))).isEmpty();
-        assertThat(mcpService.oauthStatus("worker", "worker-server"))
-                .containsEntry("has_access_token", Boolean.TRUE)
-                .doesNotContainValue("worker-token");
     }
 
     /** Cron jobs 与 runs 必须命中目标 Profile 的独立数据库。 */
@@ -252,11 +220,5 @@ class DashboardProfileAssetScopeTest {
             }
         }
         throw new AssertionError("Skill not found: " + name);
-    }
-
-    /** 读取 MCP 服务列表。 */
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> servers(Map<String, Object> listing) {
-        return (List<Map<String, Object>>) listing.get("servers");
     }
 }

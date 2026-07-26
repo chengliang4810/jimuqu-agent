@@ -114,12 +114,13 @@ public class DashboardChatServiceEventSinkTest {
         Object state = newState("run-1", "session-1");
         ConversationEventSink sink = newEventSink(service, state);
 
-        sink.onToolCompleted("mcp_lookup", "MCP call timed out", "MCP call timed out", 12L);
+        sink.onToolCompleted(
+                "remote_lookup", "Remote call timed out", "Remote call timed out", 12L);
 
         Map<String, Object> payload = drainEvents(state).get("tool.completed");
         assertThat(payload)
                 .containsEntry("status", "error")
-                .containsEntry("error", "MCP call timed out");
+                .containsEntry("error", "Remote call timed out");
     }
 
     @Test

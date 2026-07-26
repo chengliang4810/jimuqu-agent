@@ -15,7 +15,6 @@ import com.jimuqu.solon.claw.core.service.ConversationEventSink;
 import com.jimuqu.solon.claw.core.service.DelegationService;
 import com.jimuqu.solon.claw.core.service.SkillHubService;
 import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
 import com.jimuqu.solon.claw.support.AttachmentPathResolver;
@@ -140,7 +139,6 @@ public class TerminalUiWebSocketListener implements WebSocketListener {
                 null,
                 null,
                 null,
-                null,
                 null);
     }
 
@@ -160,7 +158,6 @@ public class TerminalUiWebSocketListener implements WebSocketListener {
             BrowserRuntimeService browserRuntimeService,
             ContextCompressionService contextCompressionService,
             AttachmentPathResolver attachmentResolver,
-            McpRuntimeService mcpRuntimeService,
             GatewayRuntimeRefreshService gatewayRuntimeRefreshService,
             DelegationService delegationService,
             AgentRunControlService agentRunControlService,
@@ -182,7 +179,6 @@ public class TerminalUiWebSocketListener implements WebSocketListener {
                 browserRuntimeService,
                 contextCompressionService,
                 attachmentResolver,
-                mcpRuntimeService,
                 gatewayRuntimeRefreshService,
                 delegationService,
                 agentRunControlService,
@@ -209,7 +205,6 @@ public class TerminalUiWebSocketListener implements WebSocketListener {
             BrowserRuntimeService browserRuntimeService,
             ContextCompressionService contextCompressionService,
             AttachmentPathResolver attachmentResolver,
-            McpRuntimeService mcpRuntimeService,
             GatewayRuntimeRefreshService gatewayRuntimeRefreshService,
             DelegationService delegationService,
             AgentRunControlService agentRunControlService,
@@ -239,7 +234,6 @@ public class TerminalUiWebSocketListener implements WebSocketListener {
                         contextCompressionService,
                         attachmentResolver,
                         processRegistry,
-                        mcpRuntimeService,
                         gatewayRuntimeRefreshService,
                         delegationService,
                         agentRunControlService,
@@ -610,10 +604,6 @@ public class TerminalUiWebSocketListener implements WebSocketListener {
         }
         if ("process.stop".equals(method)) {
             return rpcService.processStop();
-        }
-        if ("reload.mcp".equals(method)) {
-            return rpcService.reloadMcp(
-                    params.get("confirm").getBoolean(), params.get("always").getBoolean());
         }
         if ("reload.env".equals(method)) {
             return rpcService.reloadEnv();

@@ -18,7 +18,6 @@ const profilesStore = useProfilesStore()
 const route = useRoute()
 const router = useRouter()
 const ready = ref(false)
-const profileRouteInitialized = ref(false)
 
 const antdvTheme = computed(() => getThemeConfig(isDark.value))
 
@@ -38,26 +37,9 @@ watch(() => route.path, () => {
 watch(
   () => route.query.profile,
   (value) => {
-    if (!profileRouteInitialized.value || typeof value === 'string') {
-      profilesStore.setManagementProfile(typeof value === 'string' ? value : '')
-    }
-    profileRouteInitialized.value = true
+    profilesStore.setManagementProfile(typeof value === 'string' ? value : '')
   },
   { immediate: true },
-)
-
-watch(
-  [() => route.path, () => profilesStore.managementProfile, ready],
-  () => {
-    if (!ready.value || isLoginPage.value) return
-    const inUrl = typeof route.query.profile === 'string' ? route.query.profile : ''
-    if (inUrl === profilesStore.managementProfile) return
-    const query = { ...route.query }
-    if (profilesStore.managementProfile) query.profile = profilesStore.managementProfile
-    else delete query.profile
-    void router.replace({ query })
-  },
-  { flush: 'post' },
 )
 
 // Wait for router to resolve before rendering layout
@@ -75,7 +57,7 @@ function syncAppRuntime() {
   }
   appStore.loadModels()
   appStore.startHealthPolling()
-  void profilesStore.initialize(typeof route.query.profile !== 'string').catch(() => {})
+  void profilesStore.initialize().catch(() => {})
 }
 
 watch([isLoginPage, ready], syncAppRuntime)
@@ -100,8 +82,14 @@ useKeyboard()
         {{ t('sidebar.nodeVersionWarning', { version: appStore.nodeVersion }) }}
       </div>
       <div v-if="ready" class="app-layout" :class="{ 'no-sidebar': isLoginPage }">
-        <button v-if="!isLoginPage" class="hamburger-btn" @click="appStore.toggleSidebar">
-          <img src="/logo.png" alt="Menu" style="width: 24px; height: 24px;" />
+        <button
+          v-if="!isLoginPage"
+          class="hamburger-btn"
+          :aria-label="t('sidebar.openMenu')"
+          :title="t('sidebar.openMenu')"
+          @click="appStore.toggleSidebar"
+        >
+          <img src="/logo.png" :alt="t('sidebar.openMenu')" style="width: 24px; height: 24px;" />
         </button>
         <div v-if="!isLoginPage && appStore.sidebarOpen" class="mobile-backdrop" @click="appStore.closeSidebar" />
         <AppSidebar v-if="!isLoginPage" />

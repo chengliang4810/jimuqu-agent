@@ -17,13 +17,11 @@ public class SolonClawToolSchemaSanitizerTest {
 
         assertThat(summary.get("enabled")).isEqualTo(Boolean.TRUE);
         assertThat(summary.get("inputSchemaSanitized")).isEqualTo(Boolean.TRUE);
-        assertThat(summary.get("mcpInputSchemaSanitized")).isEqualTo(Boolean.TRUE);
         assertThat(summary.get("invalidSchemaDefaultsToObject")).isEqualTo(Boolean.TRUE);
         assertThat(summary.get("requiredPrunedToKnownProperties")).isEqualTo(Boolean.TRUE);
         assertThat(String.valueOf(summary))
                 .contains("localFunctionTools")
                 .contains("toolProviders")
-                .contains("mcpRemoteToolImport")
                 .contains("pattern")
                 .contains("format")
                 .contains("$ref")

@@ -11,10 +11,9 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.Locale;
 import org.jsoup.Jsoup;
-import org.noear.solon.ai.talents.web.WebfetchTalent;
 
 /** 受控网页抓取实现，逐跳校验重定向目标并限制响应体，避免网页工具绕过 URL 安全策略或耗尽内存。 */
-public class GuardedWebfetchTalent extends WebfetchTalent {
+public class GuardedWebfetchTalent implements WebfetchDelegate {
     /** 网页正文最大字节数，与原有网页工具的 5MB 用户可见限制保持一致。 */
     private static final long MAX_RESPONSE_BYTES = 5L * 1024L * 1024L;
 

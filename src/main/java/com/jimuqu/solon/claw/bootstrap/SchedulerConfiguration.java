@@ -17,7 +17,6 @@ import com.jimuqu.solon.claw.core.service.LlmGateway;
 import com.jimuqu.solon.claw.core.service.MemoryService;
 import com.jimuqu.solon.claw.engine.AgentRunSupervisor;
 import com.jimuqu.solon.claw.engine.PendingSessionRecoveryService;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.proactive.ProactiveReminderScheduler;
 import com.jimuqu.solon.claw.scheduler.CronJobService;
 import com.jimuqu.solon.claw.scheduler.CronScriptApprovalService;
@@ -59,7 +58,6 @@ public class SchedulerConfiguration {
      * @param attachmentCacheService 附件缓存服务依赖。
      * @param localSkillService 本地技能服务依赖。
      * @param agentRunControlService Agent运行控制服务依赖。
-     * @param mcpRuntimeService MCP运行时服务依赖。
      * @param sessionRepository 会话仓储依赖。
      * @return 返回默认定时任务调度器结果。
      */
@@ -75,7 +73,6 @@ public class SchedulerConfiguration {
             AttachmentCacheService attachmentCacheService,
             LocalSkillService localSkillService,
             AgentRunControlService agentRunControlService,
-            McpRuntimeService mcpRuntimeService,
             SessionRepository sessionRepository) {
         DefaultCronScheduler scheduler =
                 new DefaultCronScheduler(
@@ -89,7 +86,6 @@ public class SchedulerConfiguration {
                         attachmentCacheService,
                         localSkillService,
                         agentRunControlService,
-                        mcpRuntimeService,
                         sessionRepository);
         cronJobService.setCronScriptApprovalService(
                 new CronScriptApprovalService(

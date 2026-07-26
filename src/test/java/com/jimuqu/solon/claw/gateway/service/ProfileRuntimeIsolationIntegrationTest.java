@@ -17,7 +17,6 @@ import com.jimuqu.solon.claw.core.service.LlmGateway;
 import com.jimuqu.solon.claw.core.service.MemoryManager;
 import com.jimuqu.solon.claw.core.service.MemoryService;
 import com.jimuqu.solon.claw.core.service.ToolRegistry;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.profile.ProfileBeanResolver;
 import com.jimuqu.solon.claw.profile.ProfileManager;
 import com.jimuqu.solon.claw.profile.ProfileRuntimeScope;
@@ -157,7 +156,6 @@ class ProfileRuntimeIsolationIntegrationTest {
         assertDifferentBean(rootContext, child, MemoryService.class);
         assertDifferentBean(rootContext, child, MemoryManager.class);
         assertDifferentBean(rootContext, child, MemoryArchiveService.class);
-        assertDifferentBean(rootContext, child, McpRuntimeService.class);
         assertDifferentBean(rootContext, child, ChannelConnectionManager.class);
         assertThat(child.getBean(DashboardWorkspaceService.class)).isNotNull();
         assertThat(child.getBean(ToolRegistry.class).listToolNames()).contains("workspace_manage");

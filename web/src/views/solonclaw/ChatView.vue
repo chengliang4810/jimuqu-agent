@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { defineAsyncComponent, h, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/solonclaw/app'
 import { useChatStore } from '@/stores/solonclaw/chat'
 
 const appStore = useAppStore()
 const chatStore = useChatStore()
 const route = useRoute()
+const { t } = useI18n()
 const ChatPanel = defineAsyncComponent({
   loader: () => import('@/components/solonclaw/chat/ChatPanel.vue'),
   delay: 120,
@@ -14,7 +16,7 @@ const ChatPanel = defineAsyncComponent({
   loadingComponent: {
     name: 'ChatPanelLoading',
     setup() {
-      return () => h('div', { class: 'chat-panel-state' }, '对话加载中...')
+      return () => h('div', { class: 'chat-panel-state' }, t('chat.loading'))
     },
   },
   errorComponent: {
@@ -24,8 +26,8 @@ const ChatPanel = defineAsyncComponent({
     },
     setup(props) {
       return () => h('div', { class: 'chat-panel-state chat-panel-state--error' }, [
-        h('strong', '对话加载失败'),
-        h('span', props.error instanceof Error ? props.error.message : '请刷新后重试。'),
+        h('strong', t('chat.loadFailed')),
+        h('span', props.error instanceof Error ? props.error.message : t('chat.loadRetry')),
       ])
     },
   },

@@ -4,14 +4,11 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HtmlUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.context.SkillCredentialFileService;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.jimuqu.solon.claw.support.AttachmentPathResolver;
 import com.jimuqu.solon.claw.support.BoundedAttachmentIO;
 import com.jimuqu.solon.claw.support.SecretRedactor;
 import com.jimuqu.solon.claw.support.constants.ToolNameConstants;
-import com.jimuqu.solon.claw.web.DashboardMcpService;
-import com.jimuqu.solon.claw.web.McpPackageSecurityService;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -180,11 +177,6 @@ public class SecurityAuditTools {
         approvals.put(
                 "timeoutSeconds", Integer.valueOf(appConfig.getApprovals().getTimeoutSeconds()));
         approvals.put(
-                "mcpReloadConfirm", Boolean.valueOf(appConfig.getApprovals().isMcpReloadConfirm()));
-        approvals.put(
-                "mcpReloadConfirmationDefault",
-                appConfig.getApprovals().isMcpReloadConfirm() ? "confirm" : "direct");
-        approvals.put(
                 "alwaysApprovalCount",
                 Integer.valueOf(
                         approvalService == null
@@ -200,7 +192,6 @@ public class SecurityAuditTools {
             approvals.put("slashConfirmPolicy", approvalService.slashConfirmPolicySummary());
             approvals.put("approvalCardPolicy", approvalService.approvalCardPolicySummary());
             approvals.put("auditLogPolicy", approvalService.approvalAuditPolicySummary());
-            approvals.put("mcpReloadPolicy", approvalService.mcpReloadPolicySummary());
         }
         result.policy.put("approvals", approvals);
 
@@ -309,10 +300,6 @@ public class SecurityAuditTools {
         coverage.put(
                 "codeExecutionPolicy",
                 SolonClawCodeExecutionSkills.codeExecutionPolicySummary(appConfig));
-        coverage.put("mcpRuntimePolicy", McpRuntimeService.policySummary(appConfig));
-        coverage.put("mcpOAuthPolicy", DashboardMcpService.oauthPolicySummary());
-        coverage.put(
-                "mcpPackageSecurityPolicy", new McpPackageSecurityService(null).policySummary());
         Map<String, Object> attachmentPolicy = new LinkedHashMap<String, Object>();
         attachmentPolicy.put("downloadIo", BoundedAttachmentIO.policySummary());
         attachmentPolicy.put("mediaCache", new AttachmentCacheService(appConfig).policySummary());
@@ -333,7 +320,6 @@ public class SecurityAuditTools {
             coverage.put("slashConfirmPolicy", approvalService.slashConfirmPolicySummary());
             coverage.put("approvalCardPolicy", approvalService.approvalCardPolicySummary());
             coverage.put("approvalAuditPolicy", approvalService.approvalAuditPolicySummary());
-            coverage.put("mcpReloadPolicy", approvalService.mcpReloadPolicySummary());
         }
         coverage.put("smartApproval", Boolean.valueOf(smartMode && smartJudgeConfigured));
         if (approvalService != null) {
@@ -392,11 +378,6 @@ public class SecurityAuditTools {
                 "codeExecutionGuardrails",
                 Boolean.valueOf(approvalService != null || securityPolicyService != null));
         coverage.put("codeExecutionPolicyAuditable", Boolean.TRUE);
-        coverage.put("mcpUrlSafety", Boolean.valueOf(securityPolicyService != null));
-        coverage.put("mcpReloadConfirmation", Boolean.valueOf(approvalService != null));
-        coverage.put("mcpToolChangeNotice", Boolean.TRUE);
-        coverage.put("mcpRuntimePolicyAuditable", Boolean.TRUE);
-        coverage.put("mcpPackageSecurity", Boolean.TRUE);
         coverage.put("attachmentUrlSafety", Boolean.valueOf(securityPolicyService != null));
         coverage.put("attachmentCachePathSafety", Boolean.TRUE);
         coverage.put("attachmentDisplayNameRedaction", Boolean.TRUE);
@@ -445,12 +426,6 @@ public class SecurityAuditTools {
                 activeSurfaces,
                 "codeExecution",
                 approvalService != null || securityPolicyService != null);
-        addSurface(activeSurfaces, "mcpRuntimePolicy", true);
-        addSurface(activeSurfaces, "mcpOauthUrlSafety", securityPolicyService != null);
-        addSurface(activeSurfaces, "mcpOauthPolicy", true);
-        addSurface(activeSurfaces, "mcpPackageSecurity", true);
-        addSurface(activeSurfaces, "mcpReloadConfirmation", approvalService != null);
-        addSurface(activeSurfaces, "mcpToolChangeNotice", true);
         addSurface(activeSurfaces, "attachmentPolicy", true);
         addSurface(activeSurfaces, "terminalAttachmentPathSafety", securityPolicyService != null);
         addSurface(activeSurfaces, "tirithSecurity", appConfig.getSecurity().isTirithEnabled());

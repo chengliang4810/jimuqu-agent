@@ -67,13 +67,11 @@ import com.jimuqu.solon.claw.tool.runtime.BrowserRuntimeService;
 import com.jimuqu.solon.claw.tool.runtime.DangerousCommandApprovalService;
 import com.jimuqu.solon.claw.tool.runtime.ProcessRegistry;
 import com.jimuqu.solon.claw.web.DashboardCuratorService;
-import com.jimuqu.solon.claw.web.DashboardMcpService;
 import com.jimuqu.solon.claw.web.DashboardSkillsService;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import org.noear.solon.ai.chat.message.ChatMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -148,9 +146,6 @@ public class DefaultCommandService implements CommandService {
     /** 保存Agent运行仓储依赖，用于访问持久化数据。 */
     private final AgentRunRepository agentRunRepository;
 
-    /** 注入控制台MCP服务，用于调用对应业务能力。 */
-    private final DashboardMcpService dashboardMcpService;
-
     /** 注入目标服务，用于调用对应业务能力。 */
     private final GoalService goalService;
 
@@ -204,7 +199,6 @@ public class DefaultCommandService implements CommandService {
      * @param dangerousCommandApprovalService dangerous命令审批服务依赖。
      * @param agentRunControlService Agent运行控制服务依赖。
      * @param agentRunRepository Agent运行仓储依赖。
-     * @param dashboardMcpService dashboardMCP服务依赖。
      * @param goalService 目标服务依赖。
      * @param goalContractDrafter 目标契约起草器依赖，用于 /goal draft。
      * @param sessionArtifactService 会话Artifact服务依赖。
@@ -237,7 +231,6 @@ public class DefaultCommandService implements CommandService {
             DangerousCommandApprovalService dangerousCommandApprovalService,
             AgentRunControlService agentRunControlService,
             AgentRunRepository agentRunRepository,
-            DashboardMcpService dashboardMcpService,
             GoalService goalService,
             GoalContractDrafter goalContractDrafter,
             SessionArtifactService sessionArtifactService,
@@ -272,7 +265,6 @@ public class DefaultCommandService implements CommandService {
         this.dangerousCommandApprovalService = dangerousCommandApprovalService;
         this.agentRunControlService = agentRunControlService;
         this.agentRunRepository = agentRunRepository;
-        this.dashboardMcpService = dashboardMcpService;
         this.goalService = goalService == null ? new GoalService(sessionRepository) : goalService;
         this.goalContractDrafter = goalContractDrafter;
         this.sessionArtifactService =
@@ -623,10 +615,6 @@ public class DefaultCommandService implements CommandService {
 
         if (GatewayCommandConstants.COMMAND_RELOAD_SKILLS.equals(command)) {
             return handleReloadSkills();
-        }
-
-        if (GatewayCommandConstants.COMMAND_RELOAD_MCP.equals(command)) {
-            return handleReloadMcp(message, args);
         }
 
         if (GatewayCommandConstants.COMMAND_SETHOME.equals(command)) {
@@ -1952,7 +1940,6 @@ public class DefaultCommandService implements CommandService {
                 || GatewayCommandConstants.COMMAND_BRANCH.equals(command)
                 || GatewayCommandConstants.COMMAND_RESUME.equals(command)
                 || GatewayCommandConstants.COMMAND_STOP.equals(command)
-                || GatewayCommandConstants.COMMAND_RELOAD_MCP.equals(command)
                 || GatewayCommandConstants.COMMAND_COMPACT.equals(command)
                 || GatewayCommandConstants.COMMAND_ROLLBACK.equals(command);
     }
@@ -2018,39 +2005,6 @@ public class DefaultCommandService implements CommandService {
     }
 
     /**
-     * 执行ReloadMCP相关逻辑。
-     *
-     * @param message 平台消息或错误消息。
-     * @param args 工具或命令参数。
-     * @return 返回Reload MCP结果。
-     */
-    private GatewayReply handleReloadMcp(GatewayMessage message, String args) throws Exception {
-        String action = SlashCommandLine.firstToken(args);
-        if (StrUtil.isBlank(action)) {
-            if (!appConfig.getApprovals().isMcpReloadConfirm()
-                    || slashConfirmService.isAlwaysConfirmed(
-                            GatewayCommandConstants.COMMAND_RELOAD_MCP)) {
-                return executeReloadMcp(message, false);
-            }
-            SlashConfirmService.PendingConfirm confirm =
-                    slashConfirmService.register(
-                            message.sourceKey(),
-                            GatewayCommandConstants.COMMAND_RELOAD_MCP,
-                            reloadMcpConfirmPrompt());
-            return GatewayReply.ok(formatSlashConfirmPrompt(confirm));
-        }
-        if (!"now".equalsIgnoreCase(action) && !"always".equalsIgnoreCase(action)) {
-            return GatewayReply.error(
-                    "用法：" + GatewayCommandConstants.SLASH_RELOAD_MCP + " [now|always]");
-        }
-        if ("always".equalsIgnoreCase(action)) {
-            slashConfirmService.addAlwaysConfirmed(GatewayCommandConstants.COMMAND_RELOAD_MCP);
-            persistMcpReloadConfirm(false);
-        }
-        return executeReloadMcp(message, "always".equalsIgnoreCase(action));
-    }
-
-    /**
      * 执行斜杠命令ConfirmChoice相关逻辑。
      *
      * @param message 平台消息或错误消息。
@@ -2100,12 +2054,6 @@ public class DefaultCommandService implements CommandService {
         }
         if (SlashConfirmService.CHOICE_ALWAYS.equals(choice)) {
             slashConfirmService.addAlwaysConfirmed(pending.getCommand());
-            if (GatewayCommandConstants.COMMAND_RELOAD_MCP.equals(pending.getCommand())) {
-                persistMcpReloadConfirm(false);
-            }
-        }
-        if (GatewayCommandConstants.COMMAND_RELOAD_MCP.equals(pending.getCommand())) {
-            return executeReloadMcp(message, SlashConfirmService.CHOICE_ALWAYS.equals(choice));
         }
         if (GatewayCommandConstants.COMMAND_ROLLBACK.equals(pending.getCommand())) {
             return GatewayReply.ok(
@@ -2223,15 +2171,6 @@ public class DefaultCommandService implements CommandService {
     }
 
     /**
-     * 执行reloadMCPConfirm提示词相关逻辑。
-     *
-     * @return 返回reload MCP Confirm提示词结果。
-     */
-    private String reloadMcpConfirmPrompt() {
-        return "⚠️ /reload-mcp 会重新加载 MCP 工具并让下一轮模型请求重新发送完整工具 schema。";
-    }
-
-    /**
      * 执行回滚ClearConfirm提示词相关逻辑。
      *
      * @return 返回回滚Clear Confirm提示词结果。
@@ -2258,115 +2197,6 @@ public class DefaultCommandService implements CommandService {
             buffer.append("\n回复 /approve [确认编号] 执行一次，/deny 或 /cancel 取消。");
         }
         return buffer.toString();
-    }
-
-    /**
-     * 执行Reload MCP。
-     *
-     * @param message 平台消息或错误消息。
-     * @param savedAlways savedAlways 参数。
-     * @return 返回Reload MCP结果。
-     */
-    private GatewayReply executeReloadMcp(GatewayMessage message, boolean savedAlways)
-            throws Exception {
-        if (dashboardMcpService == null) {
-            return GatewayReply.error("MCP registry is not available in this runtime.");
-        }
-        DashboardMcpService.McpReloadResult result = dashboardMcpService.reloadAll();
-        appendReloadMcpHistoryNotice(message, result);
-        StringBuilder buffer = new StringBuilder();
-        buffer.append("MCP reload completed: ");
-        buffer.append(result.isEnabled() ? "enabled" : "disabled");
-        buffer.append(", tools=").append(result.getToolCount());
-        buffer.append(", changed_servers=").append(result.getChangedServers());
-        buffer.append(", unchanged_servers=").append(result.getUnchangedServers());
-        if (savedAlways) {
-            buffer.append("\n已永久确认 /reload-mcp，后续将直接执行。");
-        }
-        return GatewayReply.ok(buffer.toString());
-    }
-
-    /**
-     * 追加Reload MCP历史Notice。
-     *
-     * @param message 平台消息或错误消息。
-     * @param result 结果响应或执行结果。
-     */
-    private void appendReloadMcpHistoryNotice(
-            GatewayMessage message, DashboardMcpService.McpReloadResult result) {
-        if (message == null || result == null) {
-            return;
-        }
-        try {
-            SessionRecord session = requireSession(message.sourceKey());
-            if (session == null) {
-                return;
-            }
-            List<ChatMessage> messages = MessageSupport.loadMessages(session.getNdjson());
-            messages.add(
-                    ChatMessage.ofUser(
-                            reloadMcpHistoryNotice(
-                                    result.getChangedServers(),
-                                    result.getUnchangedServers(),
-                                    result.getToolCount())));
-            session.setNdjson(MessageSupport.toNdjson(messages));
-            session.setUpdatedAt(System.currentTimeMillis());
-            sessionRepository.save(session);
-        } catch (Exception e) {
-            restoreInterruptIfNeeded(e);
-            log.debug(
-                    "MCP reload history notice append failed; continuing without history notice:"
-                            + " {}",
-                    exceptionSummary(e));
-        }
-    }
-
-    /**
-     * 执行reloadMCP历史Notice相关逻辑。
-     *
-     * @param changed服务端 changed服务端 参数。
-     * @param unchanged服务端 unchanged服务端 参数。
-     * @param toolCount 工具Count参数。
-     * @return 返回reload MCP历史Notice结果。
-     */
-    private String reloadMcpHistoryNotice(
-            List<String> changedServers, List<String> unchangedServers, int toolCount) {
-        StringBuilder buffer = new StringBuilder();
-        buffer.append("[IMPORTANT: MCP servers have been reloaded. ");
-        if (changedServers != null && !changedServers.isEmpty()) {
-            buffer.append("Changed servers: ").append(changedServers).append(". ");
-        }
-        if (unchangedServers != null && !unchangedServers.isEmpty()) {
-            buffer.append("Reconnected servers: ").append(unchangedServers).append(". ");
-        }
-        if (toolCount > 0) {
-            buffer.append(toolCount).append(" MCP tool(s) now available. ");
-        } else {
-            buffer.append("No MCP tools available. ");
-        }
-        buffer.append("The tool list for this conversation has been updated accordingly.]");
-        return buffer.toString();
-    }
-
-    /**
-     * 执行persistMCPReloadConfirm相关逻辑。
-     *
-     * @param confirmRequired confirmRequired 参数。
-     */
-    private void persistMcpReloadConfirm(boolean confirmRequired) {
-        appConfig.getApprovals().setMcpReloadConfirm(confirmRequired);
-        if (runtimeSettingsService != null) {
-            try {
-                runtimeSettingsService.setConfigValue(
-                        "approvals.mcpReloadConfirm", String.valueOf(confirmRequired));
-            } catch (Exception e) {
-                restoreInterruptIfNeeded(e);
-                log.warn(
-                        "MCP reload confirmation setting persistence failed; in-memory setting"
-                                + " remains active: error={}",
-                        exceptionSummary(e));
-            }
-        }
     }
 
     /** 执行工具开关命令相关逻辑。 */

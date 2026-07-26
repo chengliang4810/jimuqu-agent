@@ -5,7 +5,6 @@ import type {
   DelegationPauseResponse,
   ProcessStopResponse,
   ReloadEnvResponse,
-  ReloadMcpResponse,
   RollbackDiffResponse,
   RollbackListResponse,
   RollbackRestoreResponse,
@@ -75,53 +74,6 @@ export const opsCommands: SlashCommand[] = [
             const killed = Number(r.killed ?? 0)
             const noun = killed === 1 ? 'process' : 'processes'
             ctx.transcript.sys(`stopped ${killed} background ${noun}`)
-          })
-        )
-        .catch(ctx.guardedErr)
-    }
-  },
-
-  {
-    aliases: ['reload_mcp'],
-    help: 'reload MCP servers in the live session (warns about prompt cache invalidation)',
-    name: 'reload-mcp',
-    run: (arg, ctx) => {
-      // Parse arg: `now` / `always` skip the confirmation gate.
-      // `always` additionally persists approvals.mcp_reload_confirm=false.
-      const a = (arg || '').trim().toLowerCase()
-
-      const params: { session_id: string | null; confirm?: boolean; always?: boolean } = {
-        session_id: ctx.sid
-      }
-
-      if (a === 'now' || a === 'approve' || a === 'once' || a === 'yes') {
-        params.confirm = true
-      } else if (a === 'always') {
-        params.confirm = true
-        params.always = true
-      }
-
-      ctx.gateway
-        .rpc<ReloadMcpResponse>('reload.mcp', params)
-        .then(
-          ctx.guarded<ReloadMcpResponse>(r => {
-            if (r.status === 'confirm_required') {
-              ctx.transcript.sys(r.message || '/reload-mcp requires confirmation')
-
-              return
-            }
-
-            if (r.status === 'reloaded') {
-              ctx.transcript.sys(
-                params.always
-                  ? 'MCP servers reloaded · future /reload-mcp will run without confirmation'
-                  : 'MCP servers reloaded'
-              )
-
-              return
-            }
-
-            ctx.transcript.sys('reload complete')
           })
         )
         .catch(ctx.guardedErr)
@@ -692,7 +644,6 @@ export const opsCommands: SlashCommand[] = [
       if (!names.length) {
         ctx.transcript.sys(`usage: /tools ${subcommand} <name> [name ...]`)
         ctx.transcript.sys(`built-in toolset: /tools ${subcommand} web`)
-        ctx.transcript.sys(`MCP tool: /tools ${subcommand} github:create_issue`)
 
         return
       }
@@ -712,10 +663,6 @@ export const opsCommands: SlashCommand[] = [
 
             if (r.unknown?.length) {
               ctx.transcript.sys(`unknown toolsets: ${r.unknown.join(', ')}`)
-            }
-
-            if (r.missing_servers?.length) {
-              ctx.transcript.sys(`missing MCP servers: ${r.missing_servers.join(', ')}`)
             }
 
             if (r.reset) {

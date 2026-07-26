@@ -5,7 +5,6 @@ export interface Diagnostics {
   providers: Array<Record<string, unknown>>
   channels: Array<Record<string, unknown>>
   tools: { count: number; names: string[] }
-  mcp: Record<string, unknown>
   proactive?: Record<string, unknown>
   security?: {
     approvals?: Record<string, unknown>

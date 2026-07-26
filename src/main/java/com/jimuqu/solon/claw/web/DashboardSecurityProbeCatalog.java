@@ -253,7 +253,7 @@ final class DashboardSecurityProbeCatalog {
                 runner.toolArgsPolicyProbe(
                         "tool_args_nested_endpoint_private_url",
                         "工具嵌套端点参数内网 URL 检查",
-                        "mcp_proxy",
+                        "remote_proxy",
                         nestedEndpointArgs));
         Map<String, Object> hostTarget = new LinkedHashMap<String, Object>();
         hostTarget.put("server", "localhost:8080");
@@ -264,7 +264,7 @@ final class DashboardSecurityProbeCatalog {
                 runner.toolArgsPolicyProbe(
                         "tool_args_host_target_private_url",
                         "工具主机目标参数内网 URL 检查",
-                        "mcp_proxy",
+                        "remote_proxy",
                         hostTargetArgs));
         Map<String, Object> redirectArgs = new LinkedHashMap<String, Object>();
         redirectArgs.put("content", "HTTP/1.1 302 Found\nLocation: http://localhost:8080/admin\n");
@@ -823,12 +823,6 @@ final class DashboardSecurityProbeCatalog {
                         "openssl 直连元数据地址阻断",
                         "openssl s_client -connect 169.254.169.254:443"));
         items.add(runner.schemaSanitizerProbe("schema_sanitizer", "工具 Schema 安全清洗"));
-        items.add(runner.mcpOAuthPolicyProbe("mcp_oauth_policy", "MCP OAuth 安全策略检查"));
-        items.add(runner.mcpToolChangePolicyProbe("mcp_tool_change_policy", "MCP 工具变更通知策略检查"));
-        items.add(
-                runner.mcpRuntimeArgumentPolicyProbe(
-                        "mcp_runtime_argument_policy", "MCP 运行时参数安全策略检查"));
-        items.add(runner.mcpPackageSecurityProbe("mcp_package_security", "MCP 包安全检查"));
         items.add(runner.subprocessEnvironmentProbe("subprocess_environment", "子进程环境变量净化"));
         items.add(runner.toolResultStorageProbe("tool_result_storage", "工具输出结果存储"));
         items.add(

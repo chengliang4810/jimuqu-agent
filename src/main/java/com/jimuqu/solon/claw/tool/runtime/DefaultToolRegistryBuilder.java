@@ -12,7 +12,6 @@ import com.jimuqu.solon.claw.core.service.MemoryService;
 import com.jimuqu.solon.claw.core.service.SessionSearchService;
 import com.jimuqu.solon.claw.core.service.SkillHubService;
 import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.media.ImageGenerationService;
 import com.jimuqu.solon.claw.media.SpeechService;
 import com.jimuqu.solon.claw.provider.WebSearchProvider;
@@ -28,7 +27,6 @@ import com.jimuqu.solon.claw.web.DashboardCuratorService;
 import com.jimuqu.solon.claw.web.DashboardDiagnosticsService;
 import com.jimuqu.solon.claw.web.DashboardGatewayDoctorService;
 import com.jimuqu.solon.claw.web.DashboardInsightsService;
-import com.jimuqu.solon.claw.web.DashboardMcpService;
 import com.jimuqu.solon.claw.web.DashboardPlatformToolsetsService;
 import com.jimuqu.solon.claw.web.DashboardProviderService;
 import com.jimuqu.solon.claw.web.DashboardRunService;
@@ -100,12 +98,6 @@ public class DefaultToolRegistryBuilder {
 
     /** 受管进程注册表。 */
     private ProcessRegistry processRegistry;
-
-    /** MCP 运行时服务。 */
-    private McpRuntimeService mcpRuntimeService;
-
-    /** Dashboard MCP 管理服务。 */
-    private DashboardMcpService dashboardMcpService;
 
     /** Dashboard 技能维护服务。 */
     private DashboardCuratorService dashboardCuratorService;
@@ -278,18 +270,6 @@ public class DefaultToolRegistryBuilder {
     /** 设置受管进程注册表。 */
     public DefaultToolRegistryBuilder processRegistry(ProcessRegistry processRegistry) {
         this.processRegistry = processRegistry;
-        return this;
-    }
-
-    /** 设置 MCP 运行时服务。 */
-    public DefaultToolRegistryBuilder mcpRuntimeService(McpRuntimeService mcpRuntimeService) {
-        this.mcpRuntimeService = mcpRuntimeService;
-        return this;
-    }
-
-    /** 设置 Dashboard MCP 管理服务。 */
-    public DefaultToolRegistryBuilder dashboardMcpService(DashboardMcpService dashboardMcpService) {
-        this.dashboardMcpService = dashboardMcpService;
         return this;
     }
 
@@ -466,8 +446,6 @@ public class DefaultToolRegistryBuilder {
                 securityPolicyService,
                 approvalService,
                 processRegistry,
-                mcpRuntimeService,
-                dashboardMcpService,
                 dashboardCuratorService,
                 dashboardPlatformToolsetsService,
                 dashboardProviderService,

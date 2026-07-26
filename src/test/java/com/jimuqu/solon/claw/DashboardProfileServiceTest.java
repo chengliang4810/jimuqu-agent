@@ -10,7 +10,6 @@ import com.jimuqu.solon.claw.profile.ProfileManager;
 import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.solon.claw.support.LlmProviderService;
-import com.jimuqu.solon.claw.web.DashboardMcpService;
 import com.jimuqu.solon.claw.web.DashboardProfileController;
 import com.jimuqu.solon.claw.web.DashboardProfileScope;
 import com.jimuqu.solon.claw.web.DashboardProfileService;
@@ -38,8 +37,6 @@ public class DashboardProfileServiceTest {
     void shouldExposeProfileRestMappings() throws Exception {
         assertMapping("list", "/api/profiles", MethodType.GET, Context.class);
         assertMapping("create", "/api/profiles", MethodType.POST, Context.class);
-        assertMapping("active", "/api/profiles/active", MethodType.GET, Context.class);
-        assertMapping("use", "/api/profiles/active", MethodType.POST, Context.class);
         assertMapping(
                 "importArchive",
                 "/api/profiles/import",
@@ -109,30 +106,11 @@ public class DashboardProfileServiceTest {
                 MethodType.GET,
                 Context.class,
                 String.class);
-        assertMapping(
-                "gateway",
-                "/api/profiles/{name}/gateway",
-                MethodType.GET,
-                Context.class,
-                String.class);
-        assertMapping(
-                "startGateway",
-                "/api/profiles/{name}/gateway/start",
-                MethodType.POST,
-                Context.class,
-                String.class);
-        assertMapping(
-                "stopGateway",
-                "/api/profiles/{name}/gateway/stop",
-                MethodType.POST,
-                Context.class,
-                String.class);
-        assertMapping(
-                "restartGateway",
-                "/api/profiles/{name}/gateway/restart",
-                MethodType.POST,
-                Context.class,
-                String.class);
+        assertNoMapping("/api/profiles/active");
+        assertNoMapping("/api/profiles/{name}/gateway");
+        assertNoMapping("/api/profiles/{name}/gateway/start");
+        assertNoMapping("/api/profiles/{name}/gateway/stop");
+        assertNoMapping("/api/profiles/{name}/gateway/restart");
     }
 
     /** 验证 Dashboard 可编辑说明、SOUL、模型、setup 命令和别名且所有写入只落到目标 Profile。 */
@@ -395,12 +373,11 @@ public class DashboardProfileServiceTest {
         }
     }
 
-    /** Builder 创建后模型、MCP、技能选择和 Hub PID 必须落在新 Profile，且返回精确计数。 */
+    /** Builder 创建后模型、技能选择和 Hub PID 必须落在新 Profile，且返回精确计数。 */
     @Test
     void shouldApplyProfileBuilderPostProcessingBestEffort() throws Exception {
         Path root = Files.createTempDirectory("solonclaw-profile-builder-");
         Path wrappers = Files.createTempDirectory("solonclaw-profile-builder-wrappers-");
-        DashboardMcpService mcp = null;
         SqliteDatabase database = null;
         try {
             ProfileManager manager = new ProfileManager(root, wrappers, "solonclaw");
@@ -408,14 +385,13 @@ public class DashboardProfileServiceTest {
             database = new SqliteDatabase(defaultConfig);
             DashboardProfileScope scope =
                     new DashboardProfileScope(manager, "default", defaultConfig);
-            mcp = new DashboardMcpService(defaultConfig, database, null, null, scope);
             SqlitePreferenceStore preferences = new SqlitePreferenceStore(database);
             DashboardSkillsService skills =
                     new DashboardSkillsService(
                             new LocalSkillService(defaultConfig, preferences), preferences, scope);
             BuilderProfileService service =
                     new BuilderProfileService(
-                            manager, mcp, skills, 4101L, new IOException("spawn failed"));
+                            manager, skills, 4101L, new IOException("spawn failed"));
 
             writeSkill(root, "keep");
             writeSkill(root, "drop");
@@ -426,12 +402,6 @@ public class DashboardProfileServiceTest {
             body.put("clone_from", "default");
             body.put("provider", "default");
             body.put("model", "gpt-5.4");
-            body.put(
-                    "mcp_servers",
-                    java.util.Arrays.asList(
-                            mcpServer("stdio-one", null, "echo"),
-                            mcpServer("http-one", "https://example.com/mcp", null),
-                            mcpServer("empty", null, null)));
             body.put("keep_skills", java.util.Collections.singletonList("keep"));
             body.put("hub_skills", java.util.Arrays.asList("source/one", "", "source/two"));
 
@@ -442,7 +412,6 @@ public class DashboardProfileServiceTest {
                     .containsEntry("model_set", Boolean.TRUE)
                     .containsEntry("provider", "default")
                     .containsEntry("model", "gpt-5.4")
-                    .containsEntry("mcp_written", Integer.valueOf(2))
                     .containsEntry("skills_disabled", Integer.valueOf(1));
             assertThat((List<Map<String, Object>>) created.get("hub_installs"))
                     .containsExactly(
@@ -451,9 +420,6 @@ public class DashboardProfileServiceTest {
             assertThat(Files.readString(home.resolve("config.yml")))
                     .contains("providerKey: default")
                     .contains("default: gpt-5.4");
-            assertThat(mcpServers(mcp.list("builder")))
-                    .extracting("server_id")
-                    .containsExactlyInAnyOrder("stdio-one", "http-one");
             DashboardSkillsService verifySkills =
                     new DashboardSkillsService(
                             new LocalSkillService(defaultConfig, preferences), preferences, scope);
@@ -470,9 +436,6 @@ public class DashboardProfileServiceTest {
             assertThat(skillEnabled(verifySkills.getSkills("disable-all"), "keep")).isFalse();
             assertThat(skillEnabled(verifySkills.getSkills("disable-all"), "drop")).isFalse();
         } finally {
-            if (mcp != null) {
-                mcp.shutdown();
-            }
             if (database != null) {
                 database.shutdown();
             }
@@ -495,8 +458,7 @@ public class DashboardProfileServiceTest {
             empty.put("keep_skills", java.util.Collections.emptyList());
             assertThat(service.createProfile(empty))
                     .containsEntry("skills_disabled", Integer.valueOf(0))
-                    .containsEntry("model_set", Boolean.FALSE)
-                    .containsEntry("mcp_written", Integer.valueOf(0));
+                    .containsEntry("model_set", Boolean.FALSE);
 
             writeSkill(root, "clone-default-skill");
             Map<String, Object> cloneDefault = new LinkedHashMap<String, Object>();
@@ -516,16 +478,6 @@ public class DashboardProfileServiceTest {
                     .hasMessageContaining("hub_skills");
             assertThat(root.resolve("profiles/malformed")).doesNotExist();
 
-            Map<String, Object> malformedMcp = new LinkedHashMap<String, Object>();
-            malformedMcp.put("name", "malformed-mcp");
-            Map<String, Object> server = mcpServer("bad", null, "echo");
-            server.put("args", "not-a-list");
-            malformedMcp.put("mcp_servers", java.util.Collections.singletonList(server));
-            org.assertj.core.api.Assertions.assertThatThrownBy(
-                            () -> service.createProfile(malformedMcp))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("mcp_servers.args");
-            assertThat(root.resolve("profiles/malformed-mcp")).doesNotExist();
         } finally {
             deleteTree(root);
             deleteTree(wrappers);
@@ -633,7 +585,7 @@ public class DashboardProfileServiceTest {
         }
     }
 
-    /** 覆盖 list/show/create/use/rename/delete/import/export/gateway status 全部基础契约。 */
+    /** 覆盖 list/show/create/rename/delete/import/export 全部基础契约。 */
     @Test
     void shouldManageProfilesThroughDashboardContract() throws Exception {
         Path root = Files.createTempDirectory("solonclaw-dashboard-profiles-");
@@ -653,17 +605,11 @@ public class DashboardProfileServiceTest {
 
             Map<String, Object> listed = service.listProfiles();
             assertThat(profileNames(listed)).containsExactly("default", "worker");
-            assertThat(listed.get("active")).isEqualTo("default");
-            assertThat(listed.get("current")).isEqualTo("default");
+            assertThat(listed).doesNotContainKeys("active", "current");
 
-            assertThat(service.showProfile("worker").get("home"))
-                    .isEqualTo(root.resolve("profiles/worker").toString());
-            assertThat(service.gatewayStatus("worker"))
-                    .containsEntry("profile", "worker")
-                    .containsEntry("running", Boolean.FALSE);
-
-            assertThat(service.useProfile("worker").get("active")).isEqualTo("worker");
-            assertThat(service.useProfile("default").get("active")).isEqualTo("default");
+            assertThat(service.showProfile("worker"))
+                    .containsEntry("home", root.resolve("profiles/worker").toString())
+                    .doesNotContainKeys("active", "current", "gateway");
 
             Map<String, Object> renamed = service.renameProfile("worker", "coder");
             assertThat(renamed.get("name")).isEqualTo("coder");
@@ -687,43 +633,6 @@ public class DashboardProfileServiceTest {
         }
     }
 
-    /** Dashboard 启动命名网关与 CLI 使用同一复用保护。 */
-    @Test
-    void shouldGuardNamedGatewayUnderDefaultMultiplexer() throws Exception {
-        Path root = Files.createTempDirectory("solonclaw-dashboard-multiplex-");
-        Path wrappers = Files.createTempDirectory("solonclaw-dashboard-multiplex-wrappers-");
-        try {
-            ProfileManager manager = new ProfileManager(root, wrappers, "solonclaw");
-            DashboardProfileService service = new DashboardProfileService(manager);
-            Map<String, Object> create = new LinkedHashMap<String, Object>();
-            create.put("name", "worker");
-            create.put("no_alias", Boolean.TRUE);
-            service.createProfile(create);
-            Files.writeString(
-                    root.resolve("config.yml"),
-                    "solonclaw:\n  gateway:\n    multiplexProfiles: true\n");
-            AppConfig gatewayConfig = new AppConfig();
-            gatewayConfig.getRuntime().setHome(root.toString());
-            gatewayConfig.getDashboard().setBindPort(8080);
-            com.jimuqu.solon.claw.gateway.service.GatewayRuntimeStatusService runtime =
-                    new com.jimuqu.solon.claw.gateway.service.GatewayRuntimeStatusService(
-                            gatewayConfig, "default");
-            runtime.writePidFile();
-            runtime.writeState("running", "test");
-
-            org.assertj.core.api.Assertions.assertThatThrownBy(
-                            () ->
-                                    service.startGateway(
-                                            "worker", new LinkedHashMap<String, Object>()))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("profile multiplexer");
-
-        } finally {
-            deleteTree(root);
-            deleteTree(wrappers);
-        }
-    }
-
     /** 从 Dashboard 列表响应提取按顺序返回的 Profile 名。 */
     @SuppressWarnings("unchecked")
     private List<String> profileNames(Map<String, Object> response) {
@@ -741,31 +650,12 @@ public class DashboardProfileServiceTest {
         return AppConfig.loadDetached(props);
     }
 
-    /** 构造 Builder MCP 请求项。 */
-    private Map<String, Object> mcpServer(String name, String url, String command) {
-        Map<String, Object> server = new LinkedHashMap<String, Object>();
-        server.put("name", name);
-        if (url != null) {
-            server.put("url", url);
-        }
-        if (command != null) {
-            server.put("command", command);
-        }
-        return server;
-    }
-
     /** 构造期望的 Hub 安装启动结果。 */
     private Map<String, Object> hubInstall(String identifier, Long pid) {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("identifier", identifier);
         result.put("pid", pid);
         return result;
-    }
-
-    /** 从 MCP 列表响应读取服务端项。 */
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> mcpServers(Map<String, Object> response) {
-        return (List<Map<String, Object>>) response.get("servers");
     }
 
     /** 读取测试技能启用状态。 */
@@ -814,11 +704,10 @@ public class DashboardProfileServiceTest {
         /** 创建 Builder 进程边界替身。 */
         private BuilderProfileService(
                 ProfileManager manager,
-                DashboardMcpService mcpService,
                 DashboardSkillsService skillsService,
                 Long firstPid,
                 Exception laterFailure) {
-            super(manager, mcpService, skillsService);
+            super(manager, skillsService);
             this.firstPid = firstPid;
             this.laterFailure = laterFailure;
         }
@@ -862,6 +751,16 @@ public class DashboardProfileServiceTest {
         assertThat(mapping).isNotNull();
         assertThat(mapping.value()).isEqualTo(path);
         assertThat(mapping.method()).contains(methodType);
+    }
+
+    /** 断言已移除的手动 Profile 生命周期路径不再由控制器公开。 */
+    private void assertNoMapping(String path) {
+        for (Method method : DashboardProfileController.class.getMethods()) {
+            Mapping mapping = method.getAnnotation(Mapping.class);
+            if (mapping != null) {
+                assertThat(mapping.value()).isNotEqualTo(path);
+            }
+        }
     }
 
     /** 递归清理测试临时目录。 */

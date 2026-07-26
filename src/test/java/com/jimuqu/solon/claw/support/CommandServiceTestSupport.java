@@ -63,7 +63,6 @@ public final class CommandServiceTestSupport {
                 null,
                 null,
                 null,
-                null,
                 env.memoryService);
     }
 

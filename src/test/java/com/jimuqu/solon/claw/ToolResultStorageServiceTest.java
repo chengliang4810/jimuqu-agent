@@ -57,7 +57,6 @@ public class ToolResultStorageServiceTest {
                 .contains("read_file")
                 .contains("execute_shell")
                 .contains("webfetch")
-                .contains("mcp_")
                 .contains("resultRefReturned")
                 .contains("previewRedacted")
                 .contains("describedPreviewRedacted")
@@ -163,12 +162,12 @@ public class ToolResultStorageServiceTest {
                 .startsWith("<untrusted_tool_result source=\"browser_extract\">");
         assertThat(
                         service.observe(
-                                        "mcp_docs_fetch",
+                                        "browser_docs_fetch",
                                         promptInjection,
                                         "run-boundary",
-                                        "call-mcp")
+                                        "call-browser-docs")
                                 .getObservation())
-                .startsWith("<untrusted_tool_result source=\"mcp_docs_fetch\">");
+                .startsWith("<untrusted_tool_result source=\"browser_docs_fetch\">");
         assertThat(
                         service.observe(
                                         "execute_python",

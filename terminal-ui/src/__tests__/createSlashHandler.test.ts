@@ -718,7 +718,6 @@ describe('createSlashHandler', () => {
     expect(createSlashHandler(ctx)('/tools enable')).toBe(true)
     expect(ctx.transcript.sys).toHaveBeenNthCalledWith(1, 'usage: /tools enable <name> [name ...]')
     expect(ctx.transcript.sys).toHaveBeenNthCalledWith(2, 'built-in toolset: /tools enable web')
-    expect(ctx.transcript.sys).toHaveBeenNthCalledWith(3, 'MCP tool: /tools enable github:create_issue')
   })
 
   it('renders explicit tool configuration success messages after applying changes', async () => {
@@ -749,7 +748,6 @@ describe('createSlashHandler', () => {
   it.each([
     ['/browser status', 'browser.manage', { action: 'status', session_id: null }],
     ['/browser connect', 'browser.manage', { action: 'connect', session_id: null, url: 'http://127.0.0.1:9222' }],
-    ['/reload-mcp', 'reload.mcp', { session_id: null }],
     ['/reload', 'reload.env', {}],
     ['/stop', 'process.stop', {}],
     ['/fast status', 'config.get', { key: 'fast', session_id: null }],

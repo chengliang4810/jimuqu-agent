@@ -69,7 +69,6 @@ public class ToolResultStorageService {
                                     "execute_shell",
                                     "java",
                                     "javascript",
-                                    "mcp",
                                     "node",
                                     "nodejs",
                                     "process",
@@ -81,7 +80,7 @@ public class ToolResultStorageService {
 
     /** UNTRUSTED工具前缀列表的统一常量值。 */
     private static final List<String> UNTRUSTED_TOOL_PREFIXES =
-            Collections.unmodifiableList(java.util.Arrays.asList("browser_", "mcp_"));
+            Collections.unmodifiableList(java.util.Arrays.asList("browser_"));
 
     /** 记录工具结果Storage中的缓存目录。 */
     private final String cacheDir;

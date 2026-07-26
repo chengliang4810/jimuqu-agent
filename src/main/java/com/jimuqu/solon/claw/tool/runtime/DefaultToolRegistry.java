@@ -17,7 +17,6 @@ import com.jimuqu.solon.claw.core.service.SessionSearchService;
 import com.jimuqu.solon.claw.core.service.SkillHubService;
 import com.jimuqu.solon.claw.core.service.ToolRegistry;
 import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.media.ImageGenerationService;
 import com.jimuqu.solon.claw.media.SpeechService;
 import com.jimuqu.solon.claw.media.VisionAnalysisService;
@@ -43,7 +42,6 @@ import com.jimuqu.solon.claw.web.DashboardDiagnosticsService;
 import com.jimuqu.solon.claw.web.DashboardGatewayDoctorService;
 import com.jimuqu.solon.claw.web.DashboardInsightsService;
 import com.jimuqu.solon.claw.web.DashboardLogsService;
-import com.jimuqu.solon.claw.web.DashboardMcpService;
 import com.jimuqu.solon.claw.web.DashboardMediaService;
 import com.jimuqu.solon.claw.web.DashboardPlatformToolsetsService;
 import com.jimuqu.solon.claw.web.DashboardProviderService;
@@ -130,12 +128,6 @@ public class DefaultToolRegistry implements ToolRegistry {
 
     /** 危险或外部操作审批服务。 */
     private final DangerousCommandApprovalService approvalService;
-
-    /** MCP 运行时工具发现服务。 */
-    private final McpRuntimeService mcpRuntimeService;
-
-    /** Dashboard MCP 服务，用于给 Agent 暴露服务端管理工具。 */
-    private final DashboardMcpService dashboardMcpService;
 
     /** Dashboard 技能维护服务，用于给 Agent 暴露维护建议管理工具。 */
     private final DashboardCuratorService dashboardCuratorService;
@@ -226,8 +218,6 @@ public class DefaultToolRegistry implements ToolRegistry {
      * @param securityPolicyService 安全策略服务依赖。
      * @param approvalService 审批服务依赖。
      * @param processRegistry 进程注册表依赖组件。
-     * @param mcpRuntimeService MCP运行时服务依赖。
-     * @param dashboardMcpService Dashboard MCP服务依赖。
      * @param dashboardCuratorService Dashboard 技能维护服务依赖。
      * @param dashboardPlatformToolsetsService Dashboard 平台工具集服务依赖。
      * @param dashboardProviderService Dashboard provider 服务依赖。
@@ -269,8 +259,6 @@ public class DefaultToolRegistry implements ToolRegistry {
             SecurityPolicyService securityPolicyService,
             DangerousCommandApprovalService approvalService,
             ProcessRegistry processRegistry,
-            McpRuntimeService mcpRuntimeService,
-            DashboardMcpService dashboardMcpService,
             DashboardCuratorService dashboardCuratorService,
             DashboardPlatformToolsetsService dashboardPlatformToolsetsService,
             DashboardProviderService dashboardProviderService,
@@ -309,8 +297,6 @@ public class DefaultToolRegistry implements ToolRegistry {
         this.gatewayRuntimeRefreshService = gatewayRuntimeRefreshService;
         this.securityPolicyService = securityPolicyService;
         this.approvalService = approvalService;
-        this.mcpRuntimeService = mcpRuntimeService;
-        this.dashboardMcpService = dashboardMcpService;
         this.dashboardCuratorService = dashboardCuratorService;
         this.dashboardPlatformToolsetsService = dashboardPlatformToolsetsService;
         this.dashboardProviderService = dashboardProviderService;
@@ -432,7 +418,6 @@ public class DefaultToolRegistry implements ToolRegistry {
         TodoTools todoTools = new TodoTools(appConfig, sourceKey);
         AgentManageTools agentManageTools = new AgentManageTools(delegationService, sourceKey);
         RunTools runTools = new RunTools(dashboardRunService);
-        McpManageTools mcpManageTools = new McpManageTools(dashboardMcpService);
         CuratorManageTools curatorManageTools = new CuratorManageTools(dashboardCuratorService);
         PlatformToolsetsManageTools platformToolsetsManageTools =
                 new PlatformToolsetsManageTools(dashboardPlatformToolsetsService);
@@ -516,7 +501,7 @@ public class DefaultToolRegistry implements ToolRegistry {
                 new SolonClawCodeExecutionSkills.SafeNodejsSkill(sysWorkDir, securityPolicyService);
         SystemClockTalent systemClockSkill = new SystemClockTalent();
         SolonClawWebTools.SafeWebsearchTool websearchTool =
-                new SolonClawWebTools.SafeWebsearchTool(securityPolicyService, null, appConfig);
+                new SolonClawWebTools.SafeWebsearchTool(securityPolicyService, appConfig);
         websearchTool.setWebSearchProviders(webSearchProviders);
         SolonClawWebTools.SafeWebfetchTool webfetchTool =
                 new SolonClawWebTools.SafeWebfetchTool(securityPolicyService);
@@ -532,7 +517,7 @@ public class DefaultToolRegistry implements ToolRegistry {
         SolonClawWebTools.SafeWebExtractTool webExtractTool =
                 new SolonClawWebTools.SafeWebExtractTool(webfetchTool, sysWorkDir);
         SolonClawWebTools.SafeCodeSearchTool codeSearchTool =
-                new SolonClawWebTools.SafeCodeSearchTool(securityPolicyService);
+                new SolonClawWebTools.SafeCodeSearchTool(securityPolicyService, websearchTool);
         BrowserTools browserTools = new BrowserTools(browserRuntimeService);
         SecurityAuditTools securityAuditTools =
                 new SecurityAuditTools(
@@ -599,19 +584,6 @@ public class DefaultToolRegistry implements ToolRegistry {
                 tools.add(new ConfigTools.ConfigRefreshTool(configTools));
             } else if (ToolNameConstants.TOOL_GATEWAY.equals(toolName)) {
                 // 在直接工具收集完成后再加入，避免递归包装自身。
-            } else if (ToolNameConstants.MCP.equals(toolName)) {
-                if (mcpRuntimeService != null) {
-                    for (ToolProvider provider : mcpRuntimeService.resolveEnabledToolProviders()) {
-                        if (provider != null) {
-                            java.util.Collection<FunctionTool> providedTools = provider.getTools();
-                            if (providedTools != null) {
-                                dynamicTools.addAll(providedTools);
-                            }
-                        }
-                    }
-                }
-            } else if (ToolNameConstants.MCP_MANAGE.equals(toolName)) {
-                tools.add(mcpManageTools);
             } else if (ToolNameConstants.CURATOR_MANAGE.equals(toolName)) {
                 tools.add(curatorManageTools);
             } else if (ToolNameConstants.PLATFORM_TOOLSETS_MANAGE.equals(toolName)) {
@@ -1024,7 +996,7 @@ public class DefaultToolRegistry implements ToolRegistry {
      * 按声明顺序加入动态工具；名称大小写等价时保留首次注册实现并记录告警。
      *
      * @param target 最终工具对象列表。
-     * @param dynamicTools 待加入的 MCP 或额外函数工具。
+     * @param dynamicTools 待加入的额外函数工具。
      * @param occupiedNames 已被内置工具或先前动态工具占用的名称集合。
      */
     static void addUniqueDynamicTools(

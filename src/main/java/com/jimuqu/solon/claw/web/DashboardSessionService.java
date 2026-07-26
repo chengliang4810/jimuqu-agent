@@ -15,6 +15,7 @@ import com.jimuqu.solon.claw.support.MessageSupport;
 import com.jimuqu.solon.claw.support.ProgressUpdateSanitizer;
 import com.jimuqu.solon.claw.support.SecretRedactor;
 import com.jimuqu.solon.claw.support.SessionArtifactService;
+import com.jimuqu.solon.claw.support.SessionVisibilitySupport;
 import com.jimuqu.solon.claw.support.SourceKeySupport;
 import com.jimuqu.solon.claw.support.StructuredMetadataSupport;
 import com.jimuqu.solon.claw.support.ToolMessageStatusSupport;
@@ -301,14 +302,12 @@ public class DashboardSessionService {
         return options;
     }
 
-    /** 判断会话是否满足子会话、来源、目录和归档过滤规则。 */
+    /** 判断会话是否属于用户可见对话，并满足来源、目录和归档过滤规则。 */
     private boolean isListable(SessionRecord record, SessionListOptions options) {
         if (record == null) {
             return false;
         }
-        // 显式 /branch 会话是用户可继续的独立对话，必须出现在列表；
-        // 默认 main 父子会话仍按压缩延续或委托子会话隐藏。
-        if (StrUtil.isNotBlank(record.getParentSessionId()) && !isExplicitBranch(record)) {
+        if (!SessionVisibilitySupport.isUserInitiatedConversation(record)) {
             return false;
         }
         String source = parseSource(record.getSourceKey());
@@ -1223,8 +1222,7 @@ public class DashboardSessionService {
 
     /** 默认 main 只是普通会话分支标记，只有父会话下的非 main 名称才表示显式 /branch。 */
     private boolean isExplicitBranch(SessionRecord record) {
-        String branch = record == null ? null : StrUtil.nullToEmpty(record.getBranchName()).trim();
-        return StrUtil.isNotBlank(branch) && !"main".equalsIgnoreCase(branch);
+        return SessionVisibilitySupport.isExplicitBranch(record);
     }
 
     /** 读取会话，不存在时抛出可映射为 HTTP 404 的异常。 */
@@ -1268,7 +1266,7 @@ public class DashboardSessionService {
 
     /** 判断会话是否已归档。 */
     private boolean isArchived(SessionRecord record) {
-        return isArchived(metadata(record));
+        return SessionVisibilitySupport.isArchived(record);
     }
 
     /** 从元数据对象读取归档布尔值。 */

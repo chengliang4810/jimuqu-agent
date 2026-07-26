@@ -139,7 +139,7 @@ async function mutate(action: () => Promise<unknown>, success: string) {
         <h3>{{ t('channels.personalBindingTitle') }}</h3>
         <p>{{ t('channels.personalBindingDescription') }}</p>
       </div>
-      <Button size="small" :loading="loading" @click="load">{{ t('channels.mediaRefresh') }}</Button>
+      <Button size="small" :loading="loading" @click="load">{{ t('common.refresh') }}</Button>
     </div>
 
     <Select v-model:value="selected" size="small" class="platform-select" :options="options" />

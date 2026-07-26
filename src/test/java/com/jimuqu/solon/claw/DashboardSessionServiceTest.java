@@ -4,12 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.jimuqu.solon.claw.core.model.AgentRunRecord;
+import com.jimuqu.solon.claw.core.model.GatewayMessage;
+import com.jimuqu.solon.claw.core.model.ProfileTaskRecord;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
+import com.jimuqu.solon.claw.core.model.SessionSearchQuery;
+import com.jimuqu.solon.claw.storage.repository.SqliteProfileTaskRepository;
 import com.jimuqu.solon.claw.support.MessageSupport;
 import com.jimuqu.solon.claw.support.SessionArtifactService;
 import com.jimuqu.solon.claw.support.TestEnvironment;
 import com.jimuqu.solon.claw.support.ToolMessageStatusSupport;
 import com.jimuqu.solon.claw.support.constants.CompressionConstants;
+import com.jimuqu.solon.claw.web.DashboardProfileTaskService;
 import com.jimuqu.solon.claw.web.DashboardSessionService;
 import java.io.File;
 import java.sql.Connection;
@@ -546,6 +551,70 @@ public class DashboardSessionServiceTest {
                 .containsKey("model_config");
     }
 
+    /** 验证会话列表保留用户渠道、TUI 和 Dashboard 对话，并隐藏所有明确的后台来源。 */
+    @Test
+    void shouldOnlyListUserInitiatedConversations() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        SessionRecord channel = saveListSession(env, "FEISHU:chat-1:user-1", "channel");
+        SessionRecord tui = saveListSession(env, "MEMORY:terminal-ui:tui-1", "tui");
+        SessionRecord dashboard = saveListSession(env, "MEMORY:dashboard:dashboard-1", "dashboard");
+        saveListSession(env, "FEISHU:chat-1:__heartbeat__", "heartbeat");
+        saveListSession(env, "CRON:nightly-report", "cron");
+        saveListSession(env, "profile:life:PROFILE_TASK:task-1", "profile task");
+
+        SessionRecord delegated =
+                saveListSession(env, "MEMORY:terminal-ui:delegate-child", "delegated");
+        delegated.setParentSessionId(channel.getSessionId());
+        env.sessionRepository.save(delegated);
+
+        DashboardSessionService service = new DashboardSessionService(env.sessionRepository);
+
+        assertThat(sessionTitles(service.getSessions(20, 0)))
+                .containsExactlyInAnyOrder(channel.getTitle(), tui.getTitle(), dashboard.getTitle())
+                .doesNotContain("heartbeat", "cron", "profile task", "delegated");
+    }
+
+    /** Dashboard 手工协作任务的完成通知必须进入后台会话，不能污染列表和对话搜索。 */
+    @Test
+    void shouldHideDashboardProfileTaskCompletionConversation() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        DashboardProfileTaskService taskService =
+                new DashboardProfileTaskService(
+                        new SqliteProfileTaskRepository(env.sqliteDatabase), null, env.appConfig);
+        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        body.put("target_profile", "life");
+        body.put("title", "后台协作");
+        body.put("description", "完成一次后台协作");
+        ProfileTaskRecord task = taskService.create(body);
+
+        GatewayMessage completion =
+                new GatewayMessage(
+                        com.jimuqu.solon.claw.core.enums.PlatformType.MEMORY,
+                        "dashboard-profile-task",
+                        "__profile_task__",
+                        "[协作任务事件] dashboard-profile-task-marker");
+        completion.setThreadId(task.getTaskId());
+        completion.setSourceKeyOverride(task.getSourceKey());
+        completion.setRunKind(GatewayMessage.RUN_KIND_DELEGATION_COMPLETION);
+        env.conversationOrchestrator.handleIncoming(completion);
+
+        SessionRecord generated = env.sessionRepository.getBoundSession(task.getSourceKey());
+        assertThat(generated).isNotNull();
+        assertThat(task.getSourceKey()).contains("__profile_task__");
+        DashboardSessionService sessionService = new DashboardSessionService(env.sessionRepository);
+        assertThat(sessions(sessionService.getSessions(20, 0)))
+                .extracting(item -> String.valueOf(item.get("id")))
+                .doesNotContain(generated.getSessionId());
+
+        SessionSearchQuery query = new SessionSearchQuery();
+        query.setQuery("dashboard-profile-task-marker");
+        query.setConversationOnly(true);
+        query.setLimit(10);
+        assertThat(env.sessionSearchService.search(query))
+                .extracting(com.jimuqu.solon.claw.core.model.SessionSearchEntry::getSessionId)
+                .doesNotContain(generated.getSessionId());
+    }
+
     /** 验证消息分页、详情读取、归档更新和缺失会话 404 异常契约。 */
     @Test
     void shouldPageMessagesAndUpdateTitleOrArchivedState() throws Exception {
@@ -671,6 +740,16 @@ public class DashboardSessionServiceTest {
             titles.add(item.get("title"));
         }
         return titles;
+    }
+
+    /** 创建一条带用户消息的列表测试会话。 */
+    private SessionRecord saveListSession(TestEnvironment env, String sourceKey, String title)
+            throws Exception {
+        SessionRecord session = env.sessionRepository.bindNewSession(sourceKey);
+        session.setTitle(title);
+        session.setNdjson(MessageSupport.toNdjson(Arrays.asList(ChatMessage.ofUser(title))));
+        env.sessionRepository.save(session);
+        return session;
     }
 
     /** 从消息详情提取消息列表。 */

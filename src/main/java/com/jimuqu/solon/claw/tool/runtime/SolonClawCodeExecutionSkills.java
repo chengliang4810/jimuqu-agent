@@ -274,9 +274,7 @@ public class SolonClawCodeExecutionSkills {
             this.websearchTool =
                     websearchTool == null
                             ? new SolonClawWebTools.SafeWebsearchTool(
-                                    securityPolicyService,
-                                    new org.noear.solon.ai.talents.web.WebsearchTalent(),
-                                    appConfig)
+                                    securityPolicyService, appConfig)
                             : websearchTool;
             this.webfetchTool =
                     webfetchTool == null

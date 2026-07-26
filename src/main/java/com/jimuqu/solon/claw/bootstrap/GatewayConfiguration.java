@@ -65,7 +65,6 @@ import com.jimuqu.solon.claw.tool.runtime.ProcessRegistry;
 import com.jimuqu.solon.claw.tool.runtime.SecurityPolicyService;
 import com.jimuqu.solon.claw.web.DashboardConfigService;
 import com.jimuqu.solon.claw.web.DashboardCuratorService;
-import com.jimuqu.solon.claw.web.DashboardMcpService;
 import com.jimuqu.solon.claw.web.DashboardProviderService;
 import com.jimuqu.solon.claw.web.DashboardRuntimeConfigService;
 import com.jimuqu.solon.claw.web.DashboardSkillsService;
@@ -318,7 +317,6 @@ public class GatewayConfiguration {
      * @param dangerousCommandApprovalService dangerous命令审批服务依赖。
      * @param agentRunControlService Agent运行控制服务依赖。
      * @param agentRunRepository Agent运行仓储依赖。
-     * @param dashboardMcpService dashboardMCP服务依赖。
      * @param goalService 目标服务依赖。
      * @param goalContractDrafter 目标契约起草器依赖，用于 /goal draft。
      * @param sessionArtifactService 会话Artifact服务依赖。
@@ -353,7 +351,6 @@ public class GatewayConfiguration {
             DangerousCommandApprovalService dangerousCommandApprovalService,
             AgentRunControlService agentRunControlService,
             AgentRunRepository agentRunRepository,
-            DashboardMcpService dashboardMcpService,
             GoalService goalService,
             GoalContractDrafter goalContractDrafter,
             SessionArtifactService sessionArtifactService,
@@ -387,7 +384,6 @@ public class GatewayConfiguration {
                         dangerousCommandApprovalService,
                         agentRunControlService,
                         agentRunRepository,
-                        dashboardMcpService,
                         goalService,
                         goalContractDrafter,
                         sessionArtifactService,

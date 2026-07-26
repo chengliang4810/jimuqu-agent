@@ -1222,6 +1222,54 @@ public class SessionSearchServiceTest {
         assertRedactedSearchResponse(response);
     }
 
+    /** Dashboard 对话搜索应保留较旧用户会话，同时排除携带同一关键词的后台会话。 */
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldSearchOlderUserConversationWithoutReturningBackgroundSessions() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        SessionRecord olderUser = env.sessionRepository.bindNewSession("FEISHU:room:user-search");
+        olderUser.setTitle("older searchable conversation");
+        olderUser.setNdjson(
+                MessageSupport.toNdjson(
+                        Arrays.asList(ChatMessage.ofUser("dashboard-visible-marker"))));
+        olderUser.setCreatedAt(100L);
+        olderUser.setUpdatedAt(100L);
+        env.sessionRepository.save(olderUser);
+
+        List<String> backgroundSessionIds = new ArrayList<String>();
+        for (int index = 0; index < 12; index++) {
+            SessionRecord background =
+                    env.sessionRepository.bindNewSession(
+                            index % 2 == 0
+                                    ? "FEISHU:room:__heartbeat__"
+                                    : "CRON:dashboard-search-" + index);
+            background.setTitle("hidden background " + index);
+            background.setNdjson(
+                    MessageSupport.toNdjson(
+                            Arrays.asList(ChatMessage.ofUser("dashboard-visible-marker"))));
+            background.setCreatedAt(1000L + index);
+            background.setUpdatedAt(1000L + index);
+            env.sessionRepository.save(background);
+            backgroundSessionIds.add(background.getSessionId());
+        }
+
+        DashboardSearchController controller =
+                new DashboardSearchController(env.sessionSearchService);
+        Context context = ContextEmpty.create();
+        context.paramMap().put("q", "dashboard-visible-marker");
+        context.paramMap().put("limit", "10");
+        context.paramMap().put("conversation_only", "true");
+
+        Map<String, Object> response = controller.search(context);
+        Map<String, Object> data = (Map<String, Object>) response.get("data");
+        List<Map<String, Object>> results = (List<Map<String, Object>>) data.get("results");
+
+        assertThat(results)
+                .extracting(row -> String.valueOf(row.get("session_id")))
+                .containsExactly(olderUser.getSessionId())
+                .doesNotContainAnyElementsOf(backgroundSessionIds);
+    }
+
     @Test
     void shouldReturnAnchoredWindowForScrollMode() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();

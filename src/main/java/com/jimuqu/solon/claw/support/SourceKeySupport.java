@@ -9,6 +9,9 @@ public final class SourceKeySupport {
     /** 心跳任务使用的虚拟用户标识。 */
     private static final String HEARTBEAT_USER_ID = "__heartbeat__";
 
+    /** Dashboard 协作任务完成通知使用的虚拟用户标识。 */
+    private static final String PROFILE_TASK_USER_ID = "__profile_task__";
+
     /** 创建来源键辅助实例。 */
     private SourceKeySupport() {}
 
@@ -63,6 +66,17 @@ public final class SourceKeySupport {
     /** 判断来源键是否属于心跳任务的派生会话，而非真实用户会话。 */
     public static boolean isHeartbeatSource(String sourceKey) {
         return HEARTBEAT_USER_ID.equals(split(sourceKey)[2]);
+    }
+
+    /** 判断来源键是否属于心跳、定时任务或 Profile 协作任务等后台会话。 */
+    public static boolean isBackgroundSource(String sourceKey) {
+        String[] parts = split(sourceKey);
+        if (HEARTBEAT_USER_ID.equals(parts[2]) || PROFILE_TASK_USER_ID.equals(parts[2])) {
+            return true;
+        }
+        String normalized = StrUtil.nullToEmpty(stripProfile(sourceKey)).trim();
+        return StrUtil.startWithIgnoreCase(normalized, "CRON:")
+                || StrUtil.startWithIgnoreCase(normalized, "PROFILE_TASK:");
     }
 
     /** 构造可直接绑定的渠道来源键，并在命名 Profile 下添加隔离前缀。 */

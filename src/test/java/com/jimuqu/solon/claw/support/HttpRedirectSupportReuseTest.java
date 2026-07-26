@@ -16,7 +16,6 @@ class HttpRedirectSupportReuseTest {
                 new String[] {
                     "src/main/java/com/jimuqu/solon/claw/support/BoundedAttachmentIO.java",
                     "src/main/java/com/jimuqu/solon/claw/skillhub/support/DefaultSkillHubHttpClient.java",
-                    "src/main/java/com/jimuqu/solon/claw/web/DashboardMcpService.java",
                     "src/main/java/com/jimuqu/solon/claw/web/DashboardProviderService.java",
                     "src/main/java/com/jimuqu/solon/claw/support/update/AppUpdateService.java",
                     "src/main/java/com/jimuqu/solon/claw/web/WeixinQrSetupService.java",

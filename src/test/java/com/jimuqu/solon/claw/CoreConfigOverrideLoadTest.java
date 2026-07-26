@@ -68,8 +68,6 @@ public class CoreConfigOverrideLoadTest {
                         + "  skills:\n"
                         + "    externalDirs:\n"
                         + "      - external/team-skills\n"
-                        + "  mcp:\n"
-                        + "    enabled: true\n"
                         + "  web:\n"
                         + "    searchBackend: brave-free\n"
                         + "    braveSearchApiKey: brv-test-key\n"
@@ -113,7 +111,6 @@ public class CoreConfigOverrideLoadTest {
                         + "      sendChunkRetries: 9\n"
                         + "approvals:\n"
                         + "  timeoutSeconds: 45\n"
-                        + "  mcpReloadConfirm: false\n"
                         + "security:\n"
                         + "  guardrailMode: bypass\n"
                         + "  guardrailCronMode: approve\n"
@@ -166,13 +163,11 @@ public class CoreConfigOverrideLoadTest {
         assertThat(config.getTerminal().getForegroundRetryBaseDelaySeconds()).isEqualTo(1);
         assertThat(config.getTerminal().getProcessWaitTimeoutSeconds()).isEqualTo(11);
         assertThat(config.getSkills().getExternalDirs()).containsExactly("external/team-skills");
-        assertThat(config.getMcp().isEnabled()).isTrue();
         assertThat(config.getWeb().getSearchBackend()).isEqualTo("brave-free");
         assertThat(config.getWeb().getBraveSearchApiKey()).isEqualTo("brv-test-key");
         assertThat(config.getSecurity().isRewriteBrowserLoopbackUrls()).isTrue();
         assertThat(config.getSecurity().getBrowserLoopbackHostAlias())
                 .isEqualTo("host.containers.internal");
-        assertThat(config.getApprovals().isMcpReloadConfirm()).isFalse();
         assertThat(config.getSecurity().getGuardrailMode()).isEqualTo("bypass");
         assertThat(config.getSecurity().getGuardrailCronMode()).isEqualTo("approve");
         assertThat(config.getSecurity().getGuardrailCronScope()).isEqualTo("global");

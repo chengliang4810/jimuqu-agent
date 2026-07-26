@@ -114,9 +114,6 @@ approvals:
   subagentAutoApprove: false
   # 所有审批（包括消息渠道）的统一超时秒数；超时后 /approve 不再放行过期命令。
   timeoutSeconds: 180
-  # /reload-mcp 会让下一轮模型请求重新发送完整工具 schema，默认需要确认。
-  # 设为 false 后，/reload-mcp 将直接执行。
-  mcpReloadConfirm: true
   # 危险操作智能审批专用 Provider；必须与 model 同时填写，两项都空时沿用当前 Profile 主模型。
   modelProvider: ""
   # 危险操作智能审批专用模型；必须与 modelProvider 同时填写。
@@ -184,21 +181,6 @@ solonclaw:
     # Cron 默认模型；必须与 defaultProvider 同时填写。
     defaultModel: ""
 
-  # MCP 工具适配配置。
-  mcp:
-    # 是否启用 MCP 工具适配。
-    enabled: false
-    # MCP 服务器 OAuth 认证配置（全局默认，可被单个服务器的 oauth_json 覆盖）。
-    oauth:
-      # OAuth 客户端 ID。
-      clientId: ""
-      # OAuth 客户端密钥；建议通过环境变量注入，不要明文写入配置文件。
-      clientSecret: ""
-      # OAuth token 端点 URL，例如 https://auth.example.com/oauth/token。
-      tokenUrl: ""
-      # OAuth 请求的 scope，多个 scope 用空格分隔。
-      scope: ""
-
   # 模型价格配置。默认 gpt-5.4 没有内置价格，prices 为空时明确记录为 unknown 和 unpriced token。
   pricing:
     prices: []
@@ -211,10 +193,10 @@ solonclaw:
     #     output_cost_per_million: "4.00"
     #     cache_read_cost_per_million: "0.50"
 
-  # Web 工具配置。默认复用 Solon AI 内置 websearch/webfetch；也可使用内置 Brave 或 DuckDuckGo 搜索。
+  # Web 工具配置。Web 搜索使用项目内置 HTTP 后端，网页抓取继续复用 Solon AI 的直连 HTTP 实现。
   web:
-    # 搜索后端：solon-ai / brave-free / ddgs。
-    searchBackend: solon-ai
+    # 搜索后端：ddgs / brave-free。
+    searchBackend: ddgs
     # Brave Search API key；也可通过环境变量 BRAVE_SEARCH_API_KEY 提供。
     braveSearchApiKey: ""
 

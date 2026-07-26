@@ -24,6 +24,8 @@ let requestedFileKey = ''
 
 const fileKey = computed(() => String(route.params.key || 'agents'))
 const currentMeta = computed(() => personaMeta(fileKey.value))
+const currentTitle = computed(() => t(`personaMeta.${fileKey.value}.title`))
+const currentDescription = computed(() => t(`personaMeta.${fileKey.value}.description`))
 const isEmpty = computed(() => !file.value?.content?.trim())
 const isReadOnly = computed(() => fileKey.value === 'memory_today')
 
@@ -103,8 +105,8 @@ watch(fileKey, loadFile)
   <div class="memory-view">
     <header class="page-header">
       <div>
-        <h2 class="header-title">{{ currentMeta.title }}</h2>
-        <p class="header-subtitle">{{ t('personaFile.subtitle', { description: currentMeta.description, fileName: currentMeta.fileName }) }}</p>
+        <h2 class="header-title">{{ currentTitle }}</h2>
+        <p class="header-subtitle">{{ t('personaFile.subtitle', { description: currentDescription, fileName: currentMeta.fileName }) }}</p>
       </div>
       <div class="page-actions">
         <Button size="small" type="text" @click="loadFile">
@@ -135,8 +137,8 @@ watch(fileKey, loadFile)
         :editing="editing"
         :loading="loading && !file"
         :empty="isEmpty"
-        :empty-text="t('personaFile.emptyText', { description: currentMeta.description })"
-        :placeholder="t('personaFile.editPlaceholder', { title: currentMeta.title })"
+        :empty-text="t('personaFile.emptyText', { description: currentDescription })"
+        :placeholder="t('personaFile.editPlaceholder', { title: currentTitle })"
         :saving="saving"
         :loading-text="t('common.loading')"
         :cancel-text="t('common.cancel')"

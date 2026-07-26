@@ -14,14 +14,14 @@ public class SlashConfirmServiceTest {
     void shouldReturnPendingCopyAndKeepStoredCommandImmutable() {
         SlashConfirmService service = new SlashConfirmService(new MemorySettings());
         SlashConfirmService.PendingConfirm registered =
-                service.register("session-a", "reload-mcp", "reload?");
+                service.register("session-a", "rollback", "reload?");
 
         SlashConfirmService.PendingConfirm pending = service.getPending("session-a");
         pending.setCommand("mutated");
 
         SlashConfirmService.PendingConfirm current = service.getPending("session-a");
         assertThat(current.getConfirmId()).isEqualTo(registered.getConfirmId());
-        assertThat(current.getCommand()).isEqualTo("reload-mcp");
+        assertThat(current.getCommand()).isEqualTo("rollback");
         assertThat(current.isAllowAlways()).isTrue();
     }
 
@@ -43,9 +43,9 @@ public class SlashConfirmServiceTest {
     void shouldSupersedePriorPendingConfirmForSameSource() {
         SlashConfirmService service = new SlashConfirmService(new MemorySettings());
         SlashConfirmService.PendingConfirm first =
-                service.register("session-a", "reload-mcp", "first");
+                service.register("session-a", "rollback", "first");
         SlashConfirmService.PendingConfirm second =
-                service.register("session-a", "reload-mcp", "second");
+                service.register("session-a", "rollback", "second");
 
         SlashConfirmService.PendingConfirm pending = service.getPending("session-a");
 
@@ -57,8 +57,8 @@ public class SlashConfirmServiceTest {
     @Test
     void shouldKeepSlashConfirmIsolatedBySource() {
         SlashConfirmService service = new SlashConfirmService(new MemorySettings());
-        SlashConfirmService.PendingConfirm a = service.register("source-a", "reload-mcp", "A");
-        SlashConfirmService.PendingConfirm b = service.register("source-b", "reload-mcp", "B");
+        SlashConfirmService.PendingConfirm a = service.register("source-a", "rollback", "A");
+        SlashConfirmService.PendingConfirm b = service.register("source-b", "rollback", "B");
 
         SlashConfirmService.PendingConfirm resolvedA =
                 service.resolve("source-a", a.getConfirmId());
@@ -72,7 +72,7 @@ public class SlashConfirmServiceTest {
     void shouldStripDisplayControlsFromSourceKeyAndConfirmId() {
         SlashConfirmService service = new SlashConfirmService(new MemorySettings());
         SlashConfirmService.PendingConfirm registered =
-                service.register("source\u202E-a", "reload-mcp", "reload?");
+                service.register("source\u202E-a", "rollback", "reload?");
 
         SlashConfirmService.PendingConfirm pending = service.getPending("source-a");
         SlashConfirmService.PendingConfirm resolved =
@@ -96,11 +96,11 @@ public class SlashConfirmServiceTest {
         SlashConfirmService.PendingConfirm pending =
                 service.register(
                         "session-a",
-                        "reload\u202E-mcp token=ghp_slashcommand12345",
+                        "roll\u202Eback token=ghp_slashcommand12345",
                         "reload Authorization\u202E: Bearer ghp_slashprompt12345");
 
         assertThat(pending.getCommand())
-                .contains("reload-mcp")
+                .contains("rollback")
                 .contains("token=***")
                 .doesNotContain("\u202E")
                 .doesNotContain("ghp_slashcommand12345");
@@ -116,7 +116,7 @@ public class SlashConfirmServiceTest {
     void shouldNotResolveConfirmIdMismatchAndKeepPendingEntry() {
         SlashConfirmService service = new SlashConfirmService(new MemorySettings());
         SlashConfirmService.PendingConfirm registered =
-                service.register("session-a", "reload-mcp", "reload?");
+                service.register("session-a", "rollback", "reload?");
 
         SlashConfirmService.PendingConfirm mismatch =
                 service.resolve("session-a", "wrong-confirm-id");
@@ -138,7 +138,7 @@ public class SlashConfirmServiceTest {
     void shouldExpirePendingConfirmOnResolve() {
         SlashConfirmService service = new SlashConfirmService(new MemorySettings());
         SlashConfirmService.PendingConfirm pending =
-                service.register("session-a", "reload-mcp", "reload?");
+                service.register("session-a", "rollback", "reload?");
         pending.setCreatedAt(System.currentTimeMillis() - 600000L);
 
         SlashConfirmService.PendingConfirm resolved =
@@ -152,7 +152,7 @@ public class SlashConfirmServiceTest {
     void shouldResolvePendingConfirmOnlyOnce() {
         SlashConfirmService service = new SlashConfirmService(new MemorySettings());
         SlashConfirmService.PendingConfirm pending =
-                service.register("session-a", "reload-mcp", "reload?");
+                service.register("session-a", "rollback", "reload?");
 
         SlashConfirmService.PendingConfirm first =
                 service.resolve("session-a", pending.getConfirmId());
@@ -175,7 +175,7 @@ public class SlashConfirmServiceTest {
     void shouldClearStalePendingConfirm() {
         SlashConfirmService service = new SlashConfirmService(new MemorySettings());
         SlashConfirmService.PendingConfirm pending =
-                service.register("session-a", "reload-mcp", "reload?");
+                service.register("session-a", "rollback", "reload?");
         pending.setCreatedAt(System.currentTimeMillis() - 10000L);
 
         assertThat(service.clearIfStale("session-a", 1L)).isTrue();
@@ -199,10 +199,10 @@ public class SlashConfirmServiceTest {
         MemorySettings settings = new MemorySettings();
         SlashConfirmService service = new SlashConfirmService(settings);
 
-        service.addAlwaysConfirmed("/reload-mcp");
+        service.addAlwaysConfirmed("/rollback");
 
-        assertThat(service.isAlwaysConfirmed("reload-mcp")).isTrue();
-        assertThat(service.isAlwaysConfirmed("/RELOAD-MCP")).isTrue();
+        assertThat(service.isAlwaysConfirmed("rollback")).isTrue();
+        assertThat(service.isAlwaysConfirmed("/ROLLBACK")).isTrue();
     }
 
     @Test
@@ -211,13 +211,13 @@ public class SlashConfirmServiceTest {
         SlashConfirmService service = new SlashConfirmService(settings);
 
         service.addAlwaysConfirmed(
-                "/reload-mcp https://example.test/callback?api%255Fkey=slash-always-secret");
+                "/rollback https://example.test/callback?api%255Fkey=slash-always-secret");
 
         String stored = settings.get(AgentSettingConstants.SLASH_CONFIRM_ALWAYS_COMMANDS);
         assertThat(stored).contains("api%255fkey=***").doesNotContain("slash-always-secret");
         assertThat(
                         service.isAlwaysConfirmed(
-                                "/reload-mcp https://example.test/callback?api%255Fkey=slash-always-secret"))
+                                "/rollback https://example.test/callback?api%255Fkey=slash-always-secret"))
                 .isTrue();
     }
 

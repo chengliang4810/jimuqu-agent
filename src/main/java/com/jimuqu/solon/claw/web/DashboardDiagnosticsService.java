@@ -27,7 +27,6 @@ import com.jimuqu.solon.claw.core.service.DeliveryService;
 import com.jimuqu.solon.claw.core.service.ToolRegistry;
 import com.jimuqu.solon.claw.gateway.command.SlashConfirmService;
 import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
-import com.jimuqu.solon.claw.mcp.McpRuntimeService;
 import com.jimuqu.solon.claw.proactive.ProactiveDiagnosticsService;
 import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
@@ -199,7 +198,6 @@ public class DashboardDiagnosticsService {
         result.put("channels", channels());
         result.put("stream_health", streamHealth());
         result.put("tools", tools());
-        result.put("mcp", mcp());
         result.put("security", security());
         result.put("runs", runs());
         if (proactiveDiagnosticsService != null) {
@@ -762,21 +760,6 @@ public class DashboardDiagnosticsService {
     }
 
     /**
-     * 执行MCP相关逻辑。
-     *
-     * @return 返回MCP结果。
-     */
-    private Map<String, Object> mcp() {
-        Map<String, Object> map = new LinkedHashMap<String, Object>();
-        map.put("enabled", appConfig.getMcp().isEnabled());
-        map.put("status", appConfig.getMcp().isEnabled() ? "enabled" : "disabled");
-        map.put("runtime_policy", safeMcpRuntimePolicySummary());
-        map.put("oauth_policy", safeMcpOAuthPolicySummary());
-        map.put("package_security_policy", safeMcpPackageSecurityPolicySummary());
-        return map;
-    }
-
-    /**
      * 执行安全相关逻辑。
      *
      * @return 返回安全结果。
@@ -791,9 +774,6 @@ public class DashboardDiagnosticsService {
                 StrUtil.nullToEmpty(appConfig.getSecurity().getGuardrailCronMode()));
         approvals.put(
                 "timeout_seconds", Integer.valueOf(appConfig.getApprovals().getTimeoutSeconds()));
-        approvals.put(
-                "mcp_reload_confirm",
-                Boolean.valueOf(appConfig.getApprovals().isMcpReloadConfirm()));
         approvals.put(
                 "always_approval_count",
                 Integer.valueOf(
@@ -810,7 +790,6 @@ public class DashboardDiagnosticsService {
         approvals.put("slash_confirm_policy", safeSlashConfirmPolicySummary());
         approvals.put("approval_card_policy", safeApprovalCardPolicySummary());
         approvals.put("approval_audit_policy", safeApprovalAuditPolicySummary());
-        approvals.put("mcp_reload_policy", safeMcpReloadPolicySummary());
         map.put("approvals", approvals);
 
         Map<String, Object> policy = new LinkedHashMap<String, Object>();
@@ -1263,154 +1242,6 @@ public class DashboardDiagnosticsService {
     }
 
     /**
-     * 生成安全展示用的MCPReload策略摘要。
-     *
-     * @return 返回safe MCP Reload策略Summary结果。
-     */
-    private Map<String, Object> safeMcpReloadPolicySummary() {
-        if (approvalService == null) {
-            return unavailablePolicy("approval service is unavailable");
-        }
-        try {
-            Map<String, Object> summary = approvalService.mcpReloadPolicySummary();
-            Map<String, Object> safe = new LinkedHashMap<String, Object>();
-            copyPolicyValue(summary, safe, "command");
-            copyPolicyValue(summary, safe, "confirmRequired");
-            copyPolicyValue(summary, safe, "configKey");
-            copyPolicyValue(summary, safe, "slashConfirmBacked");
-            copyPolicyValue(summary, safe, "directRunArgument");
-            copyPolicyValue(summary, safe, "alwaysConfirmArgument");
-            copyPolicyValue(summary, safe, "persistentDisableSupported");
-            copyPolicyValue(summary, safe, "runtimeConfigPersisted");
-            copyPolicyValue(summary, safe, "toolChangeNoticeInjected");
-            copyPolicyValue(summary, safe, "changedServerSummary");
-            copyPolicyValue(summary, safe, "toolCountSummary");
-            copyPolicyValue(summary, safe, "oauthUrlSafetyCovered");
-            copyPolicyValue(summary, safe, "encodedUrlParameterRedacted");
-            copyPolicyValue(summary, safe, "reloadHistoryNoticeRedacted");
-            return safe;
-        } catch (Exception e) {
-            return unavailablePolicy(e);
-        }
-    }
-
-    /**
-     * 生成安全展示用的MCP运行时策略摘要。
-     *
-     * @return 返回safe MCP运行时策略Summary结果。
-     */
-    private Map<String, Object> safeMcpRuntimePolicySummary() {
-        try {
-            Map<String, Object> summary = McpRuntimeService.policySummary(appConfig);
-            Map<String, Object> safe = new LinkedHashMap<String, Object>();
-            copyPolicyValue(summary, safe, "enabled");
-            copyPolicyValue(summary, safe, "supportedTransports");
-            copyPolicyValue(summary, safe, "remoteEndpointUrlSafety");
-            copyPolicyValue(summary, safe, "remoteEndpointAllowsPrivateByPolicy");
-            copyPolicyValue(summary, safe, "stdioEndpointSkipped");
-            copyPolicyValue(summary, safe, "remoteToolArgumentUrlSafety");
-            copyPolicyValue(summary, safe, "remoteToolStructuredCredentialArgumentBlocked");
-            copyPolicyValue(summary, safe, "remoteToolArgumentPathSafety");
-            copyPolicyValue(summary, safe, "resourceUriUrlSafety");
-            copyPolicyValue(summary, safe, "resourceUriPathSafety");
-            copyPolicyValue(summary, safe, "nestedUrlExtraction");
-            copyPolicyValue(summary, safe, "blockedUrlsMasked");
-            copyPolicyValue(summary, safe, "blockedPathsRedacted");
-            copyPolicyValue(summary, safe, "inputSchemaSanitized");
-            copyPolicyValue(summary, safe, "toolNamesPrefixed");
-            copyPolicyValue(summary, safe, "toolIncludeExcludeFilter");
-            copyPolicyValue(summary, safe, "resourceUtilityToolsCapabilityGated");
-            copyPolicyValue(summary, safe, "promptUtilityToolsCapabilityGated");
-            copyPolicyValue(summary, safe, "blockedServersSuppressed");
-            copyPolicyValue(summary, safe, "toolsChangeNotificationPersisted");
-            copyPolicyValue(summary, safe, "toolChangeHashTracked");
-            copyPolicyValue(summary, safe, "toolsChangeClearsProviderCache");
-            copyPolicyValue(summary, safe, "oauthFailureStructuredReauth");
-            copyPolicyValue(summary, safe, "oauthSecretsRedacted");
-            copyPolicyValue(summary, safe, "recoverableTransportRetry");
-            copyPolicyValue(summary, safe, "remoteToolTimeoutMillisDefault");
-            copyPolicyValue(summary, safe, "connectTimeoutMillisDefault");
-            copyPolicyValue(summary, safe, "toolCallExecutorBounded");
-            copyPolicyValue(summary, safe, "toolCallExecutorMaxThreads");
-            copyPolicyValue(summary, safe, "toolCallExecutorQueueCapacity");
-            copyPolicyValue(summary, safe, "accessTokenHeaderOnlyForRemote");
-            return safe;
-        } catch (Exception e) {
-            return unavailablePolicy(e);
-        }
-    }
-
-    /**
-     * 生成安全展示用的MCPOAuth 认证策略摘要。
-     *
-     * @return 返回safe MCP OAuth 认证策略Summary结果。
-     */
-    private Map<String, Object> safeMcpOAuthPolicySummary() {
-        try {
-            Map<String, Object> summary = DashboardMcpService.oauthPolicySummary();
-            Map<String, Object> safe = new LinkedHashMap<String, Object>();
-            copyPolicyValue(summary, safe, "authorizationEndpointUrlSafety");
-            copyPolicyValue(summary, safe, "tokenEndpointUrlSafety");
-            copyPolicyValue(summary, safe, "tokenEndpointRedirectUrlSafety");
-            copyPolicyValue(summary, safe, "tokenEndpointRedirectLimit");
-            copyPolicyValue(summary, safe, "crossOriginRedirectBodyForwardingBlocked");
-            copyPolicyValue(summary, safe, "stateValidationRequired");
-            copyPolicyValue(summary, safe, "pkceS256Required");
-            copyPolicyValue(summary, safe, "codeVerifierHiddenFromStatus");
-            copyPolicyValue(summary, safe, "accessTokenRedacted");
-            copyPolicyValue(summary, safe, "refreshTokenRedacted");
-            copyPolicyValue(summary, safe, "clientSecretRedacted");
-            copyPolicyValue(summary, safe, "refreshRequiresRefreshToken");
-            copyPolicyValue(summary, safe, "handle401RefreshThenReauth");
-            copyPolicyValue(summary, safe, "clearRemovesSecretPresenceFlags");
-            copyPolicyValue(summary, safe, "statusPresenceFields");
-            copyPolicyValue(summary, safe, "callbackErrorsRedacted");
-            copyPolicyValue(summary, safe, "tokenErrorsRedacted");
-            copyPolicyValue(summary, safe, "tokenResponseRequiresAccessToken");
-            return safe;
-        } catch (Exception e) {
-            return unavailablePolicy(e);
-        }
-    }
-
-    /**
-     * 生成安全展示用的MCP包安全策略摘要。
-     *
-     * @return 返回safe MCP Package安全策略Summary结果。
-     */
-    private Map<String, Object> safeMcpPackageSecurityPolicySummary() {
-        try {
-            Map<String, Object> summary = new McpPackageSecurityService(null).policySummary();
-            Map<String, Object> safe = new LinkedHashMap<String, Object>();
-            copyPolicyValue(summary, safe, "enabledForTransport");
-            copyPolicyValue(summary, safe, "checkedLaunchers");
-            copyPolicyValue(summary, safe, "supportedEcosystems");
-            copyPolicyValue(summary, safe, "endpointOverrideEnvironment");
-            copyPolicyValue(summary, safe, "projectEndpointOverrideEnvironment");
-            copyPolicyValue(summary, safe, "malwareAdvisoryPrefix");
-            copyPolicyValue(summary, safe, "nonMalwareVulnerabilitiesIgnored");
-            copyPolicyValue(summary, safe, "malwareBlocksSaveAndCheck");
-            copyPolicyValue(summary, safe, "requestFailureFailsOpen");
-            copyPolicyValue(summary, safe, "requestFailureFailsClosed");
-            copyPolicyValue(summary, safe, "unsafeEndpointBlocksBeforeNetwork");
-            copyPolicyValue(summary, safe, "structuredReasons");
-            copyPolicyValue(summary, safe, "persistedListReasonExposed");
-            copyPolicyValue(summary, safe, "packageVersionParsed");
-            copyPolicyValue(summary, safe, "scopedNpmPackageParsed");
-            copyPolicyValue(summary, safe, "npxPackageOptionParsed");
-            copyPolicyValue(summary, safe, "pipxRunSubcommandSkipped");
-            copyPolicyValue(summary, safe, "pypiSourceOptionParsed");
-            copyPolicyValue(summary, safe, "pypiExtrasIgnored");
-            copyPolicyValue(summary, safe, "jsonArgsSupported");
-            copyPolicyValue(summary, safe, "advisoryMessageLimit");
-            copyPolicyValue(summary, safe, "messageRedacted");
-            return safe;
-        } catch (Exception e) {
-            return unavailablePolicy(e);
-        }
-    }
-
-    /**
      * 生成安全展示用的结构清理器策略摘要。
      *
      * @return 返回safe结构清理器策略Summary结果。
@@ -1423,7 +1254,6 @@ public class DashboardDiagnosticsService {
             copyPolicyValue(summary, safe, "appliesTo");
             copyPolicyValue(summary, safe, "inputSchemaSanitized");
             copyPolicyValue(summary, safe, "outputFunctionToolSchemaSanitized");
-            copyPolicyValue(summary, safe, "mcpInputSchemaSanitized");
             copyPolicyValue(summary, safe, "invalidSchemaDefaultsToObject");
             copyPolicyValue(summary, safe, "topLevelObjectRequired");
             copyPolicyValue(summary, safe, "propertiesInjectedForObject");
@@ -2366,8 +2196,6 @@ public class DashboardDiagnosticsService {
         copyPolicyValue(approvals, safe, "subagentAutoApprove");
         copyPolicyValue(approvals, safe, "subagentApprovalDefault");
         copyPolicyValue(approvals, safe, "timeoutSeconds");
-        copyPolicyValue(approvals, safe, "mcpReloadConfirm");
-        copyPolicyValue(approvals, safe, "mcpReloadConfirmationDefault");
         copyPolicyValue(approvals, safe, "alwaysApprovalCount");
         if (approvals.get("approvalPolicy") instanceof Map) {
             safe.put("approvalPolicy", safeApprovalPolicySummary());
@@ -2400,11 +2228,6 @@ public class DashboardDiagnosticsService {
             safe.put(
                     "auditLogPolicy",
                     safeApprovalAuditPolicy((Map<String, Object>) approvals.get("auditLogPolicy")));
-        }
-        if (approvals.get("mcpReloadPolicy") instanceof Map) {
-            safe.put(
-                    "mcpReloadPolicy",
-                    safeMcpReloadPolicy((Map<String, Object>) approvals.get("mcpReloadPolicy")));
         }
         return safe;
     }
@@ -2529,15 +2352,6 @@ public class DashboardDiagnosticsService {
         if (coverage.get("codeExecutionPolicy") instanceof Map) {
             safe.put("codeExecutionPolicy", safeCodeExecutionPolicySummary());
         }
-        if (coverage.get("mcpRuntimePolicy") instanceof Map) {
-            safe.put("mcpRuntimePolicy", safeMcpRuntimePolicySummary());
-        }
-        if (coverage.get("mcpOAuthPolicy") instanceof Map) {
-            safe.put("mcpOAuthPolicy", safeMcpOAuthPolicySummary());
-        }
-        if (coverage.get("mcpPackageSecurityPolicy") instanceof Map) {
-            safe.put("mcpPackageSecurityPolicy", safeMcpPackageSecurityPolicySummary());
-        }
         if (coverage.get("attachmentPolicy") instanceof Map) {
             safe.put(
                     "attachmentPolicy",
@@ -2603,11 +2417,6 @@ public class DashboardDiagnosticsService {
                     "approvalAuditPolicy",
                     safeApprovalAuditPolicy(
                             (Map<String, Object>) coverage.get("approvalAuditPolicy")));
-        }
-        if (coverage.get("mcpReloadPolicy") instanceof Map) {
-            safe.put(
-                    "mcpReloadPolicy",
-                    safeMcpReloadPolicy((Map<String, Object>) coverage.get("mcpReloadPolicy")));
         }
         copyAuditCoverageBooleans(coverage, safe);
         return safe;
@@ -2765,31 +2574,6 @@ public class DashboardDiagnosticsService {
     }
 
     /**
-     * 生成安全展示用的MCPReload策略。
-     *
-     * @param source 来源参数。
-     * @return 返回safe MCP Reload策略结果。
-     */
-    private Map<String, Object> safeMcpReloadPolicy(Map<String, Object> source) {
-        return filterPolicyMap(
-                source,
-                "command",
-                "confirmRequired",
-                "configKey",
-                "slashConfirmBacked",
-                "directRunArgument",
-                "alwaysConfirmArgument",
-                "persistentDisableSupported",
-                "runtimeConfigPersisted",
-                "toolChangeNoticeInjected",
-                "changedServerSummary",
-                "toolCountSummary",
-                "oauthUrlSafetyCovered",
-                "encodedUrlParameterRedacted",
-                "reloadHistoryNoticeRedacted");
-    }
-
-    /**
      * 生成安全展示用的安全审计附件策略。
      *
      * @param attachment 附件参数。
@@ -2842,11 +2626,6 @@ public class DashboardDiagnosticsService {
         copyPolicyValue(source, target, "toolResultStorage");
         copyPolicyValue(source, target, "codeExecutionGuardrails");
         copyPolicyValue(source, target, "codeExecutionPolicyAuditable");
-        copyPolicyValue(source, target, "mcpUrlSafety");
-        copyPolicyValue(source, target, "mcpReloadConfirmation");
-        copyPolicyValue(source, target, "mcpToolChangeNotice");
-        copyPolicyValue(source, target, "mcpRuntimePolicyAuditable");
-        copyPolicyValue(source, target, "mcpPackageSecurity");
         copyPolicyValue(source, target, "attachmentUrlSafety");
         copyPolicyValue(source, target, "attachmentCachePathSafety");
         copyPolicyValue(source, target, "attachmentDisplayNameRedaction");

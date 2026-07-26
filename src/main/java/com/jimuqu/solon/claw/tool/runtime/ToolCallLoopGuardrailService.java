@@ -56,15 +56,7 @@ public class ToolCallLoopGuardrailService {
                                     "browser_get_images",
                                     ToolNameConstants.CONFIG_GET,
                                     "config_env_probe",
-                                    ToolNameConstants.SECURITY_AUDIT,
-                                    "mcp_filesystem_read_file",
-                                    "mcp_filesystem_read_text_file",
-                                    "mcp_filesystem_read_multiple_files",
-                                    "mcp_filesystem_list_directory",
-                                    "mcp_filesystem_list_directory_with_sizes",
-                                    "mcp_filesystem_directory_tree",
-                                    "mcp_filesystem_get_file_info",
-                                    "mcp_filesystem_search_files")));
+                                    ToolNameConstants.SECURITY_AUDIT)));
 
     /** MUTATING工具的统一常量值。 */
     private static final Set<String> MUTATING_TOOLS =

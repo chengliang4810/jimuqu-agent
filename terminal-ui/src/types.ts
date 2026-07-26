@@ -141,18 +141,10 @@ export type ThinkingMode = 'collapsed' | 'truncated' | 'full'
 export type SectionName = 'thinking' | 'tools' | 'subagents' | 'activity'
 export type SectionVisibility = Partial<Record<SectionName, DetailsMode>>
 
-export interface McpServerStatus {
-  connected: boolean
-  name: string
-  tools: number
-  transport: string
-}
-
 export interface SessionInfo {
   cwd?: string
   fast?: boolean
   lazy?: boolean
-  mcp_servers?: McpServerStatus[]
   model: string
   profile_name?: string
   reasoning_effort?: string

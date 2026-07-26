@@ -6,10 +6,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
+import com.jimuqu.solon.claw.engine.DefaultSessionSearchService;
 import com.jimuqu.solon.claw.profile.ProfileManager;
 import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.storage.repository.SqliteSessionRepository;
+import com.jimuqu.solon.claw.support.FakeLlmGateway;
 import com.jimuqu.solon.claw.support.MessageSupport;
+import com.jimuqu.solon.claw.web.DashboardSearchController;
 import com.jimuqu.solon.claw.web.DashboardSessionController;
 import com.jimuqu.solon.claw.web.DashboardSessionService;
 import com.jimuqu.solon.claw.web.profile.DashboardProfileContext;
@@ -144,6 +147,78 @@ public class DashboardProfileSessionScopeTest {
                     .containsEntry("ok", Boolean.TRUE);
             assertThat(workerRepository.findById(workerChild.getSessionId())).isNull();
         } finally {
+            currentDatabase.shutdown();
+            workerDatabase.shutdown();
+        }
+    }
+
+    /** 全局搜索必须聚合 default 与命名 Profile，并用 Profile 区分重复会话 ID。 */
+    @Test
+    void shouldSearchAllProfilesAndPreserveProfileIdentity() throws Exception {
+        Path root = Files.createTempDirectory("dashboard-profile-search-");
+        Path workerHome = root.resolve("profiles").resolve("worker");
+        Files.createDirectories(root.resolve("data"));
+        Files.createDirectories(workerHome.resolve("data"));
+        AppConfig currentConfig = config(root);
+        SqliteDatabase currentDatabase = new SqliteDatabase(currentConfig);
+        SqliteDatabase workerDatabase = new SqliteDatabase(config(workerHome));
+        String previousRoot = System.getProperty("solonclaw.profile.root");
+        System.setProperty("solonclaw.profile.root", root.toString());
+        try {
+            SessionRepository currentRepository = new SqliteSessionRepository(currentDatabase);
+            SessionRepository workerRepository = new SqliteSessionRepository(workerDatabase);
+            saveSearchSession(
+                    currentRepository,
+                    "shared-session",
+                    "MEMORY:dashboard:default-user",
+                    "default global-profile-search-marker",
+                    100L);
+            saveSearchSession(
+                    workerRepository,
+                    "shared-session",
+                    "FEISHU:worker-room:worker-user",
+                    "worker global-profile-search-marker",
+                    200L);
+
+            ProfileManager manager =
+                    new ProfileManager(
+                            root,
+                            Files.createTempDirectory("dashboard-profile-search-wrappers-"),
+                            "solonclaw");
+            DashboardProfileContext profileContext =
+                    new DashboardProfileContext(manager, currentConfig);
+            DashboardSearchController controller =
+                    new DashboardSearchController(
+                            new DefaultSessionSearchService(
+                                    currentRepository, new FakeLlmGateway(), null, currentConfig),
+                            profileContext);
+            Context request = ContextEmpty.create();
+            request.paramMap().put("profile", "all");
+            request.paramMap().put("q", "global-profile-search-marker");
+            request.paramMap().put("conversation_only", "true");
+            request.paramMap().put("limit", "10");
+
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> results =
+                    (List<Map<String, Object>>) data(controller.search(request)).get("results");
+
+            assertThat(results)
+                    .extracting(row -> row.get("profile"))
+                    .containsExactly("worker", "default");
+            assertThat(results)
+                    .extracting(row -> row.get("session_id"))
+                    .containsExactly("shared-session", "shared-session");
+            assertThat(results)
+                    .extracting(row -> row.get("title"))
+                    .containsExactly(
+                            "worker global-profile-search-marker",
+                            "default global-profile-search-marker");
+        } finally {
+            if (previousRoot == null) {
+                System.clearProperty("solonclaw.profile.root");
+            } else {
+                System.setProperty("solonclaw.profile.root", previousRoot);
+            }
             currentDatabase.shutdown();
             workerDatabase.shutdown();
         }
@@ -300,6 +375,25 @@ public class DashboardProfileSessionScopeTest {
         session.setNdjson(MessageSupport.toNdjson(Arrays.asList(ChatMessage.ofUser(title))));
         repository.save(session);
         return session;
+    }
+
+    /** 保存可在不同 Profile 复用同一会话 ID 的搜索测试会话。 */
+    private void saveSearchSession(
+            SessionRepository repository,
+            String sessionId,
+            String source,
+            String title,
+            long updatedAt)
+            throws Exception {
+        SessionRecord session = new SessionRecord();
+        session.setSessionId(sessionId);
+        session.setSourceKey(source);
+        session.setBranchName("main");
+        session.setTitle(title);
+        session.setCreatedAt(updatedAt);
+        session.setUpdatedAt(updatedAt);
+        session.setNdjson(MessageSupport.toNdjson(Arrays.asList(ChatMessage.ofUser(title))));
+        repository.save(session);
     }
 
     /** 读取 Dashboard 会话列表并保持测试中的泛型边界清晰。 */

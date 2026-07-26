@@ -457,9 +457,6 @@ public class DangerousCommandApprovalServiceTest {
                 .contains("request")
                 .contains("response")
                 .contains("observerFailureIsolated");
-        assertThat(String.valueOf(summary.get("mcpReloadPolicy")))
-                .contains("/reload-mcp")
-                .contains("toolChangeNoticeInjected");
         assertThat(summary.toString()).doesNotContain("secret-sudo");
     }
 
@@ -898,35 +895,6 @@ public class DangerousCommandApprovalServiceTest {
                 .contains("_dangerous_command_session_approvals_")
                 .doesNotContain("secret")
                 .doesNotContain("token=");
-    }
-
-    @Test
-    void shouldExposeMcpReloadPolicySummary() throws Exception {
-        TestEnvironment env = TestEnvironment.withFakeLlm();
-
-        Map<String, Object> summary = env.dangerousCommandApprovalService.mcpReloadPolicySummary();
-
-        assertThat(summary.get("command")).isEqualTo("/reload-mcp");
-        assertThat(summary.get("confirmRequired")).isEqualTo(Boolean.TRUE);
-        assertThat(summary.get("configKey")).isEqualTo("approvals.mcpReloadConfirm");
-        assertThat(summary.get("slashConfirmBacked")).isEqualTo(Boolean.TRUE);
-        assertThat(summary.get("directRunArgument")).isEqualTo("now");
-        assertThat(summary.get("alwaysConfirmArgument")).isEqualTo("always");
-        assertThat(summary.get("persistentDisableSupported")).isEqualTo(Boolean.TRUE);
-        assertThat(summary.get("runtimeConfigPersisted")).isEqualTo(Boolean.TRUE);
-        assertThat(summary.get("toolChangeNoticeInjected")).isEqualTo(Boolean.TRUE);
-        assertThat(summary.get("changedServerSummary")).isEqualTo(Boolean.TRUE);
-        assertThat(summary.get("toolCountSummary")).isEqualTo(Boolean.TRUE);
-        assertThat(summary.get("oauthUrlSafetyCovered")).isEqualTo(Boolean.TRUE);
-        assertThat(summary.get("encodedUrlParameterRedacted")).isEqualTo(Boolean.TRUE);
-        assertThat(summary.get("reloadHistoryNoticeRedacted")).isEqualTo(Boolean.TRUE);
-
-        env.appConfig.getApprovals().setMcpReloadConfirm(false);
-        assertThat(
-                        env.dangerousCommandApprovalService
-                                .mcpReloadPolicySummary()
-                                .get("confirmRequired"))
-                .isEqualTo(Boolean.FALSE);
     }
 
     @Test

@@ -99,16 +99,6 @@ const router = createRouter({
       component: () => import('@/views/solonclaw/ChannelsView.vue'),
     },
     {
-      path: '/gateways',
-      name: 'solonclaw.gateways',
-      component: () => import('@/views/solonclaw/GatewaysView.vue'),
-    },
-    {
-      path: '/mcp',
-      name: 'solonclaw.mcp',
-      component: () => import('@/views/solonclaw/McpView.vue'),
-    },
-    {
       path: '/files',
       name: 'solonclaw.files',
       component: () => import('@/views/solonclaw/FilesView.vue'),

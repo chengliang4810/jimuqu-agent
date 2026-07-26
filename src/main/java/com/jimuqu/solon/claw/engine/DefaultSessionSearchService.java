@@ -20,6 +20,7 @@ import com.jimuqu.solon.claw.support.ErrorTextSupport;
 import com.jimuqu.solon.claw.support.IdSupport;
 import com.jimuqu.solon.claw.support.MessageSupport;
 import com.jimuqu.solon.claw.support.SearchTextSupport;
+import com.jimuqu.solon.claw.support.SessionVisibilitySupport;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -125,7 +126,7 @@ public class DefaultSessionSearchService implements SessionSearchService {
     @Override
     public List<SessionSearchEntry> search(String sourceKey, String query, int limit)
             throws Exception {
-        return search(sourceKey, query, limit, false, null, null);
+        return search(sourceKey, query, limit, false, null, null, false);
     }
 
     /**
@@ -137,6 +138,7 @@ public class DefaultSessionSearchService implements SessionSearchService {
      * @param summarize 是否调用模型生成搜索聚焦总结；默认工具路径关闭以保证长会话检索延迟稳定。
      * @param sort 时间排序偏好。
      * @param roleFilter 允许命中的消息角色。
+     * @param conversationOnly 是否仅返回用户主动发起且未归档的对话。
      * @return 返回搜索结果。
      */
     private List<SessionSearchEntry> search(
@@ -145,23 +147,23 @@ public class DefaultSessionSearchService implements SessionSearchService {
             int limit,
             boolean summarize,
             String sort,
-            String roleFilter)
+            String roleFilter,
+            boolean conversationOnly)
             throws Exception {
         int resolvedLimit = Math.max(1, Math.min(limit <= 0 ? DEFAULT_LIMIT : limit, MAX_LIMIT));
         SessionRecord currentSession =
                 StrUtil.isBlank(sourceKey) ? null : sessionRepository.getBoundSession(sourceKey);
         String currentRootId = resolveRootId(currentSession);
 
-        List<SessionRecord> raw =
-                StrUtil.isBlank(query)
-                        ? sessionRepository.listRecent(Math.max(10, resolvedLimit * 5))
-                        : sessionRepository.search(query.trim(), Math.max(10, resolvedLimit * 5));
+        List<SessionRecord> raw = loadSessionCandidates(query, resolvedLimit, conversationOnly);
 
         Map<String, SearchCandidate> grouped = new LinkedHashMap<String, SearchCandidate>();
         String normalizedQuery = StrUtil.nullToEmpty(query).trim().toLowerCase(Locale.ROOT);
         // 当前绑定会话的压缩摘要可能尚未进入底层索引，仅对摘要命中走快速召回，避免后续复盘文本抢占原始目标会话。
         if (StrUtil.isNotBlank(query)
                 && currentSession != null
+                && (!conversationOnly
+                        || SessionVisibilitySupport.isUserVisibleConversation(currentSession))
                 && compressedSummaryMatches(currentSession, normalizedQuery)) {
             grouped.put(currentRootId, new SearchCandidate(currentSession, currentSession));
         }
@@ -175,14 +177,17 @@ public class DefaultSessionSearchService implements SessionSearchService {
                     continue;
                 }
             }
-            if (!grouped.containsKey(rootId)) {
-                SessionRecord display = candidate;
-                if (StrUtil.isNotBlank(rootId) && !rootId.equals(candidate.getSessionId())) {
-                    SessionRecord resolved = sessionRepository.findById(rootId);
-                    if (resolved != null) {
-                        display = resolved;
-                    }
+            SessionRecord display = candidate;
+            if (StrUtil.isNotBlank(rootId) && !rootId.equals(candidate.getSessionId())) {
+                SessionRecord resolved = sessionRepository.findById(rootId);
+                if (resolved != null) {
+                    display = resolved;
                 }
+            }
+            if (conversationOnly && !SessionVisibilitySupport.isUserVisibleConversation(display)) {
+                continue;
+            }
+            if (!grouped.containsKey(rootId)) {
                 grouped.put(rootId, new SearchCandidate(display, candidate));
             }
             if (StrUtil.isBlank(query)
@@ -227,12 +232,83 @@ public class DefaultSessionSearchService implements SessionSearchService {
             appendToolCallResults(sourceKey, query, resolvedLimit, results);
             results = retainConfirmedDiscoveryResults(results);
             results = filterEntriesByRole(results, roleFilter);
+            if (conversationOnly) {
+                results = filterUserConversationEntries(results);
+            }
             sortDiscoveryResults(results);
             sortByTime(results, sort);
         } else {
             sortByTime(results, sort);
         }
         return limitResults(results, resolvedLimit);
+    }
+
+    /**
+     * 逐步扩大候选窗口，直到找到足量用户会话或耗尽匹配记录。
+     *
+     * <p>常见搜索只读取较小窗口；只有大量后台会话连续排在前面时才继续扩大，兼顾过滤前截断的正确性与大库性能。
+     *
+     * @param query 查询文本。
+     * @param resolvedLimit 最终结果上限。
+     * @param conversationOnly 是否只搜索用户可见会话。
+     * @return 足以完成最终过滤和排序的候选记录。
+     */
+    private List<SessionRecord> loadSessionCandidates(
+            String query, int resolvedLimit, boolean conversationOnly) throws Exception {
+        int baseLimit = Math.max(10, resolvedLimit * 5);
+        if (!conversationOnly) {
+            return loadSessionCandidateWindow(query, baseLimit);
+        }
+        int total = Math.max(0, sessionRepository.countAll());
+        int candidateLimit = Math.max(1, Math.min(Math.max(total, 1), baseLimit));
+        while (true) {
+            List<SessionRecord> candidates = loadSessionCandidateWindow(query, candidateLimit);
+            if (hasEnoughVisibleConversationRoots(candidates, resolvedLimit)
+                    || candidates.size() < candidateLimit
+                    || candidateLimit >= total) {
+                return candidates;
+            }
+            candidateLimit =
+                    candidateLimit > total / 2 ? total : Math.min(total, candidateLimit * 2);
+        }
+    }
+
+    /** 从仓储读取一个搜索或最近会话候选窗口。 */
+    private List<SessionRecord> loadSessionCandidateWindow(String query, int limit)
+            throws Exception {
+        return StrUtil.isBlank(query)
+                ? sessionRepository.listRecent(limit)
+                : sessionRepository.search(query.trim(), limit);
+    }
+
+    /** 判断当前候选窗口是否已包含足量可见根会话。 */
+    private boolean hasEnoughVisibleConversationRoots(List<SessionRecord> candidates, int required)
+            throws Exception {
+        Map<String, Boolean> visibleRoots = new LinkedHashMap<String, Boolean>();
+        for (SessionRecord candidate : candidates) {
+            if (candidate == null) {
+                continue;
+            }
+            String rootId = resolveRootId(candidate);
+            String key = StrUtil.blankToDefault(rootId, candidate.getSessionId());
+            if (visibleRoots.containsKey(key)) {
+                continue;
+            }
+            SessionRecord display = candidate;
+            if (StrUtil.isNotBlank(rootId) && !rootId.equals(candidate.getSessionId())) {
+                SessionRecord resolved = sessionRepository.findById(rootId);
+                if (resolved != null) {
+                    display = resolved;
+                }
+            }
+            if (SessionVisibilitySupport.isUserVisibleConversation(display)) {
+                visibleRoots.put(key, Boolean.TRUE);
+                if (visibleRoots.size() >= required) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -249,17 +325,17 @@ public class DefaultSessionSearchService implements SessionSearchService {
         normalizeEmbeddedProfile(query);
         if (StrUtil.isNotBlank(query.getSessionId())
                 && StrUtil.isBlank(query.getAroundMessageId())) {
-            return readSession(query);
+            return applyConversationVisibility(query, readSession(query));
         }
         if (StrUtil.isNotBlank(query.getProfile())) {
             return searchProfile(query);
         }
         if (shouldSearchRuns(query)) {
-            return searchRunScope(query);
+            return applyConversationVisibility(query, searchRunScope(query));
         }
         if (StrUtil.isNotBlank(query.getSessionId())
                 && StrUtil.isNotBlank(query.getAroundMessageId())) {
-            return scroll(query);
+            return applyConversationVisibility(query, scroll(query));
         }
         List<SessionSearchEntry> entries =
                 search(
@@ -268,7 +344,8 @@ public class DefaultSessionSearchService implements SessionSearchService {
                         query.getLimit(),
                         query.isSummarize(),
                         query.getSort(),
-                        query.getRoleFilter());
+                        query.getRoleFilter(),
+                        query.isConversationOnly());
         List<SessionSearchEntry> filtered = new ArrayList<SessionSearchEntry>();
         for (SessionSearchEntry entry : entries) {
             if (StrUtil.isNotBlank(query.getSessionId())
@@ -284,6 +361,20 @@ public class DefaultSessionSearchService implements SessionSearchService {
             filtered.add(entry);
         }
         return filtered;
+    }
+
+    /**
+     * 对精确读取、滚动和运行范围结果应用与普通发现搜索一致的用户会话过滤。
+     *
+     * @param query 当前结构化查询。
+     * @param entries 原始搜索结果。
+     * @return 未要求过滤时返回原结果，否则返回用户可见会话结果。
+     */
+    private List<SessionSearchEntry> applyConversationVisibility(
+            SessionSearchQuery query, List<SessionSearchEntry> entries) throws Exception {
+        return query != null && query.isConversationOnly()
+                ? filterUserConversationEntries(entries)
+                : entries;
     }
 
     /**
@@ -501,6 +592,7 @@ public class DefaultSessionSearchService implements SessionSearchService {
         target.setTimeFrom(source.getTimeFrom());
         target.setTimeTo(source.getTimeTo());
         target.setSummarize(source.isSummarize());
+        target.setConversationOnly(source.isConversationOnly());
         target.setLimit(source.getLimit());
         return target;
     }
@@ -1230,6 +1322,35 @@ public class DefaultSessionSearchService implements SessionSearchService {
             }
         }
         return confirmed;
+    }
+
+    /**
+     * 在最终数量截断前移除后台、内部子会话和归档会话，避免后台命中遮蔽较旧用户对话。
+     *
+     * @param entries 已合并会话、运行和工具证据的搜索结果。
+     * @return 仅包含用户可见会话的结果。
+     */
+    private List<SessionSearchEntry> filterUserConversationEntries(List<SessionSearchEntry> entries)
+            throws Exception {
+        List<SessionSearchEntry> visible = new ArrayList<SessionSearchEntry>();
+        Map<String, Boolean> visibilityBySessionId = new LinkedHashMap<String, Boolean>();
+        for (SessionSearchEntry entry : entries) {
+            if (entry == null || StrUtil.isBlank(entry.getSessionId())) {
+                continue;
+            }
+            String sessionId = entry.getSessionId();
+            Boolean allowed = visibilityBySessionId.get(sessionId);
+            if (allowed == null) {
+                SessionRecord record = sessionRepository.findById(sessionId);
+                allowed =
+                        Boolean.valueOf(SessionVisibilitySupport.isUserVisibleConversation(record));
+                visibilityBySessionId.put(sessionId, allowed);
+            }
+            if (allowed.booleanValue()) {
+                visible.add(entry);
+            }
+        }
+        return visible;
     }
 
     /**

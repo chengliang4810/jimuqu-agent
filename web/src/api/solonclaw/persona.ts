@@ -4,7 +4,6 @@ import { getPersonaMeta } from '@/shared/personaMeta'
 
 export interface PersonaFileData {
   key: string
-  title: string
   fileName: string
   path: string
   exists: boolean
@@ -42,7 +41,6 @@ export async function fetchPersonaFile(key: string): Promise<PersonaFileData> {
   const meta = personaMeta(key)
   return {
     key,
-    title: meta.title,
     fileName: key === 'memory_today' ? file.name : meta.fileName,
     path: file.path,
     exists: file.exists,
