@@ -2,7 +2,6 @@ package com.jimuqu.solon.claw.web;
 
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
-import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.support.SecretRedactor;
 import com.jimuqu.solon.claw.support.TuiRuntimeProtocolService;
 import java.util.LinkedHashMap;
@@ -30,25 +29,9 @@ public class DashboardTuiRuntimeController {
     /**
      * 创建终端运行时控制器。
      *
-     * @param appConfig 应用配置，用于定位运行时目录与当前 provider。
-     * @param weixinQrSetupService 微信二维码 setup 服务。
-     * @param domesticQrSetupService 飞书、钉钉二维码 setup 服务。
-     */
-    public DashboardTuiRuntimeController(
-            AppConfig appConfig,
-            WeixinQrSetupService weixinQrSetupService,
-            DomesticQrSetupService domesticQrSetupService) {
-        this(
-                new TuiRuntimeProtocolService(
-                        appConfig, weixinQrSetupService, domesticQrSetupService));
-    }
-
-    /**
-     * 创建可注入协议服务的终端运行时控制器，供同包测试验证异常边界。
-     *
      * @param protocolService 终端运行时协议服务。
      */
-    DashboardTuiRuntimeController(TuiRuntimeProtocolService protocolService) {
+    public DashboardTuiRuntimeController(TuiRuntimeProtocolService protocolService) {
         this.protocolService = protocolService;
     }
 

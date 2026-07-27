@@ -41,6 +41,7 @@ import com.jimuqu.solon.claw.support.RuntimeMemoryMonitorService;
 import com.jimuqu.solon.claw.support.RuntimePathGuard;
 import com.jimuqu.solon.claw.support.SessionArtifactService;
 import com.jimuqu.solon.claw.support.ShutdownForensicsService;
+import com.jimuqu.solon.claw.support.TuiRuntimeProtocolService;
 import com.jimuqu.solon.claw.support.update.AppUpdateService;
 import com.jimuqu.solon.claw.support.update.AppVersionService;
 import com.jimuqu.solon.claw.tool.runtime.DangerousCommandApprovalService;
@@ -561,6 +562,23 @@ public class DashboardConfiguration {
                 securityPolicyService,
                 dashboardProfileContext,
                 profileManager);
+    }
+
+    /**
+     * 创建 Dashboard 与终端前端共用的轻量运行时协议服务。
+     *
+     * @param appConfig 应用运行配置。
+     * @param weixinQrSetupService 微信二维码 setup 服务。
+     * @param domesticQrSetupService 飞书、钉钉二维码 setup 服务。
+     * @return 终端运行时协议服务。
+     */
+    @Bean
+    public TuiRuntimeProtocolService tuiRuntimeProtocolService(
+            AppConfig appConfig,
+            WeixinQrSetupService weixinQrSetupService,
+            com.jimuqu.solon.claw.web.DomesticQrSetupService domesticQrSetupService) {
+        return new TuiRuntimeProtocolService(
+                appConfig, weixinQrSetupService, domesticQrSetupService);
     }
 
     /**
