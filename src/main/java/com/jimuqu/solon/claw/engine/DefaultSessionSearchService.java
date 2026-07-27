@@ -10,12 +10,12 @@ import com.jimuqu.solon.claw.core.model.SessionSearchEntry;
 import com.jimuqu.solon.claw.core.model.SessionSearchQuery;
 import com.jimuqu.solon.claw.core.model.ToolCallRecord;
 import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
+import com.jimuqu.solon.claw.core.repository.ReadOnlySessionRepositoryFactory;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
 import com.jimuqu.solon.claw.core.service.SessionSearchService;
 import com.jimuqu.solon.claw.profile.ProfileManager;
 import com.jimuqu.solon.claw.profile.ProfileRuntimeIdentity;
-import com.jimuqu.solon.claw.storage.repository.ReadOnlyProfileSessionRepository;
 import com.jimuqu.solon.claw.support.ErrorTextSupport;
 import com.jimuqu.solon.claw.support.IdSupport;
 import com.jimuqu.solon.claw.support.MessageSupport;
@@ -72,6 +72,9 @@ public class DefaultSessionSearchService implements SessionSearchService {
     /** 当前逻辑运行时所属 Profile，来自独立 AppConfig 工作区而非 JVM 全局可变状态。 */
     private final String currentProfileName;
 
+    /** 跨 Profile 只读会话仓储工厂；普通当前 Profile 查询不需要该端口。 */
+    private final ReadOnlySessionRepositoryFactory readOnlySessionRepositoryFactory;
+
     /**
      * 创建默认会话搜索服务实例，并注入运行所需依赖。
      *
@@ -79,7 +82,7 @@ public class DefaultSessionSearchService implements SessionSearchService {
      * @param llmGateway LLM网关参数。
      */
     public DefaultSessionSearchService(SessionRepository sessionRepository, LlmGateway llmGateway) {
-        this(sessionRepository, llmGateway, null, null);
+        this(sessionRepository, llmGateway, null, null, null);
     }
 
     /**
@@ -93,7 +96,7 @@ public class DefaultSessionSearchService implements SessionSearchService {
             SessionRepository sessionRepository,
             LlmGateway llmGateway,
             AgentRunRepository agentRunRepository) {
-        this(sessionRepository, llmGateway, agentRunRepository, null);
+        this(sessionRepository, llmGateway, agentRunRepository, null, null);
     }
 
     /**
@@ -103,16 +106,19 @@ public class DefaultSessionSearchService implements SessionSearchService {
      * @param llmGateway LLM 网关。
      * @param agentRunRepository 当前 Profile 运行仓储。
      * @param appConfig 当前逻辑运行时配置，用于解析 Profile 身份。
+     * @param readOnlySessionRepositoryFactory 跨 Profile 只读会话仓储工厂。
      */
     public DefaultSessionSearchService(
             SessionRepository sessionRepository,
             LlmGateway llmGateway,
             AgentRunRepository agentRunRepository,
-            AppConfig appConfig) {
+            AppConfig appConfig,
+            ReadOnlySessionRepositoryFactory readOnlySessionRepositoryFactory) {
         this.sessionRepository = sessionRepository;
         this.llmGateway = llmGateway;
         this.agentRunRepository = agentRunRepository;
         this.currentProfileName = ProfileRuntimeIdentity.resolve(appConfig);
+        this.readOnlySessionRepositoryFactory = readOnlySessionRepositoryFactory;
     }
 
     /**
@@ -458,7 +464,7 @@ public class DefaultSessionSearchService implements SessionSearchService {
             throws Exception {
         Path stateDb = manager.requireProfileStateDb(profile);
         return java.nio.file.Files.isRegularFile(stateDb)
-                ? new ReadOnlyProfileSessionRepository(stateDb)
+                ? requireReadOnlySessionRepositoryFactory().open(stateDb)
                 : null;
     }
 
@@ -550,11 +556,20 @@ public class DefaultSessionSearchService implements SessionSearchService {
     private List<SessionSearchEntry> searchProfile(SessionSearchQuery query) throws Exception {
         Path profileHome = ProfileManager.current().requireProfileHome(query.getProfile());
         SessionRepository profileRepository =
-                new ReadOnlyProfileSessionRepository(
-                        profileHome.resolve("data").resolve("state.db"));
+                requireReadOnlySessionRepositoryFactory()
+                        .open(profileHome.resolve("data").resolve("state.db"));
         SessionSearchQuery delegated = copyForProfile(query);
         return new DefaultSessionSearchService(profileRepository, llmGateway, null)
                 .search(delegated);
+    }
+
+    /** 读取跨 Profile 只读仓储工厂，并在错误装配时给出明确诊断。 */
+    private ReadOnlySessionRepositoryFactory requireReadOnlySessionRepositoryFactory() {
+        if (readOnlySessionRepositoryFactory == null) {
+            throw new IllegalStateException(
+                    "Read-only session repository factory is required for cross-Profile search.");
+        }
+        return readOnlySessionRepositoryFactory;
     }
 
     /** 精确会话及其所属 Profile。 */

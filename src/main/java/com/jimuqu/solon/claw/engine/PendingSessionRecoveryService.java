@@ -7,7 +7,8 @@ import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.ConversationEventSink;
 import com.jimuqu.solon.claw.core.service.ConversationOrchestrator;
-import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
+import com.jimuqu.solon.claw.core.service.PendingSessionState;
+import com.jimuqu.solon.claw.core.service.PendingSessionStateFactory;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,20 +30,29 @@ public class PendingSessionRecoveryService {
     /** 记录待恢复会话恢复中的对话编排器。 */
     private final ConversationOrchestrator conversationOrchestrator;
 
+    /** 注入 pending 会话状态工厂，用于屏蔽具体存储实现。 */
+    private final PendingSessionStateFactory pendingSessionStateFactory;
+
     /**
      * 创建Pending会话Recovery服务实例，并注入运行所需依赖。
      *
      * @param appConfig 应用运行配置。
      * @param sessionRepository 会话仓储依赖。
      * @param conversationOrchestrator conversationOrchestrator 参数。
+     * @param pendingSessionStateFactory pending 会话状态工厂。
      */
     public PendingSessionRecoveryService(
             AppConfig appConfig,
             SessionRepository sessionRepository,
-            ConversationOrchestrator conversationOrchestrator) {
+            ConversationOrchestrator conversationOrchestrator,
+            PendingSessionStateFactory pendingSessionStateFactory) {
         this.appConfig = appConfig;
         this.sessionRepository = sessionRepository;
         this.conversationOrchestrator = conversationOrchestrator;
+        if (pendingSessionStateFactory == null) {
+            throw new IllegalArgumentException("Pending session state factory is required.");
+        }
+        this.pendingSessionStateFactory = pendingSessionStateFactory;
     }
 
     /**
@@ -94,7 +104,7 @@ public class PendingSessionRecoveryService {
             if (session == null || !StrUtil.equals(sourceKey, session.getSourceKey())) {
                 return false;
             }
-            SqliteAgentSession agentSession = new SqliteAgentSession(session);
+            PendingSessionState agentSession = pendingSessionStateFactory.create(session);
             if (!agentSession.isPending()
                     || !ResumePendingSupport.isGatewayInterruptionReason(
                             agentSession.getPendingReason())) {
@@ -126,7 +136,7 @@ public class PendingSessionRecoveryService {
             return false;
         }
         try {
-            SqliteAgentSession agentSession = new SqliteAgentSession(session);
+            PendingSessionState agentSession = pendingSessionStateFactory.create(session);
             return agentSession.isPending()
                     && ResumePendingSupport.isGatewayInterruptionReason(
                             agentSession.getPendingReason());
@@ -147,7 +157,7 @@ public class PendingSessionRecoveryService {
      */
     private boolean resume(SessionRecord session) {
         try {
-            SqliteAgentSession agentSession = new SqliteAgentSession(session);
+            PendingSessionState agentSession = pendingSessionStateFactory.create(session);
             String pendingReason = agentSession.getPendingReason();
             long pendingMarkedAt = agentSession.getPendingMarkedAt();
             GatewayReply reply =

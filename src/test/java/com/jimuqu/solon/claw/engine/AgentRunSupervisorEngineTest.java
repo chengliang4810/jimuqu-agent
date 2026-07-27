@@ -32,6 +32,7 @@ import com.jimuqu.solon.claw.pricing.UsageCostCalculator;
 import com.jimuqu.solon.claw.storage.repository.SqliteAgentRunRepository;
 import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.storage.repository.SqliteSessionRepository;
+import com.jimuqu.solon.claw.storage.session.SqlitePendingSessionStateFactory;
 import com.jimuqu.solon.claw.support.LlmProviderService;
 import com.jimuqu.solon.claw.support.MessageSupport;
 import com.jimuqu.solon.claw.usage.UsageEventRecord;
@@ -215,7 +216,8 @@ public class AgentRunSupervisorEngineTest {
                         new SuccessfulGateway("engine ok"),
                         new LlmProviderService(fixture.config),
                         usageRepository,
-                        calculator);
+                        calculator,
+                        new SqlitePendingSessionStateFactory());
         SessionRecord session = fixture.sessionRepository.bindNewSession("MEMORY:usage:user");
         ExecutorService runExecutor = Executors.newSingleThreadExecutor();
 
@@ -611,7 +613,10 @@ public class AgentRunSupervisorEngineTest {
                 new NoopCompressionService(),
                 noCompressionBudget(),
                 gateway,
-                new LlmProviderService(fixture.config));
+                new LlmProviderService(fixture.config),
+                null,
+                null,
+                new SqlitePendingSessionStateFactory());
     }
 
     /**

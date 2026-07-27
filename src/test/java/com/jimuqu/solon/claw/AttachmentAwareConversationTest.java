@@ -11,6 +11,7 @@ import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
 import com.jimuqu.solon.claw.media.SpeechService;
 import com.jimuqu.solon.claw.provider.TranscriptionProvider;
+import com.jimuqu.solon.claw.storage.session.SqlitePendingSessionStateFactory;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.jimuqu.solon.claw.support.LlmProviderService;
 import com.jimuqu.solon.claw.support.MessageSupport;
@@ -142,7 +143,8 @@ public class AttachmentAwareConversationTest {
                         env.appConfig,
                         env.memoryManager,
                         null,
-                        speechService);
+                        speechService,
+                        new SqlitePendingSessionStateFactory());
         GatewayMessage message =
                 new GatewayMessage(PlatformType.MEMORY, "room-voice", "user-1", "听一下");
         message.setAttachments(new ArrayList<MessageAttachment>());

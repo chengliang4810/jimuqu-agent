@@ -7,6 +7,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.jimuqu.solon.claw.core.service.MemoryManager;
 import com.jimuqu.solon.claw.engine.DefaultConversationOrchestrator;
+import com.jimuqu.solon.claw.storage.session.SqlitePendingSessionStateFactory;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -31,7 +32,8 @@ public class DefaultConversationOrchestratorLoggingTest {
                         null,
                         new FailingMemoryManager(leakedToken),
                         null,
-                        null);
+                        null,
+                        new SqlitePendingSessionStateFactory());
         Logger logger = (Logger) LoggerFactory.getLogger(DefaultConversationOrchestrator.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<ILoggingEvent>();
         appender.start();

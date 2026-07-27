@@ -15,6 +15,7 @@ import com.jimuqu.solon.claw.core.service.ConversationOrchestrator;
 import com.jimuqu.solon.claw.core.service.DeliveryService;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
 import com.jimuqu.solon.claw.core.service.MemoryService;
+import com.jimuqu.solon.claw.core.service.PendingSessionStateFactory;
 import com.jimuqu.solon.claw.engine.AgentRunSupervisor;
 import com.jimuqu.solon.claw.engine.PendingSessionRecoveryService;
 import com.jimuqu.solon.claw.proactive.ProactiveReminderScheduler;
@@ -52,6 +53,7 @@ public class SchedulerConfiguration {
      * @param cronJobRepository 定时任务Job仓储依赖。
      * @param cronJobService 定时任务Job服务依赖。
      * @param conversationOrchestrator conversationOrchestrator 参数。
+     * @param pendingSessionStateFactory pending 会话状态工厂。
      * @param deliveryService 投递服务依赖。
      * @param gatewayPolicyRepository 网关策略仓储依赖。
      * @param dangerousCommandApprovalService dangerous命令审批服务依赖。
@@ -249,8 +251,9 @@ public class SchedulerConfiguration {
     public PendingSessionRecoveryService pendingSessionRecoveryService(
             AppConfig appConfig,
             com.jimuqu.solon.claw.core.repository.SessionRepository sessionRepository,
-            ConversationOrchestrator conversationOrchestrator) {
+            ConversationOrchestrator conversationOrchestrator,
+            PendingSessionStateFactory pendingSessionStateFactory) {
         return new PendingSessionRecoveryService(
-                appConfig, sessionRepository, conversationOrchestrator);
+                appConfig, sessionRepository, conversationOrchestrator, pendingSessionStateFactory);
     }
 }

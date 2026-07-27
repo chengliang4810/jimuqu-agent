@@ -3,6 +3,7 @@ package com.jimuqu.solon.claw.storage.session;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
+import com.jimuqu.solon.claw.core.service.PendingSessionState;
 import com.jimuqu.solon.claw.support.MessageSupport;
 import java.util.Collection;
 import java.util.Collections;
@@ -23,7 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** 基于现有 SessionRecord / SQLite 的 AgentSession 适配层。 */
-public class SqliteAgentSession implements AgentSession {
+public class SqliteAgentSession implements AgentSession, PendingSessionState {
     /** 记录会话快照恢复降级的低敏诊断日志，不输出会话内容或快照 JSON。 */
     private static final Logger log = LoggerFactory.getLogger(SqliteAgentSession.class);
 

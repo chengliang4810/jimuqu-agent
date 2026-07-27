@@ -9,6 +9,7 @@ import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.engine.DefaultSessionSearchService;
 import com.jimuqu.solon.claw.profile.ProfileManager;
 import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
+import com.jimuqu.solon.claw.storage.repository.SqliteReadOnlySessionRepositoryFactory;
 import com.jimuqu.solon.claw.storage.repository.SqliteSessionRepository;
 import com.jimuqu.solon.claw.support.FakeLlmGateway;
 import com.jimuqu.solon.claw.support.MessageSupport;
@@ -190,7 +191,11 @@ public class DashboardProfileSessionScopeTest {
             DashboardSearchController controller =
                     new DashboardSearchController(
                             new DefaultSessionSearchService(
-                                    currentRepository, new FakeLlmGateway(), null, currentConfig),
+                                    currentRepository,
+                                    new FakeLlmGateway(),
+                                    null,
+                                    currentConfig,
+                                    new SqliteReadOnlySessionRepositoryFactory()),
                             profileContext);
             Context request = ContextEmpty.create();
             request.paramMap().put("profile", "all");

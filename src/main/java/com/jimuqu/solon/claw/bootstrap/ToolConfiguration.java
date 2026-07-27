@@ -18,6 +18,7 @@ import com.jimuqu.solon.claw.core.service.DeliveryService;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
 import com.jimuqu.solon.claw.core.service.MemoryManager;
 import com.jimuqu.solon.claw.core.service.MemoryService;
+import com.jimuqu.solon.claw.core.service.PendingSessionStateFactory;
 import com.jimuqu.solon.claw.core.service.SessionSearchService;
 import com.jimuqu.solon.claw.core.service.SkillHubService;
 import com.jimuqu.solon.claw.core.service.ToolRegistry;
@@ -589,6 +590,7 @@ public class ToolConfiguration {
      * @param llmProviderService LLM提供方Service标识或键值。
      * @param usageEventRepository 用量事件仓储依赖。
      * @param usageCostCalculator 用量成本Calculator参数。
+     * @param pendingSessionStateFactory pending 会话状态工厂。
      * @return 返回Agent运行Supervisor结果。
      */
     @Bean(destroyMethod = "shutdown")
@@ -601,7 +603,8 @@ public class ToolConfiguration {
             LlmGateway llmGateway,
             LlmProviderService llmProviderService,
             UsageEventRepository usageEventRepository,
-            UsageCostCalculator usageCostCalculator) {
+            UsageCostCalculator usageCostCalculator,
+            PendingSessionStateFactory pendingSessionStateFactory) {
         return new AgentRunSupervisor(
                 appConfig,
                 sessionRepository,
@@ -611,7 +614,8 @@ public class ToolConfiguration {
                 llmGateway,
                 llmProviderService,
                 usageEventRepository,
-                usageCostCalculator);
+                usageCostCalculator,
+                pendingSessionStateFactory);
     }
 
     /**
@@ -633,6 +637,7 @@ public class ToolConfiguration {
      * @param memoryManager 记忆Manager参数。
      * @param goalService 目标服务依赖。
      * @param speechService 语音服务依赖。
+     * @param pendingSessionStateFactory pending 会话状态工厂。
      * @return 返回对话编排器结果。
      */
     @Bean
@@ -652,7 +657,8 @@ public class ToolConfiguration {
             AppConfig appConfig,
             MemoryManager memoryManager,
             GoalService goalService,
-            SpeechService speechService) {
+            SpeechService speechService,
+            PendingSessionStateFactory pendingSessionStateFactory) {
         DefaultConversationOrchestrator orchestrator =
                 new DefaultConversationOrchestrator(
                         sessionRepository,
@@ -669,7 +675,8 @@ public class ToolConfiguration {
                         appConfig,
                         memoryManager,
                         goalService,
-                        speechService);
+                        speechService,
+                        pendingSessionStateFactory);
         holder.set(orchestrator);
         return orchestrator;
     }

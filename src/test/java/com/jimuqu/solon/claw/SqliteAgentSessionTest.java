@@ -6,6 +6,7 @@ import com.jimuqu.solon.claw.core.model.GatewayReply;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.engine.PendingSessionRecoveryService;
 import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
+import com.jimuqu.solon.claw.storage.session.SqlitePendingSessionStateFactory;
 import com.jimuqu.solon.claw.support.FakeLlmGateway;
 import com.jimuqu.solon.claw.support.MessageSupport;
 import com.jimuqu.solon.claw.support.TestEnvironment;
@@ -209,7 +210,10 @@ public class SqliteAgentSessionTest {
 
         PendingSessionRecoveryService recoveryService =
                 new PendingSessionRecoveryService(
-                        env.appConfig, env.sessionRepository, env.conversationOrchestrator);
+                        env.appConfig,
+                        env.sessionRepository,
+                        env.conversationOrchestrator,
+                        new SqlitePendingSessionStateFactory());
         assertThat(recoveryService.recoverRecentPendingSessions()).isEqualTo(1);
 
         SessionRecord recovered = env.sessionRepository.findById(fresh.getSessionId());
@@ -240,7 +244,10 @@ public class SqliteAgentSessionTest {
 
         PendingSessionRecoveryService recoveryService =
                 new PendingSessionRecoveryService(
-                        env.appConfig, env.sessionRepository, env.conversationOrchestrator);
+                        env.appConfig,
+                        env.sessionRepository,
+                        env.conversationOrchestrator,
+                        new SqlitePendingSessionStateFactory());
 
         assertThat(recoveryService.resumeInterruptedSession(sourceKey, stale.getSessionId()))
                 .isTrue();

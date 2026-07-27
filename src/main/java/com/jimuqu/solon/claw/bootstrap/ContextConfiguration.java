@@ -14,6 +14,7 @@ import com.jimuqu.solon.claw.context.PersonaWorkspaceService;
 import com.jimuqu.solon.claw.context.SkillCuratorService;
 import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.core.repository.GlobalSettingRepository;
+import com.jimuqu.solon.claw.core.repository.ReadOnlySessionRepositoryFactory;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.CheckpointService;
 import com.jimuqu.solon.claw.core.service.ContextBudgetService;
@@ -383,6 +384,7 @@ public class ContextConfiguration {
      * @param llmGateway LLM网关参数。
      * @param agentRunRepository Agent运行仓储依赖。
      * @param appConfig 当前逻辑运行时配置。
+     * @param readOnlySessionRepositoryFactory 跨 Profile 只读会话仓储工厂。
      * @return 返回会话搜索服务结果。
      */
     @Bean
@@ -390,9 +392,14 @@ public class ContextConfiguration {
             SessionRepository sessionRepository,
             LlmGateway llmGateway,
             AgentRunRepository agentRunRepository,
-            AppConfig appConfig) {
+            AppConfig appConfig,
+            ReadOnlySessionRepositoryFactory readOnlySessionRepositoryFactory) {
         return new DefaultSessionSearchService(
-                sessionRepository, llmGateway, agentRunRepository, appConfig);
+                sessionRepository,
+                llmGateway,
+                agentRunRepository,
+                appConfig,
+                readOnlySessionRepositoryFactory);
     }
 
     /**

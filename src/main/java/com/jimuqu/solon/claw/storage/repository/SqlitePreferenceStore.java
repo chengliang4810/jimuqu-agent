@@ -1,12 +1,14 @@
 package com.jimuqu.solon.claw.storage.repository;
 
+import com.jimuqu.solon.claw.core.repository.DelegationPreferenceStore;
 import java.sql.Connection;
 import java.sql.SQLException;
 import lombok.RequiredArgsConstructor;
 
 /** SqlitePreferenceStore 实现。 */
 @RequiredArgsConstructor
-public class SqlitePreferenceStore extends SqliteRepositorySupport {
+public class SqlitePreferenceStore extends SqliteRepositorySupport
+        implements DelegationPreferenceStore {
     /** GLOBAL范围的统一常量值。 */
     public static final String GLOBAL_SCOPE = "__global__";
 
@@ -31,6 +33,7 @@ public class SqlitePreferenceStore extends SqliteRepositorySupport {
      * @param toolName 工具名称。
      * @return 如果工具启用满足条件则返回 true，否则返回 false。
      */
+    @Override
     public boolean isToolEnabled(String sourceKey, String toolName) throws SQLException {
         return readScopedBoolean("tool_toggles", "tool_name", sourceKey, toolName, true);
     }
@@ -43,6 +46,7 @@ public class SqlitePreferenceStore extends SqliteRepositorySupport {
      * @param defaultValue 默认值参数。
      * @return 如果工具启用满足条件则返回 true，否则返回 false。
      */
+    @Override
     public boolean isToolEnabled(String sourceKey, String toolName, boolean defaultValue)
             throws SQLException {
         return readScopedBoolean("tool_toggles", "tool_name", sourceKey, toolName, defaultValue);
@@ -66,6 +70,7 @@ public class SqlitePreferenceStore extends SqliteRepositorySupport {
      * @param toolName 工具名称。
      * @param enabled 启用状态开关值。
      */
+    @Override
     public void setToolEnabled(String sourceKey, String toolName, boolean enabled)
             throws SQLException {
         writeBoolean("tool_toggles", "tool_name", sourceKey, toolName, enabled);

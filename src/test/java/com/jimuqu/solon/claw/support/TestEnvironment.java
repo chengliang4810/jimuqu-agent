@@ -75,8 +75,10 @@ import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.storage.repository.SqliteGatewayPolicyRepository;
 import com.jimuqu.solon.claw.storage.repository.SqliteGlobalSettingRepository;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
+import com.jimuqu.solon.claw.storage.repository.SqliteReadOnlySessionRepositoryFactory;
 import com.jimuqu.solon.claw.storage.repository.SqliteSessionRepository;
 import com.jimuqu.solon.claw.storage.repository.SqliteUsageEventRepository;
+import com.jimuqu.solon.claw.storage.session.SqlitePendingSessionStateFactory;
 import com.jimuqu.solon.claw.support.constants.RuntimePathConstants;
 import com.jimuqu.solon.claw.support.update.AppUpdateService;
 import com.jimuqu.solon.claw.support.update.AppVersionService;
@@ -297,7 +299,12 @@ public class TestEnvironment {
         DelegationService delegationService =
                 new DefaultDelegationService(holder, preferenceStore, sessionRepository);
         SessionSearchService sessionSearchService =
-                new DefaultSessionSearchService(sessionRepository, llmGateway, agentRunRepository);
+                new DefaultSessionSearchService(
+                        sessionRepository,
+                        llmGateway,
+                        agentRunRepository,
+                        config,
+                        new SqliteReadOnlySessionRepositoryFactory());
         GitHubSkillSource gitHubSkillSource =
                 new GitHubSkillSource(gitHubAuth, skillHubHttpClient, skillHubStateStore);
         SkillHubService skillHubService =
@@ -419,7 +426,10 @@ public class TestEnvironment {
                         contextCompressionService,
                         contextBudgetService,
                         llmGateway,
-                        llmProviderService);
+                        llmProviderService,
+                        null,
+                        null,
+                        new SqlitePendingSessionStateFactory());
         GoalService goalService =
                 new GoalService(sessionRepository, new HeuristicGoalJudge(), config.getGoal());
         ConversationOrchestrator orchestrator =
@@ -438,7 +448,8 @@ public class TestEnvironment {
                         config,
                         memoryManager,
                         goalService,
-                        null);
+                        null,
+                        new SqlitePendingSessionStateFactory());
         holder.set(orchestrator);
         SkillLearningService skillLearningService =
                 new AsyncSkillLearningService(

@@ -22,6 +22,8 @@ import com.jimuqu.solon.claw.core.service.ConversationOrchestrator;
 import com.jimuqu.solon.claw.core.service.DeliveryService;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
 import com.jimuqu.solon.claw.core.service.MemoryManager;
+import com.jimuqu.solon.claw.core.service.PendingSessionState;
+import com.jimuqu.solon.claw.core.service.PendingSessionStateFactory;
 import com.jimuqu.solon.claw.core.service.ToolRegistry;
 import com.jimuqu.solon.claw.gateway.feedback.ConversationFeedbackSink;
 import com.jimuqu.solon.claw.gateway.feedback.GatewayConversationFeedbackSink;
@@ -29,7 +31,6 @@ import com.jimuqu.solon.claw.goal.GoalDecision;
 import com.jimuqu.solon.claw.goal.GoalService;
 import com.jimuqu.solon.claw.media.SpeechService;
 import com.jimuqu.solon.claw.profile.ProfileRuntimeScope;
-import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
 import com.jimuqu.solon.claw.support.DisplaySettingsService;
 import com.jimuqu.solon.claw.support.MessageAttachmentSupport;
 import com.jimuqu.solon.claw.support.MessageSupport;
@@ -111,54 +112,12 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     /** 注入语音服务，用于调用对应业务能力。 */
     private final SpeechService speechService;
 
+    /** 注入 pending 会话状态工厂，用于屏蔽具体存储实现。 */
+    private final PendingSessionStateFactory pendingSessionStateFactory;
+
     /** 按来源键串行化会话操作，并在最后一个等待者退出后释放锁条目。 */
     private final ReferenceCountedKeyLockRegistry sourceLocks =
             new ReferenceCountedKeyLockRegistry();
-
-    /**
-     * 创建默认对话编排器实例，并注入运行所需依赖。
-     *
-     * @param sessionRepository 会话仓储依赖。
-     * @param contextService 上下文Service上下文。
-     * @param contextCompressionService 上下文CompressionService上下文。
-     * @param llmGateway LLM网关参数。
-     * @param toolRegistry 工具注册表依赖组件。
-     * @param deliveryService 投递服务依赖。
-     * @param displaySettingsService 展示Settings服务依赖。
-     * @param runtimeSettingsService 运行时Settings服务依赖。
-     * @param dangerousCommandApprovalService dangerous命令审批服务依赖。
-     * @param agentRunSupervisor Agent运行Supervisor参数。
-     * @param runtimeFooterService 运行时Footer服务依赖。
-     */
-    public DefaultConversationOrchestrator(
-            SessionRepository sessionRepository,
-            ContextService contextService,
-            ContextCompressionService contextCompressionService,
-            LlmGateway llmGateway,
-            ToolRegistry toolRegistry,
-            DeliveryService deliveryService,
-            DisplaySettingsService displaySettingsService,
-            RuntimeSettingsService runtimeSettingsService,
-            DangerousCommandApprovalService dangerousCommandApprovalService,
-            AgentRunSupervisor agentRunSupervisor,
-            RuntimeFooterService runtimeFooterService) {
-        this(
-                sessionRepository,
-                contextService,
-                contextCompressionService,
-                llmGateway,
-                toolRegistry,
-                deliveryService,
-                displaySettingsService,
-                runtimeSettingsService,
-                dangerousCommandApprovalService,
-                agentRunSupervisor,
-                runtimeFooterService,
-                null,
-                null,
-                null,
-                null);
-    }
 
     /**
      * 创建默认对话编排器实例，并注入运行所需依赖。
@@ -178,6 +137,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
      * @param memoryManager 记忆Manager参数。
      * @param goalService 目标服务依赖。
      * @param speechService 语音服务依赖。
+     * @param pendingSessionStateFactory pending 会话状态工厂。
      */
     public DefaultConversationOrchestrator(
             SessionRepository sessionRepository,
@@ -194,7 +154,8 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             AppConfig appConfig,
             MemoryManager memoryManager,
             GoalService goalService,
-            SpeechService speechService) {
+            SpeechService speechService,
+            PendingSessionStateFactory pendingSessionStateFactory) {
         this.sessionRepository = sessionRepository;
         this.contextService = contextService;
         this.contextCompressionService = contextCompressionService;
@@ -210,6 +171,10 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
         this.memoryManager = memoryManager;
         this.goalService = goalService;
         this.speechService = speechService;
+        if (pendingSessionStateFactory == null) {
+            throw new IllegalArgumentException("Pending session state factory is required.");
+        }
+        this.pendingSessionStateFactory = pendingSessionStateFactory;
     }
 
     /**
@@ -477,7 +442,8 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
      */
     private String appendResumePendingSystemNote(String systemPrompt, SessionRecord session) {
         try {
-            SqliteAgentSession agentSession = new SqliteAgentSession(session);
+            PendingSessionState agentSession =
+                    pendingSessionStateFactory.create(session, sessionRepository);
             if (!agentSession.isPending()) {
                 return systemPrompt;
             }
@@ -551,7 +517,7 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             return false;
         }
         try {
-            return new SqliteAgentSession(session).isPending();
+            return pendingSessionStateFactory.create(session).isPending();
         } catch (Exception e) {
             log.debug(
                     "skip invalid pending session snapshot: sessionId={}, error={}",
@@ -571,7 +537,8 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             return;
         }
         try {
-            SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
+            PendingSessionState agentSession =
+                    pendingSessionStateFactory.create(session, sessionRepository);
             if (agentSession.isPending()) {
                 agentSession.pending(false, null);
                 agentSession.updateSnapshot();

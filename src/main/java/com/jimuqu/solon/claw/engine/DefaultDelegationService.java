@@ -15,13 +15,13 @@ import com.jimuqu.solon.claw.core.model.GatewayReply;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.model.SubagentRunRecord;
 import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
+import com.jimuqu.solon.claw.core.repository.DelegationPreferenceStore;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.AgentRunCancelledException;
 import com.jimuqu.solon.claw.core.service.AgentRunControlService;
 import com.jimuqu.solon.claw.core.service.DelegationService;
 import com.jimuqu.solon.claw.core.service.DeliveryService;
 import com.jimuqu.solon.claw.profile.ProfileRuntimeScope;
-import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.solon.claw.support.BoundedExecutorFactory;
 import com.jimuqu.solon.claw.support.ConversationOrchestratorHolder;
 import com.jimuqu.solon.claw.support.IdSupport;
@@ -77,7 +77,7 @@ public class DefaultDelegationService implements DelegationService {
     private final ConversationOrchestratorHolder conversationHolder;
 
     /** 工具注册表。 */
-    private final SqlitePreferenceStore preferenceStore;
+    private final DelegationPreferenceStore preferenceStore;
 
     /** 会话仓储。 */
     private final SessionRepository sessionRepository;
@@ -126,7 +126,7 @@ public class DefaultDelegationService implements DelegationService {
      */
     public DefaultDelegationService(
             ConversationOrchestratorHolder conversationHolder,
-            SqlitePreferenceStore preferenceStore,
+            DelegationPreferenceStore preferenceStore,
             SessionRepository sessionRepository) {
         this(conversationHolder, preferenceStore, sessionRepository, null, null, null);
     }
@@ -143,7 +143,7 @@ public class DefaultDelegationService implements DelegationService {
      */
     public DefaultDelegationService(
             ConversationOrchestratorHolder conversationHolder,
-            SqlitePreferenceStore preferenceStore,
+            DelegationPreferenceStore preferenceStore,
             SessionRepository sessionRepository,
             AgentRunRepository agentRunRepository,
             AppConfig appConfig,
@@ -161,7 +161,7 @@ public class DefaultDelegationService implements DelegationService {
     /** 创建支持后台结果回流的默认委派服务。 */
     public DefaultDelegationService(
             ConversationOrchestratorHolder conversationHolder,
-            SqlitePreferenceStore preferenceStore,
+            DelegationPreferenceStore preferenceStore,
             SessionRepository sessionRepository,
             AgentRunRepository agentRunRepository,
             AppConfig appConfig,

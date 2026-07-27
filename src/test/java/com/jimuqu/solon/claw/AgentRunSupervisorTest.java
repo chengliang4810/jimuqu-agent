@@ -36,6 +36,7 @@ import com.jimuqu.solon.claw.storage.repository.SqliteAgentRunRepository;
 import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.storage.repository.SqliteSessionRepository;
 import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
+import com.jimuqu.solon.claw.storage.session.SqlitePendingSessionStateFactory;
 import com.jimuqu.solon.claw.support.BlockingLlmGateway;
 import com.jimuqu.solon.claw.support.LlmProviderService;
 import com.jimuqu.solon.claw.support.MessageSupport;
@@ -1809,7 +1810,10 @@ public class AgentRunSupervisorTest {
                 compressionService,
                 budgetService,
                 gateway,
-                new LlmProviderService(fixture.config));
+                new LlmProviderService(fixture.config),
+                null,
+                null,
+                new SqlitePendingSessionStateFactory());
     }
 
     /**

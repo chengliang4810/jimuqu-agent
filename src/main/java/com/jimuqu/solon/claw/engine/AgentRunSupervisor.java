@@ -28,11 +28,12 @@ import com.jimuqu.solon.claw.core.service.ContextBudgetService;
 import com.jimuqu.solon.claw.core.service.ContextCompressionService;
 import com.jimuqu.solon.claw.core.service.ConversationEventSink;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
+import com.jimuqu.solon.claw.core.service.PendingSessionState;
+import com.jimuqu.solon.claw.core.service.PendingSessionStateFactory;
 import com.jimuqu.solon.claw.gateway.feedback.ConversationFeedbackSink;
 import com.jimuqu.solon.claw.llm.LlmErrorClassifier;
 import com.jimuqu.solon.claw.pricing.UsageCostCalculator;
 import com.jimuqu.solon.claw.profile.ProfileRuntimeScope;
-import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
 import com.jimuqu.solon.claw.support.BoundedExecutorFactory;
 import com.jimuqu.solon.claw.support.IdSupport;
 import com.jimuqu.solon.claw.support.LlmProviderService;
@@ -114,6 +115,9 @@ public class AgentRunSupervisor implements AgentRunControlService {
     /** 注入大模型提供方服务，用于调用对应业务能力。 */
     private final LlmProviderService llmProviderService;
 
+    /** 注入 pending 会话状态工厂，用于屏蔽具体存储实现。 */
+    private final PendingSessionStateFactory pendingSessionStateFactory;
+
     /** 保存用量事件仓储依赖，用于访问持久化数据。 */
     private final UsageEventRepository usageEventRepository;
 
@@ -150,39 +154,9 @@ public class AgentRunSupervisor implements AgentRunControlService {
      * @param contextBudgetService 上下文预算Service上下文。
      * @param llmGateway LLM网关参数。
      * @param llmProviderService LLM提供方Service标识或键值。
-     */
-    public AgentRunSupervisor(
-            AppConfig appConfig,
-            SessionRepository sessionRepository,
-            AgentRunRepository agentRunRepository,
-            ContextCompressionService contextCompressionService,
-            ContextBudgetService contextBudgetService,
-            LlmGateway llmGateway,
-            LlmProviderService llmProviderService) {
-        this(
-                appConfig,
-                sessionRepository,
-                agentRunRepository,
-                contextCompressionService,
-                contextBudgetService,
-                llmGateway,
-                llmProviderService,
-                null,
-                null);
-    }
-
-    /**
-     * 创建Agent运行Supervisor实例，并注入运行所需依赖。
-     *
-     * @param appConfig 应用运行配置。
-     * @param sessionRepository 会话仓储依赖。
-     * @param agentRunRepository Agent运行仓储依赖。
-     * @param contextCompressionService 上下文CompressionService上下文。
-     * @param contextBudgetService 上下文预算Service上下文。
-     * @param llmGateway LLM网关参数。
-     * @param llmProviderService LLM提供方Service标识或键值。
      * @param usageEventRepository 用量事件仓储依赖。
      * @param usageCostCalculator 用量成本Calculator参数。
+     * @param pendingSessionStateFactory pending 会话状态工厂。
      */
     public AgentRunSupervisor(
             AppConfig appConfig,
@@ -193,7 +167,8 @@ public class AgentRunSupervisor implements AgentRunControlService {
             LlmGateway llmGateway,
             LlmProviderService llmProviderService,
             UsageEventRepository usageEventRepository,
-            UsageCostCalculator usageCostCalculator) {
+            UsageCostCalculator usageCostCalculator,
+            PendingSessionStateFactory pendingSessionStateFactory) {
         this.appConfig = appConfig;
         this.sessionRepository = sessionRepository;
         this.agentRunRepository = agentRunRepository;
@@ -203,6 +178,10 @@ public class AgentRunSupervisor implements AgentRunControlService {
         this.llmProviderService = llmProviderService;
         this.usageEventRepository = usageEventRepository;
         this.usageCostCalculator = usageCostCalculator;
+        if (pendingSessionStateFactory == null) {
+            throw new IllegalArgumentException("Pending session state factory is required.");
+        }
+        this.pendingSessionStateFactory = pendingSessionStateFactory;
         this.usageEventExecutor =
                 usageEventRepository == null
                         ? null
@@ -2799,7 +2778,8 @@ public class AgentRunSupervisor implements AgentRunControlService {
                 return;
             }
             recoverUnknownStaleToolEffects(session, staleRunId);
-            SqliteAgentSession agentSession = new SqliteAgentSession(session, sessionRepository);
+            PendingSessionState agentSession =
+                    pendingSessionStateFactory.create(session, sessionRepository);
             agentSession.pending(true, resumeReason);
             agentSession.updateSnapshot();
         } catch (Exception e) {

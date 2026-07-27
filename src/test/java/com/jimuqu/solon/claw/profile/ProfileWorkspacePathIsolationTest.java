@@ -10,6 +10,7 @@ import com.jimuqu.solon.claw.core.model.DeliveryRequest;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.service.DeliveryService;
 import com.jimuqu.solon.claw.engine.DefaultConversationOrchestrator;
+import com.jimuqu.solon.claw.storage.session.SqlitePendingSessionStateFactory;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.jimuqu.solon.claw.support.AttachmentPathResolver;
 import com.jimuqu.solon.claw.support.MediaDirectiveSupport;
@@ -184,7 +185,22 @@ class ProfileWorkspacePathIsolationTest {
     /** 创建仅用于 fallback 范围解析的空编排器。 */
     private DefaultConversationOrchestrator emptyOrchestrator() {
         return new DefaultConversationOrchestrator(
-                null, null, null, null, null, null, null, null, null, null, null);
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new SqlitePendingSessionStateFactory());
     }
 
     /** 通过私有入口读取本轮 Agent fallback 范围，避免启动完整会话链。 */

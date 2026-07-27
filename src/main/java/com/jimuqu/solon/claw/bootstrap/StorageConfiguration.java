@@ -8,8 +8,10 @@ import com.jimuqu.solon.claw.core.repository.ChannelStateRepository;
 import com.jimuqu.solon.claw.core.repository.CronJobRepository;
 import com.jimuqu.solon.claw.core.repository.GatewayPolicyRepository;
 import com.jimuqu.solon.claw.core.repository.GlobalSettingRepository;
+import com.jimuqu.solon.claw.core.repository.ReadOnlySessionRepositoryFactory;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.CheckpointService;
+import com.jimuqu.solon.claw.core.service.PendingSessionStateFactory;
 import com.jimuqu.solon.claw.storage.repository.SqliteAgentRunRepository;
 import com.jimuqu.solon.claw.storage.repository.SqliteApprovalAuditRepository;
 import com.jimuqu.solon.claw.storage.repository.SqliteChannelInboundMessageRepository;
@@ -19,8 +21,10 @@ import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.storage.repository.SqliteGatewayPolicyRepository;
 import com.jimuqu.solon.claw.storage.repository.SqliteGlobalSettingRepository;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
+import com.jimuqu.solon.claw.storage.repository.SqliteReadOnlySessionRepositoryFactory;
 import com.jimuqu.solon.claw.storage.repository.SqliteSessionRepository;
 import com.jimuqu.solon.claw.storage.repository.SqliteUsageEventRepository;
+import com.jimuqu.solon.claw.storage.session.SqlitePendingSessionStateFactory;
 import com.jimuqu.solon.claw.support.DefaultCheckpointService;
 import com.jimuqu.solon.claw.usage.UsageEventRepository;
 import org.noear.solon.annotation.Bean;
@@ -161,5 +165,25 @@ public class StorageConfiguration {
     @Bean
     public CheckpointService checkpointService(AppConfig appConfig, SqliteDatabase sqliteDatabase) {
         return new DefaultCheckpointService(appConfig, sqliteDatabase);
+    }
+
+    /**
+     * 执行 pending 会话状态工厂相关逻辑。
+     *
+     * @return 返回 pending 会话状态工厂。
+     */
+    @Bean
+    public PendingSessionStateFactory pendingSessionStateFactory() {
+        return new SqlitePendingSessionStateFactory();
+    }
+
+    /**
+     * 创建跨 Profile SQLite 只读会话仓储工厂。
+     *
+     * @return 只读会话仓储工厂端口实现。
+     */
+    @Bean
+    public ReadOnlySessionRepositoryFactory readOnlySessionRepositoryFactory() {
+        return new SqliteReadOnlySessionRepositoryFactory();
     }
 }
