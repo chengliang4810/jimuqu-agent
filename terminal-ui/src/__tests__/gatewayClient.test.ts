@@ -298,6 +298,21 @@ describe('GatewayClient solonclaw bridge', () => {
     gw.kill()
   })
 
+  it('refuses to send a dashboard token over remote cleartext HTTP', async () => {
+    process.env.SOLONCLAW_SERVER_URL = 'http://agent.example.com:8080'
+    process.env.SOLONCLAW_DASHBOARD_ACCESS_TOKEN = 'remote-cleartext-token'
+
+    const gw = new GatewayClient()
+
+    gw.start()
+    await vi.waitFor(() => expect(gw.getLogTail(20)).toContain('HTTPS'))
+
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    expect(gw.getLogTail(20)).not.toContain('remote-cleartext-token')
+
+    gw.kill()
+  })
+
   it('shows the backend configuration hint when the dashboard token is missing', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValueOnce({
       json: async () => ({ error: '未配置 Dashboard 访问令牌，请先设置 solonclaw.dashboard.accessToken' }),

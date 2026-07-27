@@ -36,6 +36,17 @@ const isLoopbackServer = (serverUrl: string): boolean => {
   }
 }
 
+/** 判断目标是否可安全承载 Dashboard token：远程必须使用 HTTPS，本机可使用 loopback HTTP。 */
+const canSendDashboardToken = (serverUrl: string): boolean => {
+  try {
+    const url = new URL(serverUrl)
+
+    return url.protocol === 'https:' || isLoopbackServer(serverUrl)
+  } catch {
+    return false
+  }
+}
+
 /** 按当前安装布局生成可能的工作区配置文件路径，并保持确定性优先级。 */
 const configCandidates = (env: NodeJS.ProcessEnv, cwd: string, defaultHome: string): string[] => {
   const candidates: string[] = []
@@ -104,8 +115,16 @@ export const resolveDashboardToken = (serverUrl: string, options: DashboardToken
   const env = options.env ?? process.env
   const explicit = env.SOLONCLAW_DASHBOARD_ACCESS_TOKEN?.trim() || env.SOLONCLAW_DASHBOARD_TOKEN?.trim() || ''
 
-  if (explicit || !isLoopbackServer(serverUrl)) {
+  if (explicit) {
+    if (!canSendDashboardToken(serverUrl)) {
+      throw new Error('拒绝通过远程明文 HTTP 发送 Dashboard token；请改用 HTTPS 或 SSH loopback 隧道')
+    }
+
     return explicit
+  }
+
+  if (!isLoopbackServer(serverUrl)) {
+    return ''
   }
 
   const cwd = options.cwd ?? process.cwd()

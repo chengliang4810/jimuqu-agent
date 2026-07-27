@@ -122,7 +122,7 @@ timestamp + "." + nonce + "." + 原始 HTTP 请求体
 
 `GET /api/tui/handshake` 要求有效 Dashboard Bearer 或短会话，认证成功后返回协议版本和包含短时一次性 `ticket` 的 `/ws/tui` 地址。服务不把 loopback peer、代理头或 Host 当作认证凭据；WebSocket 建连时消费该票据，票据不能复用。业务消息采用项目的 JSON-RPC/Event 信封，不应直接复用 Dashboard Bearer 作为 WebSocket 查询参数。
 
-连接明确 loopback 后端时，官方 TUI 会从 `SOLONCLAW_WORKSPACE/config.yml`、原生安装目录或 Docker 工作区读取现有 `solonclaw.dashboard.accessToken`，只用于握手请求。连接远程后端时不会读取本机配置，必须显式设置 `SOLONCLAW_DASHBOARD_ACCESS_TOKEN`。
+连接明确 loopback 后端时，官方 TUI 会从 `SOLONCLAW_WORKSPACE/config.yml`、原生安装目录或 Docker 工作区读取现有 `solonclaw.dashboard.accessToken`，只用于握手请求。连接远程后端时不会读取本机配置，必须使用 HTTPS 并显式设置 `SOLONCLAW_DASHBOARD_ACCESS_TOKEN`；明文 HTTP 服务应先通过 SSH 隧道映射到 loopback。
 
 ## 通用响应与错误
 

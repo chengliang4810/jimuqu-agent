@@ -91,6 +91,22 @@ describe('resolveDashboardToken', () => {
     ).toBe('')
   })
 
+  it('拒绝通过远程明文 HTTP 发送显式 token', () => {
+    expect(() =>
+      resolveDashboardToken('http://agent.example.com:8080', {
+        env: { SOLONCLAW_DASHBOARD_ACCESS_TOKEN: 'remote-token' }
+      })
+    ).toThrow(/HTTPS.*SSH/)
+  })
+
+  it('远程 HTTPS 允许发送显式 token', () => {
+    expect(
+      resolveDashboardToken('https://agent.example.com', {
+        env: { SOLONCLAW_DASHBOARD_ACCESS_TOKEN: 'remote-token' }
+      })
+    ).toBe('remote-token')
+  })
+
   it('名称以 127 开头的远程域名不会被误判为 loopback', () => {
     const workspace = workspaceWithConfig('solonclaw:\n  dashboard:\n    accessToken: local-only-token\n')
 

@@ -308,7 +308,7 @@ function Install-Native {
     Write-Host "    启动: nssm start solonclaw"
     Write-Host ""
     Write-Host "  TUI 交互:   solonclaw"
-    Write-Host "  远程连接:   `$env:SOLONCLAW_SERVER_URL='http://IP:8080'; `$env:SOLONCLAW_DASHBOARD_ACCESS_TOKEN='<访问令牌>'; solonclaw"
+    Write-Host "  远程连接:   `$env:SOLONCLAW_SERVER_URL='https://HOST'; `$env:SOLONCLAW_DASHBOARD_ACCESS_TOKEN='<访问令牌>'; solonclaw"
     Write-Host ""
     Write-Host "  模型配置（二选一）:"
     Write-Host "    1. TUI 命令:   启动 solonclaw 后输入 /setup model"
