@@ -120,6 +120,10 @@ model:
 fallbackProviders: []
 security:
   allowPrivateUrls: false
+  websiteBlocklist:
+    enabled: false
+    domains: []
+    sharedFiles: []
   fileGuardrailMode: strict
   urlGuardrailMode: strict
   guardrailMode: approval
@@ -128,7 +132,9 @@ security:
   hardlineAllowlist: []
 approvals:
   subagentAutoApprove: false
-  timeoutSeconds: 60
+  timeoutSeconds: 180
+  modelProvider: ""
+  model: ""
 solonclaw:
   workspace: ./workspace
   dashboard:
@@ -154,6 +160,9 @@ Common workspace settings:
 | `security.tirithEnabled` | `true` | Enables Tirith command content scanning |
 | `security.tirithFailOpen` | `true` | Allows execution when Tirith is unavailable or times out; set `false` to fail closed |
 | `security.allowPrivateUrls` | `false` | Allows URL tools to reach private addresses; cloud metadata remains blocked |
+| `security.websiteBlocklist.enabled` | `false` | Enables URL-tool domain blocking |
+| `security.websiteBlocklist.domains` | empty | Blocked domains, including exact names and `*.example.com` wildcards |
+| `security.websiteBlocklist.sharedFiles` | empty | Shared blocklist files; relative paths resolve from the workspace |
 | `security.fileGuardrailMode` | `strict` | File path preflight mode: `strict`, `bypass` |
 | `security.urlGuardrailMode` | `strict` | URL preflight mode: `strict`, `bypass` |
 | `security.guardrailMode` | `approval` | Agent tool safety mode: `bypass`, `approval`, `smart` |
@@ -161,7 +170,9 @@ Common workspace settings:
 | `security.guardrailCronScope` | `job` | Scheduled-job approval memory scope: `job`, `session`, `global` |
 | `security.hardlineAllowlist` | empty | Explicitly allowlisted hardline categories; none are allowed by default |
 | `approvals.subagentAutoApprove` | `false` | Automatically approves one approvable dangerous command for sub-agents |
-| `approvals.timeoutSeconds` | `60` | Shared approval timeout in seconds, including messaging channels |
+| `approvals.timeoutSeconds` | `180` | Shared approval timeout in seconds, including messaging channels |
+| `approvals.modelProvider` | empty | Provider dedicated to smart approvals; set together with `approvals.model` |
+| `approvals.model` | empty | Model dedicated to smart approvals; both empty values reuse the current Profile model |
 | `solonclaw.terminal.credentialFiles` | empty | Workspace-relative credential files available to isolated execution |
 | `solonclaw.terminal.envPassthrough` | empty | Third-party environment variables allowed for local subprocesses |
 | `solonclaw.terminal.sudoPassword` | empty | Optional sudo password for `sudo -S` rewriting; can also be supplied with `SOLONCLAW_SUDO_PASSWORD` |

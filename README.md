@@ -141,6 +141,10 @@ model:
 fallbackProviders: []
 security:
   allowPrivateUrls: false
+  websiteBlocklist:
+    enabled: false
+    domains: []
+    sharedFiles: []
   fileGuardrailMode: strict
   urlGuardrailMode: strict
   guardrailMode: approval
@@ -149,7 +153,9 @@ security:
   hardlineAllowlist: []
 approvals:
   subagentAutoApprove: false
-  timeoutSeconds: 60
+  timeoutSeconds: 180
+  modelProvider: ""
+  model: ""
 solonclaw:
   dashboard:
     accessToken: ""
@@ -189,6 +195,9 @@ solonclaw:
 | `security.tirithEnabled` | `true` | 是否启用 Tirith 命令内容扫描 |
 | `security.tirithFailOpen` | `true` | Tirith 不可用或超时时是否放行；设为 `false` 会 fail-closed |
 | `security.allowPrivateUrls` | `false` | 是否允许 URL 工具访问内网/私有地址；云元数据地址仍阻断 |
+| `security.websiteBlocklist.enabled` | `false` | 是否启用 URL 工具域名阻断 |
+| `security.websiteBlocklist.domains` | 空 | 阻断域名列表，支持精确域名和 `*.example.com` 通配 |
+| `security.websiteBlocklist.sharedFiles` | 空 | 共享阻断列表文件；相对路径按工作区解析 |
 | `security.fileGuardrailMode` | `strict` | 文件路径预检：`strict`、`bypass` |
 | `security.urlGuardrailMode` | `strict` | URL 预检：`strict`、`bypass` |
 | `security.guardrailMode` | `approval` | Agent 工具安全策略：`bypass`、`approval`、`smart` |
@@ -196,7 +205,9 @@ solonclaw:
 | `security.guardrailCronScope` | `job` | 定时任务审批记忆范围：`job`、`session`、`global` |
 | `security.hardlineAllowlist` | 空 | 显式允许跳过的 hardline 类别；默认不放行 |
 | `approvals.subagentAutoApprove` | `false` | 子 Agent 是否自动批准一次可审批危险命令 |
-| `approvals.timeoutSeconds` | `60` | 所有审批（包括消息渠道）的统一超时秒数 |
+| `approvals.timeoutSeconds` | `180` | 所有审批（包括消息渠道）的统一超时秒数 |
+| `approvals.modelProvider` | 空 | 智能审批专用 Provider；必须与 `approvals.model` 同时设置 |
+| `approvals.model` | 空 | 智能审批专用模型；两项都空时沿用当前 Profile 主模型 |
 | `solonclaw.terminal.credentialFiles` | 空 | 可挂载到隔离执行环境的 workspace 相对凭据文件列表 |
 | `solonclaw.terminal.envPassthrough` | 空 | 允许传给本地子进程的第三方环境变量名 |
 | `solonclaw.terminal.sudoPassword` | 空 | 可选 sudo 密码，用于 `sudo -S` 改写；也可通过 `SOLONCLAW_SUDO_PASSWORD` 提供 |
