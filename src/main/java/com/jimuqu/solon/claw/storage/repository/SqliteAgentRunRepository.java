@@ -37,14 +37,19 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     public void saveRun(AgentRunRecord record) throws Exception {
         Connection connection = database.openConnection();
         try {
-            int toolCallCount =
-                    Math.max(
-                            Math.max(0, record.getToolCallCount()),
-                            countPersistedToolCalls(connection, record.getRunId()));
-            record.setToolCallCount(toolCallCount);
             PreparedStatement statement =
                     connection.prepareStatement(
-                            "insert or replace into agent_runs (run_id, session_id, source_key, run_kind, parent_run_id, status, phase, busy_policy, backgrounded, input_preview, final_reply_preview, provider, model, attempts, context_estimate_tokens, context_window_tokens, compression_count, fallback_count, tool_call_count, subtask_count, input_tokens, output_tokens, total_tokens, queued_at, started_at, heartbeat_at, last_activity_at, finished_at, exit_reason, recoverable, recovery_hint, error) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                            "insert into agent_runs (run_id, session_id, source_key, run_kind, parent_run_id, status, phase, busy_policy, backgrounded, input_preview, final_reply_preview, provider, model, attempts, context_estimate_tokens, context_window_tokens, compression_count, fallback_count, tool_call_count, subtask_count, input_tokens, output_tokens, total_tokens, queued_at, started_at, heartbeat_at, last_activity_at, finished_at, exit_reason, recoverable, recovery_hint, error) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                                    + "on conflict(run_id) do update set "
+                                    + "session_id=excluded.session_id, source_key=excluded.source_key, run_kind=excluded.run_kind, parent_run_id=excluded.parent_run_id, "
+                                    + "status=excluded.status, phase=excluded.phase, busy_policy=excluded.busy_policy, backgrounded=excluded.backgrounded, "
+                                    + "input_preview=excluded.input_preview, final_reply_preview=excluded.final_reply_preview, provider=excluded.provider, model=excluded.model, "
+                                    + "attempts=excluded.attempts, context_estimate_tokens=excluded.context_estimate_tokens, context_window_tokens=excluded.context_window_tokens, "
+                                    + "compression_count=excluded.compression_count, fallback_count=excluded.fallback_count, "
+                                    + "subtask_count=excluded.subtask_count, input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens, total_tokens=excluded.total_tokens, "
+                                    + "queued_at=excluded.queued_at, started_at=excluded.started_at, heartbeat_at=excluded.heartbeat_at, last_activity_at=excluded.last_activity_at, "
+                                    + "finished_at=excluded.finished_at, exit_reason=excluded.exit_reason, recoverable=excluded.recoverable, "
+                                    + "recovery_hint=excluded.recovery_hint, error=excluded.error");
             statement.setString(1, record.getRunId());
             statement.setString(2, record.getSessionId());
             statement.setString(3, record.getSourceKey());
@@ -63,7 +68,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
             statement.setInt(16, record.getContextWindowTokens());
             statement.setInt(17, record.getCompressionCount());
             statement.setInt(18, record.getFallbackCount());
-            statement.setInt(19, toolCallCount);
+            statement.setInt(19, Math.max(0, record.getToolCallCount()));
             statement.setInt(20, record.getSubtaskCount());
             statement.setLong(21, record.getInputTokens());
             statement.setLong(22, record.getOutputTokens());
@@ -825,10 +830,36 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public void saveToolCall(ToolCallRecord record) throws Exception {
         Connection connection = database.openConnection();
+        boolean transactionOwner = connection.getAutoCommit();
         try {
+            if (transactionOwner) {
+                connection.setAutoCommit(false);
+            }
+            String previousRunId = null;
+            String previousStatus = null;
+            PreparedStatement previousStatement =
+                    connection.prepareStatement(
+                            "select run_id, status from tool_calls where tool_call_id = ?");
+            previousStatement.setString(1, record.getToolCallId());
+            ResultSet previousResultSet = previousStatement.executeQuery();
+            try {
+                if (previousResultSet.next()) {
+                    previousRunId = previousResultSet.getString("run_id");
+                    previousStatus = previousResultSet.getString("status");
+                }
+            } finally {
+                previousResultSet.close();
+                previousStatement.close();
+            }
             PreparedStatement statement =
                     connection.prepareStatement(
-                            "insert or replace into tool_calls (tool_call_id, run_id, session_id, source_key, tool_name, status, args_preview, result_preview, result_ref, error, read_only, interruptible, side_effecting, result_indexable, output_limit_bytes, result_size_bytes, execution_policy, started_at, finished_at, duration_ms) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                            "insert into tool_calls (tool_call_id, run_id, session_id, source_key, tool_name, status, args_preview, result_preview, result_ref, error, read_only, interruptible, side_effecting, result_indexable, output_limit_bytes, result_size_bytes, execution_policy, started_at, finished_at, duration_ms) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                                    + "on conflict(tool_call_id) do update set "
+                                    + "run_id=excluded.run_id, session_id=excluded.session_id, source_key=excluded.source_key, tool_name=excluded.tool_name, "
+                                    + "status=excluded.status, args_preview=excluded.args_preview, result_preview=excluded.result_preview, result_ref=excluded.result_ref, error=excluded.error, "
+                                    + "read_only=excluded.read_only, interruptible=excluded.interruptible, side_effecting=excluded.side_effecting, result_indexable=excluded.result_indexable, "
+                                    + "output_limit_bytes=excluded.output_limit_bytes, result_size_bytes=excluded.result_size_bytes, execution_policy=excluded.execution_policy, "
+                                    + "started_at=excluded.started_at, finished_at=excluded.finished_at, duration_ms=excluded.duration_ms");
             statement.setString(1, record.getToolCallId());
             statement.setString(2, record.getRunId());
             statement.setString(3, record.getSessionId());
@@ -851,9 +882,33 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
             statement.setLong(20, record.getDurationMs());
             statement.executeUpdate();
             statement.close();
-            incrementToolCallCount(connection, record);
+            updateToolCallCount(
+                    connection,
+                    previousRunId,
+                    previousStatus,
+                    record.getRunId(),
+                    record.getStatus());
             appendToolResultFts(connection, record);
+            if (transactionOwner) {
+                connection.commit();
+            }
+        } catch (Exception e) {
+            if (transactionOwner) {
+                try {
+                    connection.rollback();
+                } catch (Exception rollbackError) {
+                    e.addSuppressed(rollbackError);
+                }
+            }
+            throw e;
         } finally {
+            if (transactionOwner) {
+                try {
+                    connection.setAutoCommit(true);
+                } catch (Exception e) {
+                    logBestEffortFailure("tool_call_transaction_reset", e);
+                }
+            }
             connection.close();
         }
     }
@@ -1445,58 +1500,79 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     }
 
     /**
-     * 执行increment工具Call次数相关逻辑。
+     * 根据工具调用终态变化增减运行计数，重复保存同一终态时保持幂等。
      *
-     * @param connection 连接参数。
-     * @param record 记录参数。
+     * @param connection 当前数据库连接。
+     * @param previousRunId 更新前的运行标识。
+     * @param previousStatus 更新前的工具调用状态。
+     * @param currentRunId 更新后的运行标识。
+     * @param currentStatus 更新后的工具调用状态。
      */
-    private void incrementToolCallCount(Connection connection, ToolCallRecord record) {
-        if (record == null
-                || record.getRunId() == null
-                || (!"completed".equalsIgnoreCase(record.getStatus())
-                        && !"failed".equalsIgnoreCase(record.getStatus()))) {
+    private void updateToolCallCount(
+            Connection connection,
+            String previousRunId,
+            String previousStatus,
+            String currentRunId,
+            String currentStatus)
+            throws Exception {
+        boolean previousCounted = isCountedToolCallStatus(previousStatus);
+        boolean currentCounted = isCountedToolCallStatus(currentStatus);
+        if (same(previousRunId, currentRunId)) {
+            updateToolCallCount(
+                    connection, currentRunId, (currentCounted ? 1 : 0) - (previousCounted ? 1 : 0));
             return;
         }
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "update agent_runs set tool_call_count = (select count(*) from tool_calls where run_id = ? and status in ('completed','failed')) where run_id = ?");
-            statement.setString(1, record.getRunId());
-            statement.setString(2, record.getRunId());
-            statement.executeUpdate();
-            statement.close();
-        } catch (Exception e) {
-            logBestEffortFailure("tool_call_count_update", e);
+        if (previousCounted) {
+            updateToolCallCount(connection, previousRunId, -1);
+        }
+        if (currentCounted) {
+            updateToolCallCount(connection, currentRunId, 1);
         }
     }
 
     /**
-     * 统计已落库的工具调用数量，避免运行结束再次保存 run 时覆盖工具表派生计数。
+     * 对单个运行的工具调用计数应用增量，并保证历史异常数据不会降为负数。
      *
      * @param connection 当前数据库连接。
      * @param runId 运行标识。
-     * @return 返回已完成或失败的工具调用数量。
+     * @param delta 计数增量。
      */
-    private int countPersistedToolCalls(Connection connection, String runId) {
-        if (connection == null || runId == null) {
-            return 0;
+    private void updateToolCallCount(Connection connection, String runId, int delta)
+            throws Exception {
+        if (runId == null || delta == 0) {
+            return;
         }
+        PreparedStatement statement =
+                connection.prepareStatement(
+                        "update agent_runs set tool_call_count = max(0, tool_call_count + ?) where run_id = ?");
         try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "select count(*) from tool_calls where run_id = ? and status in ('completed','failed')");
-            statement.setString(1, runId);
-            ResultSet resultSet = statement.executeQuery();
-            try {
-                return resultSet.next() ? resultSet.getInt(1) : 0;
-            } finally {
-                resultSet.close();
-                statement.close();
-            }
-        } catch (Exception e) {
-            logBestEffortFailure("tool_call_count_read", e);
-            return 0;
+            statement.setInt(1, delta);
+            statement.setString(2, runId);
+            statement.executeUpdate();
+        } finally {
+            statement.close();
         }
+    }
+
+    /**
+     * 判断工具调用状态是否应计入已完成调用数量。
+     *
+     * @param status 工具调用状态。
+     * @return completed 或 failed 返回 true。
+     */
+    private boolean isCountedToolCallStatus(String status) {
+        return "completed".equalsIgnoreCase(status) || "failed".equalsIgnoreCase(status);
+    }
+
+    /**
+     * 按空值安全方式比较两个运行标识。
+     *
+     * @param left 左侧运行标识。
+     * @param right 右侧运行标识。
+     * @return 两者相同时返回 true。
+     */
+    private boolean same(String left, String right) {
+        return left == null ? right == null : left.equals(right);
     }
 
     /**

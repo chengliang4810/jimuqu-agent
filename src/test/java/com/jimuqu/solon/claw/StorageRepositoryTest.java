@@ -332,6 +332,58 @@ public class StorageRepositoryTest {
         assertThat(env.agentRunRepository.findRun(run.getRunId()).getToolCallCount()).isEqualTo(1);
     }
 
+    /** 工具调用计数只随终态边界变化，并在重复保存、跨运行迁移和运行重存后保持正确。 */
+    @Test
+    void shouldUpdateToolCallCountOnlyWhenTerminalStateChanges() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        SessionRecord session =
+                env.sessionRepository.bindNewSession("MEMORY:run-terminal-count:user");
+        AgentRunRecord run = new AgentRunRecord();
+        run.setRunId("run-tool-terminal-count-1");
+        run.setSessionId(session.getSessionId());
+        run.setSourceKey(session.getSourceKey());
+        run.setStatus("running");
+        run.setStartedAt(System.currentTimeMillis());
+        run.setLastActivityAt(run.getStartedAt());
+        env.agentRunRepository.saveRun(run);
+
+        ToolCallRecord toolCall =
+                toolCall(run, session, "tool-call-terminal-count-1", "todo", "completed");
+        env.agentRunRepository.saveToolCall(toolCall);
+        env.agentRunRepository.saveToolCall(toolCall);
+        assertToolCallCount(env, run.getRunId(), 1);
+
+        toolCall.setStatus("running");
+        env.agentRunRepository.saveToolCall(toolCall);
+        assertToolCallCount(env, run.getRunId(), 0);
+
+        toolCall.setStatus("failed");
+        env.agentRunRepository.saveToolCall(toolCall);
+        toolCall.setStatus("completed");
+        env.agentRunRepository.saveToolCall(toolCall);
+        assertToolCallCount(env, run.getRunId(), 1);
+
+        AgentRunRecord targetRun = new AgentRunRecord();
+        targetRun.setRunId("run-tool-terminal-count-2");
+        targetRun.setSessionId(session.getSessionId());
+        targetRun.setSourceKey(session.getSourceKey());
+        targetRun.setStatus("running");
+        targetRun.setStartedAt(System.currentTimeMillis());
+        targetRun.setLastActivityAt(targetRun.getStartedAt());
+        env.agentRunRepository.saveRun(targetRun);
+
+        toolCall.setRunId(targetRun.getRunId());
+        env.agentRunRepository.saveToolCall(toolCall);
+        assertToolCallCount(env, run.getRunId(), 0);
+        assertToolCallCount(env, targetRun.getRunId(), 1);
+
+        toolCall.setStatus("denied");
+        env.agentRunRepository.saveToolCall(toolCall);
+        targetRun.setStatus("success");
+        env.agentRunRepository.saveRun(targetRun);
+        assertToolCallCount(env, targetRun.getRunId(), 0);
+    }
+
     @Test
     void shouldClearSessionScopedSecurityStateWhenBranching() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
@@ -517,6 +569,20 @@ public class StorageRepositoryTest {
         toolCall.setStartedAt(run.getStartedAt());
         toolCall.setFinishedAt(System.currentTimeMillis());
         return toolCall;
+    }
+
+    /**
+     * 断言运行记录中的工具调用计数。
+     *
+     * @param env 测试环境。
+     * @param runId 运行标识。
+     * @param expected 预期计数。
+     */
+    private void assertToolCallCount(TestEnvironment env, String runId, int expected)
+            throws Exception {
+        AgentRunRecord stored = env.agentRunRepository.findRun(runId);
+        assertThat(stored).isNotNull();
+        assertThat(stored.getToolCallCount()).isEqualTo(expected);
     }
 
     private void dropSessionSearchIndex(SqliteDatabase database) throws Exception {
