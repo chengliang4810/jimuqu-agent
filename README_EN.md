@@ -229,21 +229,32 @@ Dashboard APIs require a session token by default. Gateway injection uses HMAC s
 
 ## Project Layout
 
+The list below covers every top-level package that currently contains Java sources. Nested packages under `core/`, `gateway/`, `profile/`, `skillhub/`, `storage/`, `support/`, `tool/`, and `web/` are intentionally omitted for readability.
+
 ```text
 src/main/java/com/jimuqu/solon/claw/
 ├── agent/          # Agent profiles
-├── bootstrap/      # Solon startup, bean wiring, HTTP controllers
+├── bootstrap/      # Solon startup and bean wiring
+├── command/        # Host command registration and execution
 ├── config/         # Config-file loading, workspace overrides, path normalization
 ├── context/        # AGENTS / MEMORY / USER / Skills context
 ├── core/           # Domain models, repository interfaces, service interfaces
 ├── engine/         # Agent loop, compression, delegation
 ├── gateway/        # Messaging channels, auth, delivery, workspace refresh
+├── goal/           # Persistent goals and execution budgets
 ├── llm/            # Model protocol adapters and Solon AI integration
+├── media/          # Media types, caching, and processing boundaries
+├── pricing/        # Model pricing and cost calculation
+├── proactive/      # Conversation- and memory-driven proactive reminders
+├── profile/        # Profile lifecycle, isolation, and task delegation
+├── provider/       # Search, browser, and media provider boundaries
 ├── scheduler/      # Cron and heartbeat scheduling
 ├── skillhub/       # Skills Hub, imports, guardrails, sources
 ├── storage/        # SQLite repository implementations
 ├── support/        # Workspace support utilities
 ├── tool/           # Built-in tool registry and implementations
+├── tui/            # TUI runtime protocol and controller boundary
+├── usage/          # Token usage backfill and accounting
 └── web/            # Dashboard backend services and controllers
 ```
 

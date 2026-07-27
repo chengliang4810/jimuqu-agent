@@ -267,22 +267,32 @@ solonclaw:
 
 ## 目录结构
 
+以下清单覆盖当前所有包含 Java 源码的顶层包；为保持可读性，`core/`、`gateway/`、`profile/`、`skillhub/`、`storage/`、`support/`、`tool/` 和 `web/` 等包的内部子包不在这里穷举。
+
 ```text
 src/main/java/com/jimuqu/solon/claw/
 ├── agent/          # Agent profile
-├── bootstrap/      # Solon 启动、Bean 装配、HTTP 控制器
+├── bootstrap/      # Solon 启动与 Bean 装配
+├── command/        # 宿主命令注册与执行
 ├── config/         # 配置文件加载、运行时覆盖、路径规范化
 ├── context/        # AGENTS / MEMORY / USER / Skills 上下文
 ├── core/           # 领域模型、仓储接口、服务接口
 ├── engine/         # Agent 主循环、上下文压缩、委托
 ├── gateway/        # 国内消息渠道、鉴权、投递和运行刷新
+├── goal/           # 持久目标与执行预算
 ├── llm/            # 模型协议适配与 Solon AI 接入
+├── media/          # 媒体类型、缓存与处理边界
+├── pricing/        # 模型价格与成本计算
 ├── proactive/      # 基于主对话、记忆和工作区 MD 的主动提醒
+├── profile/        # Profile 生命周期、隔离与任务委托
+├── provider/       # 搜索、浏览器和媒体提供方边界
 ├── scheduler/      # Cron 与 heartbeat 调度
 ├── skillhub/       # Skills Hub、导入、校验与来源适配
 ├── storage/        # SQLite 仓储实现
 ├── support/        # 通用运行期支持类
 ├── tool/           # 内置工具注册与实现
+├── tui/            # TUI 运行协议与控制边界
+├── usage/          # Token 用量回填与统计
 └── web/            # Dashboard 后端服务与控制器
 ```
 
