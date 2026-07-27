@@ -155,8 +155,7 @@ public class BrowserRuntimeService {
         try {
             providerSession = provider.createSession(StrUtil.blankToDefault(taskId, newTaskId()));
         } catch (Exception e) {
-            return BrowserResult.error(
-                    "provider_error", SecretRedactor.redact(e.getMessage(), 500));
+            return providerFailure("create_session", e);
         }
         if (providerSession == null || StrUtil.isBlank(providerSession.getSessionId())) {
             return BrowserResult.error(
@@ -225,8 +224,7 @@ public class BrowserRuntimeService {
             details.put("urlRewrite", rewrite.toDetails());
             return BrowserResult.success(result.getSessionId(), result.getStatus(), details);
         } catch (Exception e) {
-            return BrowserResult.error(
-                    "provider_error", SecretRedactor.redact(e.getMessage(), 500));
+            return providerFailure("navigate", e);
         }
     }
 
@@ -290,8 +288,7 @@ public class BrowserRuntimeService {
                             fullPage != null && fullPage.booleanValue());
             return toBrowserResult(lease, actionResult, "screenshot", "path", screenshotPath);
         } catch (Exception e) {
-            return BrowserResult.error(
-                    "provider_error", SecretRedactor.redact(e.getMessage(), 500));
+            return providerFailure("screenshot", e);
         }
     }
 
@@ -320,8 +317,7 @@ public class BrowserRuntimeService {
                             StrUtil.blankToDefault(format, "text"));
             return toBrowserResult(lease, actionResult, "extracted", "selector", selector);
         } catch (Exception e) {
-            return BrowserResult.error(
-                    "provider_error", SecretRedactor.redact(e.getMessage(), 500));
+            return providerFailure("extract", e);
         }
     }
 
@@ -643,8 +639,7 @@ public class BrowserRuntimeService {
             }
             return toBrowserResult(lease, actionResult, action, "selector", selector);
         } catch (Exception e) {
-            return BrowserResult.error(
-                    "provider_error", SecretRedactor.redact(e.getMessage(), 500));
+            return providerFailure(action, e);
         }
     }
 
@@ -831,9 +826,20 @@ public class BrowserRuntimeService {
         try {
             return toBrowserResult(lease, action.execute(lease), defaultStatus, null, null);
         } catch (Exception e) {
-            return BrowserResult.error(
-                    "provider_error", SecretRedactor.redact(e.getMessage(), 500));
+            return providerFailure("provider_action", e);
         }
+    }
+
+    /**
+     * 把浏览器 Provider 抛出的内部异常转换为稳定公共错误。
+     *
+     * @param stage 固定调用阶段，禁止包含 URL、选择器、凭据或页面内容。
+     * @param error Provider 抛出的内部异常。
+     * @return 不包含内部异常消息的浏览器错误结果。
+     */
+    private BrowserResult providerFailure(String stage, Throwable error) {
+        log.warn("浏览器 Provider 调用失败：stage={}, error={}", stage, exceptionSummary(error));
+        return BrowserResult.error("provider_error", "Browser provider operation failed");
     }
 
     /** 在已校验的浏览器租约上执行单个 Provider 动作。 */

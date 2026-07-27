@@ -63,6 +63,51 @@ public class BrowserRuntimeServiceTests {
     }
 
     @Test
+    void shouldHideBrowserProviderExceptionDetails() {
+        String sensitive = "SQLException at /srv/browser/session.db token=sk-browserprovider12345";
+        BrowserProvider createFailureProvider =
+                new RecordingProvider(true) {
+                    /** 模拟 Provider 在创建会话时抛出包含内部细节的异常。 */
+                    @Override
+                    public BrowserSession createSession(String taskId) {
+                        throw new IllegalStateException(sensitive);
+                    }
+                };
+        BrowserRuntimeService createService =
+                new BrowserRuntimeService(
+                        new AppConfig(),
+                        Collections.singletonList(createFailureProvider),
+                        new SecurityPolicyService(new AppConfig()));
+
+        BrowserRuntimeService.BrowserResult createResult = createService.create("task-sensitive");
+
+        assertProviderFailureIsPublic(createResult, sensitive);
+
+        AppConfig config = new AppConfig();
+        config.getSecurity().setAllowPrivateUrls(true);
+        RecordingProvider navigateFailureProvider =
+                new RecordingProvider(true) {
+                    /** 模拟 Provider 在导航时抛出包含内部细节的异常。 */
+                    @Override
+                    public BrowserActionResult navigate(
+                            String sessionId, String url, int timeoutSeconds) {
+                        throw new IllegalStateException(sensitive);
+                    }
+                };
+        BrowserRuntimeService navigateService =
+                new BrowserRuntimeService(
+                        config,
+                        Collections.<BrowserProvider>singletonList(navigateFailureProvider),
+                        new SecurityPolicyService(config));
+        BrowserRuntimeService.BrowserResult created = navigateService.create("task-navigate");
+
+        BrowserRuntimeService.BrowserResult navigateResult =
+                navigateService.navigate(created.getSessionId(), "http://127.0.0.1/", 1);
+
+        assertProviderFailureIsPublic(navigateResult, sensitive);
+    }
+
+    @Test
     void shouldBlockPrivateAndMetadataNavigationTargets() {
         AppConfig config = new AppConfig();
         config.getSecurity().setAllowPrivateUrls(false);
@@ -1285,6 +1330,25 @@ public class BrowserRuntimeServiceTests {
             details.put("content", "provider text");
             return BrowserActionResult.ok("extracted", nextUrl, details);
         }
+    }
+
+    /**
+     * 断言 Provider 内部异常只映射为稳定公共错误。
+     *
+     * @param result 浏览器运行时错误结果。
+     * @param sensitive Provider 原始敏感异常文本。
+     */
+    private static void assertProviderFailureIsPublic(
+            BrowserRuntimeService.BrowserResult result, String sensitive) {
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getError().getCode()).isEqualTo("provider_error");
+        assertThat(result.getError().getMessage()).isEqualTo("Browser provider operation failed");
+        assertThat(result.getError().getMessage())
+                .doesNotContain(sensitive)
+                .doesNotContain("/srv/browser/session.db")
+                .doesNotContain("sk-browserprovider12345")
+                .doesNotContain("SQLException")
+                .doesNotContain("IllegalStateException");
     }
 
     private static class FixedDnsSecurityPolicyService extends SecurityPolicyService {

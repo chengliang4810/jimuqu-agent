@@ -166,9 +166,8 @@ public class DashboardChatController extends AbstractDashboardProfileController 
     /** 把 Profile SSE 路由错误写成普通 JSON 错误响应。 */
     private void writeError(Context context, int status, String code, Throwable error)
             throws IOException {
-        context.status(status);
         context.contentType("application/json;charset=UTF-8");
-        context.output(ONode.serialize(DashboardResponse.error(code, error.getMessage())));
+        context.output(ONode.serialize(DashboardResponse.error(context, status, code, error)));
     }
 
     /** 删除已由回环上传消费的 Solon 临时文件。 */

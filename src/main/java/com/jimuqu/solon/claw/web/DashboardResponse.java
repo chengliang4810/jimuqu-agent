@@ -4,9 +4,17 @@ import com.jimuqu.solon.claw.support.SecretRedactor;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.noear.solon.core.handle.Context;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** 承载控制台响应相关状态和辅助逻辑。 */
 public final class DashboardResponse {
+    /** 控制台内部错误日志，仅记录稳定错误码和异常类型。 */
+    private static final Logger log = LoggerFactory.getLogger(DashboardResponse.class);
+
+    /** 服务端异常对客户端暴露的固定公共消息。 */
+    private static final String INTERNAL_ERROR_MESSAGE = "请求处理失败 / Request failed";
+
     /** 创建控制台响应实例。 */
     private DashboardResponse() {}
 
@@ -66,6 +74,24 @@ public final class DashboardResponse {
      */
     public static Map<String, Object> error(
             Context context, int status, String code, Throwable error) {
+        if (status >= 500) {
+            log.warn(
+                    "Dashboard 请求处理失败：status={}, code={}, error={}",
+                    Integer.valueOf(status),
+                    code == null ? "ERROR" : code,
+                    exceptionType(error));
+            return error(context, status, code, INTERNAL_ERROR_MESSAGE);
+        }
         return error(context, status, code, error == null ? null : error.getMessage());
+    }
+
+    /**
+     * 生成不包含异常消息与堆栈的异常类型摘要。
+     *
+     * @param error 捕获到的异常。
+     * @return 异常类型名称；异常为空时返回 unknown。
+     */
+    private static String exceptionType(Throwable error) {
+        return error == null ? "unknown" : error.getClass().getName();
     }
 }

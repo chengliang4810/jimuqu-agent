@@ -25,4 +25,48 @@ public class DashboardResponseTest {
         assertThat(String.valueOf(response.get("error"))).contains("token=***");
         assertThat(String.valueOf(response)).doesNotContain("sk-dashboardresponse12345");
     }
+
+    /** 服务端异常应返回固定公共消息，不得暴露路径、SQL、令牌或异常类型。 */
+    @Test
+    void shouldHideInternalExceptionDetailsFromServerErrors() {
+        Context context = ContextEmpty.create();
+        String sensitive =
+                "SQLException at /srv/solonclaw/config.yml token=sk-dashboardresponse67890";
+
+        Map<String, Object> response =
+                DashboardResponse.error(
+                        context,
+                        500,
+                        "DASHBOARD_INTERNAL_ERROR",
+                        new IllegalStateException(sensitive));
+
+        assertThat(context.status()).isEqualTo(500);
+        assertThat(response.get("code")).isEqualTo("DASHBOARD_INTERNAL_ERROR");
+        assertThat(response.get("error")).isEqualTo("请求处理失败 / Request failed");
+        assertThat(String.valueOf(response))
+                .doesNotContain("/srv/solonclaw/config.yml")
+                .doesNotContain("sk-dashboardresponse67890")
+                .doesNotContain("SQLException")
+                .doesNotContain("IllegalStateException");
+    }
+
+    /** 受控的客户端错误应继续返回原业务消息，并沿用敏感文本脱敏。 */
+    @Test
+    void shouldPreserveControlledClientErrorMessages() {
+        Context context = ContextEmpty.create();
+
+        Map<String, Object> response =
+                DashboardResponse.error(
+                        context,
+                        400,
+                        "DASHBOARD_BAD_REQUEST",
+                        new IllegalArgumentException("参数无效 token=sk-controlled12345"));
+
+        assertThat(context.status()).isEqualTo(400);
+        assertThat(response.get("code")).isEqualTo("DASHBOARD_BAD_REQUEST");
+        assertThat(String.valueOf(response.get("error")))
+                .contains("参数无效")
+                .contains("token=***")
+                .doesNotContain("sk-controlled12345");
+    }
 }

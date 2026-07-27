@@ -157,7 +157,7 @@ public class DashboardConfigController {
         } catch (IllegalStateException e) {
             return DashboardResponse.error(context, 400, "CONFIG_BAD_REQUEST", e);
         } catch (Exception e) {
-            return DashboardResponse.error(context, 400, "CONFIG_BAD_REQUEST", e);
+            return DashboardResponse.error(context, 500, "CONFIG_FAILED", e);
         }
     }
 

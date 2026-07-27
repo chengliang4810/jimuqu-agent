@@ -12,10 +12,15 @@ import org.noear.solon.annotation.Controller;
 import org.noear.solon.annotation.Mapping;
 import org.noear.solon.core.handle.Context;
 import org.noear.solon.core.handle.MethodType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** 面向独立终端前端的运行时 JSON-RPC 控制器。 */
 @Controller
 public class DashboardTuiRuntimeController {
+    /** 终端运行时接口日志，仅记录固定阶段和异常类型。 */
+    private static final Logger log = LoggerFactory.getLogger(DashboardTuiRuntimeController.class);
+
     /** JSON-RPC 协议版本。 */
     private static final String JSON_RPC_VERSION = "2.0";
 
@@ -33,9 +38,18 @@ public class DashboardTuiRuntimeController {
             AppConfig appConfig,
             WeixinQrSetupService weixinQrSetupService,
             DomesticQrSetupService domesticQrSetupService) {
-        this.protocolService =
+        this(
                 new TuiRuntimeProtocolService(
-                        appConfig, weixinQrSetupService, domesticQrSetupService);
+                        appConfig, weixinQrSetupService, domesticQrSetupService));
+    }
+
+    /**
+     * 创建可注入协议服务的终端运行时控制器，供同包测试验证异常边界。
+     *
+     * @param protocolService 终端运行时协议服务。
+     */
+    DashboardTuiRuntimeController(TuiRuntimeProtocolService protocolService) {
+        this.protocolService = protocolService;
     }
 
     /**
@@ -64,7 +78,8 @@ public class DashboardTuiRuntimeController {
             return error(request.id, -32602, e.getMessage());
         } catch (Exception e) {
             context.status(500);
-            return error(request.id, -32000, "TUI runtime RPC failed: " + e.getMessage());
+            log.warn("TUI runtime RPC failed: error={}", e.getClass().getName());
+            return error(request.id, -32000, "TUI runtime RPC failed");
         }
     }
 
