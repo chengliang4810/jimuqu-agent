@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /** Dashboard 工作区配置管理服务。 */
@@ -522,6 +523,35 @@ public class DashboardRuntimeConfigService implements RuntimeConfigManagementPor
             result.put(definition.key, item);
         }
         return result;
+    }
+
+    /**
+     * 判断配置键是否属于敏感配置，供 HTTP 审计边界在写入前分类。
+     *
+     * @param key 配置键。
+     * @return 仅当受支持配置项标记为密钥时返回 true。
+     */
+    boolean isSecret(String key) {
+        return requireSupported(key).password;
+    }
+
+    /**
+     * 解析审计事件应记录的实际 Profile 名。
+     *
+     * @param profile 请求指定的 Profile 名。
+     * @return 已校验并规范化的实际 Profile 名。
+     */
+    String resolveProfileName(String profile) {
+        if (profileContext != null) {
+            return profileContext.resolve(profile).getName();
+        }
+        String requested = StrUtil.nullToEmpty(profile).trim();
+        if (requested.length() == 0 || "current".equalsIgnoreCase(requested)) {
+            return StrUtil.blankToDefault(System.getProperty("solonclaw.profile.name"), "default")
+                    .trim()
+                    .toLowerCase(Locale.ROOT);
+        }
+        return requested.toLowerCase(Locale.ROOT);
     }
 
     /**

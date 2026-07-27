@@ -12,6 +12,7 @@ import com.jimuqu.solon.claw.core.repository.CronJobRepository;
 import com.jimuqu.solon.claw.core.repository.GatewayPolicyRepository;
 import com.jimuqu.solon.claw.core.repository.GlobalSettingRepository;
 import com.jimuqu.solon.claw.core.repository.ProfileTaskRepository;
+import com.jimuqu.solon.claw.core.repository.SensitiveConfigAuditRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.AgentRunControlService;
 import com.jimuqu.solon.claw.core.service.CheckpointService;
@@ -69,6 +70,7 @@ import com.jimuqu.solon.claw.web.DashboardProfileTaskService;
 import com.jimuqu.solon.claw.web.DashboardProviderService;
 import com.jimuqu.solon.claw.web.DashboardRunService;
 import com.jimuqu.solon.claw.web.DashboardRuntimeConfigService;
+import com.jimuqu.solon.claw.web.DashboardSensitiveConfigAuditService;
 import com.jimuqu.solon.claw.web.DashboardSessionService;
 import com.jimuqu.solon.claw.web.DashboardSkillsService;
 import com.jimuqu.solon.claw.web.DashboardStatusService;
@@ -147,6 +149,19 @@ public class DashboardConfiguration {
     @Bean
     public DashboardAuthService dashboardAuthService(AppConfig appConfig) {
         return new DashboardAuthService(appConfig);
+    }
+
+    /**
+     * 创建 Dashboard 敏感配置操作审计服务。
+     *
+     * @param repository 追加式敏感配置审计仓储。
+     * @param authService Dashboard 认证服务。
+     * @return 敏感配置审计服务。
+     */
+    @Bean
+    public DashboardSensitiveConfigAuditService dashboardSensitiveConfigAuditService(
+            SensitiveConfigAuditRepository repository, DashboardAuthService authService) {
+        return new DashboardSensitiveConfigAuditService(repository, authService);
     }
 
     /**

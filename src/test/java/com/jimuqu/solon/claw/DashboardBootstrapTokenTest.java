@@ -2,11 +2,14 @@ package com.jimuqu.solon.claw;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.jimuqu.solon.claw.core.model.SensitiveConfigAuditEvent;
 import com.jimuqu.solon.claw.support.TestEnvironment;
 import com.jimuqu.solon.claw.web.DashboardAuthService;
 import com.jimuqu.solon.claw.web.DashboardRuntimeConfigController;
 import com.jimuqu.solon.claw.web.DashboardRuntimeConfigService;
+import com.jimuqu.solon.claw.web.DashboardSensitiveConfigAuditService;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.noear.solon.core.handle.ContextEmpty;
 
@@ -14,11 +17,15 @@ public class DashboardBootstrapTokenTest {
     @Test
     void localBlankTokenDashboardCanBootstrapAccessTokenOnce() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
+        DashboardAuthService authService = new DashboardAuthService(env.appConfig);
+        AtomicReference<SensitiveConfigAuditEvent> auditEvent =
+                new AtomicReference<SensitiveConfigAuditEvent>();
         DashboardRuntimeConfigController controller =
                 new DashboardRuntimeConfigController(
                         new DashboardRuntimeConfigService(
                                 env.appConfig, env.gatewayRuntimeRefreshService),
-                        new DashboardAuthService(env.appConfig));
+                        authService,
+                        new DashboardSensitiveConfigAuditService(auditEvent::set, authService));
         BootstrapContext context =
                 new BootstrapContext("127.0.0.1", "{\"accessToken\":\"bootstrap-token-123456\"}");
 
@@ -28,6 +35,14 @@ public class DashboardBootstrapTokenTest {
         assertThat(result).containsEntry("success", true);
         assertThat(env.appConfig.getDashboard().getAccessToken())
                 .isEqualTo("bootstrap-token-123456");
+        assertThat(context.headerOfResponse("X-Request-Id"))
+                .isEqualTo(auditEvent.get().getEventId());
+        assertThat(auditEvent.get().getOperation()).isEqualTo("SECRET_SET_ATTEMPT");
+        assertThat(auditEvent.get().getActorType()).isEqualTo("LOCAL_BOOTSTRAP");
+        assertThat(auditEvent.get().getAuthMethod()).isEqualTo("LOCAL");
+        assertThat(auditEvent.get().getProfile()).isEqualTo("default");
+        assertThat(auditEvent.get().getConfigKey()).isEqualTo("solonclaw.dashboard.accessToken");
+        assertThat(auditEvent.get().getRemoteIp()).isEqualTo("127.0.0.1");
         assertThat(
                         new DashboardAuthService(env.appConfig)
                                 .isAuthorized(new HeaderContext("Bearer bootstrap-token-123456")))

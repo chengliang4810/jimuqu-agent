@@ -21,16 +21,23 @@ public class DashboardRuntimeConfigController {
     /** 注入认证服务，用于调用对应业务能力。 */
     private final DashboardAuthService authService;
 
+    /** 注入敏感配置审计服务，确保高敏感操作先审计再生效或返回。 */
+    private final DashboardSensitiveConfigAuditService sensitiveConfigAuditService;
+
     /**
      * 创建控制台工作区配置控制器实例，并注入运行所需依赖。
      *
      * @param runtimeConfigService 工作区配置Service配置对象。
      * @param authService 鉴权服务依赖。
+     * @param sensitiveConfigAuditService 敏感配置操作审计服务。
      */
     public DashboardRuntimeConfigController(
-            DashboardRuntimeConfigService runtimeConfigService, DashboardAuthService authService) {
+            DashboardRuntimeConfigService runtimeConfigService,
+            DashboardAuthService authService,
+            DashboardSensitiveConfigAuditService sensitiveConfigAuditService) {
         this.runtimeConfigService = runtimeConfigService;
         this.authService = authService;
+        this.sensitiveConfigAuditService = sensitiveConfigAuditService;
     }
 
     /**
@@ -75,9 +82,17 @@ public class DashboardRuntimeConfigController {
                 return DashboardResponse.error(
                         "WORKSPACE_CONFIG_BOOTSTRAP_BAD_TOKEN", "访问令牌至少需要 8 个有效字符");
             }
+            String requestId =
+                    sensitiveConfigAuditService.recordLocalBootstrap(
+                            context,
+                            "solonclaw.dashboard.accessToken",
+                            runtimeConfigService.resolveProfileName(null));
+            context.headerSet("X-Request-Id", requestId);
             runtimeConfigService.set("solonclaw.dashboard.accessToken", token, false);
             return DashboardResponse.ok(
                     Collections.<String, Object>singletonMap("configured", true));
+        } catch (DashboardSensitiveConfigAuditService.AuditUnavailableException e) {
+            return auditUnavailable(context, e);
         } catch (IllegalArgumentException e) {
             context.status(400);
             return DashboardResponse.error(
@@ -99,11 +114,18 @@ public class DashboardRuntimeConfigController {
     public Map<String, Object> set(Context context) throws Exception {
         try {
             Map<String, Object> body = DashboardRequestBodies.jsonObjectMap(context);
-            return DashboardResponse.ok(
-                    runtimeConfigService.set(
-                            body.get("key") == null ? "" : String.valueOf(body.get("key")),
-                            body.get("value") == null ? "" : String.valueOf(body.get("value")),
-                            DashboardProfileContext.requestedProfile(context, body)));
+            String key = body.get("key") == null ? "" : String.valueOf(body.get("key"));
+            String value = body.get("value") == null ? "" : String.valueOf(body.get("value"));
+            String profile = DashboardProfileContext.requestedProfile(context, body);
+            if (runtimeConfigService.isSecret(key)) {
+                String requestId =
+                        sensitiveConfigAuditService.recordSecretSetAttempt(
+                                context, key, runtimeConfigService.resolveProfileName(profile));
+                context.headerSet("X-Request-Id", requestId);
+            }
+            return DashboardResponse.ok(runtimeConfigService.set(key, value, profile));
+        } catch (DashboardSensitiveConfigAuditService.AuditUnavailableException e) {
+            return auditUnavailable(context, e);
         } catch (DashboardProfileNotFoundException e) {
             return DashboardResponse.error(context, 404, "PROFILE_NOT_FOUND", e);
         } catch (IllegalArgumentException e) {
@@ -168,10 +190,16 @@ public class DashboardRuntimeConfigController {
         }
         try {
             Map<String, Object> body = DashboardRequestBodies.jsonObjectMap(context);
-            return DashboardResponse.ok(
-                    runtimeConfigService.reveal(
-                            body.get("key") == null ? "" : String.valueOf(body.get("key")),
-                            DashboardProfileContext.requestedProfile(context, body)));
+            String key = body.get("key") == null ? "" : String.valueOf(body.get("key"));
+            String profile = DashboardProfileContext.requestedProfile(context, body);
+            Map<String, Object> revealed = runtimeConfigService.reveal(key, profile);
+            String requestId =
+                    sensitiveConfigAuditService.recordSecretReveal(
+                            context, key, runtimeConfigService.resolveProfileName(profile));
+            context.headerSet("X-Request-Id", requestId);
+            return DashboardResponse.ok(revealed);
+        } catch (DashboardSensitiveConfigAuditService.AuditUnavailableException e) {
+            return auditUnavailable(context, e);
         } catch (DashboardProfileNotFoundException e) {
             return DashboardResponse.error(context, 404, "PROFILE_NOT_FOUND", e);
         } catch (IllegalArgumentException e) {
@@ -181,5 +209,18 @@ public class DashboardRuntimeConfigController {
             context.status(400);
             return DashboardResponse.error("WORKSPACE_CONFIG_BAD_REQUEST", e.getMessage());
         }
+    }
+
+    /**
+     * 将敏感配置审计故障映射为固定 503 响应，并保留事件标识用于服务端对账。
+     *
+     * @param context 当前 HTTP 请求。
+     * @param error 审计不可用异常。
+     * @return 不包含配置明文或异常消息的固定错误响应。
+     */
+    private Map<String, Object> auditUnavailable(
+            Context context, DashboardSensitiveConfigAuditService.AuditUnavailableException error) {
+        context.headerSet("X-Request-Id", error.getRequestId());
+        return DashboardResponse.error(context, 503, "WORKSPACE_CONFIG_AUDIT_UNAVAILABLE", error);
     }
 }

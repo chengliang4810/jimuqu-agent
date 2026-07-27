@@ -36,6 +36,9 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -662,6 +665,7 @@ public class DashboardControllerHttpTest {
                         "{\"key\":\"solonclaw.gateway.injectionSecret\",\"value\":\"secret12345678\"}",
                         token);
         assertThat(saveRuntimeConfig.status).isEqualTo(200);
+        assertThat(saveRuntimeConfig.responseHeaders.get("X-Request-Id")).isNotBlank();
         assertThat(overrideFile).exists();
         assertThat(FileUtil.readUtf8String(overrideFile))
                 .contains("injectionSecret: secret12345678");
@@ -686,6 +690,17 @@ public class DashboardControllerHttpTest {
                         token);
         assertThat(revealRuntimeConfig.status).isEqualTo(200);
         assertThat(revealRuntimeConfig.body).contains("secret12345678");
+        assertThat(revealRuntimeConfig.responseHeaders.get("X-Request-Id")).isNotBlank();
+        assertSensitiveConfigAuditEvent(
+                saveRuntimeConfig.responseHeaders.get("X-Request-Id"),
+                "SECRET_SET_ATTEMPT",
+                "BEARER",
+                "solonclaw.gateway.injectionSecret");
+        assertSensitiveConfigAuditEvent(
+                revealRuntimeConfig.responseHeaders.get("X-Request-Id"),
+                "SECRET_REVEAL",
+                "BEARER",
+                "solonclaw.gateway.injectionSecret");
 
         seedDashboardGoalSession();
 
@@ -3113,6 +3128,7 @@ public class DashboardControllerHttpTest {
                     "X-Frame-Options",
                     "Referrer-Policy",
                     "Permissions-Policy",
+                    "X-Request-Id",
                     "Set-Cookie"
                 }) {
             headers.put(
@@ -3122,6 +3138,35 @@ public class DashboardControllerHttpTest {
                             : connection.getHeaderField(name));
         }
         return headers;
+    }
+
+    /**
+     * 按响应事件标识核对真实 HTTP 敏感配置操作已经追加到 SQLite 审计表。
+     *
+     * @param eventId 响应返回的审计事件标识。
+     * @param operation 预期操作类型。
+     * @param authMethod 预期认证方式。
+     * @param configKey 预期配置键。
+     */
+    private static void assertSensitiveConfigAuditEvent(
+            String eventId, String operation, String authMethod, String configKey)
+            throws Exception {
+        try (Connection connection = bean(SqliteDatabase.class).openReadConnection();
+                PreparedStatement statement =
+                        connection.prepareStatement(
+                                "select operation, actor_type, auth_method, profile, config_key, remote_ip "
+                                        + "from sensitive_config_audit_events where event_id = ?")) {
+            statement.setString(1, eventId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).isTrue();
+                assertThat(resultSet.getString("operation")).isEqualTo(operation);
+                assertThat(resultSet.getString("actor_type")).isEqualTo("DASHBOARD");
+                assertThat(resultSet.getString("auth_method")).isEqualTo(authMethod);
+                assertThat(resultSet.getString("profile")).isEqualTo("default");
+                assertThat(resultSet.getString("config_key")).isEqualTo(configKey);
+                assertThat(resultSet.getString("remote_ip")).isEqualTo("127.0.0.1");
+            }
+        }
     }
 
     /**

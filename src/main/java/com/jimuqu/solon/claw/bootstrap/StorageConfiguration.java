@@ -9,6 +9,7 @@ import com.jimuqu.solon.claw.core.repository.CronJobRepository;
 import com.jimuqu.solon.claw.core.repository.GatewayPolicyRepository;
 import com.jimuqu.solon.claw.core.repository.GlobalSettingRepository;
 import com.jimuqu.solon.claw.core.repository.ReadOnlySessionRepositoryFactory;
+import com.jimuqu.solon.claw.core.repository.SensitiveConfigAuditRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.CheckpointService;
 import com.jimuqu.solon.claw.core.service.PendingSessionStateFactory;
@@ -22,6 +23,7 @@ import com.jimuqu.solon.claw.storage.repository.SqliteGatewayPolicyRepository;
 import com.jimuqu.solon.claw.storage.repository.SqliteGlobalSettingRepository;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.solon.claw.storage.repository.SqliteReadOnlySessionRepositoryFactory;
+import com.jimuqu.solon.claw.storage.repository.SqliteSensitiveConfigAuditRepository;
 import com.jimuqu.solon.claw.storage.repository.SqliteSessionRepository;
 import com.jimuqu.solon.claw.storage.repository.SqliteUsageEventRepository;
 import com.jimuqu.solon.claw.storage.session.SqlitePendingSessionStateFactory;
@@ -108,6 +110,18 @@ public class StorageConfiguration {
     @Bean
     public ApprovalAuditRepository approvalAuditRepository(SqliteDatabase sqliteDatabase) {
         return new SqliteApprovalAuditRepository(sqliteDatabase);
+    }
+
+    /**
+     * 创建 Dashboard 敏感配置追加式审计仓储。
+     *
+     * @param sqliteDatabase SQLite 数据库。
+     * @return 敏感配置审计仓储。
+     */
+    @Bean
+    public SensitiveConfigAuditRepository sensitiveConfigAuditRepository(
+            SqliteDatabase sqliteDatabase) {
+        return new SqliteSensitiveConfigAuditRepository(sqliteDatabase);
     }
 
     /**

@@ -754,6 +754,19 @@ public class SqliteDatabase {
             statement.execute(
                     "create index if not exists idx_approval_audit_events_session on approval_audit_events(session_id, created_at desc)");
             statement.execute(
+                    "create table if not exists sensitive_config_audit_events ("
+                            + "event_id text primary key,"
+                            + "operation text not null,"
+                            + "actor_type text not null,"
+                            + "auth_method text not null,"
+                            + "profile text not null,"
+                            + "config_key text not null,"
+                            + "remote_ip text not null,"
+                            + "created_at integer not null"
+                            + ")");
+            statement.execute(
+                    "create index if not exists idx_sensitive_config_audit_events_created on sensitive_config_audit_events(created_at desc)");
+            statement.execute(
                     "create table if not exists subagent_runs ("
                             + "subagent_id text primary key,"
                             + "parent_run_id text,"
