@@ -35,10 +35,18 @@ This outputs to `dist/`; the Maven build copies those assets into the Java appli
 
 ```
 src/
-├── api/solonclaw/          # Typed backend API wrappers
-├── components/solonclaw/   # Feature components
-├── stores/solonclaw/       # Pinia stores
-├── views/solonclaw/        # Routed dashboard views
+├── api/                    # Typed backend API wrappers
+├── assets/                 # Static assets bundled by Vite
+├── components/             # Feature and shared Vue components
+├── composables/            # Reusable Vue composition functions
+├── data/                   # Static catalogs and view data
+├── i18n/                   # Locale messages and translation setup
+├── router/                 # Dashboard route definitions
+├── shared/                 # Cross-feature UI contracts
+├── stores/                 # Pinia stores
+├── styles/                 # Global and feature styles
+├── utils/                  # Frontend-only utility functions
+├── views/                  # Routed dashboard views
 ├── App.vue                 # Main layout and navigation
 └── main.ts                 # Vue entry point
 ```
