@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import org.noear.solon.core.AppContext;
 import org.noear.solon.core.Props;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,24 +79,11 @@ public class ProfileMultiplexRuntimeManager implements ProfileMessageRouter, Aut
      * 创建 Profile 复用运行时管理器。
      *
      * @param defaultAppConfig default Profile 配置。
-     * @param rootContext 主 Solon Bean 容器，仅用于复制构建元数据。
      * @param defaultGatewayService default Profile 网关服务。
      * @param defaultAdapters default Profile 渠道适配器。
+     * @param bundleFactory 命名 Profile 子运行时工厂。
      */
     public ProfileMultiplexRuntimeManager(
-            AppConfig defaultAppConfig,
-            AppContext rootContext,
-            DefaultGatewayService defaultGatewayService,
-            Map<PlatformType, ChannelAdapter> defaultAdapters) {
-        this(
-                defaultAppConfig,
-                defaultGatewayService,
-                defaultAdapters,
-                new ProfileRuntimeBundleFactory(rootContext));
-    }
-
-    /** 创建可注入子运行时工厂的管理器，供定向测试验证失败和凭据冲突路径。 */
-    ProfileMultiplexRuntimeManager(
             AppConfig defaultAppConfig,
             DefaultGatewayService defaultGatewayService,
             Map<PlatformType, ChannelAdapter> defaultAdapters,

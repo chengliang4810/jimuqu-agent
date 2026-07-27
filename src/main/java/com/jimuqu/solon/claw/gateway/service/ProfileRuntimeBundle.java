@@ -35,7 +35,7 @@ public final class ProfileRuntimeBundle implements AutoCloseable {
     private volatile boolean closed;
 
     /** 创建已经完成装配的 Profile 运行时。 */
-    ProfileRuntimeBundle(
+    public ProfileRuntimeBundle(
             String profile,
             Path home,
             Map<String, String> environment,

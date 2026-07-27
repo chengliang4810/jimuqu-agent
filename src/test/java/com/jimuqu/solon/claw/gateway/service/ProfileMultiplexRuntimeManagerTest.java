@@ -44,8 +44,7 @@ class ProfileMultiplexRuntimeManagerTest {
         writeProfile("zbroken", "broken-app", "broken-secret");
 
         AppConfig defaultConfig = defaultConfig();
-        AppContext rootContext = detachedContext();
-        CapturingFactory factory = new CapturingFactory(rootContext, "zbroken");
+        CapturingFactory factory = new CapturingFactory("zbroken");
         DefaultGatewayService defaultGateway = defaultGateway(defaultConfig);
         ProfileMultiplexRuntimeManager manager =
                 new ProfileMultiplexRuntimeManager(
@@ -94,7 +93,7 @@ class ProfileMultiplexRuntimeManagerTest {
         writeProfile("alpha", "alpha-app", "alpha-secret");
         writeProfile("beta", "beta-app", "beta-secret");
         AppConfig defaultConfig = defaultConfig();
-        CapturingFactory factory = new CapturingFactory(detachedContext(), "never");
+        CapturingFactory factory = new CapturingFactory("never");
         ProfileMultiplexRuntimeManager manager =
                 new ProfileMultiplexRuntimeManager(
                         defaultConfig,
@@ -130,7 +129,7 @@ class ProfileMultiplexRuntimeManagerTest {
         ChannelStatus alphaStatus = new ChannelStatus(PlatformType.FEISHU, true, true, "connected");
         CapturingDeliveryService alphaDelivery = new CapturingDeliveryService(alphaStatus);
         ProfileRuntimeBundleFactory factory =
-                new ProfileRuntimeBundleFactory(detachedContext()) {
+                new ProfileRuntimeBundleFactory() {
                     /** 创建仅包含命名 Profile 投递服务的轻量子运行时。 */
                     @Override
                     public ProfileRuntimeBundle create(
@@ -188,7 +187,7 @@ class ProfileMultiplexRuntimeManagerTest {
                         defaultConfig,
                         defaultGateway(defaultConfig),
                         Collections.emptyMap(),
-                        new CapturingFactory(detachedContext(), "never"));
+                        new CapturingFactory("never"));
         ProfileRuntimeBundle alpha = manager.requireRuntime("alpha");
 
         manager.releaseRuntime("alpha");
@@ -211,7 +210,7 @@ class ProfileMultiplexRuntimeManagerTest {
         writeProfile("alpha", "alpha-app", "alpha-secret", "SOLONCLAW_ALLOW_PRIVATE_URLS=true\n");
         writeProfile("beta", "beta-app", "beta-secret", "");
         AppConfig defaultConfig = defaultConfig();
-        CapturingFactory factory = new CapturingFactory(detachedContext(), "never");
+        CapturingFactory factory = new CapturingFactory("never");
         ProfileMultiplexRuntimeManager manager =
                 new ProfileMultiplexRuntimeManager(
                         defaultConfig,
@@ -234,7 +233,7 @@ class ProfileMultiplexRuntimeManagerTest {
         writeProfile("alpha", "alpha-app", "alpha-secret");
         writeOpenWecomProfile("beta");
         AppConfig defaultConfig = defaultConfig();
-        CapturingFactory factory = new CapturingFactory(detachedContext(), "never");
+        CapturingFactory factory = new CapturingFactory("never");
         ProfileMultiplexRuntimeManager manager =
                 new ProfileMultiplexRuntimeManager(
                         defaultConfig,
@@ -400,7 +399,7 @@ class ProfileMultiplexRuntimeManagerTest {
     }
 
     /** 捕获已解析 Profile 配置，并可按名称模拟子容器启动失败。 */
-    private final class CapturingFactory extends ProfileRuntimeBundleFactory {
+    private final class CapturingFactory implements ProfileRuntimeBundleFactory {
         /** 每个 Profile 传入工厂的独立配置。 */
         private final Map<String, AppConfig> configs = new LinkedHashMap<String, AppConfig>();
 
@@ -408,8 +407,7 @@ class ProfileMultiplexRuntimeManagerTest {
         private final String failingProfile;
 
         /** 创建可控测试工厂。 */
-        private CapturingFactory(AppContext rootContext, String failingProfile) {
-            super(rootContext);
+        private CapturingFactory(String failingProfile) {
             this.failingProfile = failingProfile;
         }
 

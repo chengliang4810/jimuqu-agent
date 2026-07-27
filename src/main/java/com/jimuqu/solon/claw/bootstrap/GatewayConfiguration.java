@@ -602,9 +602,10 @@ public class GatewayConfiguration {
         ProfileMultiplexRuntimeManager manager =
                 new ProfileMultiplexRuntimeManager(
                         appConfig,
-                        ProfileBeanResolver.currentContext(),
                         gatewayService,
-                        channelAdapters);
+                        channelAdapters,
+                        new BootstrapProfileRuntimeBundleFactory(
+                                ProfileBeanResolver.currentContext()));
         gatewayRuntimeRefreshService.setProfileMultiplexRuntimeManager(manager);
         manager.start();
         return manager;
