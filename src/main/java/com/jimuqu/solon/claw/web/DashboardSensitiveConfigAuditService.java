@@ -20,12 +20,6 @@ public final class DashboardSensitiveConfigAuditService {
     /** 已认证 Dashboard 请求的安全主体类型。 */
     public static final String ACTOR_DASHBOARD = "DASHBOARD";
 
-    /** 本机首次初始化 Dashboard 令牌的安全主体类型。 */
-    public static final String ACTOR_LOCAL_BOOTSTRAP = "LOCAL_BOOTSTRAP";
-
-    /** 本机首次初始化使用的认证方式。 */
-    public static final String AUTH_METHOD_LOCAL = "LOCAL";
-
     /** 记录审计存储故障的固定元数据，不记录异常消息或敏感请求内容。 */
     private static final Logger log =
             LoggerFactory.getLogger(DashboardSensitiveConfigAuditService.class);
@@ -74,24 +68,6 @@ public final class DashboardSensitiveConfigAuditService {
      */
     public String recordSecretReveal(Context context, String configKey, String profile) {
         return recordAuthenticated(context, OPERATION_SECRET_REVEAL, configKey, profile);
-    }
-
-    /**
-     * 在本机首次写入 Dashboard 令牌前记录初始化尝试。
-     *
-     * @param context 当前 HTTP 请求。
-     * @param configKey Dashboard 令牌配置键。
-     * @param profile 已解析的实际 Profile 名。
-     * @return 可用于响应对账的审计事件标识。
-     */
-    public String recordLocalBootstrap(Context context, String configKey, String profile) {
-        return append(
-                context,
-                OPERATION_SECRET_SET_ATTEMPT,
-                ACTOR_LOCAL_BOOTSTRAP,
-                AUTH_METHOD_LOCAL,
-                configKey,
-                profile);
     }
 
     /**

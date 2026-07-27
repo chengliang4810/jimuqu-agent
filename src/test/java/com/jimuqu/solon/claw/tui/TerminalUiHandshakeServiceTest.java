@@ -20,22 +20,20 @@ class TerminalUiHandshakeServiceTest {
     private final TerminalUiAccessTicketService accessTicketService =
             new TerminalUiAccessTicketService();
 
-    /** 验证未配置令牌时发现接口明确拒绝，而不是返回必然失败的 WebSocket 地址。 */
+    /** 验证匿名本机请求不会因 loopback 地址绕过 Dashboard 认证。 */
     @Test
-    @DisplayName("controller handshake - 空 access token 时返回配置提示")
-    void controllerHandshakeWithEmptyTokenShouldFailClosed() {
+    @DisplayName("controller handshake - 匿名 loopback 请求返回 401")
+    void controllerHandshakeWithoutAuthenticationShouldFailClosed() {
         AppConfig appConfig = new AppConfig();
         TerminalUiController controller =
                 new TerminalUiController(
                         service, new DashboardAuthService(appConfig), accessTicketService);
-        LocalContext context = new LocalContext();
+        LoopbackContext context = new LoopbackContext("");
 
         Map<String, Object> result = controller.handshake(context);
 
-        assertThat(context.status()).isEqualTo(503);
-        assertThat(result).containsEntry("success", false);
-        assertThat(result).containsEntry("code", "TUI_ACCESS_TOKEN_REQUIRED");
-        assertThat(result).doesNotContainKey("ws_url");
+        assertThat(context.status()).isEqualTo(401);
+        assertThat(result).isEmpty();
     }
 
     @Test
@@ -90,7 +88,8 @@ class TerminalUiHandshakeServiceTest {
                 new TerminalUiController(
                         service, new DashboardAuthService(appConfig), accessTicketService);
 
-        Map<String, Object> result = controller.handshake(new LocalContext());
+        Map<String, Object> result =
+                controller.handshake(new LoopbackContext("Bearer long-lived-dashboard-token"));
 
         String wsUrl = String.valueOf(result.get("ws_url"));
         String marker = "ticket=";
@@ -175,8 +174,19 @@ class TerminalUiHandshakeServiceTest {
         assertThat(result.get("protocol_version")).isEqualTo(1);
     }
 
-    /** 测试用本机上下文，允许发现接口进入 token 配置检查。 */
-    private static final class LocalContext extends ContextEmpty {
+    /** 测试用本机上下文，同时支持显式传入 Dashboard Bearer。 */
+    private static final class LoopbackContext extends ContextEmpty {
+        /**
+         * 创建本机握手请求上下文。
+         *
+         * @param authorization Dashboard Authorization 请求头；空值表示匿名请求。
+         */
+        private LoopbackContext(String authorization) {
+            if (authorization != null && !authorization.isEmpty()) {
+                headerMap().put("Authorization", authorization);
+            }
+        }
+
         /** 返回 loopback 地址模拟本机终端调用。 */
         @Override
         public String remoteIp() {

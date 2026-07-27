@@ -21,7 +21,7 @@ entry.tsx                               /api/tui/handshake
                                            -> JSON-RPC requests, responses, events
 ```
 
-The default backend URL is `http://127.0.0.1:8080`. Override it with `SOLONCLAW_SERVER_URL` when the UI runs locally and the service runs elsewhere.
+The default backend URL is `http://127.0.0.1:8080`. For an explicit loopback URL, the TUI reads `solonclaw.dashboard.accessToken` from the configured local workspace and sends it only in the HTTP handshake. Override the backend with `SOLONCLAW_SERVER_URL`; remote targets never receive credentials discovered from local files and require `SOLONCLAW_DASHBOARD_ACCESS_TOKEN`.
 
 Malformed WebSocket frames are surfaced as `gateway.protocol_error`. Startup and transport diagnostics are captured into an in-memory log ring and surfaced as `gateway.stderr` style events. Neither writes directly into the terminal transcript.
 

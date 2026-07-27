@@ -66,7 +66,7 @@ The default endpoint is:
 http://127.0.0.1:8080
 ```
 
-On first Dashboard open, enter a new access token to initialize the local instance; the page writes it to `workspace/config.yml` through the localhost-only bootstrap endpoint. To pin the token before startup, pass:
+Configure a high-entropy Dashboard access token in `workspace/config.yml` before startup, or pass it explicitly as a startup property. The service no longer exposes an anonymous loopback bootstrap endpoint because reverse proxies and DNS rebinding make the peer address an unsafe authentication signal:
 
 ```bash
 java -Dsolonclaw.dashboard.accessToken=your-token -jar target/solonclaw-0.0.1.jar

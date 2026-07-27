@@ -46,12 +46,11 @@ public class TerminalUiController {
      */
     @Mapping(value = "/api/tui/handshake", method = MethodType.GET)
     public Map<String, Object> handshake(Context context) {
-        boolean canRevealToken = authService == null || authService.canRevealToken(context);
-        if (!canRevealToken) {
+        if (!authService.isAuthorized(context)) {
             authService.writeUnauthorized(context);
             return Collections.emptyMap();
         }
-        String dashboardToken = authService == null ? "" : authService.sessionToken();
+        String dashboardToken = authService.sessionToken();
         if (StrUtil.isBlank(dashboardToken)) {
             context.status(503);
             return DashboardResponse.error(

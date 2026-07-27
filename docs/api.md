@@ -23,8 +23,6 @@ Dashboard API 支持两种认证方式：
 | GET  | `/api/model/info`                                 | 公开的当前模型摘要                                                           |
 | GET  | `/api/config/defaults`                            | 公开默认配置描述                                                             |
 | GET  | `/api/config/schema`                              | 公开配置字段定义                                                             |
-| POST | `/api/workspace-config/bootstrap-dashboard-token` | 仅允许本机、尚未配置令牌时首次初始化                                         |
-| GET  | `/api/tui/handshake`                              | 返回 TUI 协议与 WebSocket 地址；仅已认证或本机 loopback 请求可获得一次性票据 |
 | POST | `/api/gateway/message`                            | 独立使用 HMAC 签名认证，见下文                                               |
 
 其余 `/api/*` 默认均需 Dashboard Bearer 或有效短会话。
@@ -122,7 +120,9 @@ timestamp + "." + nonce + "." + 原始 HTTP 请求体
 
 ## TUI WebSocket
 
-`GET /api/tui/handshake` 返回协议版本和 `/ws/tui` 地址。有效 Dashboard 身份或本机 loopback 请求会在地址中获得短时一次性 `ticket`，其他远程匿名请求返回 401；WebSocket 建连时消费该票据，票据不能复用。业务消息采用项目的 JSON-RPC/Event 信封，不应直接复用 Dashboard Bearer 作为 WebSocket 查询参数。
+`GET /api/tui/handshake` 要求有效 Dashboard Bearer 或短会话，认证成功后返回协议版本和包含短时一次性 `ticket` 的 `/ws/tui` 地址。服务不把 loopback peer、代理头或 Host 当作认证凭据；WebSocket 建连时消费该票据，票据不能复用。业务消息采用项目的 JSON-RPC/Event 信封，不应直接复用 Dashboard Bearer 作为 WebSocket 查询参数。
+
+连接明确 loopback 后端时，官方 TUI 会从 `SOLONCLAW_WORKSPACE/config.yml`、原生安装目录或 Docker 工作区读取现有 `solonclaw.dashboard.accessToken`，只用于握手请求。连接远程后端时不会读取本机配置，必须显式设置 `SOLONCLAW_DASHBOARD_ACCESS_TOKEN`。
 
 ## 通用响应与错误
 

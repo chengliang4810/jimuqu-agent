@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { GatewayClient } from '../gatewayClient.js'
@@ -103,6 +107,10 @@ describe('GatewayClient solonclaw bridge', () => {
   let originalSidecarUrl: string | undefined
   let originalDashboardToken: string | undefined
   let originalDashboardAccessToken: string | undefined
+  let originalWorkspace: string | undefined
+  let originalHome: string | undefined
+  let originalUserHome: string | undefined
+  let isolatedUserHome: string
   const originalServerUrl = process.env.SOLONCLAW_SERVER_URL
 
   beforeEach(() => {
@@ -110,8 +118,17 @@ describe('GatewayClient solonclaw bridge', () => {
     originalSidecarUrl = process.env.SOLONCLAW_TUI_SIDECAR_URL
     originalDashboardToken = process.env.SOLONCLAW_DASHBOARD_TOKEN
     originalDashboardAccessToken = process.env.SOLONCLAW_DASHBOARD_ACCESS_TOKEN
+    originalWorkspace = process.env.SOLONCLAW_WORKSPACE
+    originalHome = process.env.SOLONCLAW_HOME
+    originalUserHome = process.env.HOME
+    isolatedUserHome = mkdtempSync(join(tmpdir(), 'solonclaw-gateway-client-home-'))
     FakeWebSocket.reset()
     process.env.SOLONCLAW_SERVER_URL = 'http://127.0.0.1:8080'
+    process.env.SOLONCLAW_WORKSPACE = ''
+    process.env.SOLONCLAW_HOME = ''
+    process.env.HOME = isolatedUserHome
+    delete process.env.SOLONCLAW_DASHBOARD_TOKEN
+    delete process.env.SOLONCLAW_DASHBOARD_ACCESS_TOKEN
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
@@ -153,6 +170,26 @@ describe('GatewayClient solonclaw bridge', () => {
     } else {
       process.env.SOLONCLAW_DASHBOARD_ACCESS_TOKEN = originalDashboardAccessToken
     }
+
+    if (originalWorkspace === undefined) {
+      delete process.env.SOLONCLAW_WORKSPACE
+    } else {
+      process.env.SOLONCLAW_WORKSPACE = originalWorkspace
+    }
+
+    if (originalHome === undefined) {
+      delete process.env.SOLONCLAW_HOME
+    } else {
+      process.env.SOLONCLAW_HOME = originalHome
+    }
+
+    if (originalUserHome === undefined) {
+      delete process.env.HOME
+    } else {
+      process.env.HOME = originalUserHome
+    }
+
+    rmSync(isolatedUserHome, { force: true, recursive: true })
 
     if (originalFetch) {
       globalThis.fetch = originalFetch

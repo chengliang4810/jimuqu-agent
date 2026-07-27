@@ -2,7 +2,7 @@
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { clearApiKey, dashboardFetch, exchangeDashboardSession, getBaseUrlValue, restoreDashboardSession } from "@/api/client";
+import { clearApiKey, exchangeDashboardSession, restoreDashboardSession } from "@/api/client";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -48,15 +48,6 @@ async function validateExistingToken() {
   }
 }
 
-async function tryBootstrapDashboardToken(key: string) {
-  const res = await dashboardFetch(`${getBaseUrlValue()}/api/workspace-config/bootstrap-dashboard-token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ accessToken: key }),
-  });
-  return res.ok;
-}
-
 onMounted(async () => {
   await validateExistingToken();
 });
@@ -73,10 +64,6 @@ async function handleLogin() {
 
   try {
     if (!await exchangeDashboardSession(key)) {
-      if (await tryBootstrapDashboardToken(key) && await exchangeDashboardSession(key)) {
-        router.replace(loginTarget());
-        return;
-      }
       errorMsg.value = t("login.invalidToken");
       loading.value = false;
       return;

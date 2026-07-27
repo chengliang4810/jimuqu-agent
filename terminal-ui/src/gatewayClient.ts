@@ -6,6 +6,7 @@ import { WebSocket as WsWebSocket } from 'ws'
 
 import type { GatewayEvent } from './gatewayTypes.js'
 import { CircularBuffer } from './lib/circularBuffer.js'
+import { resolveDashboardToken } from './lib/dashboardToken.js'
 import { recordParentLifecycle } from './lib/parentLog.js'
 
 // 测试或兼容运行时可能没有全局 WebSocket，使用 ws 模块兜底。
@@ -70,10 +71,7 @@ const normalizeServerUrl = (value = DEFAULT_SERVER_URL) => {
 
 const resolveServerUrl = () => normalizeServerUrl(process.env.SOLONCLAW_SERVER_URL ?? DEFAULT_SERVER_URL)
 
-const handshakeUrl = () => `${resolveServerUrl()}/api/tui/handshake`
-
-const resolveDashboardToken = () =>
-  process.env.SOLONCLAW_DASHBOARD_ACCESS_TOKEN?.trim() || process.env.SOLONCLAW_DASHBOARD_TOKEN?.trim() || ''
+const handshakeUrl = (serverUrl = resolveServerUrl()) => `${serverUrl}/api/tui/handshake`
 
 type HandshakeResponse = {
   app?: string
@@ -84,8 +82,9 @@ type HandshakeResponse = {
 }
 
 const fetchHandshake = async (): Promise<HandshakeResponse> => {
-  const url = handshakeUrl()
-  const dashboardToken = resolveDashboardToken()
+  const serverUrl = resolveServerUrl()
+  const url = handshakeUrl(serverUrl)
+  const dashboardToken = resolveDashboardToken(serverUrl)
 
   const response = dashboardToken
     ? await fetch(url, { headers: { Authorization: `Bearer ${dashboardToken}` } })

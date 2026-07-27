@@ -3,7 +3,6 @@ package com.jimuqu.solon.claw.web;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.support.SecureTokenCompare;
-import java.net.InetAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -62,9 +61,7 @@ public class DashboardAuthService {
                             "/api/status",
                             "/api/config/defaults",
                             "/api/config/schema",
-                            "/api/model/info",
-                            "/api/workspace-config/bootstrap-dashboard-token",
-                            "/api/tui/handshake"));
+                            "/api/model/info"));
 
     /** 注入应用配置，用于控制台认证。 */
     private final AppConfig appConfig;
@@ -239,25 +236,7 @@ public class DashboardAuthService {
      * @return 如果Reveal token满足条件则返回 true，否则返回 false。
      */
     public boolean canRevealToken(Context context) {
-        return isAuthorized(context) || isLocalRequest(context);
-    }
-
-    /**
-     * 判断是否本地请求。
-     *
-     * @param context 当前请求或运行上下文。
-     * @return 如果本地请求满足条件则返回 true，否则返回 false。
-     */
-    public boolean isLocalRequest(Context context) {
-        String ip = context.remoteIp();
-        if (StrUtil.isBlank(ip)) {
-            return false;
-        }
-        try {
-            return InetAddress.getByName(ip).isLoopbackAddress();
-        } catch (Exception e) {
-            return "127.0.0.1".equals(ip) || "0:0:0:0:0:0:0:1".equals(ip) || "::1".equals(ip);
-        }
+        return isAuthorized(context);
     }
 
     /**

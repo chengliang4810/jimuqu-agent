@@ -540,7 +540,7 @@ ENV_EOF
     fi
     echo ""
     echo "  TUI 交互:   solonclaw"
-    echo "  远程连接:   SOLONCLAW_SERVER_URL=http://IP:8080 solonclaw"
+    echo "  远程连接:   SOLONCLAW_SERVER_URL=http://IP:8080 SOLONCLAW_DASHBOARD_ACCESS_TOKEN=<访问令牌> solonclaw"
     echo ""
     echo "  模型配置（二选一）:"
     echo "    1. TUI 命令:   启动 solonclaw 后输入 /setup model"

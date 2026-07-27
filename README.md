@@ -89,7 +89,7 @@ java -jar target/solonclaw-0.0.1.jar
 http://127.0.0.1:8080
 ```
 
-首次打开 Dashboard 时输入一个新的访问令牌即可完成本机初始化；页面会通过本机限定的首次设置接口写入 `workspace/config.yml`。如果要提前固定访问令牌，也可以在启动时传入：
+启动前必须在 `workspace/config.yml` 中配置高强度 Dashboard 访问令牌，或通过启动参数显式传入。服务不再依据 loopback 来源开放匿名首次设置接口，避免反向代理和 DNS rebinding 绕过认证：
 
 ```bash
 java -Dsolonclaw.dashboard.accessToken=your-token -jar target/solonclaw-0.0.1.jar

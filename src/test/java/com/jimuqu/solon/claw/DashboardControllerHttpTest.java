@@ -232,8 +232,12 @@ public class DashboardControllerHttpTest {
         String token = DASHBOARD_TEST_TOKEN;
         assertThat(token).isNotBlank();
 
-        HttpResult tuiHandshake = request("GET", "/api/tui/handshake", null, null);
-        HttpResult secondTuiHandshake = request("GET", "/api/tui/handshake", null, null);
+        HttpResult unauthorizedTuiHandshake = request("GET", "/api/tui/handshake", null, null);
+        assertThat(unauthorizedTuiHandshake.status).isEqualTo(401);
+        assertThat(unauthorizedTuiHandshake.body).doesNotContain("/ws/tui?ticket=");
+
+        HttpResult tuiHandshake = request("GET", "/api/tui/handshake", null, token);
+        HttpResult secondTuiHandshake = request("GET", "/api/tui/handshake", null, token);
         assertThat(tuiHandshake.status).isEqualTo(200);
         assertThat(secondTuiHandshake.status).isEqualTo(200);
         String tuiWebSocketUrl = ONode.ofJson(tuiHandshake.body).get("ws_url").getString();
@@ -244,6 +248,14 @@ public class DashboardControllerHttpTest {
                 .doesNotContain(DASHBOARD_TEST_TOKEN)
                 .doesNotContain("?token=");
         assertThat(secondTuiWebSocketUrl).contains("/ws/tui?ticket=").isNotEqualTo(tuiWebSocketUrl);
+
+        HttpResult unauthorizedBootstrap =
+                request(
+                        "POST",
+                        "/api/workspace-config/bootstrap-dashboard-token",
+                        "{\"accessToken\":\"attacker-token\"}",
+                        null);
+        assertThat(unauthorizedBootstrap.status).isEqualTo(401);
 
         HttpResult status = request("GET", "/api/status", null, null);
         assertThat(status.status).isEqualTo(200);

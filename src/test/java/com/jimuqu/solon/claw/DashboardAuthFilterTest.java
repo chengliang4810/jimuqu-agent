@@ -324,9 +324,9 @@ public class DashboardAuthFilterTest {
         assertThat(invoked).isFalse();
     }
 
-    /** 验证公开的首次 token 配置接口也会拒绝跨站抢占写请求。 */
+    /** 验证已移除的首次 token 配置接口在进入控制器前就要求 Dashboard 认证。 */
     @Test
-    void shouldRejectCrossOriginDashboardTokenBootstrap() throws Throwable {
+    void shouldRequireAuthenticationForRemovedDashboardTokenBootstrap() throws Throwable {
         DashboardAuthFilter filter = filter();
         FakeContext context =
                 new FakeContext("POST", "/api/workspace-config/bootstrap-dashboard-token");
@@ -337,14 +337,14 @@ public class DashboardAuthFilterTest {
         filter.doFilter(
                 context,
                 new FilterChain() {
-                    /** 跨站首次配置必须在进入公开控制器前被拦截。 */
+                    /** 未认证的旧首次配置路径不得进入任何控制器。 */
                     @Override
                     public void doFilter(Context ctx) {
                         invoked.set(true);
                     }
                 });
 
-        assertThat(context.status()).isEqualTo(403);
+        assertThat(context.status()).isEqualTo(401);
         assertThat(invoked).isFalse();
     }
 
