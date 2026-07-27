@@ -16,20 +16,8 @@ import java.util.List;
 
 /** 以 SQLite 只读模式访问另一个 Profile 的会话数据，禁止任何写入或 schema 初始化。 */
 public class ReadOnlyProfileSessionRepository implements SessionRepository {
-    /** 搜索所需的稳定会话列，避免跨 Profile 读取依赖非必要运行字段。 */
-    private static final String SELECT_COLUMNS =
-            "session_id, source_key, branch_name, parent_session_id, model_override, "
-                    + "service_tier_override, reasoning_effort_override, "
-                    + "platform_message_id, metadata_json, ndjson, title, compressed_summary, "
-                    + "system_prompt_snapshot, agent_snapshot_json, goal_state_json, "
-                    + "last_learning_at, last_compression_at, last_compression_input_tokens, "
-                    + "compression_failure_count, last_compression_failed_at, last_input_tokens, "
-                    + "last_output_tokens, last_reasoning_tokens, last_cache_read_tokens, "
-                    + "last_cache_write_tokens, last_total_tokens, cumulative_input_tokens, "
-                    + "cumulative_output_tokens, cumulative_reasoning_tokens, "
-                    + "cumulative_cache_read_tokens, cumulative_cache_write_tokens, "
-                    + "cumulative_total_tokens, last_usage_at, last_resolved_provider, "
-                    + "last_resolved_model, created_at, updated_at";
+    /** 会话映射器维护的完整查询列。 */
+    private static final String SELECT_COLUMNS = SessionRecordMapper.selectColumns();
 
     /** SQLite 只读 URI；mode=ro 会在数据库文件不存在或发生写入时直接失败。 */
     private final String jdbcUrl;

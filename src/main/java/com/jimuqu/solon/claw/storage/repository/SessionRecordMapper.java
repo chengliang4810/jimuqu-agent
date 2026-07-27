@@ -6,8 +6,82 @@ import java.sql.ResultSet;
 /** 会话记录结果集映射工具，供多个会话仓储共享同一份列映射逻辑。 */
 final class SessionRecordMapper {
 
+    /** 会话结果集映射所需的完整稳定列名，所有会话仓储必须复用此定义。 */
+    private static final String[] COLUMN_NAMES = {
+        "session_id",
+        "source_key",
+        "branch_name",
+        "parent_session_id",
+        "model_override",
+        "service_tier_override",
+        "reasoning_effort_override",
+        "platform_message_id",
+        "metadata_json",
+        "ndjson",
+        "title",
+        "compressed_summary",
+        "system_prompt_snapshot",
+        "agent_snapshot_json",
+        "goal_state_json",
+        "last_learning_at",
+        "last_compression_at",
+        "last_compression_input_tokens",
+        "compression_failure_count",
+        "last_compression_failed_at",
+        "last_input_tokens",
+        "last_output_tokens",
+        "last_reasoning_tokens",
+        "last_cache_read_tokens",
+        "last_cache_write_tokens",
+        "last_total_tokens",
+        "cumulative_input_tokens",
+        "cumulative_output_tokens",
+        "cumulative_reasoning_tokens",
+        "cumulative_cache_read_tokens",
+        "cumulative_cache_write_tokens",
+        "cumulative_total_tokens",
+        "last_usage_at",
+        "last_resolved_provider",
+        "last_resolved_model",
+        "created_at",
+        "updated_at"
+    };
+
+    /** 无表别名的完整会话查询列。 */
+    private static final String SELECT_COLUMNS = String.join(", ", COLUMN_NAMES);
+
     private SessionRecordMapper() {
         // 工具类，禁止实例化。
+    }
+
+    /**
+     * 返回无表别名的完整会话查询列。
+     *
+     * @return 按映射顺序排列的查询列。
+     */
+    static String selectColumns() {
+        return SELECT_COLUMNS;
+    }
+
+    /**
+     * 返回带指定表别名的完整会话查询列。
+     *
+     * @param tableAlias SQL 表别名。
+     * @return 按映射顺序排列并带表别名的查询列。
+     */
+    static String selectColumns(String tableAlias) {
+        if (tableAlias == null || tableAlias.trim().length() == 0) {
+            throw new IllegalArgumentException("会话查询表别名不能为空");
+        }
+        String prefix = tableAlias.trim() + ".";
+        StringBuilder columns = new StringBuilder();
+        for (String columnName : COLUMN_NAMES) {
+            if (columns.length() > 0) {
+                columns.append(", ");
+            }
+            columns.append(prefix).append(columnName);
+        }
+        return columns.toString();
     }
 
     /** 将结果集当前行映射为 SessionRecord。 */

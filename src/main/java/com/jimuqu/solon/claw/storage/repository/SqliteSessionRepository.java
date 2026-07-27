@@ -37,32 +37,11 @@ public class SqliteSessionRepository implements SessionRepository {
     /** 会话仓储日志，仅输出脱敏异常摘要，避免泄露消息正文或完整 NDJSON。 */
     private static final Logger log = LoggerFactory.getLogger(SqliteSessionRepository.class);
 
-    /** SELECTCOLUMNS的统一常量值。 */
-    private static final String SELECT_COLUMNS =
-            "session_id, source_key, branch_name, parent_session_id, model_override, service_tier_override, reasoning_effort_override, "
-                    + "platform_message_id, metadata_json, ndjson, title, compressed_summary, system_prompt_snapshot, "
-                    + "agent_snapshot_json, goal_state_json, last_learning_at, last_compression_at, "
-                    + "last_compression_input_tokens, compression_failure_count, "
-                    + "last_compression_failed_at, last_input_tokens, last_output_tokens, "
-                    + "last_reasoning_tokens, last_cache_read_tokens, last_cache_write_tokens, "
-                    + "last_total_tokens, cumulative_input_tokens, cumulative_output_tokens, "
-                    + "cumulative_reasoning_tokens, cumulative_cache_read_tokens, "
-                    + "cumulative_cache_write_tokens, cumulative_total_tokens, last_usage_at, "
-                    + "last_resolved_provider, last_resolved_model, created_at, updated_at";
+    /** 会话映射器维护的完整查询列。 */
+    private static final String SELECT_COLUMNS = SessionRecordMapper.selectColumns();
 
-    /** SELECTCOLUMNSWITHALIAS的统一常量值。 */
-    private static final String SELECT_COLUMNS_WITH_ALIAS =
-            "s.session_id, s.source_key, s.branch_name, s.parent_session_id, s.model_override, s.service_tier_override, s.reasoning_effort_override, "
-                    + "s.platform_message_id, s.metadata_json, s.ndjson, s.title, s.compressed_summary, "
-                    + "s.system_prompt_snapshot, s.agent_snapshot_json, s.goal_state_json, "
-                    + "s.last_learning_at, s.last_compression_at, s.last_compression_input_tokens, "
-                    + "s.compression_failure_count, s.last_compression_failed_at, s.last_input_tokens, "
-                    + "s.last_output_tokens, s.last_reasoning_tokens, s.last_cache_read_tokens, "
-                    + "s.last_cache_write_tokens, s.last_total_tokens, s.cumulative_input_tokens, "
-                    + "s.cumulative_output_tokens, s.cumulative_reasoning_tokens, "
-                    + "s.cumulative_cache_read_tokens, s.cumulative_cache_write_tokens, "
-                    + "s.cumulative_total_tokens, s.last_usage_at, s.last_resolved_provider, "
-                    + "s.last_resolved_model, s.created_at, s.updated_at";
+    /** 会话映射器维护的带 sessions 表别名查询列。 */
+    private static final String SELECT_COLUMNS_WITH_ALIAS = SessionRecordMapper.selectColumns("s");
 
     /** 上下文待恢复审批队列的统一常量值。 */
     private static final String CONTEXT_PENDING_APPROVAL_QUEUE =
