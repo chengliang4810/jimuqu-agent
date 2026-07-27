@@ -186,6 +186,32 @@ public class TestEnvironment {
         return create(config, new SolonAiLlmGateway(config));
     }
 
+    /**
+     * 创建连接本地 Responses SSE 回放端点的完整网关测试环境。
+     *
+     * @param baseUrl 本地回放服务基础地址。
+     * @return 使用真实 Solon AI 协议栈的测试环境。
+     */
+    public static TestEnvironment withReplayedResponsesLlm(String baseUrl) throws Exception {
+        AppConfig config = newConfig();
+        AppConfig.ProviderConfig provider = config.getProviders().get("default");
+        provider.setDialect("openai-responses");
+        provider.setBaseUrl(baseUrl);
+        provider.setApiKey("sk-test-replayed-responses");
+        provider.setDefaultModel("gpt-5.4");
+        provider.setModels(Arrays.asList("gpt-5.4"));
+        config.getModel().setProviderKey("default");
+        config.getModel().setDefault("gpt-5.4");
+        config.getLlm().setProvider("default");
+        config.getLlm().setDialect("openai-responses");
+        config.getLlm().setApiUrl(LlmProviderSupport.buildApiUrl(baseUrl, "openai-responses"));
+        config.getLlm().setApiKey(provider.getApiKey());
+        config.getLlm().setModel(provider.getDefaultModel());
+        config.getLlm().setStream(true);
+        config.getSecurity().setAllowPrivateUrls(true);
+        return create(config, new SolonAiLlmGateway(config));
+    }
+
     public static String runtimeConfigValue(String key) {
         return runtimeConfigValue(key, "");
     }
