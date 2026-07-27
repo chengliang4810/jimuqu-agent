@@ -23,6 +23,7 @@ import com.jimuqu.solon.claw.support.SecretValueGuard;
 import com.jimuqu.solon.claw.support.UrlOriginSupport;
 import com.jimuqu.solon.claw.support.constants.LlmConstants;
 import com.jimuqu.solon.claw.tool.runtime.SecurityPolicyService;
+import com.jimuqu.solon.claw.tool.runtime.port.ProviderManagementPort;
 import com.jimuqu.solon.claw.web.profile.DashboardProfileConfigFile;
 import com.jimuqu.solon.claw.web.profile.DashboardProfileContext;
 import java.io.File;
@@ -44,7 +45,7 @@ import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
 /** Dashboard provider 配置管理服务。 */
-public class DashboardProviderService {
+public class DashboardProviderService implements ProviderManagementPort {
     /** 模型列表缓存TTLMILLIS的统一常量值。 */
     private static final long MODEL_LIST_CACHE_TTL_MILLIS = 60L * 60L * 1000L;
 

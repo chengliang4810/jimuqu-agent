@@ -13,6 +13,7 @@ import com.jimuqu.solon.claw.support.BoundedExecutorFactory;
 import com.jimuqu.solon.claw.support.ErrorTextSupport;
 import com.jimuqu.solon.claw.support.SecretRedactor;
 import com.jimuqu.solon.claw.tool.runtime.SecurityPolicyService;
+import com.jimuqu.solon.claw.tool.runtime.port.DomesticQrSetupPort;
 import com.jimuqu.solon.claw.web.profile.DashboardProfileContext;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -35,7 +36,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.noear.snack4.ONode;
 
 /** 国内渠道扫码注册服务。 */
-public class DomesticQrSetupService {
+public class DomesticQrSetupService implements DomesticQrSetupPort {
     /** 平台钉钉的统一常量值。 */
     private static final String PLATFORM_DINGTALK = "dingtalk";
 

@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardSessionService;
+import com.jimuqu.solon.claw.tool.runtime.port.SessionManagementPort;
 import java.util.Collections;
 import java.util.Map;
 import org.noear.snack4.ONode;
@@ -12,14 +12,14 @@ import org.noear.solon.annotation.Param;
 /** 提供会话与检查点查询工具，复用 Dashboard 会话服务。 */
 public class SessionManageTools {
     /** Dashboard 会话服务，用于复用会话列表、详情、轨迹和检查点预览逻辑。 */
-    private final DashboardSessionService dashboardSessionService;
+    private final SessionManagementPort dashboardSessionService;
 
     /**
      * 创建会话管理工具。
      *
      * @param dashboardSessionService Dashboard 会话服务。
      */
-    public SessionManageTools(DashboardSessionService dashboardSessionService) {
+    public SessionManageTools(SessionManagementPort dashboardSessionService) {
         this.dashboardSessionService = dashboardSessionService;
     }
 

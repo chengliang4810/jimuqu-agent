@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardDiagnosticsService;
+import com.jimuqu.solon.claw.tool.runtime.port.DiagnosticsManagementPort;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -13,14 +13,14 @@ import org.noear.solon.annotation.Param;
 /** 提供 Dashboard 诊断总览只读查询工具。 */
 public class DiagnosticsManageTools {
     /** Dashboard 诊断服务，用于读取运行、工具和安全诊断总览。 */
-    private final Supplier<DashboardDiagnosticsService> diagnosticsService;
+    private final Supplier<DiagnosticsManagementPort> diagnosticsService;
 
     /**
      * 创建诊断总览查询工具。
      *
      * @param diagnosticsService Dashboard 诊断服务供应器。
      */
-    public DiagnosticsManageTools(Supplier<DashboardDiagnosticsService> diagnosticsService) {
+    public DiagnosticsManageTools(Supplier<DiagnosticsManagementPort> diagnosticsService) {
         this.diagnosticsService = diagnosticsService;
     }
 
@@ -46,7 +46,7 @@ public class DiagnosticsManageTools {
                                     "JSON array of environment variable names for subprocess_environment")
                     String namesJson) {
         try {
-            DashboardDiagnosticsService service = resolveDiagnosticsService();
+            DiagnosticsManagementPort service = resolveDiagnosticsService();
             if (service == null) {
                 return ToolResultEnvelope.error("diagnostics service unavailable").toJson();
             }
@@ -74,7 +74,7 @@ public class DiagnosticsManageTools {
      * @return 返回诊断结果。
      */
     private Map<String, Object> run(
-            DashboardDiagnosticsService service, String action, String namesJson) {
+            DiagnosticsManagementPort service, String action, String namesJson) {
         String normalized =
                 action == null ? "overview" : action.trim().toLowerCase(java.util.Locale.ROOT);
         if ("subprocess_environment".equals(normalized)
@@ -92,7 +92,7 @@ public class DiagnosticsManageTools {
      *
      * @return 返回诊断服务实例，无法解析时返回 null。
      */
-    private DashboardDiagnosticsService resolveDiagnosticsService() {
+    private DiagnosticsManagementPort resolveDiagnosticsService() {
         return diagnosticsService == null ? null : diagnosticsService.get();
     }
 

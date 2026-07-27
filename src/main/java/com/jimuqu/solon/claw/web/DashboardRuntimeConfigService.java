@@ -6,6 +6,7 @@ import com.jimuqu.solon.claw.config.RuntimeConfigResolver;
 import com.jimuqu.solon.claw.profile.ProfileMutationLock;
 import com.jimuqu.solon.claw.support.ModelConfigKeySupport;
 import com.jimuqu.solon.claw.support.SecretValueGuard;
+import com.jimuqu.solon.claw.tool.runtime.port.RuntimeConfigManagementPort;
 import com.jimuqu.solon.claw.web.profile.DashboardProfileConfigFile;
 import com.jimuqu.solon.claw.web.profile.DashboardProfileContext;
 import java.util.Arrays;
@@ -15,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Dashboard 工作区配置管理服务。 */
-public class DashboardRuntimeConfigService {
+public class DashboardRuntimeConfigService implements RuntimeConfigManagementPort {
     /** 当前 JVM Profile 配置，用于解析共享变更锁。 */
     private final AppConfig appConfig;
 

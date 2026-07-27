@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardLogsService;
+import com.jimuqu.solon.claw.tool.runtime.port.LogsQueryPort;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,14 +13,14 @@ import org.noear.solon.annotation.Param;
 /** 提供日志查询工具，复用 Dashboard 日志服务的白名单、脱敏和索引查询逻辑。 */
 public class LogsManageTools {
     /** Dashboard 日志服务，用于读取受控日志文件和结构化运行索引。 */
-    private final DashboardLogsService dashboardLogsService;
+    private final LogsQueryPort dashboardLogsService;
 
     /**
      * 创建日志管理工具。
      *
      * @param dashboardLogsService Dashboard 日志服务。
      */
-    public LogsManageTools(DashboardLogsService dashboardLogsService) {
+    public LogsManageTools(LogsQueryPort dashboardLogsService) {
         this.dashboardLogsService = dashboardLogsService;
     }
 

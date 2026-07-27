@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardRunService;
+import com.jimuqu.solon.claw.tool.runtime.port.RunManagementPort;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.noear.snack4.ONode;
@@ -12,14 +12,14 @@ import org.noear.solon.annotation.Param;
 /** 提供 Agent 运行查询和控制工具，复用 Dashboard 已有运行服务。 */
 public class RunTools {
     /** Dashboard 运行服务，用于复用运行查询、控制和子 Agent 控制逻辑。 */
-    private final DashboardRunService dashboardRunService;
+    private final RunManagementPort dashboardRunService;
 
     /**
      * 创建运行管理工具。
      *
      * @param dashboardRunService Dashboard 运行服务。
      */
-    public RunTools(DashboardRunService dashboardRunService) {
+    public RunTools(RunManagementPort dashboardRunService) {
         this.dashboardRunService = dashboardRunService;
     }
 

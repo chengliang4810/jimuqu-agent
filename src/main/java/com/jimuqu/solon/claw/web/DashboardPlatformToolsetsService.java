@@ -2,6 +2,7 @@ package com.jimuqu.solon.claw.web;
 
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
+import com.jimuqu.solon.claw.tool.runtime.port.PlatformToolsetsManagementPort;
 import com.jimuqu.solon.claw.web.profile.DashboardProfileContext;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -11,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 /** 提供控制台平台Toolsets相关业务能力，封装调用方不需要感知的运行细节。 */
-public class DashboardPlatformToolsetsService {
+public class DashboardPlatformToolsetsService implements PlatformToolsetsManagementPort {
     /** SUPPORTEDPLATFORMS的统一常量值。 */
     private static final List<String> SUPPORTED_PLATFORMS =
             Arrays.asList("feishu", "dingtalk", "wecom", "weixin", "qqbot", "yuanbao");

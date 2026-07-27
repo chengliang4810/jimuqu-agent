@@ -7,7 +7,7 @@ import com.jimuqu.solon.claw.core.repository.ProfileTaskRepository;
 import com.jimuqu.solon.claw.profile.ProfileCreateOptions;
 import com.jimuqu.solon.claw.profile.ProfileManager;
 import com.jimuqu.solon.claw.profile.ProfileRuntimeIdentity;
-import com.jimuqu.solon.claw.web.DashboardProfileService;
+import com.jimuqu.solon.claw.tool.runtime.port.ProfileManagementPort;
 import org.noear.solon.ai.annotation.ToolMapping;
 import org.noear.solon.annotation.Param;
 
@@ -20,7 +20,7 @@ public class ProfileManageTools {
     private final ProfileManager profileManager;
 
     /** 复用 Dashboard 的模型写入和运行时释放逻辑。 */
-    private final DashboardProfileService profileService;
+    private final ProfileManagementPort profileService;
 
     /** default 控制面的协作任务仓储，用于删除保护。 */
     private final ProfileTaskRepository profileTaskRepository;
@@ -29,7 +29,7 @@ public class ProfileManageTools {
     public ProfileManageTools(
             AppConfig appConfig,
             ProfileManager profileManager,
-            DashboardProfileService profileService,
+            ProfileManagementPort profileService,
             ProfileTaskRepository profileTaskRepository) {
         this.appConfig = appConfig;
         this.profileManager = profileManager;
@@ -41,7 +41,7 @@ public class ProfileManageTools {
     public ProfileManageTools(
             AppConfig appConfig,
             ProfileManager profileManager,
-            DashboardProfileService profileService) {
+            ProfileManagementPort profileService) {
         this(appConfig, profileManager, profileService, null);
     }
 

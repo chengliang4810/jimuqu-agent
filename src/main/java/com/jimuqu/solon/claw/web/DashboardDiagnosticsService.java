@@ -51,6 +51,7 @@ import com.jimuqu.solon.claw.tool.runtime.SolonClawToolSchemaSanitizer;
 import com.jimuqu.solon.claw.tool.runtime.SubprocessEnvironmentSanitizer;
 import com.jimuqu.solon.claw.tool.runtime.TirithSecurityService;
 import com.jimuqu.solon.claw.tool.runtime.ToolResultStorageService;
+import com.jimuqu.solon.claw.tool.runtime.port.DiagnosticsManagementPort;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -61,7 +62,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Dashboard 统一诊断服务。 */
-public class DashboardDiagnosticsService {
+public class DashboardDiagnosticsService implements DiagnosticsManagementPort {
     /** 记录诊断 fallback 中的非敏感异常摘要，避免吞没问题影响排查。 */
     private static final Logger log = LoggerFactory.getLogger(DashboardDiagnosticsService.class);
 

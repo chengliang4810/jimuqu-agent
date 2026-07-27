@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardAnalyticsService;
+import com.jimuqu.solon.claw.tool.runtime.port.AnalyticsManagementPort;
 import java.util.Map;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.annotation.ToolMapping;
@@ -11,14 +11,14 @@ import org.noear.solon.annotation.Param;
 /** 提供用量分析查询工具，复用 Dashboard 分析服务。 */
 public class AnalyticsManageTools {
     /** Dashboard 分析服务，用于复用 token 用量聚合逻辑。 */
-    private final DashboardAnalyticsService dashboardAnalyticsService;
+    private final AnalyticsManagementPort dashboardAnalyticsService;
 
     /**
      * 创建用量分析管理工具。
      *
      * @param dashboardAnalyticsService Dashboard 分析服务。
      */
-    public AnalyticsManageTools(DashboardAnalyticsService dashboardAnalyticsService) {
+    public AnalyticsManageTools(AnalyticsManagementPort dashboardAnalyticsService) {
         this.dashboardAnalyticsService = dashboardAnalyticsService;
     }
 

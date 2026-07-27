@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardMediaService;
+import com.jimuqu.solon.claw.tool.runtime.port.MediaManagementPort;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.noear.snack4.ONode;
@@ -12,14 +12,14 @@ import org.noear.solon.annotation.Param;
 /** 提供媒体库查询和受控索引工具，复用 Dashboard 媒体服务。 */
 public class MediaManageTools {
     /** Dashboard 媒体服务，用于复用媒体索引、路径保护和引用生成逻辑。 */
-    private final DashboardMediaService dashboardMediaService;
+    private final MediaManagementPort dashboardMediaService;
 
     /**
      * 创建媒体管理工具。
      *
      * @param dashboardMediaService Dashboard 媒体服务。
      */
-    public MediaManageTools(DashboardMediaService dashboardMediaService) {
+    public MediaManageTools(MediaManagementPort dashboardMediaService) {
         this.dashboardMediaService = dashboardMediaService;
     }
 

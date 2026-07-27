@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardCuratorService;
+import com.jimuqu.solon.claw.tool.runtime.port.CuratorManagementPort;
 import java.util.Map;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.annotation.ToolMapping;
@@ -11,14 +11,14 @@ import org.noear.solon.annotation.Param;
 /** 提供技能维护报告和建议处理工具，复用 Dashboard 技能维护服务。 */
 public class CuratorManageTools {
     /** Dashboard 技能维护服务，用于复用扫描、报告和建议处理逻辑。 */
-    private final DashboardCuratorService dashboardCuratorService;
+    private final CuratorManagementPort dashboardCuratorService;
 
     /**
      * 创建技能维护管理工具。
      *
      * @param dashboardCuratorService Dashboard 技能维护服务。
      */
-    public CuratorManageTools(DashboardCuratorService dashboardCuratorService) {
+    public CuratorManageTools(CuratorManagementPort dashboardCuratorService) {
         this.dashboardCuratorService = dashboardCuratorService;
     }
 

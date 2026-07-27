@@ -3,6 +3,7 @@ package com.jimuqu.solon.claw.web;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
+import com.jimuqu.solon.claw.tool.runtime.port.AnalyticsManagementPort;
 import com.jimuqu.solon.claw.usage.UsageEventRecord;
 import com.jimuqu.solon.claw.usage.UsageEventRepository;
 import java.time.Instant;
@@ -17,7 +18,7 @@ import java.util.Map;
 import java.util.Set;
 
 /** Dashboard 分析服务。 */
-public class DashboardAnalyticsService {
+public class DashboardAnalyticsService implements AnalyticsManagementPort {
     /** 保存会话仓储依赖，用于访问持久化数据。 */
     private final SessionRepository sessionRepository;
 

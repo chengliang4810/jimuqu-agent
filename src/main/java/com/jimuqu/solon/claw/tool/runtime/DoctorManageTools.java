@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardGatewayDoctorService;
+import com.jimuqu.solon.claw.tool.runtime.port.GatewayDoctorPort;
 import java.util.Map;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.annotation.ToolMapping;
@@ -10,14 +10,14 @@ import org.noear.solon.ai.annotation.ToolMapping;
 /** 提供消息网关 Doctor 诊断工具，复用 Dashboard Doctor 聚合服务。 */
 public class DoctorManageTools {
     /** Dashboard Doctor 服务，用于复用模型、渠道、配置和关闭诊断聚合逻辑。 */
-    private final DashboardGatewayDoctorService doctorService;
+    private final GatewayDoctorPort doctorService;
 
     /**
      * 创建 Doctor 管理工具。
      *
      * @param doctorService Dashboard Doctor 服务。
      */
-    public DoctorManageTools(DashboardGatewayDoctorService doctorService) {
+    public DoctorManageTools(GatewayDoctorPort doctorService) {
         this.doctorService = doctorService;
     }
 

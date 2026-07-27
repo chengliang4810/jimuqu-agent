@@ -8,6 +8,7 @@ import com.jimuqu.solon.claw.profile.ProfileDescriptionService;
 import com.jimuqu.solon.claw.profile.ProfileManager;
 import com.jimuqu.solon.claw.profile.ProfileMutationLock;
 import com.jimuqu.solon.claw.profile.ProfileView;
+import com.jimuqu.solon.claw.tool.runtime.port.ProfileManagementPort;
 import com.jimuqu.solon.claw.web.profile.DashboardProfileConfigFile;
 import java.io.File;
 import java.io.IOException;
@@ -30,7 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** 为机器级 Dashboard 提供 Profile 专业执行单元管理。 */
-public class DashboardProfileService {
+public class DashboardProfileService implements ProfileManagementPort {
     /** 记录 Builder 后处理降级，日志只包含 Profile 名、阶段和异常类型。 */
     private static final Logger log = LoggerFactory.getLogger(DashboardProfileService.class);
 

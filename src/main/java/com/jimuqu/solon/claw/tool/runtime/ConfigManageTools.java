@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardConfigService;
+import com.jimuqu.solon.claw.tool.runtime.port.ConfigManagementPort;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -13,14 +13,14 @@ import org.noear.solon.annotation.Param;
 /** 提供 Dashboard 配置元数据只读查询工具。 */
 public class ConfigManageTools {
     /** Dashboard 配置服务，用于读取配置结构、默认值和诊断信息。 */
-    private final DashboardConfigService configService;
+    private final ConfigManagementPort configService;
 
     /**
      * 创建配置管理工具。
      *
      * @param configService Dashboard 配置服务。
      */
-    public ConfigManageTools(DashboardConfigService configService) {
+    public ConfigManageTools(ConfigManagementPort configService) {
         this.configService = configService;
     }
 

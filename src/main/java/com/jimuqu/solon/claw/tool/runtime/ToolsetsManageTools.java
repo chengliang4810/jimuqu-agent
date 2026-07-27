@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardSkillsService;
+import com.jimuqu.solon.claw.tool.runtime.port.SkillsQueryPort;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,14 +12,14 @@ import org.noear.solon.ai.annotation.ToolMapping;
 /** 提供 Dashboard 工具集只读查询工具。 */
 public class ToolsetsManageTools {
     /** Dashboard 技能服务，用于读取与前端一致的工具集分组。 */
-    private final DashboardSkillsService skillsService;
+    private final SkillsQueryPort skillsService;
 
     /**
      * 创建工具集查询工具。
      *
      * @param skillsService Dashboard 技能服务。
      */
-    public ToolsetsManageTools(DashboardSkillsService skillsService) {
+    public ToolsetsManageTools(SkillsQueryPort skillsService) {
         this.skillsService = skillsService;
     }
 

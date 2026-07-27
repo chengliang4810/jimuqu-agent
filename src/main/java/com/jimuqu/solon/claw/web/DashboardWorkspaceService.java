@@ -8,6 +8,7 @@ import com.jimuqu.solon.claw.context.PersonaWorkspaceService;
 import com.jimuqu.solon.claw.gateway.service.ProfileMultiplexRuntimeManager;
 import com.jimuqu.solon.claw.gateway.service.ProfileRuntimeBundle;
 import com.jimuqu.solon.claw.profile.ProfileBeanResolver;
+import com.jimuqu.solon.claw.tool.runtime.port.WorkspaceManagementPort;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -18,7 +19,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 /** Dashboard 人格工作区文件服务。 */
-public class DashboardWorkspaceService {
+public class DashboardWorkspaceService implements WorkspaceManagementPort {
     /** 注入persona工作区服务，用于调用对应业务能力。 */
     private final PersonaWorkspaceService personaWorkspaceService;
 

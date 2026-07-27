@@ -5,7 +5,6 @@ import com.jimuqu.solon.claw.context.FileContextService;
 import com.jimuqu.solon.claw.context.LocalSkillService;
 import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.core.repository.ApprovalAuditRepository;
-import com.jimuqu.solon.claw.core.repository.CronJobRepository;
 import com.jimuqu.solon.claw.core.repository.GlobalSettingRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.AgentRunControlService;
@@ -40,7 +39,6 @@ import com.jimuqu.solon.claw.provider.TranscriptionProvider;
 import com.jimuqu.solon.claw.provider.WebSearchProvider;
 import com.jimuqu.solon.claw.scheduler.CronApprovalResumeObserver;
 import com.jimuqu.solon.claw.scheduler.CronJobService;
-import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.jimuqu.solon.claw.support.ConversationOrchestratorHolder;
@@ -64,15 +62,20 @@ import com.jimuqu.solon.claw.tool.runtime.ToolCallLoopGuardrailService;
 import com.jimuqu.solon.claw.tool.runtime.ToolResultStorageService;
 import com.jimuqu.solon.claw.tool.runtime.ToolResultTransformService;
 import com.jimuqu.solon.claw.usage.UsageEventRepository;
+import com.jimuqu.solon.claw.web.DashboardAnalyticsService;
 import com.jimuqu.solon.claw.web.DashboardApprovalEventsService;
 import com.jimuqu.solon.claw.web.DashboardConfigService;
 import com.jimuqu.solon.claw.web.DashboardCuratorService;
 import com.jimuqu.solon.claw.web.DashboardGatewayDoctorService;
 import com.jimuqu.solon.claw.web.DashboardInsightsService;
+import com.jimuqu.solon.claw.web.DashboardLogsService;
+import com.jimuqu.solon.claw.web.DashboardMediaService;
 import com.jimuqu.solon.claw.web.DashboardPlatformToolsetsService;
 import com.jimuqu.solon.claw.web.DashboardProviderService;
 import com.jimuqu.solon.claw.web.DashboardRunService;
 import com.jimuqu.solon.claw.web.DashboardRuntimeConfigService;
+import com.jimuqu.solon.claw.web.DashboardSessionService;
+import com.jimuqu.solon.claw.web.DashboardSkillsService;
 import com.jimuqu.solon.claw.web.DashboardStatusService;
 import com.jimuqu.solon.claw.web.DashboardWorkspaceService;
 import com.jimuqu.solon.claw.web.DomesticQrSetupService;
@@ -302,14 +305,15 @@ public class ToolConfiguration {
      * @param dashboardRuntimeConfigService Dashboard 工作区配置服务依赖。
      * @param weixinQrSetupService 微信二维码 setup 服务依赖。
      * @param domesticQrSetupService 国内二维码 setup 服务依赖。
+     * @param dashboardSessionService Dashboard 会话服务依赖。
+     * @param dashboardAnalyticsService Dashboard 分析服务依赖。
+     * @param dashboardLogsService Dashboard 日志服务依赖。
+     * @param dashboardMediaService Dashboard 媒体服务依赖。
+     * @param dashboardSkillsService Dashboard 技能服务依赖。
      * @param browserRuntimeService 浏览器运行时服务依赖。
      * @param imageGenerationService 图片Generation服务依赖。
      * @param speechService 语音服务依赖。
      * @param dashboardRunService Dashboard运行服务依赖。
-     * @param sqliteDatabase SQLite数据库依赖。
-     * @param agentRunRepository Agent运行仓储依赖。
-     * @param cronJobRepository 定时任务仓储依赖。
-     * @param usageEventRepository 用量事件仓储依赖。
      * @param webSearchProviders Web 搜索附加提供方列表。
      * @return 返回工具注册表结果。
      */
@@ -345,14 +349,15 @@ public class ToolConfiguration {
             DashboardRuntimeConfigService dashboardRuntimeConfigService,
             WeixinQrSetupService weixinQrSetupService,
             DomesticQrSetupService domesticQrSetupService,
+            DashboardSessionService dashboardSessionService,
+            DashboardAnalyticsService dashboardAnalyticsService,
+            DashboardLogsService dashboardLogsService,
+            DashboardMediaService dashboardMediaService,
+            DashboardSkillsService dashboardSkillsService,
             BrowserRuntimeService browserRuntimeService,
             ImageGenerationService imageGenerationService,
             SpeechService speechService,
             DashboardRunService dashboardRunService,
-            SqliteDatabase sqliteDatabase,
-            AgentRunRepository agentRunRepository,
-            CronJobRepository cronJobRepository,
-            UsageEventRepository usageEventRepository,
             List<WebSearchProvider> webSearchProviders) {
         return applyCommonToolRegistrySettings(
                         DefaultToolRegistry.builder(),
@@ -385,14 +390,15 @@ public class ToolConfiguration {
                 .dashboardRuntimeConfigService(dashboardRuntimeConfigService)
                 .weixinQrSetupService(weixinQrSetupService)
                 .domesticQrSetupService(domesticQrSetupService)
+                .dashboardSessionService(dashboardSessionService)
+                .dashboardAnalyticsService(dashboardAnalyticsService)
+                .dashboardLogsService(dashboardLogsService)
+                .dashboardMediaService(dashboardMediaService)
+                .dashboardSkillsService(dashboardSkillsService)
                 .browserRuntimeService(browserRuntimeService)
                 .imageGenerationService(imageGenerationService)
                 .speechService(speechService)
                 .dashboardRunService(dashboardRunService)
-                .sqliteDatabase(sqliteDatabase)
-                .agentRunRepository(agentRunRepository)
-                .cronJobRepository(cronJobRepository)
-                .usageEventRepository(usageEventRepository)
                 .webSearchProviders(webSearchProviders)
                 .build();
     }

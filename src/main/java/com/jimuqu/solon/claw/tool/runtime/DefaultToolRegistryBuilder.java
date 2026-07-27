@@ -2,8 +2,6 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.context.LocalSkillService;
-import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
-import com.jimuqu.solon.claw.core.repository.CronJobRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.CheckpointService;
 import com.jimuqu.solon.claw.core.service.DelegationService;
@@ -16,25 +14,29 @@ import com.jimuqu.solon.claw.media.ImageGenerationService;
 import com.jimuqu.solon.claw.media.SpeechService;
 import com.jimuqu.solon.claw.provider.WebSearchProvider;
 import com.jimuqu.solon.claw.scheduler.CronJobService;
-import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.jimuqu.solon.claw.support.RuntimeSettingsService;
-import com.jimuqu.solon.claw.usage.UsageEventRepository;
-import com.jimuqu.solon.claw.web.DashboardApprovalEventsService;
-import com.jimuqu.solon.claw.web.DashboardConfigService;
-import com.jimuqu.solon.claw.web.DashboardCuratorService;
-import com.jimuqu.solon.claw.web.DashboardDiagnosticsService;
-import com.jimuqu.solon.claw.web.DashboardGatewayDoctorService;
-import com.jimuqu.solon.claw.web.DashboardInsightsService;
-import com.jimuqu.solon.claw.web.DashboardPlatformToolsetsService;
-import com.jimuqu.solon.claw.web.DashboardProviderService;
-import com.jimuqu.solon.claw.web.DashboardRunService;
-import com.jimuqu.solon.claw.web.DashboardRuntimeConfigService;
-import com.jimuqu.solon.claw.web.DashboardStatusService;
-import com.jimuqu.solon.claw.web.DashboardWorkspaceService;
-import com.jimuqu.solon.claw.web.DomesticQrSetupService;
-import com.jimuqu.solon.claw.web.WeixinQrSetupService;
+import com.jimuqu.solon.claw.tool.runtime.port.AnalyticsManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.ApprovalEventsQueryPort;
+import com.jimuqu.solon.claw.tool.runtime.port.ConfigManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.CuratorManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.DiagnosticsManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.DomesticQrSetupPort;
+import com.jimuqu.solon.claw.tool.runtime.port.GatewayDoctorPort;
+import com.jimuqu.solon.claw.tool.runtime.port.InsightsQueryPort;
+import com.jimuqu.solon.claw.tool.runtime.port.LogsQueryPort;
+import com.jimuqu.solon.claw.tool.runtime.port.MediaManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.PlatformToolsetsManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.ProfileManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.ProviderManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.RunManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.RuntimeConfigManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.SessionManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.SkillsQueryPort;
+import com.jimuqu.solon.claw.tool.runtime.port.StatusQueryPort;
+import com.jimuqu.solon.claw.tool.runtime.port.WeixinQrSetupPort;
+import com.jimuqu.solon.claw.tool.runtime.port.WorkspaceManagementPort;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -100,43 +102,61 @@ public class DefaultToolRegistryBuilder {
     private ProcessRegistry processRegistry;
 
     /** Dashboard 技能维护服务。 */
-    private DashboardCuratorService dashboardCuratorService;
+    private CuratorManagementPort dashboardCuratorService;
 
     /** Dashboard 平台工具集服务。 */
-    private DashboardPlatformToolsetsService dashboardPlatformToolsetsService;
+    private PlatformToolsetsManagementPort dashboardPlatformToolsetsService;
 
     /** Dashboard 模型提供方服务。 */
-    private DashboardProviderService dashboardProviderService;
+    private ProviderManagementPort dashboardProviderService;
 
     /** Dashboard 状态服务。 */
-    private DashboardStatusService dashboardStatusService;
+    private StatusQueryPort dashboardStatusService;
 
     /** Dashboard 网关诊断服务。 */
-    private DashboardGatewayDoctorService dashboardGatewayDoctorService;
+    private GatewayDoctorPort dashboardGatewayDoctorService;
 
     /** Dashboard 洞察服务。 */
-    private DashboardInsightsService dashboardInsightsService;
+    private InsightsQueryPort dashboardInsightsService;
 
     /** Dashboard 审批事件服务。 */
-    private DashboardApprovalEventsService dashboardApprovalEventsService;
+    private ApprovalEventsQueryPort dashboardApprovalEventsService;
 
     /** Dashboard 诊断服务的延迟解析器。 */
-    private Supplier<DashboardDiagnosticsService> dashboardDiagnosticsService;
+    private Supplier<DiagnosticsManagementPort> dashboardDiagnosticsService;
 
     /** Dashboard 工作区服务。 */
-    private DashboardWorkspaceService dashboardWorkspaceService;
+    private WorkspaceManagementPort dashboardWorkspaceService;
 
     /** Dashboard 配置元数据服务。 */
-    private DashboardConfigService dashboardConfigService;
+    private ConfigManagementPort dashboardConfigService;
 
     /** Dashboard 运行配置服务。 */
-    private DashboardRuntimeConfigService dashboardRuntimeConfigService;
+    private RuntimeConfigManagementPort dashboardRuntimeConfigService;
 
     /** 微信二维码配置服务。 */
-    private WeixinQrSetupService weixinQrSetupService;
+    private WeixinQrSetupPort weixinQrSetupService;
 
     /** 国内渠道二维码配置服务。 */
-    private DomesticQrSetupService domesticQrSetupService;
+    private DomesticQrSetupPort domesticQrSetupService;
+
+    /** Dashboard 会话管理端口。 */
+    private SessionManagementPort dashboardSessionService;
+
+    /** Dashboard 用量分析端口。 */
+    private AnalyticsManagementPort dashboardAnalyticsService;
+
+    /** Dashboard 日志查询端口。 */
+    private LogsQueryPort dashboardLogsService;
+
+    /** Dashboard 媒体管理端口。 */
+    private MediaManagementPort dashboardMediaService;
+
+    /** Dashboard 工具集查询端口。 */
+    private SkillsQueryPort dashboardSkillsService;
+
+    /** Dashboard Profile 管理端口。 */
+    private ProfileManagementPort dashboardProfileService;
 
     /** 浏览器自动化运行时。 */
     private BrowserRuntimeService browserRuntimeService;
@@ -148,19 +168,7 @@ public class DefaultToolRegistryBuilder {
     private SpeechService speechService;
 
     /** Dashboard Agent 运行服务。 */
-    private DashboardRunService dashboardRunService;
-
-    /** Dashboard 查询使用的 SQLite 数据库。 */
-    private SqliteDatabase sqliteDatabase;
-
-    /** Agent 运行记录仓储。 */
-    private AgentRunRepository agentRunRepository;
-
-    /** 定时任务记录仓储。 */
-    private CronJobRepository cronJobRepository;
-
-    /** 用量事件仓储。 */
-    private UsageEventRepository usageEventRepository;
+    private RunManagementPort dashboardRunService;
 
     /** Web 搜索提供方。 */
     private List<WebSearchProvider> webSearchProviders;
@@ -275,92 +283,132 @@ public class DefaultToolRegistryBuilder {
 
     /** 设置 Dashboard 技能维护服务。 */
     public DefaultToolRegistryBuilder dashboardCuratorService(
-            DashboardCuratorService dashboardCuratorService) {
+            CuratorManagementPort dashboardCuratorService) {
         this.dashboardCuratorService = dashboardCuratorService;
         return this;
     }
 
     /** 设置 Dashboard 平台工具集服务。 */
     public DefaultToolRegistryBuilder dashboardPlatformToolsetsService(
-            DashboardPlatformToolsetsService dashboardPlatformToolsetsService) {
+            PlatformToolsetsManagementPort dashboardPlatformToolsetsService) {
         this.dashboardPlatformToolsetsService = dashboardPlatformToolsetsService;
         return this;
     }
 
     /** 设置 Dashboard 模型提供方服务。 */
     public DefaultToolRegistryBuilder dashboardProviderService(
-            DashboardProviderService dashboardProviderService) {
+            ProviderManagementPort dashboardProviderService) {
         this.dashboardProviderService = dashboardProviderService;
         return this;
     }
 
     /** 设置 Dashboard 状态服务。 */
     public DefaultToolRegistryBuilder dashboardStatusService(
-            DashboardStatusService dashboardStatusService) {
+            StatusQueryPort dashboardStatusService) {
         this.dashboardStatusService = dashboardStatusService;
         return this;
     }
 
     /** 设置 Dashboard 网关诊断服务。 */
     public DefaultToolRegistryBuilder dashboardGatewayDoctorService(
-            DashboardGatewayDoctorService dashboardGatewayDoctorService) {
+            GatewayDoctorPort dashboardGatewayDoctorService) {
         this.dashboardGatewayDoctorService = dashboardGatewayDoctorService;
         return this;
     }
 
     /** 设置 Dashboard 洞察服务。 */
     public DefaultToolRegistryBuilder dashboardInsightsService(
-            DashboardInsightsService dashboardInsightsService) {
+            InsightsQueryPort dashboardInsightsService) {
         this.dashboardInsightsService = dashboardInsightsService;
         return this;
     }
 
     /** 设置 Dashboard 审批事件服务。 */
     public DefaultToolRegistryBuilder dashboardApprovalEventsService(
-            DashboardApprovalEventsService dashboardApprovalEventsService) {
+            ApprovalEventsQueryPort dashboardApprovalEventsService) {
         this.dashboardApprovalEventsService = dashboardApprovalEventsService;
         return this;
     }
 
     /** 设置 Dashboard 诊断服务的延迟解析器。 */
     public DefaultToolRegistryBuilder dashboardDiagnosticsService(
-            Supplier<DashboardDiagnosticsService> dashboardDiagnosticsService) {
+            Supplier<DiagnosticsManagementPort> dashboardDiagnosticsService) {
         this.dashboardDiagnosticsService = dashboardDiagnosticsService;
         return this;
     }
 
     /** 设置 Dashboard 工作区服务。 */
     public DefaultToolRegistryBuilder dashboardWorkspaceService(
-            DashboardWorkspaceService dashboardWorkspaceService) {
+            WorkspaceManagementPort dashboardWorkspaceService) {
         this.dashboardWorkspaceService = dashboardWorkspaceService;
         return this;
     }
 
     /** 设置 Dashboard 配置元数据服务。 */
     public DefaultToolRegistryBuilder dashboardConfigService(
-            DashboardConfigService dashboardConfigService) {
+            ConfigManagementPort dashboardConfigService) {
         this.dashboardConfigService = dashboardConfigService;
         return this;
     }
 
     /** 设置 Dashboard 运行配置服务。 */
     public DefaultToolRegistryBuilder dashboardRuntimeConfigService(
-            DashboardRuntimeConfigService dashboardRuntimeConfigService) {
+            RuntimeConfigManagementPort dashboardRuntimeConfigService) {
         this.dashboardRuntimeConfigService = dashboardRuntimeConfigService;
         return this;
     }
 
     /** 设置微信二维码配置服务。 */
-    public DefaultToolRegistryBuilder weixinQrSetupService(
-            WeixinQrSetupService weixinQrSetupService) {
+    public DefaultToolRegistryBuilder weixinQrSetupService(WeixinQrSetupPort weixinQrSetupService) {
         this.weixinQrSetupService = weixinQrSetupService;
         return this;
     }
 
     /** 设置国内渠道二维码配置服务。 */
     public DefaultToolRegistryBuilder domesticQrSetupService(
-            DomesticQrSetupService domesticQrSetupService) {
+            DomesticQrSetupPort domesticQrSetupService) {
         this.domesticQrSetupService = domesticQrSetupService;
+        return this;
+    }
+
+    /** 设置 Dashboard 会话管理端口。 */
+    public DefaultToolRegistryBuilder dashboardSessionService(
+            SessionManagementPort dashboardSessionService) {
+        this.dashboardSessionService = dashboardSessionService;
+        return this;
+    }
+
+    /** 设置 Dashboard 用量分析端口。 */
+    public DefaultToolRegistryBuilder dashboardAnalyticsService(
+            AnalyticsManagementPort dashboardAnalyticsService) {
+        this.dashboardAnalyticsService = dashboardAnalyticsService;
+        return this;
+    }
+
+    /** 设置 Dashboard 日志查询端口。 */
+    public DefaultToolRegistryBuilder dashboardLogsService(LogsQueryPort dashboardLogsService) {
+        this.dashboardLogsService = dashboardLogsService;
+        return this;
+    }
+
+    /** 设置 Dashboard 媒体管理端口。 */
+    public DefaultToolRegistryBuilder dashboardMediaService(
+            MediaManagementPort dashboardMediaService) {
+        this.dashboardMediaService = dashboardMediaService;
+        return this;
+    }
+
+    /** 设置 Dashboard 工具集查询端口。 */
+    public DefaultToolRegistryBuilder dashboardSkillsService(
+            SkillsQueryPort dashboardSkillsService) {
+        this.dashboardSkillsService = dashboardSkillsService;
+        return this;
+    }
+
+    /** 设置 Dashboard Profile 管理端口。 */
+    public DefaultToolRegistryBuilder dashboardProfileService(
+            ProfileManagementPort dashboardProfileService) {
+        this.dashboardProfileService = dashboardProfileService;
         return this;
     }
 
@@ -385,33 +433,8 @@ public class DefaultToolRegistryBuilder {
     }
 
     /** 设置 Dashboard Agent 运行服务。 */
-    public DefaultToolRegistryBuilder dashboardRunService(DashboardRunService dashboardRunService) {
+    public DefaultToolRegistryBuilder dashboardRunService(RunManagementPort dashboardRunService) {
         this.dashboardRunService = dashboardRunService;
-        return this;
-    }
-
-    /** 设置 Dashboard 查询使用的 SQLite 数据库。 */
-    public DefaultToolRegistryBuilder sqliteDatabase(SqliteDatabase sqliteDatabase) {
-        this.sqliteDatabase = sqliteDatabase;
-        return this;
-    }
-
-    /** 设置 Agent 运行记录仓储。 */
-    public DefaultToolRegistryBuilder agentRunRepository(AgentRunRepository agentRunRepository) {
-        this.agentRunRepository = agentRunRepository;
-        return this;
-    }
-
-    /** 设置定时任务记录仓储。 */
-    public DefaultToolRegistryBuilder cronJobRepository(CronJobRepository cronJobRepository) {
-        this.cronJobRepository = cronJobRepository;
-        return this;
-    }
-
-    /** 设置用量事件仓储。 */
-    public DefaultToolRegistryBuilder usageEventRepository(
-            UsageEventRepository usageEventRepository) {
-        this.usageEventRepository = usageEventRepository;
         return this;
     }
 
@@ -459,14 +482,16 @@ public class DefaultToolRegistryBuilder {
                 dashboardRuntimeConfigService,
                 weixinQrSetupService,
                 domesticQrSetupService,
+                dashboardSessionService,
+                dashboardAnalyticsService,
+                dashboardLogsService,
+                dashboardMediaService,
+                dashboardSkillsService,
+                dashboardProfileService,
                 browserRuntimeService,
                 imageGenerationService,
                 speechService,
                 dashboardRunService,
-                sqliteDatabase,
-                agentRunRepository,
-                cronJobRepository,
-                usageEventRepository,
                 webSearchProviders);
     }
 }

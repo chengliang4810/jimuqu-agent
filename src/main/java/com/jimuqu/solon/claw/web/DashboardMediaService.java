@@ -7,6 +7,7 @@ import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.jimuqu.solon.claw.support.IdSupport;
 import com.jimuqu.solon.claw.support.RuntimePathGuard;
 import com.jimuqu.solon.claw.support.SecretRedactor;
+import com.jimuqu.solon.claw.tool.runtime.port.MediaManagementPort;
 import java.io.File;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -18,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 /** 提供控制台媒体相关业务能力，封装调用方不需要感知的运行细节。 */
-public class DashboardMediaService {
+public class DashboardMediaService implements MediaManagementPort {
     /** 记录控制台媒体中的数据库。 */
     private final SqliteDatabase database;
 

@@ -19,6 +19,7 @@ import com.jimuqu.solon.claw.support.SessionVisibilitySupport;
 import com.jimuqu.solon.claw.support.SourceKeySupport;
 import com.jimuqu.solon.claw.support.StructuredMetadataSupport;
 import com.jimuqu.solon.claw.support.ToolMessageStatusSupport;
+import com.jimuqu.solon.claw.tool.runtime.port.SessionManagementPort;
 import com.jimuqu.solon.claw.web.profile.DashboardProfileContext;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,7 +39,7 @@ import org.noear.solon.ai.chat.message.ToolMessage;
 import org.noear.solon.ai.chat.tool.ToolCall;
 
 /** Dashboard 会话查询服务。 */
-public class DashboardSessionService {
+public class DashboardSessionService implements SessionManagementPort {
     /** 会话标题最大长度，与外部对标仓库的 Dashboard 更新契约一致。 */
     private static final int MAX_TITLE_LENGTH = 100;
 

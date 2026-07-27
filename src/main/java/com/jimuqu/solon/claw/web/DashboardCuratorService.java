@@ -6,6 +6,7 @@ import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.support.IdSupport;
 import com.jimuqu.solon.claw.support.SecretRedactor;
 import com.jimuqu.solon.claw.support.TimeSupport;
+import com.jimuqu.solon.claw.tool.runtime.port.CuratorManagementPort;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -16,7 +17,7 @@ import java.util.Map;
 import org.noear.snack4.ONode;
 
 /** 提供控制台技能维护相关业务能力，封装调用方不需要感知的运行细节。 */
-public class DashboardCuratorService {
+public class DashboardCuratorService implements CuratorManagementPort {
     /** 注入技能技能维护服务，用于调用对应业务能力。 */
     private final SkillCuratorService skillCuratorService;
 

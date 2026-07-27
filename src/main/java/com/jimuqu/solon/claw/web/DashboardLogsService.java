@@ -10,6 +10,7 @@ import com.jimuqu.solon.claw.core.model.ToolCallRecord;
 import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.core.repository.CronJobRepository;
 import com.jimuqu.solon.claw.support.SecretRedactor;
+import com.jimuqu.solon.claw.tool.runtime.port.LogsQueryPort;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -19,7 +20,7 @@ import java.util.Locale;
 import java.util.Set;
 
 /** Dashboard 日志读取服务。 */
-public class DashboardLogsService {
+public class DashboardLogsService implements LogsQueryPort {
     /** 注入应用配置，用于控制台Logs。 */
     private final AppConfig appConfig;
 

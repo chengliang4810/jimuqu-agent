@@ -28,6 +28,7 @@ import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.jimuqu.solon.claw.support.LlmProviderService;
+import com.jimuqu.solon.claw.support.RuntimePathGuard;
 import com.jimuqu.solon.claw.support.RuntimeSettingsService;
 import com.jimuqu.solon.claw.support.SessionArtifactService;
 import com.jimuqu.solon.claw.tool.runtime.BrowserRuntimeService;
@@ -36,11 +37,15 @@ import com.jimuqu.solon.claw.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.solon.claw.tool.runtime.ProcessRegistry;
 import com.jimuqu.solon.claw.tool.runtime.SecurityPolicyService;
 import com.jimuqu.solon.claw.usage.UsageEventRepository;
+import com.jimuqu.solon.claw.web.DashboardAnalyticsService;
 import com.jimuqu.solon.claw.web.DashboardConfigService;
 import com.jimuqu.solon.claw.web.DashboardCuratorService;
+import com.jimuqu.solon.claw.web.DashboardLogsService;
+import com.jimuqu.solon.claw.web.DashboardMediaService;
 import com.jimuqu.solon.claw.web.DashboardProfileScope;
 import com.jimuqu.solon.claw.web.DashboardProviderService;
 import com.jimuqu.solon.claw.web.DashboardRuntimeConfigService;
+import com.jimuqu.solon.claw.web.DashboardSessionService;
 import com.jimuqu.solon.claw.web.DashboardSkillsService;
 import com.jimuqu.solon.claw.web.DashboardWorkspaceService;
 import java.util.List;
@@ -108,6 +113,42 @@ public class ProfileRuntimeSupportConfiguration {
         return new SessionArtifactService(appConfig);
     }
 
+    /** 创建当前 Profile 的会话管理支撑。 */
+    @Bean
+    public DashboardSessionService dashboardSessionService(
+            SessionRepository sessionRepository,
+            CheckpointService checkpointService,
+            SessionArtifactService sessionArtifactService,
+            AgentRunRepository agentRunRepository) {
+        return new DashboardSessionService(
+                sessionRepository, checkpointService, sessionArtifactService, agentRunRepository);
+    }
+
+    /** 创建当前 Profile 的用量分析支撑。 */
+    @Bean
+    public DashboardAnalyticsService dashboardAnalyticsService(
+            SessionRepository sessionRepository, UsageEventRepository usageEventRepository) {
+        return new DashboardAnalyticsService(sessionRepository, usageEventRepository);
+    }
+
+    /** 创建当前 Profile 的日志查询支撑。 */
+    @Bean
+    public DashboardLogsService dashboardLogsService(
+            AppConfig appConfig,
+            AgentRunRepository agentRunRepository,
+            CronJobRepository cronJobRepository) {
+        return new DashboardLogsService(appConfig, agentRunRepository, cronJobRepository);
+    }
+
+    /** 创建当前 Profile 的媒体管理支撑。 */
+    @Bean
+    public DashboardMediaService dashboardMediaService(
+            SqliteDatabase sqliteDatabase,
+            RuntimePathGuard runtimePathGuard,
+            AttachmentCacheService attachmentCacheService) {
+        return new DashboardMediaService(sqliteDatabase, runtimePathGuard, attachmentCacheService);
+    }
+
     /** 创建绑定当前命名 Profile 工作区与归档服务的 Agent 工具支撑。 */
     @Bean
     public DashboardWorkspaceService dashboardWorkspaceService(
@@ -149,13 +190,14 @@ public class ProfileRuntimeSupportConfiguration {
             DashboardConfigService dashboardConfigService,
             DashboardRuntimeConfigService dashboardRuntimeConfigService,
             DashboardWorkspaceService dashboardWorkspaceService,
+            DashboardSessionService dashboardSessionService,
+            DashboardAnalyticsService dashboardAnalyticsService,
+            DashboardLogsService dashboardLogsService,
+            DashboardMediaService dashboardMediaService,
+            DashboardSkillsService dashboardSkillsService,
             BrowserRuntimeService browserRuntimeService,
             ImageGenerationService imageGenerationService,
             SpeechService speechService,
-            SqliteDatabase sqliteDatabase,
-            AgentRunRepository agentRunRepository,
-            CronJobRepository cronJobRepository,
-            UsageEventRepository usageEventRepository,
             List<WebSearchProvider> webSearchProviders) {
         return ToolConfiguration.applyCommonToolRegistrySettings(
                         DefaultToolRegistry.builder(),
@@ -181,13 +223,14 @@ public class ProfileRuntimeSupportConfiguration {
                 .dashboardConfigService(dashboardConfigService)
                 .dashboardRuntimeConfigService(dashboardRuntimeConfigService)
                 .dashboardWorkspaceService(dashboardWorkspaceService)
+                .dashboardSessionService(dashboardSessionService)
+                .dashboardAnalyticsService(dashboardAnalyticsService)
+                .dashboardLogsService(dashboardLogsService)
+                .dashboardMediaService(dashboardMediaService)
+                .dashboardSkillsService(dashboardSkillsService)
                 .browserRuntimeService(browserRuntimeService)
                 .imageGenerationService(imageGenerationService)
                 .speechService(speechService)
-                .sqliteDatabase(sqliteDatabase)
-                .agentRunRepository(agentRunRepository)
-                .cronJobRepository(cronJobRepository)
-                .usageEventRepository(usageEventRepository)
                 .webSearchProviders(webSearchProviders)
                 .build();
     }

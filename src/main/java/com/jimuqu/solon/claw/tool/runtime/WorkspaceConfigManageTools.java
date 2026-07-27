@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardRuntimeConfigService;
+import com.jimuqu.solon.claw.tool.runtime.port.RuntimeConfigManagementPort;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -13,14 +13,14 @@ import org.noear.solon.annotation.Param;
 /** 提供 Dashboard 工作区配置项查询和受控维护工具。 */
 public class WorkspaceConfigManageTools {
     /** Dashboard 工作区配置服务，用于读取或维护配置项状态。 */
-    private final DashboardRuntimeConfigService runtimeConfigService;
+    private final RuntimeConfigManagementPort runtimeConfigService;
 
     /**
      * 创建工作区配置查询工具。
      *
      * @param runtimeConfigService Dashboard 工作区配置服务。
      */
-    public WorkspaceConfigManageTools(DashboardRuntimeConfigService runtimeConfigService) {
+    public WorkspaceConfigManageTools(RuntimeConfigManagementPort runtimeConfigService) {
         this.runtimeConfigService = runtimeConfigService;
     }
 

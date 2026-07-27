@@ -2,6 +2,7 @@ package com.jimuqu.solon.claw.web;
 
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
+import com.jimuqu.solon.claw.tool.runtime.port.ApprovalEventsQueryPort;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -9,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 /** 提供控制台审批Events相关业务能力，封装调用方不需要感知的运行细节。 */
-public class DashboardApprovalEventsService {
+public class DashboardApprovalEventsService implements ApprovalEventsQueryPort {
     /** 注入应用配置，用于控制台审批Events。 */
     private final AppConfig appConfig;
 

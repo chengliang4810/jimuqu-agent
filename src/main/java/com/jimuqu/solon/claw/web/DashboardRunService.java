@@ -10,6 +10,7 @@ import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.core.service.AgentRunControlService;
 import com.jimuqu.solon.claw.core.service.DelegationService;
 import com.jimuqu.solon.claw.support.SecretRedactor;
+import com.jimuqu.solon.claw.tool.runtime.port.RunManagementPort;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -18,7 +19,7 @@ import java.util.Map;
 import org.noear.snack4.ONode;
 
 /** Dashboard Agent run 查询服务。 */
-public class DashboardRunService {
+public class DashboardRunService implements RunManagementPort {
     /** 保存Agent运行仓储依赖，用于访问持久化数据。 */
     private final AgentRunRepository agentRunRepository;
 

@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardProviderService;
+import com.jimuqu.solon.claw.tool.runtime.port.ProviderManagementPort;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,14 +13,14 @@ import org.noear.solon.annotation.Param;
 /** 提供模型 provider 管理工具，复用 Dashboard provider 服务。 */
 public class ProviderManageTools {
     /** Dashboard provider 服务，用于复用 provider 校验、模型列表和配置落盘逻辑。 */
-    private final DashboardProviderService dashboardProviderService;
+    private final ProviderManagementPort dashboardProviderService;
 
     /**
      * 创建模型 provider 管理工具。
      *
      * @param dashboardProviderService Dashboard provider 服务。
      */
-    public ProviderManageTools(DashboardProviderService dashboardProviderService) {
+    public ProviderManageTools(ProviderManagementPort dashboardProviderService) {
         this.dashboardProviderService = dashboardProviderService;
     }
 

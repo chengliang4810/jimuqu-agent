@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardInsightsService;
+import com.jimuqu.solon.claw.tool.runtime.port.InsightsQueryPort;
 import java.util.Map;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.annotation.ToolMapping;
@@ -11,14 +11,14 @@ import org.noear.solon.annotation.Param;
 /** 提供控制台洞察查询工具，复用 Dashboard 洞察服务。 */
 public class InsightsManageTools {
     /** Dashboard 洞察服务，用于复用会话、技能和运行时概览逻辑。 */
-    private final DashboardInsightsService insightsService;
+    private final InsightsQueryPort insightsService;
 
     /**
      * 创建洞察管理工具。
      *
      * @param insightsService Dashboard 洞察服务。
      */
-    public InsightsManageTools(DashboardInsightsService insightsService) {
+    public InsightsManageTools(InsightsQueryPort insightsService) {
         this.insightsService = insightsService;
     }
 

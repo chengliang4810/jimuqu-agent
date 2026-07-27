@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardApprovalEventsService;
+import com.jimuqu.solon.claw.tool.runtime.port.ApprovalEventsQueryPort;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.noear.snack4.ONode;
@@ -12,14 +12,14 @@ import org.noear.solon.annotation.Param;
 /** 提供审批事件只读查询工具，复用 Dashboard 审批事件服务。 */
 public class ApprovalEventsManageTools {
     /** Dashboard 审批事件服务，用于复用最近事件和统计聚合逻辑。 */
-    private final DashboardApprovalEventsService approvalEventsService;
+    private final ApprovalEventsQueryPort approvalEventsService;
 
     /**
      * 创建审批事件管理工具。
      *
      * @param approvalEventsService Dashboard 审批事件服务。
      */
-    public ApprovalEventsManageTools(DashboardApprovalEventsService approvalEventsService) {
+    public ApprovalEventsManageTools(ApprovalEventsQueryPort approvalEventsService) {
         this.approvalEventsService = approvalEventsService;
     }
 

@@ -13,6 +13,7 @@ import com.jimuqu.solon.claw.support.SecretRedactor;
 import com.jimuqu.solon.claw.support.ShutdownForensicsService;
 import com.jimuqu.solon.claw.support.constants.GatewayBehaviorConstants;
 import com.jimuqu.solon.claw.support.constants.LlmConstants;
+import com.jimuqu.solon.claw.tool.runtime.port.GatewayDoctorPort;
 import java.io.File;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -28,7 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Dashboard 网关 doctor 聚合服务。 */
-public class DashboardGatewayDoctorService {
+public class DashboardGatewayDoctorService implements GatewayDoctorPort {
     /** 记录 doctor 聚合中的可恢复降级事件，避免诊断失败被静默吞掉。 */
     private static final Logger log = LoggerFactory.getLogger(DashboardGatewayDoctorService.class);
 

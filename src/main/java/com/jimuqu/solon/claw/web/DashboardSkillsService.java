@@ -24,6 +24,7 @@ import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.solon.claw.support.constants.SkillConstants;
 import com.jimuqu.solon.claw.support.constants.ToolNameConstants;
 import com.jimuqu.solon.claw.tool.runtime.SecurityPolicyService;
+import com.jimuqu.solon.claw.tool.runtime.port.SkillsQueryPort;
 import java.io.File;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -34,7 +35,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Dashboard 技能与工具集展示服务。 */
-public class DashboardSkillsService {
+public class DashboardSkillsService implements SkillsQueryPort {
     /** 注入本地技能服务，用于调用对应业务能力。 */
     private final LocalSkillService localSkillService;
 

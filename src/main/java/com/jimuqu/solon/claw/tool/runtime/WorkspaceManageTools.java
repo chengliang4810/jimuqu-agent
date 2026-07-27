@@ -3,7 +3,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
 import com.jimuqu.solon.claw.support.constants.ContextFileConstants;
-import com.jimuqu.solon.claw.web.DashboardWorkspaceService;
+import com.jimuqu.solon.claw.tool.runtime.port.WorkspaceManagementPort;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -15,14 +15,14 @@ import org.noear.solon.annotation.Param;
 /** 提供工作区查询和受控文件维护工具，复用 Dashboard 人格工作区服务。 */
 public class WorkspaceManageTools {
     /** Dashboard 工作区服务，用于读取或维护受控文件和日记内容。 */
-    private final DashboardWorkspaceService workspaceService;
+    private final WorkspaceManagementPort workspaceService;
 
     /**
      * 创建工作区查询工具。
      *
      * @param workspaceService Dashboard 工作区服务。
      */
-    public WorkspaceManageTools(DashboardWorkspaceService workspaceService) {
+    public WorkspaceManageTools(WorkspaceManagementPort workspaceService) {
         this.workspaceService = workspaceService;
     }
 

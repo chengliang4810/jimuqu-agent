@@ -12,6 +12,7 @@ import com.jimuqu.solon.claw.support.BootstrapPromptBudgetSupport;
 import com.jimuqu.solon.claw.support.ModelConfigKeySupport;
 import com.jimuqu.solon.claw.support.RuntimeSetupSpec;
 import com.jimuqu.solon.claw.tool.runtime.SubprocessEnvironmentSanitizer;
+import com.jimuqu.solon.claw.tool.runtime.port.ConfigManagementPort;
 import com.jimuqu.solon.claw.web.profile.DashboardProfileConfigFile;
 import com.jimuqu.solon.claw.web.profile.DashboardProfileContext;
 import java.io.File;
@@ -31,7 +32,7 @@ import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
 /** Dashboard 配置读写与 schema 服务。 */
-public class DashboardConfigService {
+public class DashboardConfigService implements ConfigManagementPort {
     /** 根用户前缀列表的统一常量值。 */
     private static final List<String> ROOT_PREFIXES = Arrays.asList("approvals.", "security.");
 

@@ -4,8 +4,8 @@ import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
 import com.jimuqu.solon.claw.support.TuiRuntimeProtocolService;
-import com.jimuqu.solon.claw.web.DomesticQrSetupService;
-import com.jimuqu.solon.claw.web.WeixinQrSetupService;
+import com.jimuqu.solon.claw.tool.runtime.port.DomesticQrSetupPort;
+import com.jimuqu.solon.claw.tool.runtime.port.WeixinQrSetupPort;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -36,8 +36,8 @@ public class TuiRuntimeManageTools {
      */
     public TuiRuntimeManageTools(
             AppConfig appConfig,
-            WeixinQrSetupService weixinQrSetupService,
-            DomesticQrSetupService domesticQrSetupService) {
+            WeixinQrSetupPort weixinQrSetupService,
+            DomesticQrSetupPort domesticQrSetupService) {
         this.protocolService =
                 new TuiRuntimeProtocolService(
                         appConfig, weixinQrSetupService, domesticQrSetupService);

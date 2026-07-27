@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardStatusService;
+import com.jimuqu.solon.claw.tool.runtime.port.StatusQueryPort;
 import java.util.Map;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.annotation.ToolMapping;
@@ -11,14 +11,14 @@ import org.noear.solon.annotation.Param;
 /** 提供运行状态和模型信息查询工具，复用 Dashboard 状态服务。 */
 public class StatusManageTools {
     /** Dashboard 状态服务，用于复用运行状态、健康快照和模型信息聚合逻辑。 */
-    private final DashboardStatusService dashboardStatusService;
+    private final StatusQueryPort dashboardStatusService;
 
     /**
      * 创建状态管理工具。
      *
      * @param dashboardStatusService Dashboard 状态服务。
      */
-    public StatusManageTools(DashboardStatusService dashboardStatusService) {
+    public StatusManageTools(StatusQueryPort dashboardStatusService) {
         this.dashboardStatusService = dashboardStatusService;
     }
 

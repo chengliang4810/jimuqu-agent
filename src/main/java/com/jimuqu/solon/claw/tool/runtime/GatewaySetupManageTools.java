@@ -3,8 +3,8 @@ package com.jimuqu.solon.claw.tool.runtime;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DomesticQrSetupService;
-import com.jimuqu.solon.claw.web.WeixinQrSetupService;
+import com.jimuqu.solon.claw.tool.runtime.port.DomesticQrSetupPort;
+import com.jimuqu.solon.claw.tool.runtime.port.WeixinQrSetupPort;
 import java.util.Locale;
 import java.util.Map;
 import org.noear.snack4.ONode;
@@ -14,10 +14,10 @@ import org.noear.solon.annotation.Param;
 /** 提供国内渠道二维码 setup 查询与启动工具。 */
 public class GatewaySetupManageTools {
     /** 微信二维码 setup 服务，用于复用 Dashboard 微信配置引导流程。 */
-    private final WeixinQrSetupService weixinQrSetupService;
+    private final WeixinQrSetupPort weixinQrSetupService;
 
     /** 国内渠道二维码 setup 服务，用于复用飞书和钉钉配置引导流程。 */
-    private final DomesticQrSetupService domesticQrSetupService;
+    private final DomesticQrSetupPort domesticQrSetupService;
 
     /**
      * 创建网关 setup 管理工具。
@@ -26,8 +26,7 @@ public class GatewaySetupManageTools {
      * @param domesticQrSetupService 国内渠道二维码 setup 服务。
      */
     public GatewaySetupManageTools(
-            WeixinQrSetupService weixinQrSetupService,
-            DomesticQrSetupService domesticQrSetupService) {
+            WeixinQrSetupPort weixinQrSetupService, DomesticQrSetupPort domesticQrSetupService) {
         this.weixinQrSetupService = weixinQrSetupService;
         this.domesticQrSetupService = domesticQrSetupService;
     }

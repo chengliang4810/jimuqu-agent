@@ -5,8 +5,6 @@ import com.jimuqu.solon.claw.agent.AgentRuntimePolicy;
 import com.jimuqu.solon.claw.agent.AgentRuntimeScope;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.context.LocalSkillService;
-import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
-import com.jimuqu.solon.claw.core.repository.CronJobRepository;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.CheckpointService;
 import com.jimuqu.solon.claw.core.service.DelegationService;
@@ -25,33 +23,32 @@ import com.jimuqu.solon.claw.profile.ProfileManager;
 import com.jimuqu.solon.claw.provider.BrowserProvider;
 import com.jimuqu.solon.claw.provider.WebSearchProvider;
 import com.jimuqu.solon.claw.scheduler.CronJobService;
-import com.jimuqu.solon.claw.storage.repository.SqliteDatabase;
 import com.jimuqu.solon.claw.storage.repository.SqlitePreferenceStore;
 import com.jimuqu.solon.claw.support.AttachmentCacheService;
 import com.jimuqu.solon.claw.support.LlmProviderService;
 import com.jimuqu.solon.claw.support.RuntimeSettingsService;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.support.SessionArtifactService;
 import com.jimuqu.solon.claw.support.constants.ToolNameConstants;
-import com.jimuqu.solon.claw.usage.UsageEventRepository;
-import com.jimuqu.solon.claw.web.DashboardAnalyticsService;
-import com.jimuqu.solon.claw.web.DashboardApprovalEventsService;
-import com.jimuqu.solon.claw.web.DashboardConfigService;
-import com.jimuqu.solon.claw.web.DashboardCuratorService;
-import com.jimuqu.solon.claw.web.DashboardDiagnosticsService;
-import com.jimuqu.solon.claw.web.DashboardGatewayDoctorService;
-import com.jimuqu.solon.claw.web.DashboardInsightsService;
-import com.jimuqu.solon.claw.web.DashboardLogsService;
-import com.jimuqu.solon.claw.web.DashboardMediaService;
-import com.jimuqu.solon.claw.web.DashboardPlatformToolsetsService;
-import com.jimuqu.solon.claw.web.DashboardProviderService;
-import com.jimuqu.solon.claw.web.DashboardRunService;
-import com.jimuqu.solon.claw.web.DashboardRuntimeConfigService;
-import com.jimuqu.solon.claw.web.DashboardSessionService;
-import com.jimuqu.solon.claw.web.DashboardStatusService;
-import com.jimuqu.solon.claw.web.DashboardWorkspaceService;
-import com.jimuqu.solon.claw.web.DomesticQrSetupService;
-import com.jimuqu.solon.claw.web.WeixinQrSetupService;
+import com.jimuqu.solon.claw.tool.runtime.port.AnalyticsManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.ApprovalEventsQueryPort;
+import com.jimuqu.solon.claw.tool.runtime.port.ConfigManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.CuratorManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.DiagnosticsManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.DomesticQrSetupPort;
+import com.jimuqu.solon.claw.tool.runtime.port.GatewayDoctorPort;
+import com.jimuqu.solon.claw.tool.runtime.port.InsightsQueryPort;
+import com.jimuqu.solon.claw.tool.runtime.port.LogsQueryPort;
+import com.jimuqu.solon.claw.tool.runtime.port.MediaManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.PlatformToolsetsManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.ProfileManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.ProviderManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.RunManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.RuntimeConfigManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.SessionManagementPort;
+import com.jimuqu.solon.claw.tool.runtime.port.SkillsQueryPort;
+import com.jimuqu.solon.claw.tool.runtime.port.StatusQueryPort;
+import com.jimuqu.solon.claw.tool.runtime.port.WeixinQrSetupPort;
+import com.jimuqu.solon.claw.tool.runtime.port.WorkspaceManagementPort;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -130,43 +127,61 @@ public class DefaultToolRegistry implements ToolRegistry {
     private final DangerousCommandApprovalService approvalService;
 
     /** Dashboard 技能维护服务，用于给 Agent 暴露维护建议管理工具。 */
-    private final DashboardCuratorService dashboardCuratorService;
+    private final CuratorManagementPort dashboardCuratorService;
 
     /** Dashboard 平台工具集服务，用于给 Agent 暴露渠道工具集管理工具。 */
-    private final DashboardPlatformToolsetsService dashboardPlatformToolsetsService;
+    private final PlatformToolsetsManagementPort dashboardPlatformToolsetsService;
 
     /** Dashboard provider 服务，用于给 Agent 暴露模型提供方管理工具。 */
-    private final DashboardProviderService dashboardProviderService;
+    private final ProviderManagementPort dashboardProviderService;
 
     /** Dashboard 状态服务，用于给 Agent 暴露运行状态查询工具。 */
-    private final DashboardStatusService dashboardStatusService;
+    private final StatusQueryPort dashboardStatusService;
 
     /** Dashboard Doctor 服务，用于给 Agent 暴露消息网关诊断工具。 */
-    private final DashboardGatewayDoctorService dashboardGatewayDoctorService;
+    private final GatewayDoctorPort dashboardGatewayDoctorService;
 
     /** Dashboard 洞察服务，用于给 Agent 暴露概览和技能用量查询。 */
-    private final DashboardInsightsService dashboardInsightsService;
+    private final InsightsQueryPort dashboardInsightsService;
 
     /** Dashboard 审批事件服务，用于给 Agent 暴露审批事件只读查询。 */
-    private final DashboardApprovalEventsService dashboardApprovalEventsService;
+    private final ApprovalEventsQueryPort dashboardApprovalEventsService;
 
     /** Dashboard 诊断服务供应器，用于给 Agent 暴露诊断与审批队列只读查询。 */
-    private final Supplier<DashboardDiagnosticsService> dashboardDiagnosticsService;
+    private final Supplier<DiagnosticsManagementPort> dashboardDiagnosticsService;
 
     /** Dashboard 工作区服务，用于给 Agent 暴露人格工作区只读查询。 */
-    private final DashboardWorkspaceService dashboardWorkspaceService;
+    private final WorkspaceManagementPort dashboardWorkspaceService;
 
     /** Dashboard 配置服务，用于给 Agent 暴露配置元数据只读查询。 */
-    private final DashboardConfigService dashboardConfigService;
+    private final ConfigManagementPort dashboardConfigService;
 
     /** Dashboard 工作区配置服务，用于给 Agent 暴露已脱敏配置项只读查询。 */
-    private final DashboardRuntimeConfigService dashboardRuntimeConfigService;
+    private final RuntimeConfigManagementPort dashboardRuntimeConfigService;
 
     /** 微信二维码 setup 服务，用于给 Agent 暴露 Dashboard 配置引导。 */
-    private final WeixinQrSetupService weixinQrSetupService;
+    private final WeixinQrSetupPort weixinQrSetupService;
 
     /** 国内渠道二维码 setup 服务，用于给 Agent 暴露 Dashboard 配置引导。 */
-    private final DomesticQrSetupService domesticQrSetupService;
+    private final DomesticQrSetupPort domesticQrSetupService;
+
+    /** Dashboard 会话服务，用于给 Agent 暴露会话管理工具。 */
+    private final SessionManagementPort dashboardSessionService;
+
+    /** Dashboard 分析服务，用于给 Agent 暴露用量分析工具。 */
+    private final AnalyticsManagementPort dashboardAnalyticsService;
+
+    /** Dashboard 日志服务，用于给 Agent 暴露日志查询工具。 */
+    private final LogsQueryPort dashboardLogsService;
+
+    /** Dashboard 媒体服务，用于给 Agent 暴露媒体管理工具。 */
+    private final MediaManagementPort dashboardMediaService;
+
+    /** Dashboard 技能服务，用于给 Agent 暴露工具集查询。 */
+    private final SkillsQueryPort dashboardSkillsService;
+
+    /** Dashboard Profile 服务，用于 default Agent 管理命名 Profile。 */
+    private final ProfileManagementPort dashboardProfileService;
 
     /** 受管后台进程注册表。 */
     private final ProcessRegistry processRegistry;
@@ -184,19 +199,7 @@ public class DefaultToolRegistry implements ToolRegistry {
     private List<WebSearchProvider> webSearchProviders = Collections.emptyList();
 
     /** Dashboard 运行服务，用于给 Agent 暴露一等运行管理工具。 */
-    private final DashboardRunService dashboardRunService;
-
-    /** 用量事件仓储，用于给 Agent 暴露与 Dashboard 一致的用量分析。 */
-    private final UsageEventRepository usageEventRepository;
-
-    /** Agent 运行仓储，用于给 Agent 暴露 Dashboard 日志结构化运行索引。 */
-    private final AgentRunRepository agentRunRepository;
-
-    /** 定时任务仓储，用于给 Agent 暴露 Dashboard 日志结构化定时任务索引。 */
-    private final CronJobRepository cronJobRepository;
-
-    /** SQLite 数据库，用于给 Agent 暴露 Dashboard 媒体索引查询。 */
-    private final SqliteDatabase sqliteDatabase;
+    private final RunManagementPort dashboardRunService;
 
     /**
      * 创建默认工具注册表实例，并注入完整运行依赖与 Web 搜索附加提供方。
@@ -231,14 +234,16 @@ public class DefaultToolRegistry implements ToolRegistry {
      * @param dashboardRuntimeConfigService Dashboard 工作区配置服务依赖。
      * @param weixinQrSetupService 微信二维码 setup 服务依赖。
      * @param domesticQrSetupService 国内二维码 setup 服务依赖。
+     * @param dashboardSessionService Dashboard 会话管理端口。
+     * @param dashboardAnalyticsService Dashboard 用量分析端口。
+     * @param dashboardLogsService Dashboard 日志查询端口。
+     * @param dashboardMediaService Dashboard 媒体管理端口。
+     * @param dashboardSkillsService Dashboard 技能查询端口。
+     * @param dashboardProfileService Dashboard Profile 管理端口。
      * @param browserRuntimeService 浏览器运行时服务依赖。
      * @param imageGenerationService 图片Generation服务依赖。
      * @param speechService 语音服务依赖。
      * @param dashboardRunService Dashboard运行服务依赖。
-     * @param sqliteDatabase SQLite数据库依赖。
-     * @param agentRunRepository Agent运行仓储依赖。
-     * @param cronJobRepository 定时任务仓储依赖。
-     * @param usageEventRepository 用量事件仓储依赖。
      * @param webSearchProviders Web 搜索附加提供方列表。
      */
     public DefaultToolRegistry(
@@ -259,27 +264,29 @@ public class DefaultToolRegistry implements ToolRegistry {
             SecurityPolicyService securityPolicyService,
             DangerousCommandApprovalService approvalService,
             ProcessRegistry processRegistry,
-            DashboardCuratorService dashboardCuratorService,
-            DashboardPlatformToolsetsService dashboardPlatformToolsetsService,
-            DashboardProviderService dashboardProviderService,
-            DashboardStatusService dashboardStatusService,
-            DashboardGatewayDoctorService dashboardGatewayDoctorService,
-            DashboardInsightsService dashboardInsightsService,
-            DashboardApprovalEventsService dashboardApprovalEventsService,
-            Supplier<DashboardDiagnosticsService> dashboardDiagnosticsService,
-            DashboardWorkspaceService dashboardWorkspaceService,
-            DashboardConfigService dashboardConfigService,
-            DashboardRuntimeConfigService dashboardRuntimeConfigService,
-            WeixinQrSetupService weixinQrSetupService,
-            DomesticQrSetupService domesticQrSetupService,
+            CuratorManagementPort dashboardCuratorService,
+            PlatformToolsetsManagementPort dashboardPlatformToolsetsService,
+            ProviderManagementPort dashboardProviderService,
+            StatusQueryPort dashboardStatusService,
+            GatewayDoctorPort dashboardGatewayDoctorService,
+            InsightsQueryPort dashboardInsightsService,
+            ApprovalEventsQueryPort dashboardApprovalEventsService,
+            Supplier<DiagnosticsManagementPort> dashboardDiagnosticsService,
+            WorkspaceManagementPort dashboardWorkspaceService,
+            ConfigManagementPort dashboardConfigService,
+            RuntimeConfigManagementPort dashboardRuntimeConfigService,
+            WeixinQrSetupPort weixinQrSetupService,
+            DomesticQrSetupPort domesticQrSetupService,
+            SessionManagementPort dashboardSessionService,
+            AnalyticsManagementPort dashboardAnalyticsService,
+            LogsQueryPort dashboardLogsService,
+            MediaManagementPort dashboardMediaService,
+            SkillsQueryPort dashboardSkillsService,
+            ProfileManagementPort dashboardProfileService,
             BrowserRuntimeService browserRuntimeService,
             ImageGenerationService imageGenerationService,
             SpeechService speechService,
-            DashboardRunService dashboardRunService,
-            SqliteDatabase sqliteDatabase,
-            AgentRunRepository agentRunRepository,
-            CronJobRepository cronJobRepository,
-            UsageEventRepository usageEventRepository,
+            RunManagementPort dashboardRunService,
             List<WebSearchProvider> webSearchProviders) {
         this.appConfig = appConfig;
         this.preferenceStore = preferenceStore;
@@ -313,6 +320,12 @@ public class DefaultToolRegistry implements ToolRegistry {
         this.dashboardRuntimeConfigService = dashboardRuntimeConfigService;
         this.weixinQrSetupService = weixinQrSetupService;
         this.domesticQrSetupService = domesticQrSetupService;
+        this.dashboardSessionService = dashboardSessionService;
+        this.dashboardAnalyticsService = dashboardAnalyticsService;
+        this.dashboardLogsService = dashboardLogsService;
+        this.dashboardMediaService = dashboardMediaService;
+        this.dashboardSkillsService = dashboardSkillsService;
+        this.dashboardProfileService = dashboardProfileService;
         this.processRegistry = processRegistry;
         this.browserRuntimeService =
                 browserRuntimeService == null
@@ -324,10 +337,6 @@ public class DefaultToolRegistry implements ToolRegistry {
         this.imageGenerationService = imageGenerationService;
         this.speechService = speechService;
         this.dashboardRunService = dashboardRunService;
-        this.sqliteDatabase = sqliteDatabase;
-        this.agentRunRepository = agentRunRepository;
-        this.cronJobRepository = cronJobRepository;
-        this.usageEventRepository = usageEventRepository;
         setWebSearchProviders(webSearchProviders);
     }
 
@@ -377,28 +386,11 @@ public class DefaultToolRegistry implements ToolRegistry {
         SessionSearchTools sessionSearchTools =
                 new SessionSearchTools(sessionSearchService, sourceKey);
         SearchManageTools searchManageTools = new SearchManageTools(sessionSearchService);
-        SessionManageTools sessionManageTools =
-                new SessionManageTools(
-                        new DashboardSessionService(
-                                sessionRepository,
-                                checkpointService,
-                                new SessionArtifactService(),
-                                agentRunRepository));
+        SessionManageTools sessionManageTools = new SessionManageTools(dashboardSessionService);
         AnalyticsManageTools analyticsManageTools =
-                new AnalyticsManageTools(
-                        new DashboardAnalyticsService(sessionRepository, usageEventRepository));
-        LogsManageTools logsManageTools =
-                new LogsManageTools(
-                        new DashboardLogsService(appConfig, agentRunRepository, cronJobRepository));
-        MediaManageTools mediaManageTools =
-                new MediaManageTools(
-                        sqliteDatabase == null
-                                ? null
-                                : new DashboardMediaService(
-                                        sqliteDatabase,
-                                        new com.jimuqu.solon.claw.support.RuntimePathGuard(
-                                                appConfig),
-                                        attachmentCacheService));
+                new AnalyticsManageTools(dashboardAnalyticsService);
+        LogsManageTools logsManageTools = new LogsManageTools(dashboardLogsService);
+        MediaManageTools mediaManageTools = new MediaManageTools(dashboardMediaService);
         SkillTools skillTools =
                 new SkillTools(
                         localSkillService,
@@ -408,10 +400,7 @@ public class DefaultToolRegistry implements ToolRegistry {
                         agentScope,
                         cronJobService);
         SkillHubTools skillHubTools = new SkillHubTools(skillHubService);
-        ToolsetsManageTools toolsetsManageTools =
-                new ToolsetsManageTools(
-                        new com.jimuqu.solon.claw.web.DashboardSkillsService(
-                                localSkillService, preferenceStore));
+        ToolsetsManageTools toolsetsManageTools = new ToolsetsManageTools(dashboardSkillsService);
         MessagingTools messagingTools =
                 new MessagingTools(deliveryService, sourceKey, attachmentCacheService, appConfig);
         CronjobTools cronjobTools = new CronjobTools(cronJobService, sourceKey);
@@ -427,13 +416,16 @@ public class DefaultToolRegistry implements ToolRegistry {
                         .equals(
                                 com.jimuqu.solon.claw.profile.ProfileRuntimeIdentity.resolve(
                                         appConfig));
+        ProfileManagementPort profileManagementPort =
+                dashboardProfileService == null
+                        ? resolveDashboardProfileService()
+                        : dashboardProfileService;
         ProfileManageTools profileManageTools =
                 defaultProfileRuntime
                         ? new ProfileManageTools(
                                 appConfig,
                                 ProfileManager.current(),
-                                ProfileBeanResolver.getBean(
-                                        com.jimuqu.solon.claw.web.DashboardProfileService.class),
+                                profileManagementPort,
                                 ProfileBeanResolver.getBean(
                                         com.jimuqu.solon.claw.core.repository.ProfileTaskRepository
                                                 .class))
@@ -1241,8 +1233,17 @@ public class DefaultToolRegistry implements ToolRegistry {
      *
      * @return 返回 Dashboard 诊断服务，容器尚未就绪时返回 null。
      */
-    private DashboardDiagnosticsService resolveDashboardDiagnosticsService() {
-        return ProfileBeanResolver.getBean(DashboardDiagnosticsService.class);
+    private DiagnosticsManagementPort resolveDashboardDiagnosticsService() {
+        return ProfileBeanResolver.getBean(DiagnosticsManagementPort.class);
+    }
+
+    /**
+     * 按需解析 Dashboard Profile 管理端口，避免工具注册表与网关复用运行时形成 Bean 环。
+     *
+     * @return 返回 Dashboard Profile 管理端口，容器尚未就绪时返回 null。
+     */
+    private ProfileManagementPort resolveDashboardProfileService() {
+        return ProfileBeanResolver.getBean(ProfileManagementPort.class);
     }
 
     /**

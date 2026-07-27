@@ -88,16 +88,20 @@ import com.jimuqu.solon.claw.tool.runtime.DefaultToolRegistry;
 import com.jimuqu.solon.claw.tool.runtime.ProcessRegistry;
 import com.jimuqu.solon.claw.tool.runtime.SecurityPolicyService;
 import com.jimuqu.solon.claw.tool.runtime.TirithSecurityService;
+import com.jimuqu.solon.claw.web.DashboardAnalyticsService;
 import com.jimuqu.solon.claw.web.DashboardApprovalEventsService;
 import com.jimuqu.solon.claw.web.DashboardConfigService;
 import com.jimuqu.solon.claw.web.DashboardCuratorService;
 import com.jimuqu.solon.claw.web.DashboardDiagnosticsService;
 import com.jimuqu.solon.claw.web.DashboardGatewayDoctorService;
 import com.jimuqu.solon.claw.web.DashboardInsightsService;
+import com.jimuqu.solon.claw.web.DashboardLogsService;
+import com.jimuqu.solon.claw.web.DashboardMediaService;
 import com.jimuqu.solon.claw.web.DashboardPlatformToolsetsService;
 import com.jimuqu.solon.claw.web.DashboardProviderService;
 import com.jimuqu.solon.claw.web.DashboardRunService;
 import com.jimuqu.solon.claw.web.DashboardRuntimeConfigService;
+import com.jimuqu.solon.claw.web.DashboardSessionService;
 import com.jimuqu.solon.claw.web.DashboardSkillsService;
 import com.jimuqu.solon.claw.web.DashboardStatusService;
 import com.jimuqu.solon.claw.web.DashboardWorkspaceService;
@@ -378,6 +382,19 @@ public class TestEnvironment {
                                 .<com.jimuqu.solon.claw.provider.BrowserProvider>emptyList(),
                         securityPolicyService);
         DashboardRunService dashboardRunService = new DashboardRunService(agentRunRepository);
+        DashboardSessionService dashboardSessionService =
+                new DashboardSessionService(
+                        sessionRepository,
+                        checkpointService,
+                        new SessionArtifactService(config),
+                        agentRunRepository);
+        DashboardAnalyticsService dashboardAnalyticsService =
+                new DashboardAnalyticsService(sessionRepository, usageEventRepository);
+        DashboardLogsService dashboardLogsService =
+                new DashboardLogsService(config, agentRunRepository, cronJobRepository);
+        DashboardMediaService dashboardMediaService =
+                new DashboardMediaService(
+                        database, new RuntimePathGuard(config), attachmentCacheService);
         ToolRegistry toolRegistry =
                 DefaultToolRegistry.builder()
                         .appConfig(config)
@@ -410,12 +427,14 @@ public class TestEnvironment {
                         .dashboardRuntimeConfigService(dashboardRuntimeConfigService)
                         .weixinQrSetupService(weixinQrSetupService)
                         .domesticQrSetupService(domesticQrSetupService)
+                        .dashboardSessionService(dashboardSessionService)
+                        .dashboardAnalyticsService(dashboardAnalyticsService)
+                        .dashboardLogsService(dashboardLogsService)
+                        .dashboardMediaService(dashboardMediaService)
+                        .dashboardSkillsService(dashboardSkillsService)
+                        .dashboardProfileService(null)
                         .browserRuntimeService(browserRuntimeService)
                         .dashboardRunService(dashboardRunService)
-                        .sqliteDatabase(database)
-                        .agentRunRepository(agentRunRepository)
-                        .cronJobRepository(cronJobRepository)
-                        .usageEventRepository(usageEventRepository)
                         .build();
         ContextBudgetService contextBudgetService = new DefaultContextBudgetService(config);
         AgentRunSupervisor agentRunSupervisor =

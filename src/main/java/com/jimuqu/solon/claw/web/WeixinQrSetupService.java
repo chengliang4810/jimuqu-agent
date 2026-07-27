@@ -12,6 +12,7 @@ import com.jimuqu.solon.claw.support.BoundedExecutorFactory;
 import com.jimuqu.solon.claw.support.ErrorTextSupport;
 import com.jimuqu.solon.claw.support.HttpRedirectSupport;
 import com.jimuqu.solon.claw.tool.runtime.SecurityPolicyService;
+import com.jimuqu.solon.claw.tool.runtime.port.WeixinQrSetupPort;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,7 +21,7 @@ import java.util.concurrent.ExecutorService;
 import org.noear.snack4.ONode;
 
 /** 微信 iLink QR 登录服务。 */
-public class WeixinQrSetupService {
+public class WeixinQrSetupService implements WeixinQrSetupPort {
     /** 默认基础URL的统一常量值。 */
     private static final String DEFAULT_BASE_URL = "https://ilinkai.weixin.qq.com";
 

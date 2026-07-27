@@ -23,6 +23,7 @@ import com.jimuqu.solon.claw.support.SecretRedactor;
 import com.jimuqu.solon.claw.support.constants.LlmConstants;
 import com.jimuqu.solon.claw.support.update.AppUpdateService;
 import com.jimuqu.solon.claw.support.update.AppVersionService;
+import com.jimuqu.solon.claw.tool.runtime.port.StatusQueryPort;
 import com.jimuqu.solon.claw.web.profile.DashboardProfileContext;
 import java.io.File;
 import java.time.LocalDate;
@@ -37,7 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Dashboard 状态聚合服务。 */
-public class DashboardStatusService {
+public class DashboardStatusService implements StatusQueryPort {
     /** 记录 Dashboard 状态路径规范化失败的低敏诊断日志，不输出完整路径。 */
     private static final Logger log = LoggerFactory.getLogger(DashboardStatusService.class);
 

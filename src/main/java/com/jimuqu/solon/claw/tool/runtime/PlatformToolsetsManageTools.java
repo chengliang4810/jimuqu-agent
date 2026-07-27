@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardPlatformToolsetsService;
+import com.jimuqu.solon.claw.tool.runtime.port.PlatformToolsetsManagementPort;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.noear.snack4.ONode;
@@ -12,7 +12,7 @@ import org.noear.solon.annotation.Param;
 /** 提供国内渠道平台工具集管理工具，复用 Dashboard 平台工具集服务。 */
 public class PlatformToolsetsManageTools {
     /** Dashboard 平台工具集服务，用于复用平台白名单、规范化和配置保存逻辑。 */
-    private final DashboardPlatformToolsetsService dashboardPlatformToolsetsService;
+    private final PlatformToolsetsManagementPort dashboardPlatformToolsetsService;
 
     /**
      * 创建平台工具集管理工具。
@@ -20,7 +20,7 @@ public class PlatformToolsetsManageTools {
      * @param dashboardPlatformToolsetsService Dashboard 平台工具集服务。
      */
     public PlatformToolsetsManageTools(
-            DashboardPlatformToolsetsService dashboardPlatformToolsetsService) {
+            PlatformToolsetsManagementPort dashboardPlatformToolsetsService) {
         this.dashboardPlatformToolsetsService = dashboardPlatformToolsetsService;
     }
 

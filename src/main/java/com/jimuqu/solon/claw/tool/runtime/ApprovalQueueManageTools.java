@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import com.jimuqu.solon.claw.core.model.ToolResultEnvelope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.web.DashboardDiagnosticsService;
+import com.jimuqu.solon.claw.tool.runtime.port.DiagnosticsManagementPort;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -14,14 +14,14 @@ import org.noear.solon.annotation.Param;
 /** 提供审批队列和确认队列只读查询工具，复用 Dashboard 诊断服务。 */
 public class ApprovalQueueManageTools {
     /** Dashboard 诊断服务，用于读取 pending/history/always/slash confirm 队列。 */
-    private final Supplier<DashboardDiagnosticsService> diagnosticsService;
+    private final Supplier<DiagnosticsManagementPort> diagnosticsService;
 
     /**
      * 创建审批队列管理工具。
      *
      * @param diagnosticsService Dashboard 诊断服务供应器。
      */
-    public ApprovalQueueManageTools(Supplier<DashboardDiagnosticsService> diagnosticsService) {
+    public ApprovalQueueManageTools(Supplier<DiagnosticsManagementPort> diagnosticsService) {
         this.diagnosticsService = diagnosticsService;
     }
 
@@ -48,7 +48,7 @@ public class ApprovalQueueManageTools {
                             description = "Max queue items")
                     Integer limit) {
         try {
-            DashboardDiagnosticsService service = resolveDiagnosticsService();
+            DiagnosticsManagementPort service = resolveDiagnosticsService();
             if (service == null) {
                 return ToolResultEnvelope.error("approval queue service unavailable").toJson();
             }
@@ -70,8 +70,8 @@ public class ApprovalQueueManageTools {
      * @param limit 最大返回数量。
      * @return 返回 Dashboard 诊断服务结果。
      */
-    private Map<String, Object> run(
-            DashboardDiagnosticsService service, String action, Integer limit) throws Exception {
+    private Map<String, Object> run(DiagnosticsManagementPort service, String action, Integer limit)
+            throws Exception {
         String normalized = action == null ? "pending" : action.trim().toLowerCase(Locale.ROOT);
         int safeLimit = limit == null ? 50 : Math.min(Math.max(1, limit.intValue()), 200);
         if ("history".equals(normalized)) {
@@ -95,7 +95,7 @@ public class ApprovalQueueManageTools {
      * @param limit 每类队列的最大读取数量。
      * @return 返回聚合结果。
      */
-    private Map<String, Object> summary(DashboardDiagnosticsService service, int limit)
+    private Map<String, Object> summary(DiagnosticsManagementPort service, int limit)
             throws Exception {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("pending", service.pendingApprovals(limit));
@@ -110,7 +110,7 @@ public class ApprovalQueueManageTools {
      *
      * @return 返回诊断服务实例，无法解析时返回 null。
      */
-    private DashboardDiagnosticsService resolveDiagnosticsService() {
+    private DiagnosticsManagementPort resolveDiagnosticsService() {
         return diagnosticsService == null ? null : diagnosticsService.get();
     }
 }

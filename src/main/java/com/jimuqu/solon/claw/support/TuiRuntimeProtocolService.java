@@ -6,8 +6,8 @@ import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.config.RuntimeConfigResolver;
 import com.jimuqu.solon.claw.llm.LlmProviderSupport;
 import com.jimuqu.solon.claw.support.constants.LlmConstants;
-import com.jimuqu.solon.claw.web.DomesticQrSetupService;
-import com.jimuqu.solon.claw.web.WeixinQrSetupService;
+import com.jimuqu.solon.claw.tool.runtime.port.DomesticQrSetupPort;
+import com.jimuqu.solon.claw.tool.runtime.port.WeixinQrSetupPort;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -26,10 +26,10 @@ public class TuiRuntimeProtocolService {
     private final LlmProviderService llmProviderService;
 
     /** 微信二维码 setup 服务；为空时 TUI 只暴露手动配置。 */
-    private final WeixinQrSetupService weixinQrSetupService;
+    private final WeixinQrSetupPort weixinQrSetupService;
 
     /** 飞书、钉钉二维码 setup 服务；为空时 TUI 只暴露手动配置。 */
-    private final DomesticQrSetupService domesticQrSetupService;
+    private final DomesticQrSetupPort domesticQrSetupService;
 
     /**
      * 创建 TUI 运行时协议服务。
@@ -49,8 +49,8 @@ public class TuiRuntimeProtocolService {
      */
     public TuiRuntimeProtocolService(
             AppConfig appConfig,
-            WeixinQrSetupService weixinQrSetupService,
-            DomesticQrSetupService domesticQrSetupService) {
+            WeixinQrSetupPort weixinQrSetupService,
+            DomesticQrSetupPort domesticQrSetupService) {
         this.appConfig = appConfig == null ? new AppConfig() : appConfig;
         this.setupService = new RuntimeSetupService(this.appConfig);
         this.llmProviderService = new LlmProviderService(this.appConfig);

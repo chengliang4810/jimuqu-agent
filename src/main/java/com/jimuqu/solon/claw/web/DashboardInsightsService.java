@@ -6,11 +6,12 @@ import com.jimuqu.solon.claw.context.LocalSkillService;
 import com.jimuqu.solon.claw.context.SkillUsageTracker;
 import com.jimuqu.solon.claw.core.model.SkillDescriptor;
 import com.jimuqu.solon.claw.core.repository.SessionRepository;
+import com.jimuqu.solon.claw.tool.runtime.port.InsightsQueryPort;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** 提供控制台洞察相关业务能力，封装调用方不需要感知的运行细节。 */
-public class DashboardInsightsService {
+public class DashboardInsightsService implements InsightsQueryPort {
     /** 注入应用配置，用于控制台洞察。 */
     private final AppConfig appConfig;
 
