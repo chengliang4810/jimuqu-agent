@@ -2,6 +2,7 @@ package com.jimuqu.solon.claw.web;
 
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
+import com.jimuqu.solon.claw.support.SecureTokenCompare;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -113,7 +114,8 @@ public class DashboardAuthService {
             return true;
         }
         String queryToken = webSocketParam(socket, "token");
-        return token.equals(queryToken) || token.equals(urlDecode(queryToken));
+        return SecureTokenCompare.matches(token, queryToken)
+                || SecureTokenCompare.matches(token, urlDecode(queryToken));
     }
 
     /**
@@ -336,7 +338,7 @@ public class DashboardAuthService {
         }
         String scheme = auth.substring(0, splitIndex).trim();
         String actualToken = auth.substring(splitIndex + 1).trim();
-        return "Bearer".equalsIgnoreCase(scheme) && token.equals(actualToken);
+        return "Bearer".equalsIgnoreCase(scheme) && SecureTokenCompare.matches(token, actualToken);
     }
 
     /** 按大小写不敏感方式读取 WebSocket 握手参数或请求头。 */

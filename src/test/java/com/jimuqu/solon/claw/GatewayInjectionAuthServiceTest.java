@@ -31,6 +31,17 @@ public class GatewayInjectionAuthServiceTest {
         assertThat(seenNonces).containsKey("nonce-0").hasSize(maxNonces);
     }
 
+    /** HMAC 十六进制比较继续兼容大小写，但拒绝前缀、后缀和不同值。 */
+    @Test
+    void shouldCompareHmacHexCaseInsensitivelyWithoutPartialMatches() throws Exception {
+        GatewayInjectionAuthService service = new GatewayInjectionAuthService(new AppConfig());
+
+        assertThat(constantTimeEquals(service, "abcdef012345", "ABCDEF012345")).isTrue();
+        assertThat(constantTimeEquals(service, "abcdef012345", "abcdef")).isFalse();
+        assertThat(constantTimeEquals(service, "abcdef012345", "abcdef01234500")).isFalse();
+        assertThat(constantTimeEquals(service, "abcdef012345", "abcdef012346")).isFalse();
+    }
+
     /** 调用私有 markNonce，避免构造完整 HTTP 上下文影响防重放边界断言。 */
     private static boolean markNonce(
             GatewayInjectionAuthService service, String nonce, long now, long window)
@@ -41,6 +52,16 @@ public class GatewayInjectionAuthServiceTest {
         method.setAccessible(true);
         return ((Boolean) method.invoke(service, nonce, Long.valueOf(now), Long.valueOf(window)))
                 .booleanValue();
+    }
+
+    /** 调用私有签名比较入口，验证共享安全比较工具没有改变 HMAC 兼容语义。 */
+    private static boolean constantTimeEquals(
+            GatewayInjectionAuthService service, String expected, String actual) throws Exception {
+        Method method =
+                GatewayInjectionAuthService.class.getDeclaredMethod(
+                        "constantTimeEquals", String.class, String.class);
+        method.setAccessible(true);
+        return ((Boolean) method.invoke(service, expected, actual)).booleanValue();
     }
 
     /** 读取 nonce 缓存上限，测试跟随生产常量变化。 */

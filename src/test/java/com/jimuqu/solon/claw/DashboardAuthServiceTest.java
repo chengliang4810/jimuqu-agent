@@ -45,6 +45,9 @@ public class DashboardAuthServiceTest {
         assertThat(authService.isAuthorized(new HeaderContext("bearer test-token"))).isTrue();
         assertThat(authService.isAuthorized(new HeaderContext("BEARER test-token"))).isTrue();
         assertThat(authService.isAuthorized(new HeaderContext("Bearer wrong-token"))).isFalse();
+        assertThat(authService.isAuthorized(new HeaderContext("Bearer TEST-TOKEN"))).isFalse();
+        assertThat(authService.isAuthorized(new HeaderContext("Bearer test-token-suffix")))
+                .isFalse();
     }
 
     /** 验证 loopback WebSocket 也必须携带正确令牌，防止浏览器跨站连接绕过鉴权。 */
@@ -56,6 +59,8 @@ public class DashboardAuthServiceTest {
 
         assertThat(authService.isAuthorized(webSocket(""))).isFalse();
         assertThat(authService.isAuthorized(webSocket("test-token"))).isTrue();
+        assertThat(authService.isAuthorized(webSocket("test%2Dtoken"))).isTrue();
+        assertThat(authService.isAuthorized(webSocket("test-token-suffix"))).isFalse();
     }
 
     /** 验证通配监听地址不会授权任意浏览器 Origin。 */

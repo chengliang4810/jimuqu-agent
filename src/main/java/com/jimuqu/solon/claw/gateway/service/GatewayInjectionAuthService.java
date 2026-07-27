@@ -2,11 +2,12 @@ package com.jimuqu.solon.claw.gateway.service;
 
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
+import com.jimuqu.solon.claw.support.SecureTokenCompare;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -173,11 +174,9 @@ public class GatewayInjectionAuthService {
      * @return 两个签名按字节一致时返回 true。
      */
     private boolean constantTimeEquals(String expectedHex, String actualHex) {
-        byte[] expected =
-                StrUtil.nullToEmpty(expectedHex).toLowerCase().getBytes(StandardCharsets.UTF_8);
-        byte[] actual =
-                StrUtil.nullToEmpty(actualHex).toLowerCase().getBytes(StandardCharsets.UTF_8);
-        return MessageDigest.isEqual(expected, actual);
+        String expected = StrUtil.nullToEmpty(expectedHex).toLowerCase(Locale.ROOT);
+        String actual = StrUtil.nullToEmpty(actualHex).toLowerCase(Locale.ROOT);
+        return SecureTokenCompare.matches(expected, actual);
     }
 
     /**
