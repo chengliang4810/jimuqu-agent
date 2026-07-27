@@ -46,8 +46,6 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 import org.noear.solon.ai.chat.ChatRole;
 import org.noear.solon.ai.chat.message.AssistantMessage;
@@ -113,9 +111,9 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     /** 注入语音服务，用于调用对应业务能力。 */
     private final SpeechService speechService;
 
-    /** 保存来源Locks映射，便于按键快速查询。 */
-    private final ConcurrentMap<String, Object> sourceLocks =
-            new ConcurrentHashMap<String, Object>();
+    /** 按来源键串行化会话操作，并在最后一个等待者退出后释放锁条目。 */
+    private final ReferenceCountedKeyLockRegistry sourceLocks =
+            new ReferenceCountedKeyLockRegistry();
 
     /**
      * 创建默认对话编排器实例，并注入运行所需依赖。
@@ -235,10 +233,12 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             throws Exception {
         String sourceKey = message.sourceKey();
         SessionRecord session;
-        synchronized (lockFor(sourceKey)) {
-            session = sessionRepository.getBoundSession(sourceKey);
-            if (session == null) {
-                session = sessionRepository.bindNewSession(sourceKey);
+        try (ReferenceCountedKeyLockRegistry.Lease lease = acquireSourceLock(sourceKey)) {
+            synchronized (lease.monitor()) {
+                session = sessionRepository.getBoundSession(sourceKey);
+                if (session == null) {
+                    session = sessionRepository.bindNewSession(sourceKey);
+                }
             }
         }
         RunBusyDecision decision =
@@ -300,12 +300,14 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     public GatewayReply runScheduled(
             GatewayMessage syntheticMessage, ConversationEventSink eventSink) throws Exception {
         String sourceKey = syntheticMessage.sourceKey();
-        synchronized (lockFor(sourceKey)) {
-            SessionRecord session = sessionRepository.getBoundSession(sourceKey);
-            if (session == null) {
-                session = sessionRepository.bindNewSession(sourceKey);
+        try (ReferenceCountedKeyLockRegistry.Lease lease = acquireSourceLock(sourceKey)) {
+            synchronized (lease.monitor()) {
+                SessionRecord session = sessionRepository.getBoundSession(sourceKey);
+                if (session == null) {
+                    session = sessionRepository.bindNewSession(sourceKey);
+                }
+                return runOnSession(session, syntheticMessage, eventSink);
             }
-            return runOnSession(session, syntheticMessage, eventSink);
         }
     }
 
@@ -371,92 +373,96 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
             ConversationEventSink eventSink,
             Function<GatewayReply, Boolean> replyCommitter)
             throws Exception {
-        synchronized (lockFor(sourceKey)) {
-            SessionRecord session = findPendingSession(sourceKey, sessionId);
-            if (session == null) {
-                return missingPendingSessionReply(sessionId);
-            }
-            String resumedUserMessage = MessageSupport.getLastUserMessage(session.getNdjson());
-
-            AgentRuntimeScope agentScope = resolveAgentScope(session);
-            List<String> enabledToolNames =
-                    toolRegistry.resolveEnabledToolNames(sourceKey, agentScope);
-            List<Object> enabledTools = toolRegistry.resolveEnabledTools(sourceKey, agentScope);
-            String systemPrompt =
-                    contextService.buildSystemPrompt(sourceKey, agentScope)
-                            + "\n\n"
-                            + runtimeSettingsService.buildAgentRuntimePrompt(
-                                    sourceKey, session, enabledToolNames, agentScope);
-            systemPrompt = appendResumePendingSystemNote(systemPrompt, session);
-            systemPrompt = appendProgressUpdateSystemNote(systemPrompt);
-            session.setSystemPromptSnapshot(systemPrompt);
-
-            GatewayMessage feedbackTarget = messageFromSourceKey(sourceKey);
-            ConversationFeedbackSink feedbackSink = feedbackSinkFor(feedbackTarget);
-            String outputLeaseRunId = null;
-            try {
-                AgentRunOutcome outcome =
-                        agentRunSupervisor.runWithOutputLease(
-                                session,
-                                systemPrompt,
-                                null,
-                                enabledTools,
-                                feedbackSink,
-                                eventSink,
-                                true,
-                                agentScope,
-                                Collections.emptyList(),
-                                null,
-                                Collections.emptyList(),
-                                Collections.emptyList(),
-                                null,
-                                null,
-                                enabledToolNames);
-                outputLeaseRunId = outcome.getRunRecord().getRunId();
-                String finalReply =
-                        sanitizeFinalReply(
-                                StrUtil.blankToDefault(
-                                        outcome.getFinalReply(),
-                                        AgentRecoveryPromptConstants.EMPTY_REPLY_FALLBACK));
-                finalReply = decorateFinalReply(finalReply, feedbackTarget.getPlatform(), outcome);
-                final String terminalReply = finalReply;
-                final GatewayReply reply = GatewayReply.ok(terminalReply);
-                reply.setSessionId(session.getSessionId());
-                reply.setBranchName(session.getBranchName());
-                applyRuntimeMetadata(reply, outcome);
-                boolean terminalWritten =
-                        agentRunSupervisor.completeOutputLease(
-                                session.getSourceKey(),
-                                outputLeaseRunId,
-                                () -> {
-                                    feedbackSink.onFinalReply(terminalReply);
-                                    eventSink.onRunCompleted(
-                                            session.getSessionId(),
-                                            terminalReply,
-                                            outcome.getResult());
-                                    clearAgentPending(session);
-                                    syncMemory(
-                                            session.getSourceKey(),
-                                            resumedUserMessage,
-                                            terminalReply,
-                                            session,
-                                            outcome);
-                                    if (replyCommitter != null) {
-                                        replyCommitter.apply(reply);
-                                    }
-                                });
-                if (!terminalWritten) {
-                    return null;
+        try (ReferenceCountedKeyLockRegistry.Lease lease = acquireSourceLock(sourceKey)) {
+            synchronized (lease.monitor()) {
+                SessionRecord session = findPendingSession(sourceKey, sessionId);
+                if (session == null) {
+                    return missingPendingSessionReply(sessionId);
                 }
-                return reply;
-            } catch (Throwable error) {
-                return completeFailedRun(
-                        session.getSourceKey(), session, eventSink, replyCommitter, error);
-            } finally {
-                if (StrUtil.isNotBlank(outputLeaseRunId)) {
-                    agentRunSupervisor.releaseOutputLease(session.getSourceKey(), outputLeaseRunId);
-                } else {
-                    agentRunSupervisor.releaseCurrentThreadOutputLease(session.getSourceKey());
+                String resumedUserMessage = MessageSupport.getLastUserMessage(session.getNdjson());
+
+                AgentRuntimeScope agentScope = resolveAgentScope(session);
+                List<String> enabledToolNames =
+                        toolRegistry.resolveEnabledToolNames(sourceKey, agentScope);
+                List<Object> enabledTools = toolRegistry.resolveEnabledTools(sourceKey, agentScope);
+                String systemPrompt =
+                        contextService.buildSystemPrompt(sourceKey, agentScope)
+                                + "\n\n"
+                                + runtimeSettingsService.buildAgentRuntimePrompt(
+                                        sourceKey, session, enabledToolNames, agentScope);
+                systemPrompt = appendResumePendingSystemNote(systemPrompt, session);
+                systemPrompt = appendProgressUpdateSystemNote(systemPrompt);
+                session.setSystemPromptSnapshot(systemPrompt);
+
+                GatewayMessage feedbackTarget = messageFromSourceKey(sourceKey);
+                ConversationFeedbackSink feedbackSink = feedbackSinkFor(feedbackTarget);
+                String outputLeaseRunId = null;
+                try {
+                    AgentRunOutcome outcome =
+                            agentRunSupervisor.runWithOutputLease(
+                                    session,
+                                    systemPrompt,
+                                    null,
+                                    enabledTools,
+                                    feedbackSink,
+                                    eventSink,
+                                    true,
+                                    agentScope,
+                                    Collections.emptyList(),
+                                    null,
+                                    Collections.emptyList(),
+                                    Collections.emptyList(),
+                                    null,
+                                    null,
+                                    enabledToolNames);
+                    outputLeaseRunId = outcome.getRunRecord().getRunId();
+                    String finalReply =
+                            sanitizeFinalReply(
+                                    StrUtil.blankToDefault(
+                                            outcome.getFinalReply(),
+                                            AgentRecoveryPromptConstants.EMPTY_REPLY_FALLBACK));
+                    finalReply =
+                            decorateFinalReply(finalReply, feedbackTarget.getPlatform(), outcome);
+                    final String terminalReply = finalReply;
+                    final GatewayReply reply = GatewayReply.ok(terminalReply);
+                    reply.setSessionId(session.getSessionId());
+                    reply.setBranchName(session.getBranchName());
+                    applyRuntimeMetadata(reply, outcome);
+                    boolean terminalWritten =
+                            agentRunSupervisor.completeOutputLease(
+                                    session.getSourceKey(),
+                                    outputLeaseRunId,
+                                    () -> {
+                                        feedbackSink.onFinalReply(terminalReply);
+                                        eventSink.onRunCompleted(
+                                                session.getSessionId(),
+                                                terminalReply,
+                                                outcome.getResult());
+                                        clearAgentPending(session);
+                                        syncMemory(
+                                                session.getSourceKey(),
+                                                resumedUserMessage,
+                                                terminalReply,
+                                                session,
+                                                outcome);
+                                        if (replyCommitter != null) {
+                                            replyCommitter.apply(reply);
+                                        }
+                                    });
+                    if (!terminalWritten) {
+                        return null;
+                    }
+                    return reply;
+                } catch (Throwable error) {
+                    return completeFailedRun(
+                            session.getSourceKey(), session, eventSink, replyCommitter, error);
+                } finally {
+                    if (StrUtil.isNotBlank(outputLeaseRunId)) {
+                        agentRunSupervisor.releaseOutputLease(
+                                session.getSourceKey(), outputLeaseRunId);
+                    } else {
+                        agentRunSupervisor.releaseCurrentThreadOutputLease(session.getSourceKey());
+                    }
                 }
             }
         }
@@ -579,20 +585,14 @@ public class DefaultConversationOrchestrator implements ConversationOrchestrator
     }
 
     /**
-     * 执行lockFor相关逻辑。
+     * 获取来源键对应的引用计数锁租约。
      *
      * @param sourceKey 渠道来源键。
-     * @return 返回lock For结果。
+     * @return 必须关闭的锁租约。
      */
-    private Object lockFor(String sourceKey) {
+    private ReferenceCountedKeyLockRegistry.Lease acquireSourceLock(String sourceKey) {
         String key = StrUtil.blankToDefault(sourceKey, "__default__");
-        Object existing = sourceLocks.get(key);
-        if (existing != null) {
-            return existing;
-        }
-        Object created = new Object();
-        Object previous = sourceLocks.putIfAbsent(key, created);
-        return previous == null ? created : previous;
+        return sourceLocks.acquire(key);
     }
 
     /**
