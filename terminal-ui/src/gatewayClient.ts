@@ -156,6 +156,10 @@ const redactUrl = (raw: string): string => {
   }
 }
 
+/** 脱敏日志文本内嵌的 URL，避免错误前缀导致整段文本绕过 URL 解析。 */
+const redactUrlsInText = (raw: string): string =>
+  raw.replace(/[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi, candidate => redactUrl(candidate))
+
 interface Pending {
   id: string
   method: string
@@ -490,7 +494,7 @@ export class GatewayClient extends EventEmitter {
       return connectPromise
     } catch (err) {
       const rawMessage = err instanceof Error ? err.message : String(err)
-      const safeMessage = redactUrl(rawMessage)
+      const safeMessage = redactUrlsInText(rawMessage)
       const line = `[startup] failed to connect websocket gateway ${safeAttachUrl} (constructor error: ${safeMessage})`
 
       this.pushLog(line)
@@ -503,9 +507,10 @@ export class GatewayClient extends EventEmitter {
 
   private startSolonBackendGateway(): Promise<void> {
     const url = handshakeUrl()
+    const safeUrl = redactUrl(url)
 
-    this.startReadyTimer('solon-backend', url)
-    this.pushLog(`[startup] handshake ${url}`)
+    this.startReadyTimer('solon-backend', safeUrl)
+    this.pushLog(`[startup] handshake ${safeUrl}`)
 
     return fetchHandshake()
       .then(handshake => {
@@ -518,7 +523,8 @@ export class GatewayClient extends EventEmitter {
         return this.startAttachedGateway(wsUrl)
       })
       .catch(err => {
-        const message = err instanceof Error ? err.message : String(err)
+        const rawMessage = err instanceof Error ? err.message : String(err)
+        const message = redactUrlsInText(rawMessage)
         const line = `[startup] backend handshake failed: ${message}`
 
         this.backendUnavailable = true
@@ -526,7 +532,7 @@ export class GatewayClient extends EventEmitter {
         this.publish({ type: 'gateway.stderr', payload: { line } })
         this.publish({ type: 'error', payload: { message: `无法连接后端服务: ${message}` } })
         this.handleTransportExit(1, 'backend handshake failed')
-        throw err instanceof Error ? err : new Error(String(err))
+        throw message === rawMessage && err instanceof Error ? err : new Error(message)
       })
   }
 

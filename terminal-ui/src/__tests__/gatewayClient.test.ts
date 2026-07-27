@@ -313,6 +313,41 @@ describe('GatewayClient solonclaw bridge', () => {
     gw.kill()
   })
 
+  it('redacts handshake URL credentials from logs and error events', async () => {
+    const serverUrl = 'http://alice:hunter2@127.0.0.1:8080?api_key=secret'
+    const handshake = `${serverUrl}/api/tui/handshake`
+
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      throw new TypeError(`fetch failed for "${String(input)}"`)
+    })
+
+    process.env.SOLONCLAW_SERVER_URL = serverUrl
+    vi.stubGlobal('fetch', fetchMock)
+
+    const gw = new GatewayClient()
+    const errorEvents: string[] = []
+
+    gw.on('event', event => {
+      if (event.type === 'gateway.stderr' || event.type === 'error') {
+        errorEvents.push(JSON.stringify(event))
+      }
+    })
+
+    gw.start()
+
+    await vi.waitFor(() => expect(gw.getLogTail(20)).toContain('backend handshake failed'))
+    await gw.drain()
+
+    const exposedText = `${gw.getLogTail(20)}\n${errorEvents.join('\n')}`
+
+    expect(fetchMock).toHaveBeenCalledWith(handshake)
+    expect(exposedText).toContain('http://***@127.0.0.1:8080')
+    expect(exposedText).toContain('?***')
+    expect(exposedText).not.toContain('alice').not.toContain('hunter2').not.toContain('api_key=secret')
+
+    gw.kill()
+  })
+
   it('shows the backend configuration hint when the dashboard token is missing', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValueOnce({
       json: async () => ({ error: '未配置 Dashboard 访问令牌，请先设置 solonclaw.dashboard.accessToken' }),
