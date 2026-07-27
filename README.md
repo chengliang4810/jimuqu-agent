@@ -246,6 +246,10 @@ solonclaw:
       enabled: true
 ```
 
+## HTTP API
+
+Dashboard、Gateway 注入、TUI 握手、认证方式和统一错误形态见 [HTTP API 文档](docs/api.md)。
+
 ## 主动提醒
 
 主动提醒按配置周期读取最近的国内渠道主对话和三层记忆。`PROACTIVITY_ANALYSIS.md` 分析用户互动情况并调整活跃度，`PROACTIVE.md` 负责防重复、选择话题和生成最终可见消息。系统不再维护独立候选、决策或投递重试表。

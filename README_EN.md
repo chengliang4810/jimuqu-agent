@@ -226,6 +226,8 @@ Common in-conversation commands:
 
 ## API Overview
 
+See the [HTTP API reference](docs/api.md) for the complete route catalog, authentication boundaries, gateway HMAC signing, TUI handshake, and error shapes.
+
 Main HTTP endpoints:
 
 - `GET /api/status`: workspace status
