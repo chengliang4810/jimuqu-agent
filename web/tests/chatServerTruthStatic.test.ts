@@ -8,11 +8,11 @@ assert.ok(
   'chat session loading should document that stale browser cache cannot override an empty server list',
 )
 assert.ok(
-  store.includes('&& (readInFlight(s.id) || streamStates.value.has(s.id) || resumingRuns.value.has(s.id))'),
+  store.includes('&& (readInFlight(session.key) || streamStates.value.has(session.key) || resumingRuns.value.has(session.key))'),
   'local-only sessions should survive only when they are still recoverable',
 )
 assert.ok(
-  store.includes('activeSessionId.value = null') && store.includes('activeSession.value = null'),
+  store.includes('activeSessionKey.value = null') && store.includes('activeSession.value = null'),
   'chat store should clear the active session when neither server nor recoverable local sessions exist',
 )
 assert.ok(

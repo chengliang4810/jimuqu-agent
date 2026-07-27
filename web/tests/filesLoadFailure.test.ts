@@ -51,6 +51,10 @@ export async function listFiles(path = ''): Promise<ListResult> {
   const storeSource = readFileSync(new URL('../src/stores/solonclaw/files.ts', import.meta.url), 'utf8')
     .replace("import * as filesApi from '@/api/solonclaw/files'", "import * as filesApi from './mock-files-api.ts'")
     .replace("import type { FileEntry } from '@/api/solonclaw/files'", "import type { FileEntry } from './mock-files-api.ts'")
+    .replace(
+      "import { useProfileContextGuard } from '@/composables/useProfileContextGuard'",
+      "function useProfileContextGuard() { return { capture: () => 0, isCurrent: () => true } }",
+    )
     .replace("} from '../../shared/fileTypes.ts'", "} from './file-types.ts'")
   writeFileSync(storePath, storeSource)
 

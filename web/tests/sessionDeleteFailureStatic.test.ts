@@ -7,18 +7,22 @@ const zh = readFileSync(new URL('../src/i18n/locales/zh.ts', import.meta.url), '
 const en = readFileSync(new URL('../src/i18n/locales/en.ts', import.meta.url), 'utf8')
 
 const storeDelete = store.slice(
-  store.indexOf('async function deleteSession(sessionId: string)'),
+  store.indexOf('async function deleteSession(sessionKey: string)'),
   store.indexOf('function getSessionMsgs'),
 )
 
 assert.match(
   storeDelete,
-  /async function deleteSession\(sessionId: string\): Promise<boolean>/,
+  /async function deleteSession\(sessionKey: string\): Promise<boolean>/,
   'store deleteSession should return the backend delete result',
 )
 assert.ok(
-  storeDelete.includes('const ok = await deleteSessionApi(sessionId)'),
-  'store deleteSession should inspect the API boolean result',
+  storeDelete.includes('const target = sessionForKey(sessionKey)'),
+  'store deleteSession should resolve the Profile-aware session before calling the API',
+)
+assert.ok(
+  storeDelete.includes('const ok = await deleteSessionApi(target.id, target.profile)'),
+  'store deleteSession should delete the target from its owning Profile',
 )
 assert.ok(
   storeDelete.includes('if (!ok) return false'),

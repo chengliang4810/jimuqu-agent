@@ -11,6 +11,7 @@ try {
   const clientPath = join(tempDir, 'client-under-test.ts')
   const source = readFileSync(new URL('../src/api/client.ts', import.meta.url), 'utf8')
     .replace("import router from '@/router'", "import router from './mock-router.ts'")
+    .replace("import { appendManagementProfile } from '@/shared/profileScope'", "import { appendManagementProfile } from './mock-profile-scope.ts'")
     .replace("import { isDashboardOriginRejected } from './dashboardAuthError.ts'", "import { isDashboardOriginRejected } from './mock-dashboard-auth-error.ts'")
     .replaceAll("from './sessionAuth.ts'", "from './mock-session-auth.ts'")
 
@@ -23,6 +24,11 @@ export default {
   writeFileSync(join(tempDir, 'mock-dashboard-auth-error.ts'), `
 export function isDashboardOriginRejected() {
   return false
+}
+`)
+  writeFileSync(join(tempDir, 'mock-profile-scope.ts'), `
+export function appendManagementProfile(path: string) {
+  return path
 }
 `)
   writeFileSync(join(tempDir, 'mock-session-auth.ts'), `

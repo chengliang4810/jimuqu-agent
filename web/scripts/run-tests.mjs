@@ -1,15 +1,15 @@
-import { readFileSync } from 'node:fs'
+import { globSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-// 自动执行全部命名为 test:* 的独立测试脚本，避免新增脚本后漏出 CI 门禁。
-const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
-const testScripts = Object.keys(packageJson.scripts || {})
-  .filter(name => name.startsWith('test:'))
-  .sort()
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+// 自动发现全部测试文件，避免手工维护 package.json 清单导致 CI 漏跑。
+const testsDirectory = fileURLToPath(new URL('../tests/', import.meta.url))
+const testFiles = globSync('**/*.test.ts', { cwd: testsDirectory }).sort()
 
-for (const testScript of testScripts) {
-  const result = spawnSync(npmCommand, ['run', testScript], {
+for (const [index, testFile] of testFiles.entries()) {
+  console.log(`[web:test] ${index + 1}/${testFiles.length} ${testFile}`)
+  const result = spawnSync(process.execPath, ['--experimental-strip-types', join(testsDirectory, testFile)], {
     env: process.env,
     stdio: 'inherit',
   })
@@ -17,3 +17,5 @@ for (const testScript of testScripts) {
     process.exit(result.status || 1)
   }
 }
+
+console.log(`[web:test] passed ${testFiles.length}/${testFiles.length} files`)
