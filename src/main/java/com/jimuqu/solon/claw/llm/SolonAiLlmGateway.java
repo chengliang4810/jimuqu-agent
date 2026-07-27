@@ -1,7 +1,6 @@
 package com.jimuqu.solon.claw.llm;
 
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.crypto.SecureUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.config.RuntimeConfigResolver;
 import com.jimuqu.solon.claw.context.MemoryContextBoundary;
@@ -14,7 +13,6 @@ import com.jimuqu.solon.claw.core.repository.SessionRepository;
 import com.jimuqu.solon.claw.core.service.ConversationEventSink;
 import com.jimuqu.solon.claw.core.service.LlmGateway;
 import com.jimuqu.solon.claw.gateway.feedback.ConversationFeedbackSink;
-import com.jimuqu.solon.claw.llm.dialect.RawResponseLoggingChatDialect;
 import com.jimuqu.solon.claw.media.MediaInputBoundaryService;
 import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
 import com.jimuqu.solon.claw.support.BoundedExecutorFactory;
@@ -29,7 +27,6 @@ import com.jimuqu.solon.claw.support.SecretRedactor;
 import com.jimuqu.solon.claw.support.SecretValueGuard;
 import com.jimuqu.solon.claw.support.ToolMessageStatusSupport;
 import com.jimuqu.solon.claw.support.constants.LlmConstants;
-import com.jimuqu.solon.claw.support.constants.RuntimePathConstants;
 import com.jimuqu.solon.claw.tool.runtime.DangerousCommandApprovalService;
 import com.jimuqu.solon.claw.tool.runtime.ReActToolObservationSupport;
 import com.jimuqu.solon.claw.tool.runtime.SanitizedFunctionTool;
@@ -59,7 +56,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import org.noear.snack4.ONode;
@@ -73,9 +69,7 @@ import org.noear.solon.ai.agent.react.intercept.ToolRetryInterceptor;
 import org.noear.solon.ai.agent.react.intercept.ToolSanitizerInterceptor;
 import org.noear.solon.ai.agent.react.task.ToolExchanger;
 import org.noear.solon.ai.agent.trace.Metrics;
-import org.noear.solon.ai.chat.CacheControl;
 import org.noear.solon.ai.chat.ChatChoice;
-import org.noear.solon.ai.chat.ChatConfig;
 import org.noear.solon.ai.chat.ChatModel;
 import org.noear.solon.ai.chat.ChatOptions;
 import org.noear.solon.ai.chat.ChatRequest;
@@ -85,7 +79,6 @@ import org.noear.solon.ai.chat.ChatResponseDefault;
 import org.noear.solon.ai.chat.content.ContentBlock;
 import org.noear.solon.ai.chat.content.Contents;
 import org.noear.solon.ai.chat.content.ImageBlock;
-import org.noear.solon.ai.chat.dialect.ChatDialectManager;
 import org.noear.solon.ai.chat.interceptor.CallChain;
 import org.noear.solon.ai.chat.interceptor.StreamChain;
 import org.noear.solon.ai.chat.interceptor.ToolChain;
@@ -100,11 +93,6 @@ import org.noear.solon.ai.chat.tool.MethodToolProvider;
 import org.noear.solon.ai.chat.tool.ToolCall;
 import org.noear.solon.ai.chat.tool.ToolProvider;
 import org.noear.solon.ai.chat.tool.ToolResult;
-import org.noear.solon.ai.llm.dialect.anthropic.AnthropicChatDialect;
-import org.noear.solon.ai.llm.dialect.gemini.GeminiChatDialect;
-import org.noear.solon.ai.llm.dialect.ollama.OllamaChatDialect;
-import org.noear.solon.ai.llm.dialect.openai.OpenaiChatDialect;
-import org.noear.solon.ai.llm.dialect.openai.OpenaiResponsesDialect;
 import org.noear.solon.ai.talents.pdf.PdfTalent;
 import org.noear.solon.core.util.RankEntity;
 import org.slf4j.Logger;
@@ -155,9 +143,6 @@ public class SolonAiLlmGateway implements LlmGateway {
 
     /** LLM 网关日志器。 */
     private static final Logger log = LoggerFactory.getLogger(SolonAiLlmGateway.class);
-
-    /** CUSTOMDIALECTSREGISTERED的统一常量值。 */
-    private static final AtomicBoolean CUSTOM_DIALECTS_REGISTERED = new AtomicBoolean(false);
 
     /** 识别用户原文中明确要求 no_agent=true 的布尔赋值。 */
     private static final Pattern USER_NO_AGENT_TRUE_PATTERN =
@@ -210,6 +195,9 @@ public class SolonAiLlmGateway implements LlmGateway {
 
     /** 注入模型元数据服务，用于调用对应业务能力。 */
     private final ModelMetadataService modelMetadataService;
+
+    /** 构建模型协议配置并隔离方言注册细节。 */
+    private final SolonAiChatModelFactory chatModelFactory;
 
     /** 记录SolonAi大模型消息网关中的pdf技能。 */
     private volatile PdfTalent pdfSkill;
@@ -338,6 +326,38 @@ public class SolonAiLlmGateway implements LlmGateway {
             ToolResultTransformService toolResultTransformService,
             ToolCallLoopGuardrailService toolCallLoopGuardrailService,
             SecurityPolicyService securityPolicyService) {
+        this(
+                appConfig,
+                sessionRepository,
+                dangerousCommandApprovalService,
+                llmProviderService,
+                toolResultTransformService,
+                toolCallLoopGuardrailService,
+                securityPolicyService,
+                new SolonAiChatModelFactory());
+    }
+
+    /**
+     * 创建 Solon AI 大模型消息网关实例，并注入完整运行依赖。
+     *
+     * @param appConfig 应用运行配置。
+     * @param sessionRepository 会话仓储依赖。
+     * @param dangerousCommandApprovalService 危险命令审批服务。
+     * @param llmProviderService 大模型提供方服务。
+     * @param toolResultTransformService 工具结果转换服务。
+     * @param toolCallLoopGuardrailService 工具循环防护服务。
+     * @param securityPolicyService 安全策略服务。
+     * @param chatModelFactory 模型协议配置工厂。
+     */
+    public SolonAiLlmGateway(
+            AppConfig appConfig,
+            SessionRepository sessionRepository,
+            DangerousCommandApprovalService dangerousCommandApprovalService,
+            LlmProviderService llmProviderService,
+            ToolResultTransformService toolResultTransformService,
+            ToolCallLoopGuardrailService toolCallLoopGuardrailService,
+            SecurityPolicyService securityPolicyService,
+            SolonAiChatModelFactory chatModelFactory) {
         this.appConfig = appConfig;
         this.sessionRepository = sessionRepository;
         this.dangerousCommandApprovalService = dangerousCommandApprovalService;
@@ -357,6 +377,8 @@ public class SolonAiLlmGateway implements LlmGateway {
                         : securityPolicyService;
         this.mediaInputBoundaryService = new MediaInputBoundaryService(appConfig);
         this.modelMetadataService = new ModelMetadataService(appConfig);
+        this.chatModelFactory =
+                chatModelFactory == null ? new SolonAiChatModelFactory() : chatModelFactory;
         if (this.dangerousCommandApprovalService != null) {
             this.dangerousCommandApprovalService.setSmartApprovalJudge(
                     new SolonAiSmartApprovalJudge());
@@ -3266,16 +3288,6 @@ public class SolonAiLlmGateway implements LlmGateway {
     }
 
     /**
-     * 构建Chat配置。
-     *
-     * @param resolved resolved 参数。
-     * @return 返回创建好的Chat配置。
-     */
-    private ChatConfig buildChatConfig(AppConfig.LlmConfig resolved) {
-        return buildChatConfig(resolved, null);
-    }
-
-    /**
      * 判断是否支持Vision载荷。
      *
      * @param resolved resolved 参数。
@@ -3299,259 +3311,6 @@ public class SolonAiLlmGateway implements LlmGateway {
     }
 
     /**
-     * 构建Chat配置。
-     *
-     * @param resolved resolved 参数。
-     * @param session 会话参数。
-     * @return 返回创建好的Chat配置。
-     */
-    private ChatConfig buildChatConfig(AppConfig.LlmConfig resolved, SessionRecord session) {
-        ensureCustomDialectsRegistered();
-        String dialect =
-                LlmProviderSupport.normalizeDialect(
-                        StrUtil.isNotBlank(resolved.getDialect())
-                                ? resolved.getDialect()
-                                : resolved.getProvider());
-
-        ChatConfig chatConfig = new ChatConfig();
-        chatConfig.setApiUrl(resolved.getApiUrl());
-        chatConfig.setProvider(dialect);
-        chatConfig.setModel(resolved.getModel());
-        chatConfig.setTimeout(Duration.ofMinutes(5));
-
-        if (StrUtil.isNotBlank(resolved.getApiKey())) {
-            chatConfig.setApiKey(resolved.getApiKey());
-        }
-
-        String reasoningEffort =
-                session != null && StrUtil.isNotBlank(session.getReasoningEffortOverride())
-                        ? session.getReasoningEffortOverride().trim()
-                        : resolved.getReasoningEffort();
-        applyProviderRequestOptions(chatConfig, resolved, dialect, reasoningEffort);
-        applyFastMode(chatConfig, resolved, dialect, session);
-        applyPromptCache(chatConfig, resolved, dialect, session);
-
-        return chatConfig;
-    }
-
-    /** 将通用模型配置转换为各协议实际接受的请求字段。 */
-    private void applyProviderRequestOptions(
-            ChatConfig chatConfig,
-            AppConfig.LlmConfig resolved,
-            String dialect,
-            String reasoningEffort) {
-        String effort = StrUtil.nullToEmpty(reasoningEffort).trim().toLowerCase(Locale.ROOT);
-        boolean reasoningEnabled = StrUtil.isNotBlank(effort) && !"none".equals(effort);
-
-        if (LlmConstants.PROVIDER_GEMINI.equals(dialect)) {
-            Map<String, Object> generationConfig = new LinkedHashMap<String, Object>();
-            generationConfig.put("temperature", resolved.getTemperature());
-            generationConfig.put(
-                    "maxOutputTokens",
-                    resolved.getMaxTokens() > 0
-                            ? resolved.getMaxTokens()
-                            : RuntimePathConstants.DEFAULT_MAX_TOKENS);
-            if (StrUtil.isNotBlank(effort)) {
-                Map<String, Object> thinkingConfig = new LinkedHashMap<String, Object>();
-                thinkingConfig.put("includeThoughts", reasoningEnabled);
-                if (reasoningEnabled
-                        && !resolved.getModel()
-                                .toLowerCase(Locale.ROOT)
-                                .startsWith("gemini-2.5-")) {
-                    if ("minimal".equals(effort) || "low".equals(effort)) {
-                        thinkingConfig.put("thinkingLevel", "LOW");
-                    } else if ("high".equals(effort) || "xhigh".equals(effort)) {
-                        thinkingConfig.put("thinkingLevel", "HIGH");
-                    }
-                }
-                generationConfig.put("thinkingConfig", thinkingConfig);
-            }
-            // Solon AI 4.0.3 的 Gemini Map 转换会丢失嵌套 thinkingConfig；结构化节点可由官方方言原样输出。
-            chatConfig
-                    .getModelOptions()
-                    .optionSet("generationConfig", ONode.ofBean(generationConfig));
-            return;
-        }
-
-        if (LlmConstants.PROVIDER_OLLAMA.equals(dialect)) {
-            Map<String, Object> options = new LinkedHashMap<String, Object>();
-            options.put("temperature", resolved.getTemperature());
-            if (resolved.getMaxTokens() > 0) {
-                options.put("num_predict", resolved.getMaxTokens());
-            }
-            chatConfig.getModelOptions().optionSet("options", options);
-            if (StrUtil.isNotBlank(effort)) {
-                chatConfig.getModelOptions().optionSet("think", reasoningEnabled);
-            }
-            return;
-        }
-
-        if (resolved.getMaxTokens() > 0) {
-            chatConfig.getModelOptions().max_tokens(resolved.getMaxTokens());
-        }
-        if (!reasoningEnabled
-                || (!LlmConstants.PROVIDER_ANTHROPIC.equals(dialect)
-                        && !supportsOpenAiReasoning(resolved.getModel()))) {
-            chatConfig.getModelOptions().temperature(resolved.getTemperature());
-        }
-
-        if (LlmConstants.PROVIDER_OPENAI_RESPONSES.equals(dialect) && reasoningEnabled) {
-            Map<String, Object> reasoning = new LinkedHashMap<String, Object>();
-            reasoning.put("effort", effort);
-            reasoning.put("summary", "auto");
-            chatConfig.getModelOptions().optionSet("reasoning", reasoning);
-        } else if (LlmConstants.PROVIDER_OPENAI.equals(dialect)
-                && reasoningEnabled
-                && supportsOpenAiReasoning(resolved.getModel())) {
-            chatConfig.getModelOptions().optionSet("reasoning_effort", effort);
-        } else if (LlmConstants.PROVIDER_ANTHROPIC.equals(dialect) && reasoningEnabled) {
-            applyAnthropicReasoning(chatConfig, resolved, effort);
-        }
-    }
-
-    /** 将推理强度转换为 Anthropic 自适应或预算式 thinking 参数。 */
-    private void applyAnthropicReasoning(
-            ChatConfig chatConfig, AppConfig.LlmConfig resolved, String effort) {
-        if (usesAdaptiveAnthropicThinking(resolved.getModel())) {
-            Map<String, Object> thinking = new LinkedHashMap<String, Object>();
-            thinking.put("type", "adaptive");
-            chatConfig.getModelOptions().optionSet("thinking", thinking);
-            Map<String, Object> outputConfig = new LinkedHashMap<String, Object>();
-            outputConfig.put("effort", normalizeAnthropicEffort(resolved.getModel(), effort));
-            chatConfig.getModelOptions().optionSet("output_config", outputConfig);
-            return;
-        }
-
-        int maxTokens = resolved.getMaxTokens();
-        if (maxTokens <= 1024) {
-            return;
-        }
-        int requestedBudget;
-        if ("minimal".equals(effort)) {
-            requestedBudget = 1024;
-        } else if ("low".equals(effort)) {
-            requestedBudget = 4000;
-        } else if ("high".equals(effort)) {
-            requestedBudget = 16000;
-        } else if ("xhigh".equals(effort)) {
-            requestedBudget = 32000;
-        } else {
-            requestedBudget = 8000;
-        }
-        Map<String, Object> thinking = new LinkedHashMap<String, Object>();
-        thinking.put("enabled", true);
-        thinking.put("budget_tokens", Math.min(requestedBudget, maxTokens - 1024));
-        chatConfig.getModelOptions().optionSet("thinking", thinking);
-    }
-
-    /** 判断 Claude 模型是否使用 4.6 之后的自适应 thinking 合约。 */
-    private boolean usesAdaptiveAnthropicThinking(String model) {
-        String normalized = StrUtil.nullToEmpty(model).toLowerCase(Locale.ROOT).replace('.', '-');
-        if (!normalized.contains("claude")) {
-            return false;
-        }
-        return !(normalized.contains("claude-3")
-                || normalized.contains("opus-4-0")
-                || normalized.contains("opus-4-1")
-                || normalized.contains("opus-4-5")
-                || normalized.contains("sonnet-4-0")
-                || normalized.contains("sonnet-4-5")
-                || normalized.contains("haiku-4-5"));
-    }
-
-    /** 规范化 Anthropic 自适应 thinking 的 effort 值。 */
-    private String normalizeAnthropicEffort(String model, String effort) {
-        if ("minimal".equals(effort)) {
-            return "low";
-        }
-        String normalizedModel = StrUtil.nullToEmpty(model).toLowerCase(Locale.ROOT);
-        if ("xhigh".equals(effort)
-                && (normalizedModel.contains("4-6") || normalizedModel.contains("4.6"))) {
-            return "max";
-        }
-        return effort;
-    }
-
-    /** 判断 OpenAI 模型是否接受 reasoning effort。 */
-    private boolean supportsOpenAiReasoning(String model) {
-        String normalized = StrUtil.nullToEmpty(model).toLowerCase(Locale.ROOT);
-        int slash = normalized.lastIndexOf('/');
-        if (slash >= 0) {
-            normalized = normalized.substring(slash + 1);
-        }
-        return normalized.startsWith("gpt-5")
-                || normalized.startsWith("o1")
-                || normalized.startsWith("o3")
-                || normalized.startsWith("o4");
-    }
-
-    /** 将会话 /fast 状态转换为提供方原生快速模式参数。 */
-    private void applyFastMode(
-            ChatConfig chatConfig,
-            AppConfig.LlmConfig resolved,
-            String dialect,
-            SessionRecord session) {
-        if (session == null
-                || !"priority"
-                        .equalsIgnoreCase(
-                                StrUtil.nullToEmpty(session.getServiceTierOverride()).trim())) {
-            return;
-        }
-        if ((LlmConstants.PROVIDER_OPENAI.equals(dialect)
-                        || LlmConstants.PROVIDER_OPENAI_RESPONSES.equals(dialect))
-                && LlmProviderSupport.isDirectOpenAiBaseUrl(resolved.getApiUrl())
-                && supportsOpenAiReasoning(resolved.getModel())
-                && !StrUtil.nullToEmpty(resolved.getModel())
-                        .toLowerCase(Locale.ROOT)
-                        .contains("codex")) {
-            chatConfig.getModelOptions().optionSet("service_tier", "priority");
-            return;
-        }
-        if (LlmConstants.PROVIDER_ANTHROPIC.equals(dialect)
-                && LlmProviderSupport.baseUrlHostMatches(resolved.getApiUrl(), "api.anthropic.com")
-                && isAnthropicFastModel(resolved.getModel())) {
-            chatConfig.getModelOptions().optionSet("speed", "fast");
-            chatConfig.setHeader("anthropic-beta", "fast-mode-2026-02-01");
-        }
-    }
-
-    /** 判断模型是否支持 Anthropic Fast Mode。 */
-    private boolean isAnthropicFastModel(String model) {
-        String normalized = StrUtil.nullToEmpty(model).toLowerCase(Locale.ROOT);
-        return normalized.contains("opus-4-6") || normalized.contains("opus-4.6");
-    }
-
-    /** 将提示词缓存配置接入 Solon AI 官方 CacheControl 与协议补充策略。 */
-    private void applyPromptCache(
-            ChatConfig chatConfig,
-            AppConfig.LlmConfig resolved,
-            String dialect,
-            SessionRecord session) {
-        PromptCachePolicy policy = new PromptCachePolicy(resolved.getPromptCache());
-        if (!policy.isEnabled()) {
-            return;
-        }
-        if (LlmConstants.PROVIDER_ANTHROPIC.equals(dialect)) {
-            chatConfig.setCacheControl(CacheControl.ofEphemeral());
-            chatConfig.getModelOptions().toolContextPut(PromptCachePolicy.TOOL_CONTEXT_KEY, policy);
-            return;
-        }
-
-        String seed =
-                StrUtil.nullToEmpty(resolved.getProvider())
-                        + '|'
-                        + StrUtil.nullToEmpty(resolved.getModel())
-                        + '|'
-                        + (session == null ? "" : StrUtil.nullToEmpty(session.getSessionId()));
-        String cacheKey = "solonclaw-" + SecureUtil.sha256(seed).substring(0, 32);
-        if (LlmConstants.PROVIDER_OPENAI.equals(dialect)) {
-            chatConfig.setCacheControl(CacheControl.ofPromptKey(cacheKey));
-        } else if (LlmConstants.PROVIDER_OPENAI_RESPONSES.equals(dialect)) {
-            chatConfig.getModelOptions().optionSet("prompt_cache_key", cacheKey);
-        }
-    }
-
-    /**
      * 构建Chat模型。
      *
      * @param resolved resolved 参数。
@@ -3569,7 +3328,7 @@ public class SolonAiLlmGateway implements LlmGateway {
      * @return 带会话请求选项的 Chat 模型。
      */
     protected ChatModel buildChatModel(AppConfig.LlmConfig resolved, SessionRecord session) {
-        return buildChatConfig(resolved, session).toChatModel();
+        return chatModelFactory.buildModel(resolved, session);
     }
 
     /**
@@ -3588,36 +3347,6 @@ public class SolonAiLlmGateway implements LlmGateway {
                 + StrUtil.nullToEmpty(config.getModel())
                 + "|"
                 + (StrUtil.isBlank(config.getApiKey()) ? "no-key" : "has-key");
-    }
-
-    /** 确保Custom Dialects Registered。 */
-    private void ensureCustomDialectsRegistered() {
-        if (CUSTOM_DIALECTS_REGISTERED.compareAndSet(false, true)) {
-            ChatDialectManager.register(
-                    new RawResponseLoggingChatDialect(
-                            OpenaiResponsesDialect.getInstance(),
-                            LlmConstants.PROVIDER_OPENAI_RESPONSES,
-                            true),
-                    -100);
-            ChatDialectManager.register(
-                    new RawResponseLoggingChatDialect(
-                            OpenaiChatDialect.getInstance(), LlmConstants.PROVIDER_OPENAI, false),
-                    -99);
-            ChatDialectManager.register(
-                    new RawResponseLoggingChatDialect(
-                            OllamaChatDialect.getInstance(), LlmConstants.PROVIDER_OLLAMA, false),
-                    -98);
-            ChatDialectManager.register(
-                    new RawResponseLoggingChatDialect(
-                            GeminiChatDialect.getInstance(), LlmConstants.PROVIDER_GEMINI, false),
-                    -97);
-            ChatDialectManager.register(
-                    new RawResponseLoggingChatDialect(
-                            AnthropicChatDialect.getInstance(),
-                            LlmConstants.PROVIDER_ANTHROPIC,
-                            false),
-                    -96);
-        }
     }
 
     /**

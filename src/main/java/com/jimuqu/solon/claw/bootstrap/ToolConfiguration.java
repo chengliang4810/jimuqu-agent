@@ -26,7 +26,9 @@ import com.jimuqu.solon.claw.engine.DefaultConversationOrchestrator;
 import com.jimuqu.solon.claw.engine.DefaultDelegationService;
 import com.jimuqu.solon.claw.gateway.service.GatewayRuntimeRefreshService;
 import com.jimuqu.solon.claw.goal.GoalService;
+import com.jimuqu.solon.claw.llm.SolonAiChatModelFactory;
 import com.jimuqu.solon.claw.llm.SolonAiLlmGateway;
+import com.jimuqu.solon.claw.llm.dialect.LlmDialectRegistrar;
 import com.jimuqu.solon.claw.media.ImageGenerationService;
 import com.jimuqu.solon.claw.media.SpeechService;
 import com.jimuqu.solon.claw.media.VisionAnalysisService;
@@ -542,6 +544,28 @@ public class ToolConfiguration {
     }
 
     /**
+     * 创建进程级模型方言注册器。
+     *
+     * @return 幂等方言注册器。
+     */
+    @Bean
+    public LlmDialectRegistrar llmDialectRegistrar() {
+        return new LlmDialectRegistrar();
+    }
+
+    /**
+     * 创建模型协议配置工厂。
+     *
+     * @param llmDialectRegistrar 进程级方言注册器。
+     * @return 模型协议配置工厂。
+     */
+    @Bean
+    public SolonAiChatModelFactory solonAiChatModelFactory(
+            LlmDialectRegistrar llmDialectRegistrar) {
+        return new SolonAiChatModelFactory(llmDialectRegistrar);
+    }
+
+    /**
      * 执行对话编排器Holder相关逻辑。
      *
      * @return 返回对话编排器Holder结果。
@@ -561,6 +585,7 @@ public class ToolConfiguration {
      * @param toolResultTransformService 工具结果转换Service响应或执行结果。
      * @param toolCallLoopGuardrailService 工具CallLoop护栏服务依赖。
      * @param securityPolicyService 安全策略服务依赖。
+     * @param chatModelFactory 模型协议配置工厂。
      * @return 返回大模型消息网关结果。
      */
     @Bean
@@ -571,7 +596,8 @@ public class ToolConfiguration {
             LlmProviderService llmProviderService,
             ToolResultTransformService toolResultTransformService,
             ToolCallLoopGuardrailService toolCallLoopGuardrailService,
-            SecurityPolicyService securityPolicyService) {
+            SecurityPolicyService securityPolicyService,
+            SolonAiChatModelFactory chatModelFactory) {
         SolonAiLlmGateway gateway =
                 new SolonAiLlmGateway(
                         appConfig,
@@ -580,7 +606,8 @@ public class ToolConfiguration {
                         llmProviderService,
                         toolResultTransformService,
                         toolCallLoopGuardrailService,
-                        securityPolicyService);
+                        securityPolicyService,
+                        chatModelFactory);
         return gateway;
     }
 

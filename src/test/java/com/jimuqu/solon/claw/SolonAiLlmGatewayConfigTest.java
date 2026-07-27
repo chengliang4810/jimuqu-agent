@@ -7,6 +7,7 @@ import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.core.model.AgentRunContext;
 import com.jimuqu.solon.claw.core.model.MessageAttachment;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
+import com.jimuqu.solon.claw.llm.SolonAiChatModelFactory;
 import com.jimuqu.solon.claw.llm.SolonAiLlmGateway;
 import com.jimuqu.solon.claw.llm.dialect.RawResponseLoggingChatDialect;
 import com.jimuqu.solon.claw.media.MediaInputBoundaryService;
@@ -239,16 +240,9 @@ public class SolonAiLlmGatewayConfigTest {
         config.getLlm().setApiUrl("https://api.openai.com/v1/chat/completions");
         config.getLlm().setModel("gpt-5.4");
 
-        SolonAiLlmGateway gateway = new SolonAiLlmGateway(config);
         SessionRecord session = new SessionRecord();
         session.setServiceTierOverride("priority");
-        Method buildChatConfig =
-                SolonAiLlmGateway.class.getDeclaredMethod(
-                        "buildChatConfig", AppConfig.LlmConfig.class, SessionRecord.class);
-        buildChatConfig.setAccessible(true);
-
-        ChatConfig chatConfig =
-                (ChatConfig) buildChatConfig.invoke(gateway, config.getLlm(), session);
+        ChatConfig chatConfig = new SolonAiChatModelFactory().buildConfig(config.getLlm(), session);
 
         assertThat(chatConfig.getModelOptions().options())
                 .containsEntry("service_tier", "priority");
@@ -262,16 +256,9 @@ public class SolonAiLlmGatewayConfigTest {
         config.getLlm().setModel("gpt-5.4");
         config.getLlm().setReasoningEffort("medium");
 
-        SolonAiLlmGateway gateway = new SolonAiLlmGateway(config);
         SessionRecord session = new SessionRecord();
         session.setReasoningEffortOverride("high");
-        Method buildChatConfig =
-                SolonAiLlmGateway.class.getDeclaredMethod(
-                        "buildChatConfig", AppConfig.LlmConfig.class, SessionRecord.class);
-        buildChatConfig.setAccessible(true);
-
-        ChatConfig chatConfig =
-                (ChatConfig) buildChatConfig.invoke(gateway, config.getLlm(), session);
+        ChatConfig chatConfig = new SolonAiChatModelFactory().buildConfig(config.getLlm(), session);
 
         Map<?, ?> reasoning = (Map<?, ?>) chatConfig.getModelOptions().options().get("reasoning");
         assertThat(reasoning.get("effort")).isEqualTo("high");
@@ -614,19 +601,14 @@ public class SolonAiLlmGatewayConfigTest {
         return config;
     }
 
-    /** 通过网关真实配置构建器生成协议请求体。 */
+    /** 通过独立模型协议配置工厂生成协议请求体。 */
     private ONode buildRequest(AppConfig config, SessionRecord session) throws Exception {
         return buildRequest(buildChatConfig(config, session), true);
     }
 
-    /** 调用网关内部配置构建器。 */
-    private ChatConfig buildChatConfig(AppConfig config, SessionRecord session) throws Exception {
-        SolonAiLlmGateway gateway = new SolonAiLlmGateway(config);
-        Method method =
-                SolonAiLlmGateway.class.getDeclaredMethod(
-                        "buildChatConfig", AppConfig.LlmConfig.class, SessionRecord.class);
-        method.setAccessible(true);
-        return (ChatConfig) method.invoke(gateway, config.getLlm(), session);
+    /** 调用独立模型协议配置工厂。 */
+    private ChatConfig buildChatConfig(AppConfig config, SessionRecord session) {
+        return new SolonAiChatModelFactory().buildConfig(config.getLlm(), session);
     }
 
     /** 使用 Solon AI 官方方言生成最终请求 JSON。 */

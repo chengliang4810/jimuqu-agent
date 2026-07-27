@@ -5,11 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import cn.hutool.core.io.IoUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.core.model.SessionRecord;
-import com.jimuqu.solon.claw.llm.SolonAiLlmGateway;
+import com.jimuqu.solon.claw.llm.SolonAiChatModelFactory;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.OutputStream;
-import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -210,14 +209,9 @@ public class SolonAiProtocolRequestIntegrationTest {
         }
     }
 
-    /** 调用网关内部正式配置构建器。 */
-    private ChatConfig buildChatConfig(AppConfig config, SessionRecord session) throws Exception {
-        SolonAiLlmGateway gateway = new SolonAiLlmGateway(config);
-        Method method =
-                SolonAiLlmGateway.class.getDeclaredMethod(
-                        "buildChatConfig", AppConfig.LlmConfig.class, SessionRecord.class);
-        method.setAccessible(true);
-        return (ChatConfig) method.invoke(gateway, config.getLlm(), session);
+    /** 调用独立模型协议配置工厂。 */
+    private ChatConfig buildChatConfig(AppConfig config, SessionRecord session) {
+        return new SolonAiChatModelFactory().buildConfig(config.getLlm(), session);
     }
 
     /** 保存一次捕获到的模型 HTTP 请求。 */
