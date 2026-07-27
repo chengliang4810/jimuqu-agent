@@ -1,7 +1,6 @@
-package com.jimuqu.solon.claw.bootstrap;
+package com.jimuqu.solon.claw.web;
 
 import com.jimuqu.solon.claw.support.RuntimeProcessSupport;
-import com.jimuqu.solon.claw.web.DashboardStatusService;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;

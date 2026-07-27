@@ -2,7 +2,7 @@ package com.jimuqu.solon.claw;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.jimuqu.solon.claw.bootstrap.HealthController;
+import com.jimuqu.solon.claw.web.HealthController;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;

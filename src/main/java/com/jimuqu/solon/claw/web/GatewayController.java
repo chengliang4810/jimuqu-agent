@@ -1,4 +1,4 @@
-package com.jimuqu.solon.claw.bootstrap;
+package com.jimuqu.solon.claw.web;
 
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.core.enums.PlatformType;
