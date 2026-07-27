@@ -112,6 +112,24 @@ class SqliteChannelInboundMessageRepositoryTest {
         assertThat(repository.listPending("default", 10L, 0L, 10)).isEmpty();
     }
 
+    /** 批次事务完成后必须恢复自动提交，后续普通写应立即对只读连接可见。 */
+    @Test
+    void shouldRestoreAutoCommitAfterStartingBatch() throws Exception {
+        repository.saveIfAbsent(pendingRecord("batch-owner", "batch-owner-key", 1L));
+        assertThat(
+                        repository.startBatch(
+                                "batch-owner",
+                                Arrays.asList("batch-owner"),
+                                "WEIXIN:routed:user",
+                                "{\"text\":\"owner\"}",
+                                10L))
+                .isTrue();
+
+        assertThat(repository.saveIfAbsent(record("after-batch", "after-batch-key"))).isTrue();
+
+        assertThat(repository.findByMessageKey("after-batch-key")).isNotNull();
+    }
+
     /** 任一批次成员缺失或已被消费时必须整体回滚，不能留下半领取状态。 */
     @Test
     void shouldRollbackBatchWhenAnyReceiptIsUnavailable() throws Exception {
@@ -229,6 +247,20 @@ class SqliteChannelInboundMessageRepositoryTest {
         assertThat(repository.listClaimedDeliveries("default", "owner-b", -1L, "", 10))
                 .extracting(ChannelInboundMessageRecord::getIngressId)
                 .containsExactly("claimed-old");
+    }
+
+    /** 投递收敛事务完成后必须恢复自动提交，后续普通写应立即对只读连接可见。 */
+    @Test
+    void shouldRestoreAutoCommitAfterConvergingDeliveries() throws Exception {
+        assertThat(
+                        repository.convergeInterruptedDeliveries(
+                                "default", Long.MAX_VALUE, "interrupted"))
+                .isZero();
+
+        assertThat(repository.saveIfAbsent(record("after-converge", "after-converge-key")))
+                .isTrue();
+
+        assertThat(repository.findByMessageKey("after-converge-key")).isNotNull();
     }
 
     /** 已经开始外发但未落终态的旧记录必须 fail-closed，不能在重启后重复投递。 */

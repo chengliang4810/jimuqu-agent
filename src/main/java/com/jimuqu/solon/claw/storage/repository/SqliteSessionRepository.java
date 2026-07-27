@@ -101,16 +101,18 @@ public class SqliteSessionRepository implements SessionRepository {
      */
     @Override
     public SessionRecord getBoundSession(String sourceKey) throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
-                            "select session_id from bindings where source_key = ?");
+                            "select "
+                                    + SELECT_COLUMNS_WITH_ALIAS
+                                    + " from bindings b join sessions s on s.session_id = b.session_id where b.source_key = ?");
             statement.setString(1, sourceKey);
             ResultSet resultSet = statement.executeQuery();
             try {
                 if (resultSet.next()) {
-                    return findById(resultSet.getString(1));
+                    return map(resultSet);
                 }
             } finally {
                 resultSet.close();
@@ -252,7 +254,7 @@ public class SqliteSessionRepository implements SessionRepository {
      */
     @Override
     public SessionRecord findById(String sessionId) throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -283,7 +285,7 @@ public class SqliteSessionRepository implements SessionRepository {
     @Override
     public SessionRecord findBySourceAndBranch(String sourceKey, String branchName)
             throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -321,7 +323,7 @@ public class SqliteSessionRepository implements SessionRepository {
         if (value.length() == 0) {
             return results;
         }
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -669,7 +671,7 @@ public class SqliteSessionRepository implements SessionRepository {
         if (platform == null || StrUtil.isBlank(chatId)) {
             return false;
         }
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             if (findExactOriginSession(connection, conversationSourceKey) != null) {
                 return true;
@@ -875,7 +877,7 @@ public class SqliteSessionRepository implements SessionRepository {
     public List<SessionRecord> search(String keyword, int limit) throws Exception {
         LinkedHashMap<String, SessionRecord> results = new LinkedHashMap<String, SessionRecord>();
         int safeLimit = Math.max(1, limit);
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             for (String ftsQuery : sessionFtsQueries(keyword)) {
                 try {
@@ -1089,7 +1091,7 @@ public class SqliteSessionRepository implements SessionRepository {
     @Override
     public List<SessionRecord> listRecent(int limit, int offset) throws Exception {
         List<SessionRecord> results = new ArrayList<SessionRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -1125,7 +1127,7 @@ public class SqliteSessionRepository implements SessionRepository {
     public List<SessionRecord> listPendingAgentSessions(long updatedAfterMillis, int limit)
             throws Exception {
         List<SessionRecord> results = new ArrayList<SessionRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -1159,7 +1161,7 @@ public class SqliteSessionRepository implements SessionRepository {
      */
     @Override
     public int countAll() throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement("select count(1) from sessions");
@@ -1191,7 +1193,7 @@ public class SqliteSessionRepository implements SessionRepository {
             return new ArrayList<SessionRecord>();
         }
         List<SessionRecord> result = new ArrayList<SessionRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(

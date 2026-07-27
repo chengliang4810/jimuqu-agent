@@ -29,6 +29,12 @@ public class SqliteProfileTaskRepository extends SqliteRepositorySupport
         return database.openConnection();
     }
 
+    /** 获取不占用单写锁的 Profile 任务查询连接。 */
+    @Override
+    protected Connection getReadConnection() throws SQLException {
+        return database.openReadConnection();
+    }
+
     /** 保存经过信任边界校验的新任务。 */
     @Override
     public ProfileTaskRecord save(final ProfileTaskRecord task) throws Exception {

@@ -86,7 +86,7 @@ public class DashboardCuratorService {
      */
     public Map<String, Object> list(int limit) throws Exception {
         List<Map<String, Object>> reports = new ArrayList<Map<String, Object>>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -116,7 +116,7 @@ public class DashboardCuratorService {
      * @return 返回detail结果。
      */
     public Map<String, Object> detail(String reportId) throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -167,7 +167,7 @@ public class DashboardCuratorService {
     public Map<String, Object> improvements(int limit) throws Exception {
         List<Map<String, Object>> improvements = new ArrayList<Map<String, Object>>();
         int max = Math.max(1, Math.min(limit <= 0 ? 20 : limit, 100));
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(

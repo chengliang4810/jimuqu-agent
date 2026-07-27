@@ -19,6 +19,12 @@ public class SqliteChannelStateRepository extends SqliteRepositorySupport
         return database.openConnection();
     }
 
+    /** 获取不占用单写锁的渠道状态查询连接。 */
+    @Override
+    protected Connection getReadConnection() throws SQLException {
+        return database.openReadConnection();
+    }
+
     /**
      * 获取当前注册项或配置项。
      *

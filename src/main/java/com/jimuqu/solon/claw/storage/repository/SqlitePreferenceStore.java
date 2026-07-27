@@ -18,6 +18,12 @@ public class SqlitePreferenceStore extends SqliteRepositorySupport {
         return database.openConnection();
     }
 
+    /** 获取不占用单写锁的偏好查询连接。 */
+    @Override
+    protected Connection getReadConnection() throws SQLException {
+        return database.openReadConnection();
+    }
+
     /**
      * 判断是否工具启用。
      *

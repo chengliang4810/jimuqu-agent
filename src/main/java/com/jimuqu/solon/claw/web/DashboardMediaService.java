@@ -53,7 +53,7 @@ public class DashboardMediaService {
      */
     public Map<String, Object> list(String platform, int limit) throws Exception {
         List<Map<String, Object>> media = new ArrayList<Map<String, Object>>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement;
             if (StrUtil.isBlank(platform)) {
@@ -134,7 +134,7 @@ public class DashboardMediaService {
      * @return 返回detail结果。
      */
     public Map<String, Object> detail(String mediaId) throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement("select * from channel_media where media_id = ?");
@@ -265,7 +265,7 @@ public class DashboardMediaService {
      * @return 返回原始Detail结果。
      */
     private Map<String, Object> rawDetail(String mediaId) throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement("select * from channel_media where media_id = ?");

@@ -310,7 +310,7 @@ public class DefaultCheckpointService implements CheckpointService {
      */
     @Override
     public boolean hasRecentCheckpoint(String sourceKey, long sinceEpochMillis) throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -339,7 +339,7 @@ public class DefaultCheckpointService implements CheckpointService {
     @Override
     public List<CheckpointRecord> listRecent(String sourceKey, int limit) throws Exception {
         List<CheckpointRecord> results = new ArrayList<CheckpointRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -727,7 +727,7 @@ public class DefaultCheckpointService implements CheckpointService {
 
     /** 查询最新 checkpoint。 */
     private CheckpointRecord findLatest(String sourceKey) throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -747,7 +747,7 @@ public class DefaultCheckpointService implements CheckpointService {
 
     /** 通过 id 查询 checkpoint。 */
     private CheckpointRecord findById(String checkpointId) throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -788,7 +788,7 @@ public class DefaultCheckpointService implements CheckpointService {
      */
     private List<CheckpointRecord> listAll(String sourceKey) throws Exception {
         List<CheckpointRecord> results = new ArrayList<CheckpointRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(

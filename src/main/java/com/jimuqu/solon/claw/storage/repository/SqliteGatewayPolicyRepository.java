@@ -27,6 +27,12 @@ public class SqliteGatewayPolicyRepository extends SqliteRepositorySupport
         return database.openConnection();
     }
 
+    /** 获取不占用单写锁的网关策略查询连接。 */
+    @Override
+    protected Connection getReadConnection() throws SQLException {
+        return database.openReadConnection();
+    }
+
     /**
      * 读取主渠道渠道。
      *

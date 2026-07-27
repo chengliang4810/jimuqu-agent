@@ -37,6 +37,16 @@ public abstract class SqliteRepositorySupport {
     protected abstract Connection getConnection() throws SQLException;
 
     /**
+     * 获取只读查询连接；子类可覆盖以释放 WAL 读写并发。
+     *
+     * @return 只读查询连接。
+     * @throws SQLException 如果获取连接失败。
+     */
+    protected Connection getReadConnection() throws SQLException {
+        return getConnection();
+    }
+
+    /**
      * 查询单条记录。
      *
      * @param sql SQL查询语句
@@ -47,7 +57,7 @@ public abstract class SqliteRepositorySupport {
      */
     protected <T> T queryOne(String sql, StatementBinder binder, RowMapper<T> mapper)
             throws SQLException {
-        try (Connection connection = getConnection();
+        try (Connection connection = getReadConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
             if (binder != null) {
                 binder.bind(statement);
@@ -73,7 +83,7 @@ public abstract class SqliteRepositorySupport {
     protected <T> List<T> queryList(String sql, StatementBinder binder, RowMapper<T> mapper)
             throws SQLException {
         List<T> results = new ArrayList<>();
-        try (Connection connection = getConnection();
+        try (Connection connection = getReadConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
             if (binder != null) {
                 binder.bind(statement);
@@ -114,7 +124,7 @@ public abstract class SqliteRepositorySupport {
      * @throws SQLException 如果查询失败
      */
     protected int queryInt(String sql, StatementBinder binder) throws SQLException {
-        try (Connection connection = getConnection();
+        try (Connection connection = getReadConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
             if (binder != null) {
                 binder.bind(statement);

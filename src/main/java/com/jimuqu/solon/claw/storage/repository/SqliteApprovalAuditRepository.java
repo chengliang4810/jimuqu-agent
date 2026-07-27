@@ -20,6 +20,12 @@ public class SqliteApprovalAuditRepository extends SqliteRepositorySupport
         return database.openConnection();
     }
 
+    /** 获取不占用单写锁的审批审计查询连接。 */
+    @Override
+    protected Connection getReadConnection() throws SQLException {
+        return database.openReadConnection();
+    }
+
     /**
      * 执行append相关逻辑。
      *

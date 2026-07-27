@@ -97,7 +97,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public AgentRunRecord findRun(String runId) throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement("select * from agent_runs where run_id = ?");
@@ -124,7 +124,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public List<AgentRunRecord> listBySession(String sessionId, int limit) throws Exception {
         List<AgentRunRecord> records = new ArrayList<AgentRunRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -154,7 +154,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public long countUsageRunsBySession(String sessionId) throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -181,7 +181,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public List<AgentRunRecord> listFinishedWithUsage(int limit) throws Exception {
         List<AgentRunRecord> records = new ArrayList<AgentRunRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -211,7 +211,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public List<AgentRunRecord> listRecoverable(int limit) throws Exception {
         List<AgentRunRecord> records = new ArrayList<AgentRunRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -243,7 +243,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     public List<AgentRunRecord> listActiveBefore(long beforeEpochMillis, int limit)
             throws Exception {
         List<AgentRunRecord> records = new ArrayList<AgentRunRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -404,7 +404,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public List<AgentRunRecord> listActiveBySource(String sourceKey, int limit) throws Exception {
         List<AgentRunRecord> records = new ArrayList<AgentRunRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -449,7 +449,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
             int limit)
             throws Exception {
         List<AgentRunRecord> records = new ArrayList<AgentRunRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             StringBuilder sql = new StringBuilder("select distinct r.* from agent_runs r");
             List<Object> args = new ArrayList<Object>();
@@ -535,7 +535,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public List<AgentRunEventRecord> listEvents(String runId) throws Exception {
         List<AgentRunEventRecord> events = new ArrayList<AgentRunEventRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -579,7 +579,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
             int limit)
             throws Exception {
         List<AgentRunEventRecord> events = new ArrayList<AgentRunEventRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             StringBuilder sql = new StringBuilder("select e.* from agent_run_events e");
             List<Object> args = new ArrayList<Object>();
@@ -669,7 +669,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public List<RunControlCommand> listRunControlCommands(String runId) throws Exception {
         List<RunControlCommand> records = new ArrayList<RunControlCommand>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -700,7 +700,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public RunControlCommand findLatestPendingCommand(String runId, String command)
             throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -785,7 +785,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public QueuedRunMessage findNextQueuedMessage(String sourceKey, String sessionId)
             throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -812,7 +812,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public QueuedRunMessage findNextQueuedMessageBySourceKey(String sourceKey) throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -839,7 +839,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public int countQueuedMessages(String sourceKey, String sessionId) throws Exception {
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -1020,7 +1020,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public List<ToolCallRecord> listToolCalls(String runId) throws Exception {
         List<ToolCallRecord> records = new ArrayList<ToolCallRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -1066,7 +1066,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
             int limit)
             throws Exception {
         List<ToolCallRecord> records = new ArrayList<ToolCallRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             StringBuilder sql = new StringBuilder("select * from tool_calls where 1 = 1");
             List<Object> args = new ArrayList<Object>();
@@ -1171,7 +1171,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public List<SubagentRunRecord> listSubagents(String parentRunId) throws Exception {
         List<SubagentRunRecord> records = new ArrayList<SubagentRunRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
@@ -1255,7 +1255,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public List<RunRecoveryRecord> listRecoveries(String runId) throws Exception {
         List<RunRecoveryRecord> records = new ArrayList<RunRecoveryRecord>();
-        Connection connection = database.openConnection();
+        Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
                     connection.prepareStatement(

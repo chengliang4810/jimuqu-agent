@@ -92,6 +92,8 @@ public class SqliteChannelInboundMessageRepository implements ChannelInboundMess
             } catch (Exception e) {
                 connection.rollback();
                 throw e;
+            } finally {
+                connection.setAutoCommit(true);
             }
         }
     }
@@ -102,7 +104,7 @@ public class SqliteChannelInboundMessageRepository implements ChannelInboundMess
         String sql =
                 "select rowid as inbound_sequence, * from channel_inbound_messages"
                         + " where message_key = ?";
-        try (Connection connection = database.openConnection();
+        try (Connection connection = database.openReadConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, messageKey);
             try (ResultSet resultSet = statement.executeQuery()) {
@@ -218,7 +220,7 @@ public class SqliteChannelInboundMessageRepository implements ChannelInboundMess
     public long capturePendingWatermark(String profile) throws Exception {
         String sql =
                 "select coalesce(max(rowid), 0) from channel_inbound_messages where profile = ?";
-        try (Connection connection = database.openConnection();
+        try (Connection connection = database.openReadConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, profile);
             try (ResultSet resultSet = statement.executeQuery()) {
@@ -254,7 +256,7 @@ public class SqliteChannelInboundMessageRepository implements ChannelInboundMess
                         + " and status = ? and rowid <= ? and rowid > ?"
                         + " order by rowid asc limit ?";
         List<ChannelInboundMessageRecord> records = new ArrayList<ChannelInboundMessageRecord>();
-        try (Connection connection = database.openConnection();
+        try (Connection connection = database.openReadConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
             int index = 1;
             statement.setString(index++, profile);
@@ -354,6 +356,8 @@ public class SqliteChannelInboundMessageRepository implements ChannelInboundMess
             } catch (Exception e) {
                 connection.rollback();
                 throw e;
+            } finally {
+                connection.setAutoCommit(true);
             }
         }
     }
@@ -438,7 +442,7 @@ public class SqliteChannelInboundMessageRepository implements ChannelInboundMess
                         + " and (processed_at > ? or (processed_at = ? and ingress_id > ?))"
                         + " order by processed_at asc, ingress_id asc limit ?";
         List<ChannelInboundMessageRecord> records = new ArrayList<ChannelInboundMessageRecord>();
-        try (Connection connection = database.openConnection();
+        try (Connection connection = database.openReadConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, profile);
             statement.setString(2, ChannelInboundMessageRecord.STATUS_PROCESSED);
@@ -486,7 +490,7 @@ public class SqliteChannelInboundMessageRepository implements ChannelInboundMess
                         + " and (processed_at > ? or (processed_at = ? and ingress_id > ?))"
                         + " order by processed_at asc, ingress_id asc limit ?";
         List<ChannelInboundMessageRecord> records = new ArrayList<ChannelInboundMessageRecord>();
-        try (Connection connection = database.openConnection();
+        try (Connection connection = database.openReadConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, profile);
             statement.setString(2, ChannelInboundMessageRecord.STATUS_PROCESSED);

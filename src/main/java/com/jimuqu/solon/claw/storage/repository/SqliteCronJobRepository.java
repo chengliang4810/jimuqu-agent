@@ -21,6 +21,12 @@ public class SqliteCronJobRepository extends SqliteRepositorySupport implements 
         return database.openConnection();
     }
 
+    /** 获取不占用单写锁的定时任务查询连接。 */
+    @Override
+    protected Connection getReadConnection() throws SQLException {
+        return database.openReadConnection();
+    }
+
     /**
      * 执行save，服务于SQLite定时任务任务主流程相关逻辑。
      *

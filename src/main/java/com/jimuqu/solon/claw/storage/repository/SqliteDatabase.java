@@ -28,6 +28,9 @@ public class SqliteDatabase {
     /** 记录SQLite数据库中的jdbcURL。 */
     private final String jdbcUrl;
 
+    /** SQLite 只读 URI，用于创建不参与单写锁的短生命周期查询连接。 */
+    private final String readOnlyJdbcUrl;
+
     /** SQLite 主文件路径，用于同步收紧主库及 WAL/SHM 权限。 */
     private final Path stateDbPath;
 
@@ -46,6 +49,7 @@ public class SqliteDatabase {
         FileUtil.mkParentDirs(appConfig.getRuntime().getStateDb());
         this.stateDbPath = Paths.get(appConfig.getRuntime().getStateDb()).toAbsolutePath();
         this.jdbcUrl = "jdbc:sqlite:" + appConfig.getRuntime().getStateDb();
+        this.readOnlyJdbcUrl = "jdbc:sqlite:" + stateDbPath.toUri().toASCIIString() + "?mode=ro";
         initSchema();
         hardenStateFiles();
     }
@@ -66,6 +70,28 @@ public class SqliteDatabase {
             throw e;
         } catch (RuntimeException e) {
             connectionLock.unlock();
+            throw e;
+        }
+    }
+
+    /**
+     * 打开不参与单写锁的短生命周期只读连接，利用 WAL 允许查询与写事务并行。
+     *
+     * @return 返回启用 query_only 的只读连接。
+     */
+    public Connection openReadConnection() throws SQLException {
+        Connection connection = DriverManager.getConnection(readOnlyJdbcUrl);
+        try {
+            Statement statement = connection.createStatement();
+            try {
+                statement.execute("pragma query_only=ON");
+                statement.execute("pragma busy_timeout=5000");
+            } finally {
+                statement.close();
+            }
+            return connection;
+        } catch (SQLException | RuntimeException e) {
+            closeQuietly(connection);
             throw e;
         }
     }

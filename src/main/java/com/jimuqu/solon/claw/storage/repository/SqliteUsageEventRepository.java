@@ -21,6 +21,12 @@ public class SqliteUsageEventRepository extends SqliteRepositorySupport
         return database.openConnection();
     }
 
+    /** 获取不占用单写锁的用量查询连接。 */
+    @Override
+    protected Connection getReadConnection() throws SQLException {
+        return database.openReadConnection();
+    }
+
     /**
      * 写入IfAbsent。
      *
