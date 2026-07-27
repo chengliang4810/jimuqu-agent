@@ -513,6 +513,39 @@ public class BrowserRuntimeServiceTests {
         }
     }
 
+    /** CDP 服务端不响应时必须按调用超时返回稳定错误，且不得泄露目标地址或连接凭据。 */
+    @Test
+    void shouldReturnStableCdpTimeoutWhenServerDoesNotRespond() throws Exception {
+        try (FakeCdpServer server = new FakeCdpServer(false, "Page.navigate")) {
+            CdpTestProvider provider = new CdpTestProvider(server.connectUrl());
+            AppConfig config = new AppConfig();
+            config.normalizePaths();
+            BrowserRuntimeService service =
+                    new BrowserRuntimeService(
+                            config,
+                            Collections.<BrowserProvider>singletonList(provider),
+                            new SecurityPolicyService(config),
+                            1);
+            BrowserRuntimeService.BrowserResult created = service.create("task-cdp-timeout");
+
+            BrowserRuntimeService.BrowserResult navigated =
+                    service.navigate(
+                            created.getSessionId(),
+                            "https://93.184.216.34/private?token=timeout-secret",
+                            1);
+
+            assertThat(navigated.isSuccess()).isFalse();
+            assertThat(navigated.getError().getCode()).isEqualTo("cdp_timeout");
+            assertThat(navigated.getError().getMessage())
+                    .doesNotContain("timeout-secret")
+                    .doesNotContain("connect-secret")
+                    .doesNotContain("93.184.216.34");
+            assertThat(server.methods()).contains("Page.navigate");
+            service.close(created.getSessionId());
+            server.assertHealthy();
+        }
+    }
+
     @Test
     void shouldApplyScreenshotPathPolicyBeforeProviderWrite() {
         AppConfig config = new AppConfig();
@@ -727,6 +760,10 @@ public class BrowserRuntimeServiceTests {
     private static class FakeCdpServer implements AutoCloseable {
         private static final String WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
         private final boolean failClick;
+
+        /** 收到后故意不返回响应的 CDP 方法；为空时所有方法正常响应。 */
+        private final String ignoredMethod;
+
         private final ServerSocket serverSocket;
         private final Thread serverThread;
         private final AtomicBoolean running = new AtomicBoolean(true);
@@ -740,8 +777,24 @@ public class BrowserRuntimeServiceTests {
         private volatile Socket clientSocket;
         private volatile String currentUrl = "about:blank";
 
+        /**
+         * 创建正常响应全部方法的假 CDP 服务。
+         *
+         * @param failClick 是否让点击动作返回业务失败。
+         */
         FakeCdpServer(boolean failClick) throws Exception {
+            this(failClick, null);
+        }
+
+        /**
+         * 创建可忽略指定方法响应的假 CDP 服务。
+         *
+         * @param failClick 是否让点击动作返回业务失败。
+         * @param ignoredMethod 收到后不返回响应的方法。
+         */
+        FakeCdpServer(boolean failClick, String ignoredMethod) throws Exception {
             this.failClick = failClick;
+            this.ignoredMethod = ignoredMethod;
             this.serverSocket = new ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"));
             this.serverThread = new Thread(this::serve, "fake-browser-cdp");
             this.serverThread.setDaemon(true);
@@ -792,7 +845,9 @@ public class BrowserRuntimeServiceTests {
                     }
                     String response =
                             handleMessage(new String(frame.payload, StandardCharsets.UTF_8));
-                    writeFrame(output, 0x1, response.getBytes(StandardCharsets.UTF_8));
+                    if (response != null) {
+                        writeFrame(output, 0x1, response.getBytes(StandardCharsets.UTF_8));
+                    }
                     for (String event : new ArrayList<String>(outboundEvents)) {
                         if (outboundEvents.remove(event)) {
                             writeFrame(output, 0x1, event.getBytes(StandardCharsets.UTF_8));
@@ -850,6 +905,9 @@ public class BrowserRuntimeServiceTests {
                             ? (Map<String, Object>) command.get("params")
                             : Collections.<String, Object>emptyMap();
             methods.add(method);
+            if (method.equals(ignoredMethod)) {
+                return null;
+            }
 
             Map<String, Object> result = new LinkedHashMap<String, Object>();
             if ("Target.getTargets".equals(method)) {

@@ -1,6 +1,7 @@
 package com.jimuqu.solon.claw.media;
 
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.http.HttpException;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
 import com.jimuqu.solon.claw.config.AppConfig;
@@ -11,6 +12,7 @@ import com.jimuqu.solon.claw.support.HutoolHttpErrorFormatter;
 import java.util.Locale;
 import java.util.Map;
 import org.noear.snack4.ONode;
+import org.noear.snack4.SnackException;
 
 /** 使用 OpenAI 兼容 `/audio/transcriptions` HTTP 协议的内置独立 STT Provider。 */
 final class OpenAiSttProvider implements TranscriptionProvider {
@@ -97,7 +99,12 @@ final class OpenAiSttProvider implements TranscriptionProvider {
             String body =
                     BoundedAttachmentIO.readHutoolText(
                             response, BoundedAttachmentIO.JSON_MAX_BYTES);
-            Object parsed = ONode.deserialize(body, Object.class);
+            Object parsed;
+            try {
+                parsed = ONode.deserialize(body, Object.class);
+            } catch (SnackException e) {
+                return TranscriptionResult.fail("STT provider returned invalid JSON");
+            }
             if (!(parsed instanceof Map)) {
                 return TranscriptionResult.fail("STT provider returned invalid JSON");
             }
@@ -106,6 +113,8 @@ final class OpenAiSttProvider implements TranscriptionProvider {
                 return TranscriptionResult.fail("STT provider returned no text");
             }
             return TranscriptionResult.ok(String.valueOf(text));
+        } catch (HttpException e) {
+            return TranscriptionResult.fail("STT request failed");
         }
     }
 

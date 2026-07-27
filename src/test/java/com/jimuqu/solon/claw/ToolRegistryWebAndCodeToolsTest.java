@@ -16,7 +16,10 @@ import com.jimuqu.solon.claw.tool.runtime.SolonClawFileStateTracker;
 import com.jimuqu.solon.claw.tool.runtime.SolonClawPatchTools;
 import com.jimuqu.solon.claw.tool.runtime.SolonClawWebTools;
 import com.jimuqu.solon.claw.tool.runtime.ToolCallLoopGuardrailService;
+import com.sun.net.httpserver.HttpServer;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.agent.react.task.ToolExchanger;
@@ -509,6 +513,91 @@ class ToolRegistryWebAndCodeToolsTest {
         assertThat(((List<?>) result.get("data").get("web").toData()).size()).isEqualTo(2);
         assertThat(result.get("data").get("web").get(0).get("url").getString())
                 .isEqualTo("https://example.com/solon");
+    }
+
+    /** Brave 内置后端必须实际发送约定的查询参数和鉴权头，并稳定映射非成功状态。 */
+    @Test
+    void shouldExecuteBraveSearchOverHttpAndRejectNonSuccessStatus() throws Exception {
+        AtomicInteger requestCount = new AtomicInteger();
+        AtomicReference<String> requestMethod = new AtomicReference<String>();
+        AtomicReference<String> rawQuery = new AtomicReference<String>();
+        AtomicReference<String> subscriptionToken = new AtomicReference<String>();
+        AtomicReference<String> accept = new AtomicReference<String>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext(
+                "/search",
+                exchange -> {
+                    int invocation = requestCount.incrementAndGet();
+                    if (invocation == 1) {
+                        requestMethod.set(exchange.getRequestMethod());
+                        rawQuery.set(exchange.getRequestURI().getRawQuery());
+                        subscriptionToken.set(
+                                exchange.getRequestHeaders().getFirst("X-Subscription-Token"));
+                        accept.set(exchange.getRequestHeaders().getFirst("Accept"));
+                    }
+                    if (invocation > 1) {
+                        exchange.sendResponseHeaders(503, -1);
+                        exchange.close();
+                        return;
+                    }
+                    byte[] response =
+                            "{\"web\":{\"results\":[{\"title\":\"Solon AI\",\"url\":\"https://example.com/solon\",\"description\":\"Java agent\"}]}}"
+                                    .getBytes(StandardCharsets.UTF_8);
+                    exchange.getResponseHeaders().add("Content-Type", "application/json");
+                    exchange.sendResponseHeaders(200, response.length);
+                    exchange.getResponseBody().write(response);
+                    exchange.close();
+                });
+        server.start();
+        try {
+            TestEnvironment env = TestEnvironment.withFakeLlm();
+            env.appConfig.getWeb().setSearchBackend("brave-free");
+            env.appConfig.getWeb().setBraveSearchApiKey("brave-local-test-key");
+            String endpoint = "http://127.0.0.1:" + server.getAddress().getPort() + "/search";
+            SolonClawWebTools.SafeWebsearchTool websearch =
+                    new SolonClawWebTools.SafeWebsearchTool(
+                            fixedPublicDnsPolicy(env), env.appConfig) {
+                        /** 返回当前测试的进程内 Brave 协议端点。 */
+                        @Override
+                        protected String braveSearchEndpoint() {
+                            return endpoint;
+                        }
+
+                        /** 测试仅验证传输契约，因此跳过对进程内端点的生产网络策略检查。 */
+                        @Override
+                        protected void checkSearchEndpoint(String url) {}
+                    };
+
+            Document document =
+                    websearch.websearch(
+                            "solon ai",
+                            Integer.valueOf(2),
+                            "fallback",
+                            "auto",
+                            Integer.valueOf(1000));
+            ONode result = ONode.ofJson(document.getContent());
+
+            assertThat(result.get("provider").getString()).isEqualTo("brave-free");
+            assertThat(requestMethod.get()).isEqualTo("GET");
+            assertThat(URLDecoder.decode(rawQuery.get(), "UTF-8"))
+                    .contains("q=solon ai")
+                    .contains("count=2");
+            assertThat(subscriptionToken.get()).isEqualTo("brave-local-test-key");
+            assertThat(accept.get()).isEqualTo("application/json");
+
+            assertThatThrownBy(
+                            () ->
+                                    websearch.websearch(
+                                            "failure",
+                                            Integer.valueOf(2),
+                                            "fallback",
+                                            "auto",
+                                            Integer.valueOf(1000)))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("Brave Search returned HTTP 503");
+        } finally {
+            server.stop(0);
+        }
     }
 
     @Test

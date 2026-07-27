@@ -879,7 +879,7 @@ public class SolonClawWebTools {
                 throw new IllegalStateException("BRAVE_SEARCH_API_KEY is not set");
             }
             int limit = Math.max(1, Math.min(numResults == null ? 8 : numResults.intValue(), 20));
-            checkSearchEndpoint(BRAVE_SEARCH_ENDPOINT);
+            checkSearchEndpoint(braveSearchEndpoint());
             String body = executeBraveSearchRequest(query, limit, apiKey);
             Object parsed = ONode.ofJson(body).toData();
             Map<String, Object> root =
@@ -928,7 +928,7 @@ public class SolonClawWebTools {
          */
         private Document ddgsSearch(String query, Integer numResults) {
             int limit = Math.max(1, Math.min(numResults == null ? 8 : numResults.intValue(), 20));
-            checkSearchEndpoint(DDGS_SEARCH_ENDPOINT);
+            checkSearchEndpoint(ddgsSearchEndpoint());
             String body = executeDdgsSearchRequest(query, limit);
             List<Map<String, Object>> web = parseDdgsResults(body, limit);
             Map<String, Object> data = new LinkedHashMap<String, Object>();
@@ -1059,6 +1059,24 @@ public class SolonClawWebTools {
         }
 
         /**
+         * 返回 Brave Search HTTP 端点，测试可覆写为本地协议服务器。
+         *
+         * @return 返回 Brave Search HTTP 端点。
+         */
+        protected String braveSearchEndpoint() {
+            return BRAVE_SEARCH_ENDPOINT;
+        }
+
+        /**
+         * 返回 DuckDuckGo HTML Search HTTP 端点，测试可覆写为本地协议服务器。
+         *
+         * @return 返回 DuckDuckGo HTML Search HTTP 端点。
+         */
+        protected String ddgsSearchEndpoint() {
+            return DDGS_SEARCH_ENDPOINT;
+        }
+
+        /**
          * 执行Brave搜索请求。
          *
          * @param query 查询参数。
@@ -1068,7 +1086,7 @@ public class SolonClawWebTools {
          */
         protected String executeBraveSearchRequest(String query, int limit, String apiKey) {
             HttpResponse response =
-                    HttpRequest.get(BRAVE_SEARCH_ENDPOINT)
+                    HttpRequest.get(braveSearchEndpoint())
                             .form("q", query)
                             .form("count", Integer.valueOf(limit))
                             .header("X-Subscription-Token", apiKey)
@@ -1095,7 +1113,7 @@ public class SolonClawWebTools {
          */
         protected String executeDdgsSearchRequest(String query, int limit) {
             HttpResponse response =
-                    HttpRequest.get(DDGS_SEARCH_ENDPOINT)
+                    HttpRequest.get(ddgsSearchEndpoint())
                             .form("q", query)
                             .form("kl", "wt-wt")
                             .form("dc", Integer.valueOf(0))
