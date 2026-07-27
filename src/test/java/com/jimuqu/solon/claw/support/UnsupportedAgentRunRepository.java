@@ -29,7 +29,8 @@ public abstract class UnsupportedAgentRunRepository implements AgentRunRepositor
     }
 
     @Override
-    public List<AgentRunRecord> listFinishedWithUsage(int limit) {
+    public List<AgentRunRecord> listFinishedWithUsage(
+            long beforeFinishedAt, String beforeRunId, int limit) {
         throw unsupported();
     }
 

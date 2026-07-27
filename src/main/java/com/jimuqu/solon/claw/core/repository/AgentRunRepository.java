@@ -66,7 +66,20 @@ public interface AgentRunRepository {
      * @param limit 最大返回数量。
      * @return 返回Finished With用量列表。
      */
-    List<AgentRunRecord> listFinishedWithUsage(int limit) throws Exception;
+    default List<AgentRunRecord> listFinishedWithUsage(int limit) throws Exception {
+        return listFinishedWithUsage(-1L, null, limit);
+    }
+
+    /**
+     * 按稳定游标列出已完成且包含用量的运行。
+     *
+     * @param beforeFinishedAt 上一页末条完成时间；小于零表示首页。
+     * @param beforeRunId 上一页末条运行标识；首页可为空。
+     * @param limit 最大返回数量。
+     * @return 按完成时间和运行标识倒序排列的运行列表。
+     */
+    List<AgentRunRecord> listFinishedWithUsage(long beforeFinishedAt, String beforeRunId, int limit)
+            throws Exception;
 
     /**
      * 列出Recoverable。

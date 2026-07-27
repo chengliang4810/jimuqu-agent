@@ -216,13 +216,19 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     }
 
     /**
-     * 列出Finished With用量。
+     * 按稳定游标列出已完成且包含用量的运行。
      *
+     * @param beforeFinishedAt 上一页末条完成时间；小于零表示首页。
+     * @param beforeRunId 上一页末条运行标识；首页可为空。
      * @param limit 最大返回数量。
-     * @return 返回Finished With用量列表。
+     * @return 按完成时间和运行标识倒序排列的运行列表。
      */
     @Override
-    public List<AgentRunRecord> listFinishedWithUsage(int limit) throws Exception {
+    public List<AgentRunRecord> listFinishedWithUsage(
+            long beforeFinishedAt, String beforeRunId, int limit) throws Exception {
+        if (beforeFinishedAt >= 0L && (beforeRunId == null || beforeRunId.trim().isEmpty())) {
+            throw new IllegalArgumentException("用量运行分页游标缺少 runId");
+        }
         List<AgentRunRecord> records = new ArrayList<AgentRunRecord>();
         Connection connection = database.openReadConnection();
         try {
@@ -232,8 +238,14 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
                                     + USAGE_RUN_COLUMNS
                                     + " from agent_runs where status = 'success'"
                                     + " and (input_tokens > 0 or output_tokens > 0 or total_tokens > 0)"
-                                    + " order by finished_at desc limit ?");
-            statement.setInt(1, Math.max(1, Math.min(limit <= 0 ? 1000 : limit, 10000)));
+                                    + " and (? < 0 or finished_at < ?"
+                                    + " or (finished_at = ? and run_id < ?))"
+                                    + " order by finished_at desc, run_id desc limit ?");
+            statement.setLong(1, beforeFinishedAt);
+            statement.setLong(2, beforeFinishedAt);
+            statement.setLong(3, beforeFinishedAt);
+            statement.setString(4, beforeRunId == null ? "" : beforeRunId);
+            statement.setInt(5, Math.max(1, Math.min(limit <= 0 ? 1000 : limit, 10000)));
             ResultSet resultSet = statement.executeQuery();
             try {
                 while (resultSet.next()) {

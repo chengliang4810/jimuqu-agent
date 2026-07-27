@@ -340,7 +340,8 @@ final class DashboardDiagnosticTestSupport {
         }
 
         @Override
-        public List<AgentRunRecord> listFinishedWithUsage(int limit) {
+        public List<AgentRunRecord> listFinishedWithUsage(
+                long beforeFinishedAt, String beforeRunId, int limit) {
             return Collections.emptyList();
         }
 

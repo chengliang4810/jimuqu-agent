@@ -14,9 +14,13 @@ import com.jimuqu.solon.claw.support.FixedSessionRepository;
 import com.jimuqu.solon.claw.support.UnsupportedAgentRunRepository;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -39,7 +43,7 @@ class UsageBackfillServiceTest {
                             new FixedAgentRunRepository(
                                     Arrays.asList(
                                             run("run-1", "session-1", 1000L),
-                                            run("run-2", "session-2", 2000L))),
+                                            run("run-2", "session-2", 500L))),
                             new FixedSessionRepository(
                                     Arrays.asList(
                                             session("session-1", 1000L),
@@ -75,6 +79,30 @@ class UsageBackfillServiceTest {
         } finally {
             database.shutdown();
         }
+    }
+
+    /** 超过单页上限的运行必须全部回填，且重复执行仍保持幂等。 */
+    @Test
+    void backfillsAllRunsBeyondSinglePageAndRemainsIdempotent() throws Exception {
+        List<AgentRunRecord> runs = new ArrayList<AgentRunRecord>();
+        for (int index = 0; index < 10001; index++) {
+            runs.add(run("large-run-" + index, "large-session", 20000L - index));
+        }
+        InMemoryUsageEventRepository usageRepository = new InMemoryUsageEventRepository();
+        UsageBackfillService service =
+                new UsageBackfillService(
+                        usageRepository,
+                        new FixedAgentRunRepository(runs),
+                        new FixedSessionRepository(
+                                Collections.singletonList(session("large-session", 20000L))),
+                        calculator());
+
+        assertThat(service.backfillApproximate()).isEqualTo(10001);
+        assertThat(usageRepository.findByEventId("backfill-run-large-run-10000")).isNotNull();
+        assertThat(usageRepository.findByEventId("backfill-session-large-session")).isNull();
+        assertThat(usageRepository.size()).isEqualTo(10001);
+        assertThat(service.backfillApproximate()).isZero();
+        assertThat(usageRepository.size()).isEqualTo(10001);
     }
 
     /** 已提交写入才报错时，重跑不得复制已提交事件，并应继续处理后续会话。 */
@@ -200,18 +228,106 @@ class UsageBackfillServiceTest {
          * @param runs 已完成用量运行。
          */
         private FixedAgentRunRepository(List<AgentRunRecord> runs) {
-            this.runs = runs;
+            this.runs =
+                    runs == null
+                            ? new ArrayList<AgentRunRecord>()
+                            : new ArrayList<AgentRunRecord>(runs);
+            Collections.sort(
+                    this.runs,
+                    new Comparator<AgentRunRecord>() {
+                        /** 按生产仓储的完成时间与运行标识倒序排列测试记录。 */
+                        @Override
+                        public int compare(AgentRunRecord left, AgentRunRecord right) {
+                            int finishedCompare =
+                                    Long.compare(right.getFinishedAt(), left.getFinishedAt());
+                            if (finishedCompare != 0) {
+                                return finishedCompare;
+                            }
+                            return right.getRunId().compareTo(left.getRunId());
+                        }
+                    });
         }
 
         /**
-         * 返回固定运行记录。
+         * 按稳定游标返回固定运行记录。
          *
+         * @param beforeFinishedAt 上一页末条完成时间；小于零表示首页。
+         * @param beforeRunId 上一页末条运行标识；首页可为空。
          * @param limit 最大返回数量。
          * @return 返回不超过限制的运行记录。
          */
         @Override
-        public List<AgentRunRecord> listFinishedWithUsage(int limit) {
-            return runs.subList(0, Math.min(Math.max(0, limit), runs.size()));
+        public List<AgentRunRecord> listFinishedWithUsage(
+                long beforeFinishedAt, String beforeRunId, int limit) {
+            List<AgentRunRecord> page = new ArrayList<AgentRunRecord>();
+            int safeLimit = Math.max(0, limit);
+            for (AgentRunRecord run : runs) {
+                boolean afterCursor =
+                        beforeFinishedAt < 0L
+                                || run.getFinishedAt() < beforeFinishedAt
+                                || (run.getFinishedAt() == beforeFinishedAt
+                                        && run.getRunId().compareTo(beforeRunId) < 0);
+                if (!afterCursor) {
+                    continue;
+                }
+                page.add(run);
+                if (page.size() >= safeLimit) {
+                    break;
+                }
+            }
+            return page;
+        }
+    }
+
+    /** 仅为万条分页回归提供快速、幂等的内存用量事件仓储。 */
+    private static final class InMemoryUsageEventRepository implements UsageEventRepository {
+        /** 按事件标识保存唯一回填事件。 */
+        private final Map<String, UsageEventRecord> events =
+                new LinkedHashMap<String, UsageEventRecord>();
+
+        /** 原子语义写入尚不存在的事件。 */
+        @Override
+        public boolean insertIfAbsent(UsageEventRecord record) {
+            if (record == null || events.containsKey(record.getEventId())) {
+                return false;
+            }
+            events.put(record.getEventId(), record);
+            return true;
+        }
+
+        /** 按事件标识返回内存记录。 */
+        @Override
+        public UsageEventRecord findByEventId(String eventId) {
+            return events.get(eventId);
+        }
+
+        /** 返回最近写入的受限事件列表。 */
+        @Override
+        public List<UsageEventRecord> listRecent(int limit) {
+            List<UsageEventRecord> records = new ArrayList<UsageEventRecord>(events.values());
+            int from = Math.max(0, records.size() - Math.max(0, limit));
+            return new ArrayList<UsageEventRecord>(records.subList(from, records.size()));
+        }
+
+        /** 返回指定时间范围内的受限事件列表。 */
+        @Override
+        public List<UsageEventRecord> listBetween(long fromInclusive, long toInclusive, int limit) {
+            List<UsageEventRecord> records = new ArrayList<UsageEventRecord>();
+            for (UsageEventRecord event : events.values()) {
+                if (event.getCreatedAt() < fromInclusive || event.getCreatedAt() > toInclusive) {
+                    continue;
+                }
+                records.add(event);
+                if (records.size() >= Math.max(0, limit)) {
+                    break;
+                }
+            }
+            return records;
+        }
+
+        /** 返回当前唯一事件数量。 */
+        private int size() {
+            return events.size();
         }
     }
 

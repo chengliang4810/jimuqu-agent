@@ -448,6 +448,37 @@ public class StorageRepositoryTest {
         assertThat(staleResult.getError()).isNull();
     }
 
+    /** 用量运行游标必须在同毫秒记录之间保持稳定倒序，且跨页不重不漏。 */
+    @Test
+    void shouldPageFinishedUsageRunsWithStableTieBreaker() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        env.agentRunRepository.saveRun(usageRun("usage-cursor-a", "success", 5000L, 10L));
+        env.agentRunRepository.saveRun(usageRun("usage-cursor-c", "success", 5000L, 10L));
+        env.agentRunRepository.saveRun(usageRun("usage-cursor-b", "success", 5000L, 10L));
+        env.agentRunRepository.saveRun(usageRun("usage-cursor-old", "success", 4000L, 10L));
+        env.agentRunRepository.saveRun(usageRun("usage-cursor-failed", "failed", 6000L, 10L));
+        env.agentRunRepository.saveRun(usageRun("usage-cursor-zero", "success", 6000L, 0L));
+
+        List<AgentRunRecord> first = env.agentRunRepository.listFinishedWithUsage(-1L, null, 2);
+        assertThat(first)
+                .extracting(AgentRunRecord::getRunId)
+                .containsExactly("usage-cursor-c", "usage-cursor-b");
+
+        AgentRunRecord firstCursor = first.get(first.size() - 1);
+        List<AgentRunRecord> second =
+                env.agentRunRepository.listFinishedWithUsage(
+                        firstCursor.getFinishedAt(), firstCursor.getRunId(), 2);
+        assertThat(second)
+                .extracting(AgentRunRecord::getRunId)
+                .containsExactly("usage-cursor-a", "usage-cursor-old");
+
+        AgentRunRecord secondCursor = second.get(second.size() - 1);
+        assertThat(
+                        env.agentRunRepository.listFinishedWithUsage(
+                                secondCursor.getFinishedAt(), secondCursor.getRunId(), 2))
+                .isEmpty();
+    }
+
     /** 陈旧运行应按调用方批次原子更新，并为每个运行只写一条恢复记录。 */
     @Test
     void shouldAtomicallyMarkExactStaleRunBatch() throws Exception {
@@ -713,6 +744,31 @@ public class StorageRepositoryTest {
         toolCall.setStartedAt(run.getStartedAt());
         toolCall.setFinishedAt(System.currentTimeMillis());
         return toolCall;
+    }
+
+    /**
+     * 构造用于稳定游标测试的轻量用量运行。
+     *
+     * @param runId 运行标识。
+     * @param status 运行状态。
+     * @param finishedAt 完成时间。
+     * @param totalTokens 总用量。
+     * @return 返回可落库的运行记录。
+     */
+    private AgentRunRecord usageRun(
+            String runId, String status, long finishedAt, long totalTokens) {
+        AgentRunRecord run = new AgentRunRecord();
+        run.setRunId(runId);
+        run.setSessionId("usage-cursor-session");
+        run.setSourceKey("MEMORY:usage-cursor:user");
+        run.setStatus(status);
+        run.setProvider("provider-a");
+        run.setModel("model-a");
+        run.setInputTokens(totalTokens);
+        run.setTotalTokens(totalTokens);
+        run.setStartedAt(finishedAt - 100L);
+        run.setFinishedAt(finishedAt);
+        return run;
     }
 
     /**

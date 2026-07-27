@@ -12,6 +12,9 @@ import java.util.Set;
 
 /** 提供用量Backfill相关业务能力，封装调用方不需要感知的运行细节。 */
 public class UsageBackfillService {
+    /** 单页最多读取一万条运行，避免回填期间一次加载无界历史数据。 */
+    private static final int RUN_PAGE_SIZE = 10000;
+
     /** 保存用量事件仓储依赖，用于访问持久化数据。 */
     private final UsageEventRepository usageEventRepository;
 
@@ -51,17 +54,30 @@ public class UsageBackfillService {
     public int backfillApproximate() throws Exception {
         int inserted = 0;
         Set<String> sessionsWithRunUsage = new LinkedHashSet<String>();
-        List<AgentRunRecord> runs = agentRunRepository.listFinishedWithUsage(10000);
-        for (AgentRunRecord run : runs) {
-            UsageEventRecord event = fromRun(run);
-            if (event != null) {
-                if (StrUtil.isNotBlank(event.getSessionId())) {
-                    sessionsWithRunUsage.add(event.getSessionId());
-                }
-                if (usageEventRepository.insertIfAbsent(event)) {
-                    inserted++;
+        long beforeFinishedAt = -1L;
+        String beforeRunId = null;
+        while (true) {
+            List<AgentRunRecord> runs =
+                    agentRunRepository.listFinishedWithUsage(
+                            beforeFinishedAt, beforeRunId, RUN_PAGE_SIZE);
+            if (runs == null || runs.isEmpty()) {
+                break;
+            }
+            for (AgentRunRecord run : runs) {
+                UsageEventRecord event = fromRun(run);
+                if (event != null) {
+                    if (StrUtil.isNotBlank(event.getSessionId())) {
+                        sessionsWithRunUsage.add(event.getSessionId());
+                    }
+                    if (usageEventRepository.insertIfAbsent(event)) {
+                        inserted++;
+                    }
                 }
             }
+            AgentRunRecord last = runs.get(runs.size() - 1);
+            requireAdvancedCursor(beforeFinishedAt, beforeRunId, last);
+            beforeFinishedAt = last.getFinishedAt();
+            beforeRunId = last.getRunId();
         }
         int sessionCount = sessionRepository.countAll();
         List<SessionRecord> sessions = sessionRepository.listRecent(sessionCount);
@@ -75,6 +91,30 @@ public class UsageBackfillService {
             }
         }
         return inserted;
+    }
+
+    /**
+     * 校验仓储返回的末条记录能够推进键集分页游标，避免错误实现导致无限循环。
+     *
+     * @param previousFinishedAt 上一页完成时间游标。
+     * @param previousRunId 上一页运行标识游标。
+     * @param last 当前页末条运行。
+     */
+    private void requireAdvancedCursor(
+            long previousFinishedAt, String previousRunId, AgentRunRecord last) {
+        if (last == null || last.getFinishedAt() < 0L || StrUtil.isBlank(last.getRunId())) {
+            throw new IllegalStateException("用量运行分页返回了无效游标");
+        }
+        if (previousFinishedAt < 0L) {
+            return;
+        }
+        boolean advanced =
+                last.getFinishedAt() < previousFinishedAt
+                        || (last.getFinishedAt() == previousFinishedAt
+                                && last.getRunId().compareTo(previousRunId) < 0);
+        if (!advanced) {
+            throw new IllegalStateException("用量运行分页游标未前进");
+        }
     }
 
     /**
