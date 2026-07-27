@@ -2,7 +2,7 @@
 import { onMounted, ref } from "vue";
 import { Button, Input, Popconfirm, message } from "antdv-next";
 import { useI18n } from "vue-i18n";
-import { clearApiKey, setApiKey } from "@/api/client";
+import { exchangeDashboardSession, getManagementProfile, logoutDashboardSession } from "@/api/client";
 import { fetchWorkspaceConfigItems, revealWorkspaceConfigItem, setWorkspaceConfigItem } from "@/api/solonclaw/config";
 
 const ACCESS_TOKEN_KEY = "solonclaw.dashboard.accessToken";
@@ -46,12 +46,17 @@ async function saveAccessToken() {
 
   saving.value = true;
   try {
+    const changesCurrentDashboardToken = !getManagementProfile();
     await setWorkspaceConfigItem(ACCESS_TOKEN_KEY, nextToken);
-    setApiKey(nextToken);
+    if (changesCurrentDashboardToken && !await exchangeDashboardSession(nextToken)) {
+      throw new Error(t("login.invalidToken"));
+    }
     accessToken.value = "";
     await loadTokenStatus();
     message.success(t("account.accessTokenSaved"));
-    window.location.reload();
+    if (changesCurrentDashboardToken) {
+      window.location.reload();
+    }
   } catch (err: any) {
     message.error(err.message || t("common.saveFailed"));
   } finally {
@@ -73,15 +78,21 @@ async function revealAccessToken() {
 async function clearAccessToken() {
   saving.value = true;
   try {
+    const changesCurrentDashboardToken = !getManagementProfile();
     await setWorkspaceConfigItem(ACCESS_TOKEN_KEY, "");
     accessToken.value = "";
     tokenPreview.value = "";
     workspaceConfigItems.value = workspaceConfigItems.value.filter(item => item.key !== ACCESS_TOKEN_KEY);
     configured.value = false;
-    clearApiKey();
-    await loadTokenStatus();
+    if (changesCurrentDashboardToken) {
+      await logoutDashboardSession();
+    } else {
+      await loadTokenStatus();
+    }
     message.success(t("account.accessTokenCleared"));
-    window.location.reload();
+    if (changesCurrentDashboardToken) {
+      window.location.reload();
+    }
   } catch (err: any) {
     message.error(err.message || t("common.saveFailed"));
   } finally {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from "vue";
+import { message } from "antdv-next";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAppStore } from "@/stores/solonclaw/app";
@@ -7,7 +8,7 @@ import ThemeSwitch from "./ThemeSwitch.vue";
 import LanguageSwitch from "./LanguageSwitch.vue";
 import SystemNavItems from "./SystemNavItems.vue";
 
-import { clearApiKey } from "@/api/client";
+import { logoutDashboardSession } from "@/api/client";
 import { MONITORING_NAV_ITEMS, PERSONA_NAV_ITEMS, PRIMARY_NAV_ITEMS } from "@/shared/sidebarNav";
 
 const { t } = useI18n();
@@ -44,9 +45,13 @@ function handlePersonaNav(key: string) {
   router.push({ name: 'solonclaw.persona.file', params: { key } });
 }
 
-function handleLogout() {
-  clearApiKey();
-  router.replace({ name: 'login' });
+async function handleLogout() {
+  try {
+    await logoutDashboardSession();
+    router.replace({ name: 'login' });
+  } catch {
+    message.error(t("login.connectionFailed"));
+  }
 }
 
 async function scrollActiveNavItem() {

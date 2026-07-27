@@ -56,13 +56,16 @@ public class DashboardAuthFilter implements Filter {
                         && "POST".equalsIgnoreCase(ctx.method())
                         && ctx.header("X-solonclaw-Signature") != null;
         if (path.startsWith("/api/")) {
-            if (!signedGatewayInjection
-                    && !authService.isPublicApiPath(path, ctx.method())
-                    && !authService.isAuthorized(ctx)) {
-                authService.writeUnauthorized(ctx);
-                return;
+            DashboardAuthService.AuthenticationMethod authenticationMethod =
+                    DashboardAuthService.AuthenticationMethod.NONE;
+            if (!signedGatewayInjection && !authService.isPublicApiPath(path, ctx.method())) {
+                authenticationMethod = authService.authenticationMethod(ctx);
+                if (authenticationMethod == DashboardAuthService.AuthenticationMethod.NONE) {
+                    authService.writeUnauthorized(ctx);
+                    return;
+                }
             }
-            if (isUnsafeBrowserWriteFromDisallowedOrigin(ctx)) {
+            if (isUnsafeBrowserWriteFromDisallowedOrigin(ctx, authenticationMethod)) {
                 ctx.status(403);
                 ctx.contentType("application/json;charset=UTF-8");
                 ctx.output(
@@ -112,7 +115,8 @@ public class DashboardAuthFilter implements Filter {
      * @param ctx 当前请求上下文。
      * @return 如果是带 Origin 的非安全跨站写请求则返回 true。
      */
-    private boolean isUnsafeBrowserWriteFromDisallowedOrigin(Context ctx) {
+    private boolean isUnsafeBrowserWriteFromDisallowedOrigin(
+            Context ctx, DashboardAuthService.AuthenticationMethod authenticationMethod) {
         String method = ctx.method();
         if ("GET".equalsIgnoreCase(method)
                 || "HEAD".equalsIgnoreCase(method)
@@ -120,6 +124,10 @@ public class DashboardAuthFilter implements Filter {
             return false;
         }
         String origin = ctx.header("Origin");
+        if (authenticationMethod == DashboardAuthService.AuthenticationMethod.SESSION
+                && StrUtil.isBlank(origin)) {
+            return true;
+        }
         return StrUtil.isNotBlank(origin) && !authService.isAllowedDashboardOrigin(ctx, origin);
     }
 }

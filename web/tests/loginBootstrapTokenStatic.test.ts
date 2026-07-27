@@ -9,6 +9,6 @@ assert.ok(
 )
 
 assert.ok(
-  /if \(!res\.ok\)[\s\S]*tryBootstrapDashboardToken\(key\)[\s\S]*setApiKey\(key\)[\s\S]*router\.replace\(loginTarget\(\)\)/.test(loginView),
-  'successful bootstrap should store the new token and enter the originally requested dashboard page',
+  /if \(!await exchangeDashboardSession\(key\)\)[\s\S]*tryBootstrapDashboardToken\(key\)[\s\S]*exchangeDashboardSession\(key\)[\s\S]*router\.replace\(loginTarget\(\)\)/.test(loginView),
+  'successful bootstrap should exchange the new token for a short session before entering the requested page',
 )

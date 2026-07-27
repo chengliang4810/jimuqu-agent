@@ -3,13 +3,14 @@ import { appendManagementProfile } from '@/shared/profileScope'
 import { isDashboardOriginRejected } from './dashboardAuthError.ts'
 export {
   clearApiKey,
-  getApiKey,
+  exchangeDashboardSession,
   getBaseUrlValue,
   hasApiKey,
-  setApiKey,
+  logoutDashboardSession,
+  restoreDashboardSession,
   setServerUrl,
 } from './sessionAuth.ts'
-import { clearApiKey, getApiKey, getBaseUrlValue } from './sessionAuth.ts'
+import { clearApiKey, getBaseUrlValue } from './sessionAuth.ts'
 
 let managementProfile = ''
 
@@ -74,7 +75,7 @@ export async function dashboardFetch(input: RequestInfo | URL, options: RequestI
     : input instanceof URL
       ? new URL(profiledApiPath(input.toString()))
       : input
-  const res = await fetch(scopedInput, options)
+  const res = await fetch(scopedInput, { credentials: 'same-origin', ...options })
   if (res.ok) {
     return res
   }
@@ -92,11 +93,6 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
-  }
-
-  const apiKey = getApiKey()
-  if (apiKey && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${apiKey}`)
   }
 
   const res = await dashboardFetch(url, { ...options, headers })

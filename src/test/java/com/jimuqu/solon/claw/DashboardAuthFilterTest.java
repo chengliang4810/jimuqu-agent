@@ -234,6 +234,96 @@ public class DashboardAuthFilterTest {
         assertThat(invoked).isTrue();
     }
 
+    /** 验证 Cookie 认证写请求缺少 Origin 时按 CSRF 防护要求拒绝。 */
+    @Test
+    void shouldRejectCookieAuthenticatedWriteWithoutOrigin() throws Throwable {
+        AppConfig config = new AppConfig();
+        config.getDashboard().setAccessToken("test-token");
+        DashboardAuthService service = new DashboardAuthService(config);
+        FakeContext issue = new FakeContext("POST", "/api/auth/session");
+        issue.requestHeader("Authorization", "Bearer test-token");
+        assertThat(service.issueBrowserSession(issue)).isTrue();
+        String cookie = issue.headerOfResponse("Set-Cookie").split(";", 2)[0].split("=", 2)[1];
+        DashboardAuthFilter filter = new DashboardAuthFilter(service);
+        FakeContext context = new FakeContext("POST", "/api/private");
+        context.cookieMap().put(DashboardAuthService.SESSION_COOKIE_NAME, cookie);
+        AtomicBoolean invoked = new AtomicBoolean(false);
+
+        filter.doFilter(
+                context,
+                new FilterChain() {
+                    /** 缺少 Origin 的 Cookie 写请求不应进入业务处理链。 */
+                    @Override
+                    public void doFilter(Context ctx) {
+                        invoked.set(true);
+                    }
+                });
+
+        assertThat(context.status()).isEqualTo(403);
+        assertThat(invoked).isFalse();
+    }
+
+    /** 验证 Cookie 认证写请求携带严格同源 Origin 时可继续处理。 */
+    @Test
+    void shouldAllowCookieAuthenticatedWriteFromSameOrigin() throws Throwable {
+        AppConfig config = new AppConfig();
+        config.getDashboard().setAccessToken("test-token");
+        DashboardAuthService service = new DashboardAuthService(config);
+        FakeContext issue = new FakeContext("POST", "/api/auth/session");
+        issue.requestHeader("Authorization", "Bearer test-token");
+        assertThat(service.issueBrowserSession(issue)).isTrue();
+        String cookie = issue.headerOfResponse("Set-Cookie").split(";", 2)[0].split("=", 2)[1];
+        DashboardAuthFilter filter = new DashboardAuthFilter(service);
+        FakeContext context = new FakeContext("POST", "/api/private");
+        context.cookieMap().put(DashboardAuthService.SESSION_COOKIE_NAME, cookie);
+        context.requestHeader("Origin", "http://dashboard.example.com");
+        context.requestHeader("Host", "dashboard.example.com");
+        AtomicBoolean invoked = new AtomicBoolean(false);
+
+        filter.doFilter(
+                context,
+                new FilterChain() {
+                    /** 严格同源 Cookie 写请求应进入业务处理链。 */
+                    @Override
+                    public void doFilter(Context ctx) {
+                        invoked.set(true);
+                    }
+                });
+
+        assertThat(context.status()).isEqualTo(200);
+        assertThat(invoked).isTrue();
+    }
+
+    /** 验证错误 Bearer 即使伴随有效 Cookie 也必须优先返回未认证。 */
+    @Test
+    void shouldRejectInvalidBearerWithoutCookieFallback() throws Throwable {
+        AppConfig config = new AppConfig();
+        config.getDashboard().setAccessToken("test-token");
+        DashboardAuthService service = new DashboardAuthService(config);
+        FakeContext issue = new FakeContext("POST", "/api/auth/session");
+        issue.requestHeader("Authorization", "Bearer test-token");
+        assertThat(service.issueBrowserSession(issue)).isTrue();
+        String cookie = issue.headerOfResponse("Set-Cookie").split(";", 2)[0].split("=", 2)[1];
+        DashboardAuthFilter filter = new DashboardAuthFilter(service);
+        FakeContext context = new FakeContext("GET", "/api/private");
+        context.cookieMap().put(DashboardAuthService.SESSION_COOKIE_NAME, cookie);
+        context.requestHeader("Authorization", "Bearer wrong-token");
+        AtomicBoolean invoked = new AtomicBoolean(false);
+
+        filter.doFilter(
+                context,
+                new FilterChain() {
+                    /** 错误 Bearer 不应借助 Cookie 进入业务处理链。 */
+                    @Override
+                    public void doFilter(Context ctx) {
+                        invoked.set(true);
+                    }
+                });
+
+        assertThat(context.status()).isEqualTo(401);
+        assertThat(invoked).isFalse();
+    }
+
     /** 验证公开的首次 token 配置接口也会拒绝跨站抢占写请求。 */
     @Test
     void shouldRejectCrossOriginDashboardTokenBootstrap() throws Throwable {

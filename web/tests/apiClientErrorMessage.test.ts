@@ -33,10 +33,11 @@ export function appendManagementProfile(path: string) {
 `)
   writeFileSync(join(tempDir, 'mock-session-auth.ts'), `
 export function clearApiKey() {}
-export function getApiKey() { return '' }
+export async function exchangeDashboardSession() { return false }
 export function getBaseUrlValue() { return 'http://dashboard.local' }
 export function hasApiKey() { return false }
-export function setApiKey() {}
+export async function logoutDashboardSession() {}
+export async function restoreDashboardSession() { return false }
 export function setServerUrl() {}
 `)
   writeFileSync(clientPath, source)

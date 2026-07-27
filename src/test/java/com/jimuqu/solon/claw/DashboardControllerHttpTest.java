@@ -19,6 +19,7 @@ import com.jimuqu.solon.claw.storage.repository.SqliteSessionRepository;
 import com.jimuqu.solon.claw.storage.session.SqliteAgentSession;
 import com.jimuqu.solon.claw.support.ModelConfigKeySupport;
 import com.jimuqu.solon.claw.tool.runtime.DangerousCommandApprovalService;
+import com.jimuqu.solon.claw.web.DashboardAuthService;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.BufferedReader;
@@ -107,6 +108,46 @@ public class DashboardControllerHttpTest {
                 System.setProperty("http.keepAlive", previousHttpKeepAlive);
             }
         }
+    }
+
+    /** 验证真实 HTTP 边界用长期 Bearer 换取、使用并撤销 HttpOnly Dashboard 短会话。 */
+    @Test
+    void shouldExchangeBearerForStrictDashboardSessionCookie() throws Exception {
+        HttpResult issued = request("POST", "/api/auth/session", null, DASHBOARD_TEST_TOKEN);
+
+        assertThat(issued.status).isEqualTo(200);
+        String setCookie = issued.responseHeaders.get("Set-Cookie");
+        assertThat(setCookie)
+                .startsWith("solonclaw_dashboard_session=")
+                .contains("Max-Age=28800")
+                .contains("Path=/api")
+                .contains("HttpOnly")
+                .contains("SameSite=Strict")
+                .doesNotContain(DASHBOARD_TEST_TOKEN);
+        String cookie = setCookie.split(";", 2)[0];
+        Map<String, String> cookieHeaders = new LinkedHashMap<String, String>();
+        cookieHeaders.put("Cookie", cookie);
+
+        assertThat(request("GET", "/api/sessions", null, null, cookieHeaders).status)
+                .isEqualTo(200);
+        assertThat(request("GET", "/api/sessions", null, "wrong-token", cookieHeaders).status)
+                .isEqualTo(401);
+        assertThat(request("DELETE", "/api/auth/session", null, null, cookieHeaders).status)
+                .isEqualTo(403);
+
+        cookieHeaders.put("Origin", "http://127.0.0.1:" + port);
+        HttpResult revoked = request("DELETE", "/api/auth/session", null, null, cookieHeaders);
+        assertThat(revoked.status).isEqualTo(200);
+        assertThat(revoked.responseHeaders.get("Set-Cookie"))
+                .startsWith("solonclaw_dashboard_session=")
+                .contains("Max-Age=0")
+                .contains("Path=/api")
+                .contains("HttpOnly")
+                .contains("SameSite=Strict");
+
+        cookieHeaders.remove("Origin");
+        assertThat(request("GET", "/api/sessions", null, null, cookieHeaders).status)
+                .isEqualTo(401);
     }
 
     /** 验证 Dashboard 会话列表会用失败运行补足空消息会话的交互统计。 */
@@ -3071,11 +3112,37 @@ public class DashboardControllerHttpTest {
                     "X-Content-Type-Options",
                     "X-Frame-Options",
                     "Referrer-Policy",
-                    "Permissions-Policy"
+                    "Permissions-Policy",
+                    "Set-Cookie"
                 }) {
-            headers.put(name, connection.getHeaderField(name));
+            headers.put(
+                    name,
+                    "Set-Cookie".equals(name)
+                            ? dashboardSessionCookie(connection)
+                            : connection.getHeaderField(name));
         }
         return headers;
+    }
+
+    /**
+     * 从可能包含 Solon 会话 Cookie 的响应中提取 Dashboard HttpOnly 会话 Cookie。
+     *
+     * @param connection 已完成请求的 HTTP 连接。
+     * @return Dashboard 会话 Cookie；响应未设置时返回 null。
+     */
+    private static String dashboardSessionCookie(HttpURLConnection connection) {
+        for (Map.Entry<String, List<String>> entry : connection.getHeaderFields().entrySet()) {
+            if (entry.getKey() == null || !"Set-Cookie".equalsIgnoreCase(entry.getKey())) {
+                continue;
+            }
+            for (String value : entry.getValue()) {
+                if (value != null
+                        && value.startsWith(DashboardAuthService.SESSION_COOKIE_NAME + "=")) {
+                    return value;
+                }
+            }
+        }
+        return null;
     }
 
     /**

@@ -10,11 +10,11 @@ assert.ok(
 )
 assert.ok(
   api.includes('dashboardFetch('),
-  'downloadFile should use dashboardFetch so protected downloads send dashboard auth headers',
+  'downloadFile should use the shared cookie-authenticated Dashboard fetch boundary',
 )
 assert.ok(
-  api.includes("headers.set('Authorization', `Bearer ${apiKey}`)"),
-  'downloadFile should attach the dashboard token as a Bearer header',
+  !api.includes('Authorization') && !api.includes('getApiKey'),
+  'downloadFile should rely on HttpOnly Cookie authentication without reading the long-lived token',
 )
 assert.ok(
   api.includes('res.blob()'),
@@ -34,7 +34,7 @@ assert.ok(
 )
 assert.ok(
   !api.includes('a.href = getDownloadUrl'),
-  'downloadFile should not navigate a naked download URL without Authorization headers',
+  'downloadFile should not navigate a naked download URL without the shared authenticated fetch boundary',
 )
 assert.ok(
   !filesApi.includes("params.set('token'") && !filesApi.includes('getApiKey'),

@@ -9,10 +9,9 @@ const tempDir = mkdtempSync(join(testsDir, '.tmp-chat-stream-events-'))
 try {
   const chatPath = join(tempDir, 'chat-under-test.ts')
   const source = readFileSync(new URL('../src/api/solonclaw/chat.ts', import.meta.url), 'utf8')
-    .replace("import { dashboardFetch, getApiKey, getBaseUrlValue, request } from '../client'", "import { dashboardFetch, getApiKey, getBaseUrlValue, request } from './mock-client.ts'")
+    .replace("import { dashboardFetch, getBaseUrlValue, request } from '../client'", "import { dashboardFetch, getBaseUrlValue, request } from './mock-client.ts'")
 
   writeFileSync(join(tempDir, 'mock-client.ts'), `
-export function getApiKey() { return '' }
 export function getBaseUrlValue() { return 'http://dashboard.local' }
 export function request() { throw new Error('request should not be called') }
 export async function dashboardFetch() {

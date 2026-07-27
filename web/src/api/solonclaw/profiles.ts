@@ -1,4 +1,4 @@
-import { dashboardFetch, getApiKey, getBaseUrlValue, request } from '../client'
+import { dashboardFetch, getBaseUrlValue, request } from '../client'
 import { fetchAvailableModels } from './system'
 
 export interface ProfileDistribution {
@@ -229,12 +229,8 @@ export async function importProfile(file: File, name?: string): Promise<SolonCla
 }
 
 export async function exportProfile(name: string): Promise<void> {
-  const headers = new Headers()
-  const apiKey = getApiKey()
-  if (apiKey) headers.set('Authorization', `Bearer ${apiKey}`)
-
   const path = `/api/profiles/${encodeURIComponent(name)}/export`
-  const response = await dashboardFetch(`${getBaseUrlValue()}${path}`, { headers })
+  const response = await dashboardFetch(`${getBaseUrlValue()}${path}`)
   if (!response.ok) {
     const text = await response.text().catch(() => '')
     throw new Error(text || `Export failed: ${response.status}`)

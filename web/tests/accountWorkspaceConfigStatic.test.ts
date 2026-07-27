@@ -8,6 +8,10 @@ const en = readFileSync(new URL('../src/i18n/locales/en.ts', import.meta.url), '
 assert.ok(account.includes('workspaceConfigItems'), 'account settings should keep all workspace config items')
 assert.ok(account.includes('Object.entries(items)'), 'account settings should derive rows from /api/workspace-config')
 assert.ok(account.includes('item.redacted_value'), 'account settings should render redacted values only')
+assert.ok(
+  account.includes('const changesCurrentDashboardToken = !getManagementProfile()'),
+  'named Profile token changes must not replace or revoke the current Dashboard browser session',
+)
 assert.ok(account.includes('t("account.workspaceConfigItems")'), 'account settings should label workspace config list')
 assert.ok(zh.includes("workspaceConfigItems: '工作区配置项'"), 'zh copy should include workspace config list label')
 assert.ok(en.includes("workspaceConfigItems: 'Workspace config items'"), 'en copy should include workspace config list label')

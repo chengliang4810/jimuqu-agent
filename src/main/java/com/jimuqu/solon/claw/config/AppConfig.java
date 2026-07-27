@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -1952,12 +1953,27 @@ public class AppConfig {
     @NoArgsConstructor
     public static class DashboardConfig {
         /** 记录控制台中的access token。 */
-        private String accessToken;
+        private volatile String accessToken;
+
+        /** 记录 Dashboard 访问令牌的单调变更代际，不参与配置序列化。 */
+        private transient volatile long accessTokenRevision;
 
         /** 记录控制台中的bind主机。 */
         private String bindHost;
 
         /** 记录控制台中的bind端口。 */
         private int bindPort = 8080;
+
+        /**
+         * 更新 Dashboard 访问令牌，并在值实际变化时推进会话失效代际。
+         *
+         * @param accessToken 新的 Dashboard 访问令牌。
+         */
+        public synchronized void setAccessToken(String accessToken) {
+            if (!Objects.equals(this.accessToken, accessToken)) {
+                this.accessToken = accessToken;
+                this.accessTokenRevision++;
+            }
+        }
     }
 }

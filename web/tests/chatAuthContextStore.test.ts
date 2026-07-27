@@ -68,6 +68,10 @@ Object.defineProperty(globalThis, 'window', {
   },
   configurable: true,
 })
+Object.defineProperty(globalThis, 'fetch', {
+  value: async () => ({ ok: true, status: 200 } as Response),
+  configurable: true,
+})
 Object.defineProperty(globalThis, 'document', {
   value: {
     visibilityState: 'hidden',
@@ -102,7 +106,7 @@ const session = (id: string, title = id): SessionSummary => ({
 function chatApiMocks(): Plugin {
   const modules: Record<string, string> = {
     '@/api/client': `
-      export { getApiKey, getBaseUrlValue } from '/src/api/sessionAuth.ts'
+      export { getBaseUrlValue } from '/src/api/sessionAuth.ts'
       export function getManagementProfile() { return '' }
     `,
     '@/api/solonclaw/chat': `
@@ -155,10 +159,10 @@ const server = await createServer({
 })
 
 try {
-  const { setApiKey } = await server.ssrLoadModule('/src/api/sessionAuth.ts') as typeof import('../src/api/sessionAuth.ts')
+  const { exchangeDashboardSession } = await server.ssrLoadModule('/src/api/sessionAuth.ts') as typeof import('../src/api/sessionAuth.ts')
   const { useChatStore } = await server.ssrLoadModule('/src/stores/solonclaw/chat.ts') as typeof import('../src/stores/solonclaw/chat.ts')
 
-  setApiKey('account-a')
+  await exchangeDashboardSession('account-a')
   globalThis.__CHAT_SESSIONS_MOCK__ = { fetchSessions: async () => [session('account-a-session')] }
   globalThis.__CHAT_RUN_MOCK__ = {
     cancelRun: async () => {},
@@ -175,14 +179,14 @@ try {
   await store.loadSessions()
   assert.deepEqual(store.sessions.map(item => item.id), ['account-a-session'], 'store should load the current account sessions')
 
-  for (const listener of windowListeners.get('storage') || []) listener({ key: 'solonclaw_api_key' })
+  for (const listener of windowListeners.get('storage') || []) listener({ key: 'solonclaw_auth_scope_v1' })
   assert.equal(store.sessions.length, 0, 'another tab auth switch should clear this tab in-memory sessions')
   await store.loadSessions()
   for (const listener of windowListeners.get('storage') || []) listener({ key: null })
   assert.equal(store.sessions.length, 0, 'another tab localStorage.clear should clear this tab in-memory sessions')
   await store.loadSessions()
 
-  setApiKey('account-b')
+  await exchangeDashboardSession('account-b')
   assert.equal(store.sessions.length, 0, 'auth switch should clear in-memory sessions immediately')
   assert.equal(store.activeSession, null, 'auth switch should clear the active session immediately')
   assert.equal(store.sessionsLoaded, false, 'auth switch should require a fresh session load')
@@ -190,7 +194,7 @@ try {
   let resolveLate!: (sessions: SessionSummary[]) => void
   globalThis.__CHAT_SESSIONS_MOCK__.fetchSessions = () => new Promise(resolve => { resolveLate = resolve })
   const lateLoad = store.loadSessions()
-  setApiKey('account-c')
+  await exchangeDashboardSession('account-c')
   resolveLate([session('account-b-late-session')])
   await lateLoad
   assert.equal(store.sessions.length, 0, 'late responses from the previous auth context must be discarded')
@@ -202,7 +206,7 @@ try {
   let resolveStart!: (run: { run_id: string, status: string, session_id: string }) => void
   globalThis.__CHAT_RUN_MOCK__.startRun = () => new Promise(resolve => { resolveStart = resolve })
   const lateSend = store.sendMessage('account-c-message')
-  setApiKey('account-d')
+  await exchangeDashboardSession('account-d')
   globalThis.__CHAT_SESSIONS_MOCK__.fetchSessions = async () => [session('shared-session', 'account-d-title')]
   await store.loadSessions()
   resolveStart({ run_id: 'old-run', status: 'running', session_id: 'shared-session' })
@@ -216,7 +220,7 @@ try {
   let resolveCancel!: () => void
   globalThis.__CHAT_RUN_MOCK__.cancelRun = () => new Promise(resolve => { resolveCancel = resolve })
   const lateStop = store.stopStreaming()
-  setApiKey('account-e')
+  await exchangeDashboardSession('account-e')
   globalThis.__CHAT_SESSIONS_MOCK__.fetchSessions = async () => [session('shared-session')]
   await store.loadSessions()
   await store.sendMessage('account-e-message')
@@ -234,7 +238,7 @@ try {
   assert.equal(disposedController.signal.aborted, true, 'disposing the store should abort active SSE streams')
   assert.equal(store.sessions.length, 0, 'disposing the store should clear auth-scoped in-memory data')
   assert.equal(documentListeners.get('visibilitychange')?.size || 0, 0, 'disposing the store should remove visibility listeners')
-  setApiKey('account-f')
+  await exchangeDashboardSession('account-f')
   disposedEventCallback({ event: 'message.delta', delta: 'late-disposed-account-data' })
   assert.equal(
     [...values.values()].some(value => value.includes('late-disposed-account-data')),

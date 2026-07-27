@@ -2,7 +2,7 @@
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { clearApiKey, dashboardFetch, getApiKey, getBaseUrlValue, handleDashboardAuthFailure, setApiKey, hasApiKey } from "@/api/client";
+import { clearApiKey, dashboardFetch, exchangeDashboardSession, getBaseUrlValue, restoreDashboardSession } from "@/api/client";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -24,31 +24,25 @@ function loginTarget() {
 }
 
 async function validateExistingToken() {
-  const existingKey = (urlToken || getApiKey()).trim();
-  if (!existingKey) {
-    return;
-  }
-
   loading.value = true;
   errorMsg.value = "";
   try {
-    const res = await dashboardFetch(`${getBaseUrlValue()}/api/sessions`, {
-      headers: { Authorization: `Bearer ${existingKey}` },
-    });
-
-    if (res.ok) {
-      setApiKey(existingKey);
+    const authenticated = urlToken.trim()
+      ? await exchangeDashboardSession(urlToken)
+      : await restoreDashboardSession();
+    if (authenticated) {
       router.replace(loginTarget());
       return;
     }
-
-    const body = await res.text().catch(() => "");
-    handleDashboardAuthFailure(res.status, body);
     clearApiKey();
     token.value = "";
+    if (urlToken.trim()) {
+      errorMsg.value = t("login.invalidToken");
+    }
   } catch {
     clearApiKey();
     token.value = "";
+    errorMsg.value = t("login.connectionFailed");
   } finally {
     loading.value = false;
   }
@@ -64,9 +58,7 @@ async function tryBootstrapDashboardToken(key: string) {
 }
 
 onMounted(async () => {
-  if (urlToken || hasApiKey()) {
-    await validateExistingToken();
-  }
+  await validateExistingToken();
 });
 
 async function handleLogin() {
@@ -80,26 +72,16 @@ async function handleLogin() {
   errorMsg.value = "";
 
   try {
-    const res = await dashboardFetch(`${getBaseUrlValue()}/api/sessions`, {
-      headers: { Authorization: `Bearer ${key}` },
-    });
-
-    if (!res.ok) {
-      if (res.status === 401 && await tryBootstrapDashboardToken(key)) {
-        setApiKey(key);
+    if (!await exchangeDashboardSession(key)) {
+      if (await tryBootstrapDashboardToken(key) && await exchangeDashboardSession(key)) {
         router.replace(loginTarget());
         return;
       }
-      const body = await res.text().catch(() => "");
       errorMsg.value = t("login.invalidToken");
-      if (res.status !== 401 && handleDashboardAuthFailure(res.status, body)) {
-        errorMsg.value = t("login.connectionFailed");
-      }
       loading.value = false;
       return;
     }
 
-    setApiKey(key);
     router.replace(loginTarget());
   } catch {
     errorMsg.value = t("login.connectionFailed");

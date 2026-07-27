@@ -1,4 +1,4 @@
-import { dashboardFetch, getApiKey, getBaseUrlValue, request } from '../client'
+import { dashboardFetch, getBaseUrlValue, request } from '../client'
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
@@ -77,16 +77,9 @@ export async function uploadChatFiles(files: File[], profile?: string): Promise<
     formData.append('file', file, file.name)
   }
 
-  const headers = new Headers()
-  const apiKey = getApiKey()
-  if (apiKey) {
-    headers.set('Authorization', `Bearer ${apiKey}`)
-  }
-
   const res = await dashboardFetch(`${getBaseUrlValue()}${withProfile('/api/chat/uploads', profile)}`, {
     method: 'POST',
     body: formData,
-    headers,
   })
 
   if (!res.ok) {
@@ -119,18 +112,11 @@ export function streamRunEvents(
   profile?: string,
 ) {
   const controller = new AbortController()
-  const headers = new Headers()
-  const apiKey = getApiKey()
-  if (apiKey) {
-    headers.set('Authorization', `Bearer ${apiKey}`)
-  }
-
   void (async () => {
     try {
       const eventsPath = withProfile(`/api/chat/runs/${encodeURIComponent(runId)}/events`, profile)
       const res = await dashboardFetch(`${getBaseUrlValue()}${eventsPath}`, {
         method: 'GET',
-        headers,
         signal: controller.signal,
       })
 

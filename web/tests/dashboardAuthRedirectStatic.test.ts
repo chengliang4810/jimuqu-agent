@@ -5,6 +5,7 @@ const client = readFileSync(new URL('../src/api/client.ts', import.meta.url), 'u
 const authError = readFileSync(new URL('../src/api/dashboardAuthError.ts', import.meta.url), 'utf8')
 const chatApi = readFileSync(new URL('../src/api/solonclaw/chat.ts', import.meta.url), 'utf8')
 const loginView = readFileSync(new URL('../src/views/LoginView.vue', import.meta.url), 'utf8')
+const sessionAuth = readFileSync(new URL('../src/api/sessionAuth.ts', import.meta.url), 'utf8')
 
 assert.ok(
   authError.includes('Forbidden dashboard request origin'),
@@ -35,6 +36,8 @@ assert.ok(
   'chat event streams should use dashboardFetch so auth failures redirect to login',
 )
 assert.ok(
-  loginView.includes('dashboardFetch(`${getBaseUrlValue()}/api/sessions`'),
-  'login validation should use dashboardFetch so stale stored tokens are cleared consistently',
+  loginView.includes('await exchangeDashboardSession(urlToken)')
+    && loginView.includes('await restoreDashboardSession()')
+    && sessionAuth.includes("const SESSION_ENDPOINT = '/api/auth/session'"),
+  'login validation should use the shared short-session exchange and restore boundary',
 )

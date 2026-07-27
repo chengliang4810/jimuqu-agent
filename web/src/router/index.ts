@@ -1,5 +1,10 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import { hasApiKey } from '@/api/client'
+import {
+  exchangeDashboardSession,
+  getInjectedToken,
+  hasApiKey,
+  restoreDashboardSession,
+} from '@/api/sessionAuth'
 
 const STALE_CHUNK_RELOAD_KEY = 'solonclaw_stale_chunk_reload_at'
 let staleChunkReloaded = false
@@ -110,15 +115,28 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   // Public pages don't need auth
   if (to.meta.public) {
     next()
     return
   }
 
-  // All other pages require token
-  if (!hasApiKey()) {
+  if (hasApiKey()) {
+    next()
+    return
+  }
+
+  const injectedToken = getInjectedToken().trim()
+  let authenticated = false
+  try {
+    authenticated = injectedToken
+      ? await exchangeDashboardSession(injectedToken)
+      : await restoreDashboardSession()
+  } catch {
+    authenticated = false
+  }
+  if (!authenticated) {
     next({ name: 'login', query: { redirect: to.fullPath } })
     return
   }
