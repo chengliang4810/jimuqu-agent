@@ -355,7 +355,9 @@ final class DashboardDiagnosticTestSupport {
         }
 
         @Override
-        public void markStaleRuns(long beforeEpochMillis, long now) {}
+        public List<AgentRunRecord> markStaleRuns(long beforeEpochMillis, long now, int limit) {
+            return Collections.emptyList();
+        }
 
         @Override
         public List<AgentRunRecord> listActiveBySource(String sourceKey, int limit) {

@@ -86,12 +86,15 @@ public interface AgentRunRepository {
     List<AgentRunRecord> listActiveBefore(long beforeEpochMillis, int limit) throws Exception;
 
     /**
-     * 标记Stale运行。
+     * 原子标记一批 Stale 运行，并返回本次实际完成状态转换的原始记录。
      *
      * @param beforeEpochMillis beforeEpochMillis 参数。
      * @param now 当前时间戳。
+     * @param limit 单批最大处理数量。
+     * @return 返回本次实际标记的运行列表。
      */
-    void markStaleRuns(long beforeEpochMillis, long now) throws Exception;
+    List<AgentRunRecord> markStaleRuns(long beforeEpochMillis, long now, int limit)
+            throws Exception;
 
     /**
      * 列出Active根据来源。

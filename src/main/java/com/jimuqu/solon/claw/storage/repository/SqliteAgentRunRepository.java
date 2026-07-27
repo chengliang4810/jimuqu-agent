@@ -266,34 +266,132 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     }
 
     /**
-     * 标记Stale运行。
+     * 在同一事务中选择、批量更新陈旧运行并写入恢复记录。
      *
-     * @param beforeEpochMillis beforeEpochMillis 参数。
-     * @param now 当前时间戳。
+     * @param beforeEpochMillis 陈旧判定截止时间。
+     * @param now 恢复记录创建时间。
+     * @param limit 单批最大处理数量。
+     * @return 返回本次实际完成状态转换的原始运行记录。
      */
     @Override
-    public void markStaleRuns(long beforeEpochMillis, long now) throws Exception {
-        List<AgentRunRecord> stale = listActiveBefore(beforeEpochMillis, 500);
-        for (AgentRunRecord record : stale) {
-            record.setStatus("recoverable");
-            record.setPhase("recovery");
-            record.setRecoverable(true);
-            record.setRecoveryHint("服务重启或长时间无 heartbeat，已标记为可恢复。");
-            record.setExitReason("stale_heartbeat");
-            record.setFinishedAt(0L);
-            saveRun(record);
+    public List<AgentRunRecord> markStaleRuns(long beforeEpochMillis, long now, int limit)
+            throws Exception {
+        Connection connection = database.openConnection();
+        boolean transactionOwner = connection.getAutoCommit();
+        try {
+            if (transactionOwner) {
+                connection.setAutoCommit(false);
+            }
+            List<AgentRunRecord> stale =
+                    listActiveBefore(
+                            connection, beforeEpochMillis, Math.max(1, Math.min(limit, 500)));
+            if (stale.isEmpty()) {
+                if (transactionOwner) {
+                    connection.commit();
+                }
+                return stale;
+            }
 
-            RunRecoveryRecord recovery = new RunRecoveryRecord();
-            recovery.setRecoveryId(com.jimuqu.solon.claw.support.IdSupport.newId());
-            recovery.setRunId(record.getRunId());
-            recovery.setSessionId(record.getSessionId());
-            recovery.setSourceKey(record.getSourceKey());
-            recovery.setRecoveryType("stale_heartbeat");
-            recovery.setStatus("recoverable");
-            recovery.setSummary(record.getRecoveryHint());
-            recovery.setCreatedAt(now);
-            saveRecovery(recovery);
+            String recoveryHint = "服务重启或长时间无 heartbeat，已标记为可恢复。";
+            StringBuilder updateSql =
+                    new StringBuilder(
+                            "update agent_runs set status = 'recoverable', phase = 'recovery', recoverable = 1, recovery_hint = ?, exit_reason = 'stale_heartbeat', finished_at = 0 where run_id in (");
+            for (int index = 0; index < stale.size(); index++) {
+                if (index > 0) {
+                    updateSql.append(',');
+                }
+                updateSql.append('?');
+            }
+            updateSql.append(
+                    ") and status in ('queued','running','waiting_approval','backgrounded','paused','interrupting') and coalesce(nullif(last_activity_at, 0), started_at) < ?");
+            PreparedStatement update = connection.prepareStatement(updateSql.toString());
+            try {
+                update.setString(1, redact(recoveryHint, 2000));
+                for (int index = 0; index < stale.size(); index++) {
+                    update.setString(index + 2, stale.get(index).getRunId());
+                }
+                update.setLong(stale.size() + 2, beforeEpochMillis);
+                int updated = update.executeUpdate();
+                if (updated != stale.size()) {
+                    throw new IllegalStateException(
+                            "陈旧运行批量更新数量不一致：expected=" + stale.size() + ", actual=" + updated);
+                }
+            } finally {
+                update.close();
+            }
+
+            PreparedStatement insertRecovery =
+                    connection.prepareStatement(
+                            "insert into run_recoveries (recovery_id, run_id, session_id, source_key, recovery_type, status, summary, payload_json, created_at, resolved_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            try {
+                for (AgentRunRecord record : stale) {
+                    insertRecovery.setString(1, com.jimuqu.solon.claw.support.IdSupport.newId());
+                    insertRecovery.setString(2, record.getRunId());
+                    insertRecovery.setString(3, record.getSessionId());
+                    insertRecovery.setString(4, record.getSourceKey());
+                    insertRecovery.setString(5, "stale_heartbeat");
+                    insertRecovery.setString(6, "recoverable");
+                    insertRecovery.setString(7, redact(recoveryHint, 2000));
+                    insertRecovery.setString(8, null);
+                    insertRecovery.setLong(9, now);
+                    insertRecovery.setLong(10, 0L);
+                    insertRecovery.addBatch();
+                }
+                insertRecovery.executeBatch();
+            } finally {
+                insertRecovery.close();
+            }
+            if (transactionOwner) {
+                connection.commit();
+            }
+            return stale;
+        } catch (Exception e) {
+            if (transactionOwner) {
+                try {
+                    connection.rollback();
+                } catch (Exception rollbackError) {
+                    e.addSuppressed(rollbackError);
+                }
+            }
+            throw e;
+        } finally {
+            if (transactionOwner) {
+                try {
+                    connection.setAutoCommit(true);
+                } catch (Exception e) {
+                    logBestEffortFailure("stale_run_transaction_reset", e);
+                }
+            }
+            connection.close();
         }
+    }
+
+    /**
+     * 使用指定连接查询陈旧活动运行，供事务内批处理复用。
+     *
+     * @param connection 当前数据库连接。
+     * @param beforeEpochMillis 陈旧判定截止时间。
+     * @param limit 单批最大返回数量。
+     * @return 返回陈旧活动运行列表。
+     */
+    private List<AgentRunRecord> listActiveBefore(
+            Connection connection, long beforeEpochMillis, int limit) throws Exception {
+        List<AgentRunRecord> records = new ArrayList<AgentRunRecord>();
+        PreparedStatement statement =
+                connection.prepareStatement(
+                        "select * from agent_runs where status in ('queued','running','waiting_approval','backgrounded','paused','interrupting') and coalesce(nullif(last_activity_at, 0), started_at) < ? order by started_at asc limit ?");
+        statement.setLong(1, beforeEpochMillis);
+        statement.setInt(2, Math.max(1, Math.min(limit, 500)));
+        ResultSet resultSet = statement.executeQuery();
+        try {
+            while (resultSet.next()) {
+                records.add(mapRun(resultSet));
+            }
+        } finally {
+            resultSet.close();
+            statement.close();
+        }
+        return records;
     }
 
     /**

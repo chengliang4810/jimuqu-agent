@@ -384,6 +384,86 @@ public class StorageRepositoryTest {
         assertToolCallCount(env, targetRun.getRunId(), 0);
     }
 
+    /** 陈旧运行应按调用方批次原子更新，并为每个运行只写一条恢复记录。 */
+    @Test
+    void shouldAtomicallyMarkExactStaleRunBatch() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        long staleAt = System.currentTimeMillis() - 120_000L;
+        for (int index = 0; index < 3; index++) {
+            AgentRunRecord run = new AgentRunRecord();
+            run.setRunId("stale-atomic-batch-" + index);
+            run.setSessionId("stale-atomic-session-" + index);
+            run.setSourceKey("MEMORY:stale-atomic:" + index);
+            run.setRunKind("scheduled");
+            run.setStatus("running");
+            run.setStartedAt(staleAt + index);
+            run.setLastActivityAt(staleAt + index);
+            env.agentRunRepository.saveRun(run);
+        }
+
+        long before = System.currentTimeMillis() - 60_000L;
+        List<AgentRunRecord> first =
+                env.agentRunRepository.markStaleRuns(before, System.currentTimeMillis(), 2);
+        List<AgentRunRecord> second =
+                env.agentRunRepository.markStaleRuns(before, System.currentTimeMillis(), 2);
+        List<AgentRunRecord> third =
+                env.agentRunRepository.markStaleRuns(before, System.currentTimeMillis(), 2);
+
+        assertThat(first).hasSize(2);
+        assertThat(second).hasSize(1);
+        assertThat(third).isEmpty();
+        for (AgentRunRecord stale : first) {
+            assertThat(env.agentRunRepository.findRun(stale.getRunId()).getStatus())
+                    .isEqualTo("recoverable");
+            assertThat(env.agentRunRepository.listRecoveries(stale.getRunId())).hasSize(1);
+        }
+        AgentRunRecord last = second.get(0);
+        assertThat(env.agentRunRepository.findRun(last.getRunId()).getStatus())
+                .isEqualTo("recoverable");
+        assertThat(env.agentRunRepository.listRecoveries(last.getRunId())).hasSize(1);
+    }
+
+    /** 恢复记录写入失败时，陈旧运行的状态更新必须随同事务回滚。 */
+    @Test
+    void shouldRollbackStaleRunWhenRecoveryInsertFails() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        long staleAt = System.currentTimeMillis() - 120_000L;
+        AgentRunRecord run = new AgentRunRecord();
+        run.setRunId("stale-atomic-rollback");
+        run.setSessionId("stale-atomic-rollback-session");
+        run.setSourceKey("MEMORY:stale-atomic-rollback:user");
+        run.setRunKind("scheduled");
+        run.setStatus("running");
+        run.setStartedAt(staleAt);
+        run.setLastActivityAt(staleAt);
+        env.agentRunRepository.saveRun(run);
+
+        Connection connection = env.sqliteDatabase.openConnection();
+        try {
+            Statement statement = connection.createStatement();
+            try {
+                statement.execute(
+                        "create trigger fail_stale_recovery before insert on run_recoveries when new.recovery_type = 'stale_heartbeat' begin select raise(abort, 'forced stale recovery failure'); end");
+            } finally {
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
+
+        Exception failure = null;
+        try {
+            env.agentRunRepository.markStaleRuns(
+                    System.currentTimeMillis() - 60_000L, System.currentTimeMillis(), 10);
+        } catch (Exception e) {
+            failure = e;
+        }
+
+        assertThat(failure).isNotNull();
+        assertThat(env.agentRunRepository.findRun(run.getRunId()).getStatus()).isEqualTo("running");
+        assertThat(env.agentRunRepository.listRecoveries(run.getRunId())).isEmpty();
+    }
+
     @Test
     void shouldClearSessionScopedSecurityStateWhenBranching() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();

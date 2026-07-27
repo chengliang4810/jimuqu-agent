@@ -44,7 +44,7 @@ public abstract class UnsupportedAgentRunRepository implements AgentRunRepositor
     }
 
     @Override
-    public void markStaleRuns(long beforeEpochMillis, long now) {
+    public List<AgentRunRecord> markStaleRuns(long beforeEpochMillis, long now, int limit) {
         throw unsupported();
     }
 

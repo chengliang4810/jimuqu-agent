@@ -2940,11 +2940,10 @@ public class AgentRunSupervisor implements AgentRunControlService {
         try {
             agentRunRepository.requeueStaleRunningMessages(before);
             while (true) {
-                List<AgentRunRecord> staleRuns = agentRunRepository.listActiveBefore(before, 200);
+                List<AgentRunRecord> staleRuns = agentRunRepository.markStaleRuns(before, now, 200);
                 if (staleRuns.isEmpty()) {
                     break;
                 }
-                agentRunRepository.markStaleRuns(before, now);
                 for (AgentRunRecord staleRun : staleRuns) {
                     String kind = StrUtil.blankToDefault(staleRun.getRunKind(), "");
                     String status = StrUtil.blankToDefault(staleRun.getStatus(), "");

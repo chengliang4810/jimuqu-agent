@@ -426,8 +426,8 @@ public class DashboardRunServiceTest {
         }
 
         @Override
-        public void markStaleRuns(long beforeEpochMillis, long now) {
-            return;
+        public List<AgentRunRecord> markStaleRuns(long beforeEpochMillis, long now, int limit) {
+            return Collections.emptyList();
         }
 
         @Override
