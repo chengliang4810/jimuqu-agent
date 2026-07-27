@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -169,6 +170,34 @@ class ProfileGatewayLifecycleServiceTest {
                                 .getDeclaredMethod("stopGateway", String.class)
                                 .getReturnType())
                 .isEqualTo(Void.TYPE);
+    }
+
+    /** 命名 Profile 后台进程只接收安全系统变量和自身 .env，default 保持原继承行为。 */
+    @Test
+    void isolatesNamedGatewayProcessEnvironment() throws Exception {
+        Path home = root.resolve("profiles/alpha");
+        write(
+                home.resolve(".env"),
+                "PROFILE_ONLY_SECRET=alpha-secret\n"
+                        + "SOLONCLAW_PROFILE=spoofed\n"
+                        + "SOLONCLAW_HOME=/spoofed\n");
+        ProfileGatewayLifecycleService service = new ProfileGatewayLifecycleService(manager, root);
+        ProcessBuilder namedBuilder = new ProcessBuilder("ignored");
+        Map<String, String> namedEnvironment = namedBuilder.environment();
+        namedEnvironment.put("PARENT_ONLY_SECRET", "must-not-leak");
+
+        service.configureProcessEnvironment(namedBuilder, "alpha", home);
+
+        assertThat(namedEnvironment)
+                .containsEntry("PROFILE_ONLY_SECRET", "alpha-secret")
+                .containsEntry("SOLONCLAW_PROFILE", "alpha")
+                .containsEntry("SOLONCLAW_HOME", home.toAbsolutePath().normalize().toString())
+                .doesNotContainKey("PARENT_ONLY_SECRET");
+
+        ProcessBuilder defaultBuilder = new ProcessBuilder("ignored");
+        defaultBuilder.environment().put("PARENT_ONLY_SECRET", "preserved");
+        service.configureProcessEnvironment(defaultBuilder, "default", root);
+        assertThat(defaultBuilder.environment()).containsEntry("PARENT_ONLY_SECRET", "preserved");
     }
 
     /** 获取一个当前可绑定的本机端口。 */

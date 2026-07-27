@@ -243,6 +243,7 @@ final class ProfileGatewayLifecycleService {
         List<String> effectiveArgs = serverArgumentsLocked(name, serverArgs);
         List<String> command = launchCommand(name, home, effectiveArgs);
         ProcessBuilder builder = new ProcessBuilder(command);
+        configureProcessEnvironment(builder, name, home);
         builder.directory(new File(System.getProperty("user.dir", ".")));
         builder.redirectErrorStream(true);
         builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
@@ -323,6 +324,26 @@ final class ProfileGatewayLifecycleService {
             }
         }
         return command;
+    }
+
+    /**
+     * 用命名 Profile 的安全环境快照替换后台网关进程环境。
+     *
+     * <p>default 网关继续继承当前进程环境；命名 Profile 只继承运行必需的系统变量，并叠加自己的 .env，避免父进程中的其他 Profile 凭据泄露到子进程。
+     *
+     * @param builder 待启动的后台网关进程。
+     * @param profile 规范化 Profile 名。
+     * @param home Profile 工作区。
+     */
+    void configureProcessEnvironment(ProcessBuilder builder, String profile, Path home) {
+        if ("default".equals(profile)) {
+            return;
+        }
+        Map<String, String> environment = ProfileEnvironmentLoader.load(home);
+        try (ProfileRuntimeScope.Scope ignored =
+                ProfileRuntimeScope.open(profile, home, environment, null)) {
+            ProfileRuntimeScope.replaceProcessEnvironment(builder.environment());
+        }
     }
 
     /** 选择显式、已持久化、配置或自动分配的 Profile 网关端口。 */
