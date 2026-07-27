@@ -255,6 +255,36 @@ public class DashboardControllerHttpTest {
         assertThat(missing.cacheControl).contains("no-store");
     }
 
+    /** 验证 Dashboard 所有主要 HTTP 返回路径都会下发浏览器安全响应头。 */
+    @Test
+    void shouldSetDashboardSecurityHeadersAcrossResponsePaths() throws Exception {
+        HttpResult index = request("GET", "/index.html", null, null);
+        HttpResult asset = request("GET", "/assets/cache-header-test.abc123.js", null, null);
+        HttpResult preflight = request("OPTIONS", "/api/workspace-config", null, null);
+        HttpResult unauthorized = request("GET", "/api/workspace-config", null, null);
+        HttpResult authorized = request("GET", "/api/workspace-config", null, DASHBOARD_TEST_TOKEN);
+        Map<String, String> rejectedHeaders = new LinkedHashMap<String, String>();
+        rejectedHeaders.put("Origin", "https://evil.example.com");
+        HttpResult forbidden =
+                request(
+                        "POST",
+                        "/api/workspace-config",
+                        "{}",
+                        DASHBOARD_TEST_TOKEN,
+                        rejectedHeaders);
+
+        assertThat(index.status).isEqualTo(200);
+        assertThat(asset.status).isEqualTo(200);
+        assertThat(preflight.status).isEqualTo(204);
+        assertThat(unauthorized.status).isEqualTo(401);
+        assertThat(authorized.status).isEqualTo(200);
+        assertThat(forbidden.status).isEqualTo(403);
+        for (HttpResult result :
+                new HttpResult[] {index, asset, preflight, unauthorized, authorized, forbidden}) {
+            assertDashboardSecurityHeaders(result);
+        }
+    }
+
     @Test
     void shouldReturnStructuredErrorForInvalidDiagnosticsJson() throws Exception {
         String token = DASHBOARD_TEST_TOKEN;
@@ -2995,8 +3025,9 @@ public class DashboardControllerHttpTest {
         java.io.InputStream stream =
                 status >= 400 ? connection.getErrorStream() : connection.getInputStream();
         String cacheControl = connection.getHeaderField("Cache-Control");
+        Map<String, String> responseHeaders = dashboardSecurityHeaders(connection);
         if (stream == null) {
-            return new HttpResult(status, "", cacheControl);
+            return new HttpResult(status, "", cacheControl, responseHeaders);
         }
         BufferedReader reader =
                 new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
@@ -3006,11 +3037,57 @@ public class DashboardControllerHttpTest {
             while ((line = reader.readLine()) != null) {
                 buffer.append(line).append('\n');
             }
-            return new HttpResult(status, buffer.toString(), cacheControl);
+            return new HttpResult(status, buffer.toString(), cacheControl, responseHeaders);
         } finally {
             reader.close();
             connection.disconnect();
         }
+    }
+
+    /**
+     * 从真实 HTTP 响应中提取 Dashboard 浏览器安全响应头。
+     *
+     * @param connection 已完成请求的 HTTP 连接。
+     * @return 按响应头名称保存的安全响应头。
+     */
+    private static Map<String, String> dashboardSecurityHeaders(HttpURLConnection connection) {
+        Map<String, String> headers = new LinkedHashMap<String, String>();
+        for (String name :
+                new String[] {
+                    "Content-Security-Policy",
+                    "X-Content-Type-Options",
+                    "X-Frame-Options",
+                    "Referrer-Policy",
+                    "Permissions-Policy"
+                }) {
+            headers.put(name, connection.getHeaderField(name));
+        }
+        return headers;
+    }
+
+    /**
+     * 断言真实 HTTP 响应携带完整的 Dashboard 浏览器安全策略。
+     *
+     * @param result Dashboard HTTP 响应。
+     */
+    private static void assertDashboardSecurityHeaders(HttpResult result) {
+        assertThat(result.responseHeaders.get("Content-Security-Policy"))
+                .isEqualTo(
+                        "default-src 'self'; "
+                                + "script-src 'self'; "
+                                + "style-src 'self' 'unsafe-inline'; "
+                                + "img-src 'self' data: blob: http: https:; "
+                                + "media-src 'self' data: blob:; "
+                                + "connect-src 'self' ws: wss:; "
+                                + "worker-src 'self' blob:; "
+                                + "object-src 'none'; "
+                                + "base-uri 'self'; "
+                                + "frame-ancestors 'none'");
+        assertThat(result.responseHeaders.get("X-Content-Type-Options")).isEqualTo("nosniff");
+        assertThat(result.responseHeaders.get("X-Frame-Options")).isEqualTo("DENY");
+        assertThat(result.responseHeaders.get("Referrer-Policy")).isEqualTo("no-referrer");
+        assertThat(result.responseHeaders.get("Permissions-Policy"))
+                .isEqualTo("camera=(), geolocation=(), microphone=()");
     }
 
     private static HttpResult requestPatch(
@@ -3190,14 +3267,34 @@ public class DashboardControllerHttpTest {
         private final String body;
         private final String cacheControl;
 
+        /** Dashboard 浏览器安全响应头。 */
+        private final Map<String, String> responseHeaders;
+
         private HttpResult(int status, String body) {
             this(status, body, "");
         }
 
         private HttpResult(int status, String body, String cacheControl) {
+            this(status, body, cacheControl, java.util.Collections.<String, String>emptyMap());
+        }
+
+        /**
+         * 创建包含响应体、缓存策略和安全响应头的 HTTP 测试结果。
+         *
+         * @param status HTTP 状态码。
+         * @param body HTTP 响应体。
+         * @param cacheControl 缓存控制响应头。
+         * @param responseHeaders Dashboard 浏览器安全响应头。
+         */
+        private HttpResult(
+                int status, String body, String cacheControl, Map<String, String> responseHeaders) {
             this.status = status;
             this.body = body;
             this.cacheControl = cacheControl == null ? "" : cacheControl;
+            this.responseHeaders =
+                    responseHeaders == null
+                            ? java.util.Collections.<String, String>emptyMap()
+                            : responseHeaders;
         }
     }
 

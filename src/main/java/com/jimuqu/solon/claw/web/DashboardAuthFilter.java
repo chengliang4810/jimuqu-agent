@@ -9,6 +9,19 @@ import org.noear.solon.core.handle.FilterChain;
 
 /** Dashboard API token 校验与严格同源 CORS 过滤器。 */
 public class DashboardAuthFilter implements Filter {
+    /** Dashboard 页面允许的最小内容来源策略。 */
+    private static final String CONTENT_SECURITY_POLICY =
+            "default-src 'self'; "
+                    + "script-src 'self'; "
+                    + "style-src 'self' 'unsafe-inline'; "
+                    + "img-src 'self' data: blob: http: https:; "
+                    + "media-src 'self' data: blob:; "
+                    + "connect-src 'self' ws: wss:; "
+                    + "worker-src 'self' blob:; "
+                    + "object-src 'none'; "
+                    + "base-uri 'self'; "
+                    + "frame-ancestors 'none'";
+
     /** 注入认证服务，用于调用对应业务能力。 */
     private final DashboardAuthService authService;
 
@@ -29,6 +42,7 @@ public class DashboardAuthFilter implements Filter {
      */
     @Override
     public void doFilter(Context ctx, FilterChain chain) throws Throwable {
+        applySecurityHeaders(ctx);
         authService.applyCors(ctx);
 
         if ("OPTIONS".equalsIgnoreCase(ctx.method())) {
@@ -67,6 +81,19 @@ public class DashboardAuthFilter implements Filter {
             }
             throw e;
         }
+    }
+
+    /**
+     * 为 Dashboard 的页面、静态资源和 API 统一设置浏览器安全响应头。
+     *
+     * @param ctx 当前请求上下文。
+     */
+    private void applySecurityHeaders(Context ctx) {
+        ctx.headerSet("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+        ctx.headerSet("X-Content-Type-Options", "nosniff");
+        ctx.headerSet("X-Frame-Options", "DENY");
+        ctx.headerSet("Referrer-Policy", "no-referrer");
+        ctx.headerSet("Permissions-Policy", "camera=(), geolocation=(), microphone=()");
     }
 
     /**

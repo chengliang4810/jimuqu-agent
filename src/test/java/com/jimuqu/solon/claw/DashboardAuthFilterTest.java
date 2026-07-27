@@ -32,6 +32,7 @@ public class DashboardAuthFilterTest {
 
         assertThat(context.status()).isEqualTo(204);
         assertThat(invoked).isFalse();
+        assertSecurityHeaders(context);
     }
 
     @Test
@@ -52,6 +53,7 @@ public class DashboardAuthFilterTest {
                 });
 
         assertThat(context.status()).isEqualTo(200);
+        assertSecurityHeaders(context);
     }
 
     @Test
@@ -137,6 +139,7 @@ public class DashboardAuthFilterTest {
 
         assertThat(context.status()).isEqualTo(403);
         assertThat(invoked).isFalse();
+        assertSecurityHeaders(context);
     }
 
     @Test
@@ -158,6 +161,7 @@ public class DashboardAuthFilterTest {
 
         assertThat(context.status()).isEqualTo(401);
         assertThat(invoked).isFalse();
+        assertSecurityHeaders(context);
     }
 
     @Test
@@ -203,6 +207,7 @@ public class DashboardAuthFilterTest {
 
         assertThat(context.status()).isEqualTo(200);
         assertThat(invoked).isTrue();
+        assertSecurityHeaders(context);
     }
 
     @Test
@@ -258,6 +263,31 @@ public class DashboardAuthFilterTest {
         AppConfig config = new AppConfig();
         config.getDashboard().setAccessToken("test-token");
         return new DashboardAuthFilter(new DashboardAuthService(config));
+    }
+
+    /**
+     * 断言所有 Dashboard 响应路径都携带完整的浏览器安全响应头。
+     *
+     * @param context 已经过滤器处理的测试上下文。
+     */
+    private static void assertSecurityHeaders(Context context) {
+        assertThat(context.headerOfResponse("Content-Security-Policy"))
+                .isEqualTo(
+                        "default-src 'self'; "
+                                + "script-src 'self'; "
+                                + "style-src 'self' 'unsafe-inline'; "
+                                + "img-src 'self' data: blob: http: https:; "
+                                + "media-src 'self' data: blob:; "
+                                + "connect-src 'self' ws: wss:; "
+                                + "worker-src 'self' blob:; "
+                                + "object-src 'none'; "
+                                + "base-uri 'self'; "
+                                + "frame-ancestors 'none'");
+        assertThat(context.headerOfResponse("X-Content-Type-Options")).isEqualTo("nosniff");
+        assertThat(context.headerOfResponse("X-Frame-Options")).isEqualTo("DENY");
+        assertThat(context.headerOfResponse("Referrer-Policy")).isEqualTo("no-referrer");
+        assertThat(context.headerOfResponse("Permissions-Policy"))
+                .isEqualTo("camera=(), geolocation=(), microphone=()");
     }
 
     /** 测试用请求上下文，最小化提供过滤器依赖的请求信息。 */
