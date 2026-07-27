@@ -9,18 +9,15 @@ import com.jimuqu.solon.claw.core.model.SubagentRunRecord;
 import com.jimuqu.solon.claw.core.model.ToolCallRecord;
 import com.jimuqu.solon.claw.core.repository.AgentRunRepository;
 import com.jimuqu.solon.claw.support.SecretRedactor;
-import com.jimuqu.solon.claw.support.StructuredMetadataSupport;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** SQLite Agent run 仓储实现。 */
-@RequiredArgsConstructor
 public class SqliteAgentRunRepository implements AgentRunRepository {
     /** Agent run 仓储日志仅记录可降级维护失败的操作名和异常类型，避免泄露会话内容或工具结果。 */
     private static final Logger log = LoggerFactory.getLogger(SqliteAgentRunRepository.class);
@@ -36,6 +33,43 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
 
     /** 记录SQLiteAgent运行中的数据库。 */
     private final SqliteDatabase database;
+
+    /** 运行事件叶子存储。 */
+    private final SqliteRunEventStore runEventStore;
+
+    /** 运行控制命令叶子存储。 */
+    private final SqliteRunControlStore runControlStore;
+
+    /** 排队运行消息叶子存储。 */
+    private final SqliteQueuedRunMessageStore queuedRunMessageStore;
+
+    /** 工具调用存储。 */
+    private final SqliteToolCallStore toolCallStore;
+
+    /** 子代理运行叶子存储。 */
+    private final SqliteSubagentRunStore subagentRunStore;
+
+    /** 运行恢复记录叶子存储。 */
+    private final SqliteRunRecoveryStore runRecoveryStore;
+
+    /** Agent 运行跨表清理器。 */
+    private final SqliteAgentRunPruner runPruner;
+
+    /**
+     * 创建 SQLite Agent 运行仓储门面。
+     *
+     * @param database SQLite 数据库连接入口。
+     */
+    public SqliteAgentRunRepository(SqliteDatabase database) {
+        this.database = database;
+        this.runEventStore = new SqliteRunEventStore(database);
+        this.runControlStore = new SqliteRunControlStore(database);
+        this.queuedRunMessageStore = new SqliteQueuedRunMessageStore(database);
+        this.toolCallStore = new SqliteToolCallStore(database);
+        this.subagentRunStore = new SqliteSubagentRunStore(database);
+        this.runRecoveryStore = new SqliteRunRecoveryStore(database);
+        this.runPruner = new SqliteAgentRunPruner(database);
+    }
 
     /**
      * 保存运行。
@@ -523,30 +557,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public void appendEvent(AgentRunEventRecord event) throws Exception {
-        Connection connection = database.openConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "insert into agent_run_events (event_id, run_id, session_id, source_key, event_type, phase, severity, attempt_no, provider, model, summary, metadata_json, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            statement.setString(1, event.getEventId());
-            statement.setString(2, event.getRunId());
-            statement.setString(3, event.getSessionId());
-            statement.setString(4, event.getSourceKey());
-            statement.setString(5, event.getEventType());
-            statement.setString(6, event.getPhase());
-            statement.setString(7, event.getSeverity());
-            statement.setInt(8, event.getAttemptNo());
-            statement.setString(9, event.getProvider());
-            statement.setString(10, event.getModel());
-            statement.setString(11, redact(event.getSummary(), 1000));
-            statement.setString(12, StructuredMetadataSupport.redactJson(event.getMetadataJson()));
-            statement.setLong(13, event.getCreatedAt());
-            statement.executeUpdate();
-            appendEventFts(connection, event);
-            statement.close();
-        } finally {
-            connection.close();
-        }
+        runEventStore.appendEvent(event);
     }
 
     /**
@@ -557,26 +568,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public List<AgentRunEventRecord> listEvents(String runId) throws Exception {
-        List<AgentRunEventRecord> events = new ArrayList<AgentRunEventRecord>();
-        Connection connection = database.openReadConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "select * from agent_run_events where run_id = ? order by created_at asc");
-            statement.setString(1, runId);
-            ResultSet resultSet = statement.executeQuery();
-            try {
-                while (resultSet.next()) {
-                    events.add(mapEvent(resultSet));
-                }
-            } finally {
-                resultSet.close();
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
-        return events;
+        return runEventStore.listEvents(runId);
     }
 
     /**
@@ -601,59 +593,8 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
             long timeTo,
             int limit)
             throws Exception {
-        List<AgentRunEventRecord> events = new ArrayList<AgentRunEventRecord>();
-        Connection connection = database.openReadConnection();
-        try {
-            StringBuilder sql = new StringBuilder("select e.* from agent_run_events e");
-            List<Object> args = new ArrayList<Object>();
-            sql.append(" where 1 = 1");
-            if (sourceKey != null && sourceKey.trim().length() > 0) {
-                sql.append(" and e.source_key = ?");
-                args.add(sourceKey);
-            }
-            if (sessionId != null && sessionId.trim().length() > 0) {
-                sql.append(" and e.session_id = ?");
-                args.add(sessionId);
-            }
-            if (runId != null && runId.trim().length() > 0) {
-                sql.append(" and e.run_id = ?");
-                args.add(runId);
-            }
-            if (timeFrom > 0) {
-                sql.append(" and e.created_at >= ?");
-                args.add(Long.valueOf(timeFrom));
-            }
-            if (timeTo > 0) {
-                sql.append(" and e.created_at <= ?");
-                args.add(Long.valueOf(timeTo));
-            }
-            if (query != null && query.trim().length() > 0) {
-                sql.append(
-                        " and (lower(coalesce(e.event_type, '')) like ?"
-                                + " or lower(coalesce(e.summary, '')) like ?"
-                                + " or lower(coalesce(e.metadata_json, '')) like ?)");
-                String pattern = "%" + query.trim().toLowerCase(java.util.Locale.ROOT) + "%";
-                args.add(pattern);
-                args.add(pattern);
-                args.add(pattern);
-            }
-            sql.append(" order by e.created_at desc limit ?");
-            args.add(Math.max(1, Math.min(limit <= 0 ? 20 : limit, 200)));
-            PreparedStatement statement = connection.prepareStatement(sql.toString());
-            bindArgs(statement, args);
-            ResultSet resultSet = statement.executeQuery();
-            try {
-                while (resultSet.next()) {
-                    events.add(mapEvent(resultSet));
-                }
-            } finally {
-                resultSet.close();
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
-        return events;
+        return runEventStore.searchEvents(
+                sourceKey, sessionId, runId, query, timeFrom, timeTo, limit);
     }
 
     /**
@@ -663,24 +604,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public void saveRunControlCommand(RunControlCommand command) throws Exception {
-        Connection connection = database.openConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "insert or replace into run_control_commands (command_id, run_id, source_key, command, payload_json, status, created_at, handled_at) values (?, ?, ?, ?, ?, ?, ?, ?)");
-            statement.setString(1, command.getCommandId());
-            statement.setString(2, command.getRunId());
-            statement.setString(3, command.getSourceKey());
-            statement.setString(4, command.getCommand());
-            statement.setString(5, command.getPayloadJson());
-            statement.setString(6, command.getStatus());
-            statement.setLong(7, command.getCreatedAt());
-            statement.setLong(8, command.getHandledAt());
-            statement.executeUpdate();
-            statement.close();
-        } finally {
-            connection.close();
-        }
+        runControlStore.save(command);
     }
 
     /**
@@ -691,26 +615,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public List<RunControlCommand> listRunControlCommands(String runId) throws Exception {
-        List<RunControlCommand> records = new ArrayList<RunControlCommand>();
-        Connection connection = database.openReadConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "select * from run_control_commands where run_id = ? order by created_at asc");
-            statement.setString(1, runId);
-            ResultSet resultSet = statement.executeQuery();
-            try {
-                while (resultSet.next()) {
-                    records.add(mapRunControlCommand(resultSet));
-                }
-            } finally {
-                resultSet.close();
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
-        return records;
+        return runControlStore.list(runId);
     }
 
     /**
@@ -723,23 +628,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public RunControlCommand findLatestPendingCommand(String runId, String command)
             throws Exception {
-        Connection connection = database.openReadConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "select * from run_control_commands where run_id = ? and command = ? and status = 'pending' order by created_at desc limit 1");
-            statement.setString(1, runId);
-            statement.setString(2, command);
-            ResultSet resultSet = statement.executeQuery();
-            try {
-                return resultSet.next() ? mapRunControlCommand(resultSet) : null;
-            } finally {
-                resultSet.close();
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
+        return runControlStore.findLatestPending(runId, command);
     }
 
     /**
@@ -752,19 +641,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public void markRunControlCommandHandled(String commandId, String status, long handledAt)
             throws Exception {
-        Connection connection = database.openConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "update run_control_commands set status = ?, handled_at = ? where command_id = ?");
-            statement.setString(1, status);
-            statement.setLong(2, handledAt);
-            statement.setString(3, commandId);
-            statement.executeUpdate();
-            statement.close();
-        } finally {
-            connection.close();
-        }
+        runControlStore.markHandled(commandId, status, handledAt);
     }
 
     /**
@@ -774,28 +651,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public void saveQueuedMessage(QueuedRunMessage message) throws Exception {
-        Connection connection = database.openConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "insert or replace into queued_run_messages (queue_id, run_id, session_id, source_key, message_text, message_json, status, busy_policy, created_at, started_at, finished_at, error) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            statement.setString(1, message.getQueueId());
-            statement.setString(2, message.getRunId());
-            statement.setString(3, message.getSessionId());
-            statement.setString(4, message.getSourceKey());
-            statement.setString(5, message.getMessageText());
-            statement.setString(6, message.getMessageJson());
-            statement.setString(7, message.getStatus());
-            statement.setString(8, message.getBusyPolicy());
-            statement.setLong(9, message.getCreatedAt());
-            statement.setLong(10, message.getStartedAt());
-            statement.setLong(11, message.getFinishedAt());
-            statement.setString(12, redact(message.getError(), 2000));
-            statement.executeUpdate();
-            statement.close();
-        } finally {
-            connection.close();
-        }
+        queuedRunMessageStore.save(message);
     }
 
     /**
@@ -808,23 +664,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     @Override
     public QueuedRunMessage findNextQueuedMessage(String sourceKey, String sessionId)
             throws Exception {
-        Connection connection = database.openReadConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "select * from queued_run_messages where source_key = ? and session_id = ? and status = 'queued' order by created_at asc limit 1");
-            statement.setString(1, sourceKey);
-            statement.setString(2, sessionId);
-            ResultSet resultSet = statement.executeQuery();
-            try {
-                return resultSet.next() ? mapQueuedMessage(resultSet) : null;
-            } finally {
-                resultSet.close();
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
+        return queuedRunMessageStore.findNext(sourceKey, sessionId);
     }
 
     /**
@@ -835,22 +675,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public QueuedRunMessage findNextQueuedMessageBySourceKey(String sourceKey) throws Exception {
-        Connection connection = database.openReadConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "select * from queued_run_messages where source_key = ? and status = 'queued' order by created_at asc limit 1");
-            statement.setString(1, sourceKey);
-            ResultSet resultSet = statement.executeQuery();
-            try {
-                return resultSet.next() ? mapQueuedMessage(resultSet) : null;
-            } finally {
-                resultSet.close();
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
+        return queuedRunMessageStore.findNextBySourceKey(sourceKey);
     }
 
     /**
@@ -862,23 +687,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public int countQueuedMessages(String sourceKey, String sessionId) throws Exception {
-        Connection connection = database.openReadConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "select count(*) from queued_run_messages where source_key = ? and session_id = ? and status = 'queued'");
-            statement.setString(1, sourceKey);
-            statement.setString(2, sessionId);
-            ResultSet resultSet = statement.executeQuery();
-            try {
-                return resultSet.next() ? resultSet.getInt(1) : 0;
-            } finally {
-                resultSet.close();
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
+        return queuedRunMessageStore.countQueued(sourceKey, sessionId);
     }
 
     /**
@@ -900,47 +709,13 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     public boolean markQueuedMessage(
             String queueId, String expectedStatus, String status, long timestamp, String error)
             throws Exception {
-        Connection connection = database.openConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "update queued_run_messages set status = ?, started_at = case when ? = 'running' then ? else started_at end, finished_at = case when ? in ('success','failed','cancelled') then ? else finished_at end, error = ? where queue_id = ? and (? is null or status = ?)");
-            statement.setString(1, status);
-            statement.setString(2, status);
-            statement.setLong(3, timestamp);
-            statement.setString(4, status);
-            statement.setLong(5, timestamp);
-            statement.setString(6, redact(error, 2000));
-            statement.setString(7, queueId);
-            statement.setString(8, expectedStatus);
-            statement.setString(9, expectedStatus);
-            try {
-                return statement.executeUpdate() == 1;
-            } finally {
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
+        return queuedRunMessageStore.mark(queueId, expectedStatus, status, timestamp, error);
     }
 
     /** 将超过恢复阈值的 running 队列项退回 queued，并清理上次执行痕迹。 */
     @Override
     public int requeueStaleRunningMessages(long beforeEpochMillis) throws Exception {
-        Connection connection = database.openConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "update queued_run_messages set status = 'queued', started_at = 0, finished_at = 0, error = null where status = 'running' and coalesce(nullif(started_at, 0), created_at) < ?");
-            statement.setLong(1, beforeEpochMillis);
-            try {
-                return statement.executeUpdate();
-            } finally {
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
+        return queuedRunMessageStore.requeueStaleRunning(beforeEpochMillis);
     }
 
     /**
@@ -950,88 +725,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public void saveToolCall(ToolCallRecord record) throws Exception {
-        Connection connection = database.openConnection();
-        boolean transactionOwner = connection.getAutoCommit();
-        try {
-            if (transactionOwner) {
-                connection.setAutoCommit(false);
-            }
-            String previousRunId = null;
-            String previousStatus = null;
-            PreparedStatement previousStatement =
-                    connection.prepareStatement(
-                            "select run_id, status from tool_calls where tool_call_id = ?");
-            previousStatement.setString(1, record.getToolCallId());
-            ResultSet previousResultSet = previousStatement.executeQuery();
-            try {
-                if (previousResultSet.next()) {
-                    previousRunId = previousResultSet.getString("run_id");
-                    previousStatus = previousResultSet.getString("status");
-                }
-            } finally {
-                previousResultSet.close();
-                previousStatement.close();
-            }
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "insert into tool_calls (tool_call_id, run_id, session_id, source_key, tool_name, status, args_preview, result_preview, result_ref, error, read_only, interruptible, side_effecting, result_indexable, output_limit_bytes, result_size_bytes, execution_policy, started_at, finished_at, duration_ms) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-                                    + "on conflict(tool_call_id) do update set "
-                                    + "run_id=excluded.run_id, session_id=excluded.session_id, source_key=excluded.source_key, tool_name=excluded.tool_name, "
-                                    + "status=excluded.status, args_preview=excluded.args_preview, result_preview=excluded.result_preview, result_ref=excluded.result_ref, error=excluded.error, "
-                                    + "read_only=excluded.read_only, interruptible=excluded.interruptible, side_effecting=excluded.side_effecting, result_indexable=excluded.result_indexable, "
-                                    + "output_limit_bytes=excluded.output_limit_bytes, result_size_bytes=excluded.result_size_bytes, execution_policy=excluded.execution_policy, "
-                                    + "started_at=excluded.started_at, finished_at=excluded.finished_at, duration_ms=excluded.duration_ms");
-            statement.setString(1, record.getToolCallId());
-            statement.setString(2, record.getRunId());
-            statement.setString(3, record.getSessionId());
-            statement.setString(4, record.getSourceKey());
-            statement.setString(5, record.getToolName());
-            statement.setString(6, record.getStatus());
-            statement.setString(7, redact(record.getArgsPreview(), 8000));
-            statement.setString(8, redact(record.getResultPreview(), 8000));
-            statement.setString(9, redact(record.getResultRef(), 1000));
-            statement.setString(10, redact(record.getError(), 2000));
-            statement.setInt(11, record.isReadOnly() ? 1 : 0);
-            statement.setInt(12, record.isInterruptible() ? 1 : 0);
-            statement.setInt(13, record.isSideEffecting() ? 1 : 0);
-            statement.setInt(14, record.isResultIndexable() ? 1 : 0);
-            statement.setInt(15, record.getOutputLimitBytes());
-            statement.setLong(16, record.getResultSizeBytes());
-            statement.setString(17, record.getExecutionPolicy());
-            statement.setLong(18, record.getStartedAt());
-            statement.setLong(19, record.getFinishedAt());
-            statement.setLong(20, record.getDurationMs());
-            statement.executeUpdate();
-            statement.close();
-            updateToolCallCount(
-                    connection,
-                    previousRunId,
-                    previousStatus,
-                    record.getRunId(),
-                    record.getStatus());
-            appendToolResultFts(connection, record);
-            if (transactionOwner) {
-                connection.commit();
-            }
-        } catch (Exception e) {
-            if (transactionOwner) {
-                try {
-                    connection.rollback();
-                } catch (Exception rollbackError) {
-                    e.addSuppressed(rollbackError);
-                }
-            }
-            throw e;
-        } finally {
-            if (transactionOwner) {
-                try {
-                    connection.setAutoCommit(true);
-                } catch (Exception e) {
-                    logBestEffortFailure("tool_call_transaction_reset", e);
-                }
-            }
-            connection.close();
-        }
+        toolCallStore.save(record);
     }
 
     /**
@@ -1042,26 +736,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public List<ToolCallRecord> listToolCalls(String runId) throws Exception {
-        List<ToolCallRecord> records = new ArrayList<ToolCallRecord>();
-        Connection connection = database.openReadConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "select * from tool_calls where run_id = ? order by started_at asc");
-            statement.setString(1, runId);
-            ResultSet resultSet = statement.executeQuery();
-            try {
-                while (resultSet.next()) {
-                    records.add(mapToolCall(resultSet));
-                }
-            } finally {
-                resultSet.close();
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
-        return records;
+        return toolCallStore.list(runId);
     }
 
     /**
@@ -1088,64 +763,8 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
             long timeTo,
             int limit)
             throws Exception {
-        List<ToolCallRecord> records = new ArrayList<ToolCallRecord>();
-        Connection connection = database.openReadConnection();
-        try {
-            StringBuilder sql = new StringBuilder("select * from tool_calls where 1 = 1");
-            List<Object> args = new ArrayList<Object>();
-            if (sourceKey != null && sourceKey.trim().length() > 0) {
-                sql.append(" and source_key = ?");
-                args.add(sourceKey);
-            }
-            if (sessionId != null && sessionId.trim().length() > 0) {
-                sql.append(" and session_id = ?");
-                args.add(sessionId);
-            }
-            if (runId != null && runId.trim().length() > 0) {
-                sql.append(" and run_id = ?");
-                args.add(runId);
-            }
-            if (toolName != null && toolName.trim().length() > 0) {
-                sql.append(" and tool_name = ?");
-                args.add(toolName);
-            }
-            if (timeFrom > 0) {
-                sql.append(" and started_at >= ?");
-                args.add(Long.valueOf(timeFrom));
-            }
-            if (timeTo > 0) {
-                sql.append(" and started_at <= ?");
-                args.add(Long.valueOf(timeTo));
-            }
-            if (query != null && query.trim().length() > 0) {
-                sql.append(
-                        " and (lower(coalesce(tool_name, '')) like ?"
-                                + " or lower(coalesce(args_preview, '')) like ?"
-                                + " or lower(coalesce(result_preview, '')) like ?"
-                                + " or lower(coalesce(error, '')) like ?)");
-                String pattern = "%" + query.trim().toLowerCase(java.util.Locale.ROOT) + "%";
-                args.add(pattern);
-                args.add(pattern);
-                args.add(pattern);
-                args.add(pattern);
-            }
-            sql.append(" order by started_at desc limit ?");
-            args.add(Math.max(1, Math.min(limit <= 0 ? 20 : limit, 200)));
-            PreparedStatement statement = connection.prepareStatement(sql.toString());
-            bindArgs(statement, args);
-            ResultSet resultSet = statement.executeQuery();
-            try {
-                while (resultSet.next()) {
-                    records.add(mapToolCall(resultSet));
-                }
-            } finally {
-                resultSet.close();
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
-        return records;
+        return toolCallStore.search(
+                sourceKey, sessionId, runId, toolName, query, timeFrom, timeTo, limit);
     }
 
     /**
@@ -1155,34 +774,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public void saveSubagentRun(SubagentRunRecord record) throws Exception {
-        Connection connection = database.openConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "insert or replace into subagent_runs (subagent_id, parent_run_id, child_run_id, parent_source_key, child_source_key, session_id, name, goal_preview, status, active, interrupt_requested, depth, task_index, output_tail_json, error, started_at, finished_at, heartbeat_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            statement.setString(1, record.getSubagentId());
-            statement.setString(2, record.getParentRunId());
-            statement.setString(3, record.getChildRunId());
-            statement.setString(4, record.getParentSourceKey());
-            statement.setString(5, record.getChildSourceKey());
-            statement.setString(6, record.getSessionId());
-            statement.setString(7, record.getName());
-            statement.setString(8, redact(record.getGoalPreview(), 1000));
-            statement.setString(9, record.getStatus());
-            statement.setInt(10, record.isActive() ? 1 : 0);
-            statement.setInt(11, record.isInterruptRequested() ? 1 : 0);
-            statement.setInt(12, record.getDepth());
-            statement.setInt(13, record.getTaskIndex());
-            statement.setString(14, redact(record.getOutputTailJson(), 4000));
-            statement.setString(15, redact(record.getError(), 2000));
-            statement.setLong(16, record.getStartedAt());
-            statement.setLong(17, record.getFinishedAt());
-            statement.setLong(18, record.getHeartbeatAt());
-            statement.executeUpdate();
-            statement.close();
-        } finally {
-            connection.close();
-        }
+        subagentRunStore.save(record);
     }
 
     /**
@@ -1193,26 +785,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public List<SubagentRunRecord> listSubagents(String parentRunId) throws Exception {
-        List<SubagentRunRecord> records = new ArrayList<SubagentRunRecord>();
-        Connection connection = database.openReadConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "select * from subagent_runs where parent_run_id = ? order by started_at asc");
-            statement.setString(1, parentRunId);
-            ResultSet resultSet = statement.executeQuery();
-            try {
-                while (resultSet.next()) {
-                    records.add(mapSubagent(resultSet));
-                }
-            } finally {
-                resultSet.close();
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
-        return records;
+        return subagentRunStore.list(parentRunId);
     }
 
     /**
@@ -1223,21 +796,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public int markActiveSubagentsInterrupted(long now) throws Exception {
-        Connection connection = database.openConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "update subagent_runs set status = 'interrupted', active = 0, interrupt_requested = 1, finished_at = ?, heartbeat_at = ? where active = 1");
-            statement.setLong(1, now);
-            statement.setLong(2, now);
-            try {
-                return statement.executeUpdate();
-            } finally {
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
+        return subagentRunStore.markActiveInterrupted(now);
     }
 
     /**
@@ -1247,26 +806,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public void saveRecovery(RunRecoveryRecord record) throws Exception {
-        Connection connection = database.openConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "insert or replace into run_recoveries (recovery_id, run_id, session_id, source_key, recovery_type, status, summary, payload_json, created_at, resolved_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            statement.setString(1, record.getRecoveryId());
-            statement.setString(2, record.getRunId());
-            statement.setString(3, record.getSessionId());
-            statement.setString(4, record.getSourceKey());
-            statement.setString(5, record.getRecoveryType());
-            statement.setString(6, record.getStatus());
-            statement.setString(7, redact(record.getSummary(), 2000));
-            statement.setString(8, redact(record.getPayloadJson(), 4000));
-            statement.setLong(9, record.getCreatedAt());
-            statement.setLong(10, record.getResolvedAt());
-            statement.executeUpdate();
-            statement.close();
-        } finally {
-            connection.close();
-        }
+        runRecoveryStore.save(record);
     }
 
     /**
@@ -1277,26 +817,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public List<RunRecoveryRecord> listRecoveries(String runId) throws Exception {
-        List<RunRecoveryRecord> records = new ArrayList<RunRecoveryRecord>();
-        Connection connection = database.openReadConnection();
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "select * from run_recoveries where run_id = ? order by created_at asc");
-            statement.setString(1, runId);
-            ResultSet resultSet = statement.executeQuery();
-            try {
-                while (resultSet.next()) {
-                    records.add(mapRecovery(resultSet));
-                }
-            } finally {
-                resultSet.close();
-                statement.close();
-            }
-        } finally {
-            connection.close();
-        }
-        return records;
+        return runRecoveryStore.list(runId);
     }
 
     /**
@@ -1306,44 +827,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     @Override
     public void pruneBefore(long beforeEpochMillis) throws Exception {
-        Connection connection = database.openConnection();
-        try {
-            PreparedStatement deleteToolCalls =
-                    connection.prepareStatement(
-                            "delete from tool_calls where run_id in (select run_id from agent_runs where started_at < ?)");
-            deleteToolCalls.setLong(1, beforeEpochMillis);
-            deleteToolCalls.executeUpdate();
-            deleteToolCalls.close();
-
-            PreparedStatement deleteSubagents =
-                    connection.prepareStatement(
-                            "delete from subagent_runs where parent_run_id in (select run_id from agent_runs where started_at < ?)");
-            deleteSubagents.setLong(1, beforeEpochMillis);
-            deleteSubagents.executeUpdate();
-            deleteSubagents.close();
-
-            PreparedStatement deleteRecoveries =
-                    connection.prepareStatement(
-                            "delete from run_recoveries where run_id in (select run_id from agent_runs where started_at < ?)");
-            deleteRecoveries.setLong(1, beforeEpochMillis);
-            deleteRecoveries.executeUpdate();
-            deleteRecoveries.close();
-
-            PreparedStatement deleteEvents =
-                    connection.prepareStatement(
-                            "delete from agent_run_events where run_id in (select run_id from agent_runs where started_at < ?)");
-            deleteEvents.setLong(1, beforeEpochMillis);
-            deleteEvents.executeUpdate();
-            deleteEvents.close();
-
-            PreparedStatement deleteRuns =
-                    connection.prepareStatement("delete from agent_runs where started_at < ?");
-            deleteRuns.setLong(1, beforeEpochMillis);
-            deleteRuns.executeUpdate();
-            deleteRuns.close();
-        } finally {
-            connection.close();
-        }
+        runPruner.pruneBefore(beforeEpochMillis);
     }
 
     /**
@@ -1427,153 +911,6 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     }
 
     /**
-     * 执行map事件相关逻辑。
-     *
-     * @param resultSet 结果Set响应或执行结果。
-     * @return 返回map事件结果。
-     */
-    private AgentRunEventRecord mapEvent(ResultSet resultSet) throws Exception {
-        AgentRunEventRecord record = new AgentRunEventRecord();
-        record.setEventId(resultSet.getString("event_id"));
-        record.setRunId(resultSet.getString("run_id"));
-        record.setSessionId(resultSet.getString("session_id"));
-        record.setSourceKey(resultSet.getString("source_key"));
-        record.setEventType(resultSet.getString("event_type"));
-        record.setPhase(resultSet.getString("phase"));
-        record.setSeverity(resultSet.getString("severity"));
-        record.setAttemptNo(resultSet.getInt("attempt_no"));
-        record.setProvider(resultSet.getString("provider"));
-        record.setModel(resultSet.getString("model"));
-        record.setSummary(resultSet.getString("summary"));
-        record.setMetadataJson(resultSet.getString("metadata_json"));
-        record.setCreatedAt(resultSet.getLong("created_at"));
-        return record;
-    }
-
-    /**
-     * 执行map工具Call相关逻辑。
-     *
-     * @param resultSet 结果Set响应或执行结果。
-     * @return 返回map工具Call结果。
-     */
-    private ToolCallRecord mapToolCall(ResultSet resultSet) throws Exception {
-        ToolCallRecord record = new ToolCallRecord();
-        record.setToolCallId(resultSet.getString("tool_call_id"));
-        record.setRunId(resultSet.getString("run_id"));
-        record.setSessionId(resultSet.getString("session_id"));
-        record.setSourceKey(resultSet.getString("source_key"));
-        record.setToolName(resultSet.getString("tool_name"));
-        record.setStatus(resultSet.getString("status"));
-        record.setArgsPreview(resultSet.getString("args_preview"));
-        record.setResultPreview(resultSet.getString("result_preview"));
-        record.setResultRef(resultSet.getString("result_ref"));
-        record.setError(resultSet.getString("error"));
-        record.setReadOnly(resultSet.getInt("read_only") != 0);
-        record.setInterruptible(resultSet.getInt("interruptible") != 0);
-        record.setSideEffecting(resultSet.getInt("side_effecting") != 0);
-        record.setResultIndexable(resultSet.getInt("result_indexable") != 0);
-        record.setOutputLimitBytes(resultSet.getInt("output_limit_bytes"));
-        record.setResultSizeBytes(resultSet.getLong("result_size_bytes"));
-        record.setExecutionPolicy(resultSet.getString("execution_policy"));
-        record.setStartedAt(resultSet.getLong("started_at"));
-        record.setFinishedAt(resultSet.getLong("finished_at"));
-        record.setDurationMs(resultSet.getLong("duration_ms"));
-        return record;
-    }
-
-    /**
-     * 执行map子Agent相关逻辑。
-     *
-     * @param resultSet 结果Set响应或执行结果。
-     * @return 返回map Subagent结果。
-     */
-    private SubagentRunRecord mapSubagent(ResultSet resultSet) throws Exception {
-        SubagentRunRecord record = new SubagentRunRecord();
-        record.setSubagentId(resultSet.getString("subagent_id"));
-        record.setParentRunId(resultSet.getString("parent_run_id"));
-        record.setChildRunId(resultSet.getString("child_run_id"));
-        record.setParentSourceKey(resultSet.getString("parent_source_key"));
-        record.setChildSourceKey(resultSet.getString("child_source_key"));
-        record.setSessionId(resultSet.getString("session_id"));
-        record.setName(resultSet.getString("name"));
-        record.setGoalPreview(resultSet.getString("goal_preview"));
-        record.setStatus(resultSet.getString("status"));
-        record.setActive(resultSet.getInt("active") != 0);
-        record.setInterruptRequested(resultSet.getInt("interrupt_requested") != 0);
-        record.setDepth(resultSet.getInt("depth"));
-        record.setTaskIndex(resultSet.getInt("task_index"));
-        record.setOutputTailJson(resultSet.getString("output_tail_json"));
-        record.setError(resultSet.getString("error"));
-        record.setStartedAt(resultSet.getLong("started_at"));
-        record.setFinishedAt(resultSet.getLong("finished_at"));
-        record.setHeartbeatAt(resultSet.getLong("heartbeat_at"));
-        return record;
-    }
-
-    /**
-     * 执行map运行控制命令相关逻辑。
-     *
-     * @param resultSet 结果Set响应或执行结果。
-     * @return 返回map运行Control命令结果。
-     */
-    private RunControlCommand mapRunControlCommand(ResultSet resultSet) throws Exception {
-        RunControlCommand record = new RunControlCommand();
-        record.setCommandId(resultSet.getString("command_id"));
-        record.setRunId(resultSet.getString("run_id"));
-        record.setSourceKey(resultSet.getString("source_key"));
-        record.setCommand(resultSet.getString("command"));
-        record.setPayloadJson(resultSet.getString("payload_json"));
-        record.setStatus(resultSet.getString("status"));
-        record.setCreatedAt(resultSet.getLong("created_at"));
-        record.setHandledAt(resultSet.getLong("handled_at"));
-        return record;
-    }
-
-    /**
-     * 执行map排队消息相关逻辑。
-     *
-     * @param resultSet 结果Set响应或执行结果。
-     * @return 返回map Queued消息结果。
-     */
-    private QueuedRunMessage mapQueuedMessage(ResultSet resultSet) throws Exception {
-        QueuedRunMessage record = new QueuedRunMessage();
-        record.setQueueId(resultSet.getString("queue_id"));
-        record.setRunId(resultSet.getString("run_id"));
-        record.setSessionId(resultSet.getString("session_id"));
-        record.setSourceKey(resultSet.getString("source_key"));
-        record.setMessageText(resultSet.getString("message_text"));
-        record.setMessageJson(resultSet.getString("message_json"));
-        record.setStatus(resultSet.getString("status"));
-        record.setBusyPolicy(resultSet.getString("busy_policy"));
-        record.setCreatedAt(resultSet.getLong("created_at"));
-        record.setStartedAt(resultSet.getLong("started_at"));
-        record.setFinishedAt(resultSet.getLong("finished_at"));
-        record.setError(resultSet.getString("error"));
-        return record;
-    }
-
-    /**
-     * 执行map恢复相关逻辑。
-     *
-     * @param resultSet 结果Set响应或执行结果。
-     * @return 返回map Recovery结果。
-     */
-    private RunRecoveryRecord mapRecovery(ResultSet resultSet) throws Exception {
-        RunRecoveryRecord record = new RunRecoveryRecord();
-        record.setRecoveryId(resultSet.getString("recovery_id"));
-        record.setRunId(resultSet.getString("run_id"));
-        record.setSessionId(resultSet.getString("session_id"));
-        record.setSourceKey(resultSet.getString("source_key"));
-        record.setRecoveryType(resultSet.getString("recovery_type"));
-        record.setStatus(resultSet.getString("status"));
-        record.setSummary(resultSet.getString("summary"));
-        record.setPayloadJson(resultSet.getString("payload_json"));
-        record.setCreatedAt(resultSet.getLong("created_at"));
-        record.setResolvedAt(resultSet.getLong("resolved_at"));
-        return record;
-    }
-
-    /**
      * 追加运行Filters。
      *
      * @param sql sql 参数。
@@ -1634,145 +971,6 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     }
 
     /**
-     * 追加事件Fts。
-     *
-     * @param connection 连接参数。
-     * @param event 事件参数。
-     */
-    private void appendEventFts(Connection connection, AgentRunEventRecord event) {
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "insert into agent_run_events_fts (run_id, session_id, source_key, event_type, summary, metadata_json) values (?, ?, ?, ?, ?, ?)");
-            statement.setString(1, event.getRunId());
-            statement.setString(2, event.getSessionId());
-            statement.setString(3, event.getSourceKey());
-            statement.setString(4, event.getEventType());
-            statement.setString(5, SecretRedactor.redact(event.getSummary(), 1000));
-            statement.setString(6, StructuredMetadataSupport.redactJson(event.getMetadataJson()));
-            statement.executeUpdate();
-            statement.close();
-        } catch (Exception e) {
-            logBestEffortFailure("agent_run_events_fts_append", e);
-        }
-    }
-
-    /**
-     * 根据工具调用终态变化增减运行计数，重复保存同一终态时保持幂等。
-     *
-     * @param connection 当前数据库连接。
-     * @param previousRunId 更新前的运行标识。
-     * @param previousStatus 更新前的工具调用状态。
-     * @param currentRunId 更新后的运行标识。
-     * @param currentStatus 更新后的工具调用状态。
-     */
-    private void updateToolCallCount(
-            Connection connection,
-            String previousRunId,
-            String previousStatus,
-            String currentRunId,
-            String currentStatus)
-            throws Exception {
-        boolean previousCounted = isCountedToolCallStatus(previousStatus);
-        boolean currentCounted = isCountedToolCallStatus(currentStatus);
-        if (same(previousRunId, currentRunId)) {
-            updateToolCallCount(
-                    connection, currentRunId, (currentCounted ? 1 : 0) - (previousCounted ? 1 : 0));
-            return;
-        }
-        if (previousCounted) {
-            updateToolCallCount(connection, previousRunId, -1);
-        }
-        if (currentCounted) {
-            updateToolCallCount(connection, currentRunId, 1);
-        }
-    }
-
-    /**
-     * 对单个运行的工具调用计数应用增量，并保证历史异常数据不会降为负数。
-     *
-     * @param connection 当前数据库连接。
-     * @param runId 运行标识。
-     * @param delta 计数增量。
-     */
-    private void updateToolCallCount(Connection connection, String runId, int delta)
-            throws Exception {
-        if (runId == null || delta == 0) {
-            return;
-        }
-        PreparedStatement statement =
-                connection.prepareStatement(
-                        "update agent_runs set tool_call_count = max(0, tool_call_count + ?) where run_id = ?");
-        try {
-            statement.setInt(1, delta);
-            statement.setString(2, runId);
-            statement.executeUpdate();
-        } finally {
-            statement.close();
-        }
-    }
-
-    /**
-     * 判断工具调用状态是否应计入已完成调用数量。
-     *
-     * @param status 工具调用状态。
-     * @return completed 或 failed 返回 true。
-     */
-    private boolean isCountedToolCallStatus(String status) {
-        return "completed".equalsIgnoreCase(status) || "failed".equalsIgnoreCase(status);
-    }
-
-    /**
-     * 按空值安全方式比较两个运行标识。
-     *
-     * @param left 左侧运行标识。
-     * @param right 右侧运行标识。
-     * @return 两者相同时返回 true。
-     */
-    private boolean same(String left, String right) {
-        return left == null ? right == null : left.equals(right);
-    }
-
-    /**
-     * 追加工具结果Fts。
-     *
-     * @param connection 连接参数。
-     * @param record 记录参数。
-     */
-    private void appendToolResultFts(Connection connection, ToolCallRecord record) {
-        if (record == null || !record.isResultIndexable()) {
-            return;
-        }
-        try {
-            PreparedStatement statement =
-                    connection.prepareStatement(
-                            "insert into agent_run_events_fts (run_id, session_id, source_key, event_type, summary, metadata_json) values (?, ?, ?, ?, ?, ?)");
-            statement.setString(1, record.getRunId());
-            statement.setString(2, record.getSessionId());
-            statement.setString(3, record.getSourceKey());
-            statement.setString(4, "tool.result");
-            statement.setString(
-                    5,
-                    String.valueOf(record.getToolName())
-                            + " "
-                            + redact(record.getResultPreview(), 8000));
-            statement.setString(
-                    6,
-                    "{\"tool_name\":\""
-                            + escapeJson(record.getToolName())
-                            + "\",\"args_preview\":\""
-                            + escapeJson(redact(record.getArgsPreview(), 8000))
-                            + "\",\"result_ref\":\""
-                            + escapeJson(redact(record.getResultRef(), 1000))
-                            + "\"}");
-            statement.executeUpdate();
-            statement.close();
-        } catch (Exception e) {
-            logBestEffortFailure("tool_result_fts_append", e);
-        }
-    }
-
-    /**
      * 记录可降级的仓储维护失败，不输出运行标识、正文、参数预览或结果摘要。
      *
      * @param operation 内部维护操作名。
@@ -1793,19 +991,6 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
      */
     private static String exceptionSummary(Exception error) {
         return error == null ? "unknown" : error.getClass().getSimpleName();
-    }
-
-    /**
-     * 转义JSON。
-     *
-     * @param value 待规范化或校验的原始值。
-     * @return 返回escape JSON结果。
-     */
-    private String escapeJson(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     /**
