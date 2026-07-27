@@ -4,6 +4,8 @@ English | [简体中文](README.md)
 
 Solon Claw is a single-instance Agent service built with Java, Solon, and Solon AI. The project aims to align with the core behavior and capabilities of an external reference Agent in the Java / Solon ecosystem, with a focus on the Agent loop, tool calling, sessions, memory, skills, scheduled tasks, Chinese messaging channels, and a dashboard-first setup and diagnostics experience.
 
+The public product name is **Solon Claw**. Commands, Maven artifacts, Docker images, and configuration namespaces consistently use `solonclaw`. The Java package `com.jimuqu.solon.claw` is only a source-code namespace, not a separate product or configuration name.
+
 > The project is under active development. APIs and configuration keys may change as the implementation evolves. Feedback and contributions are welcome.
 
 ## Features
