@@ -384,7 +384,7 @@ public class StorageRepositoryTest {
         assertToolCallCount(env, targetRun.getRunId(), 0);
     }
 
-    /** 用量与陈旧运行扫描只应返回调用方需要的字段，不加载大预览和错误正文。 */
+    /** 批量、活跃与搜索运行查询只应返回调用方需要的字段，完整列表仍保持公开契约。 */
     @Test
     void shouldProjectLightweightUsageAndStaleRunColumns() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
@@ -446,6 +446,86 @@ public class StorageRepositoryTest {
         assertThat(staleResult.getFinalReplyPreview()).isNull();
         assertThat(staleResult.getRecoveryHint()).isNull();
         assertThat(staleResult.getError()).isNull();
+
+        AgentRunRecord active = new AgentRunRecord();
+        active.setRunId("active-projection-run");
+        active.setSessionId("active-projection-session");
+        active.setSourceKey("MEMORY:active-projection:user");
+        active.setRunKind("conversation");
+        active.setStatus("running");
+        active.setPhase("model");
+        active.setProvider("provider-active");
+        active.setModel("model-active");
+        active.setInputPreview("active input preview");
+        active.setFinalReplyPreview("active reply preview");
+        active.setRecoveryHint("active recovery hint");
+        active.setError("active internal error");
+        active.setStartedAt(now);
+        active.setLastActivityAt(now);
+        env.agentRunRepository.saveRun(active);
+
+        AgentRunRecord activeResult =
+                env.agentRunRepository.listActiveBySource(active.getSourceKey(), 1).stream()
+                        .findFirst()
+                        .orElse(null);
+        assertThat(activeResult).isNotNull();
+        assertThat(activeResult.getRunId()).isEqualTo(active.getRunId());
+        assertThat(activeResult.getStatus()).isEqualTo("running");
+        assertThat(activeResult.getInputPreview()).isEqualTo("active input preview");
+        assertThat(activeResult.getFinalReplyPreview()).isEqualTo("active reply preview");
+        assertThat(activeResult.getProvider()).isNull();
+        assertThat(activeResult.getModel()).isNull();
+        assertThat(activeResult.getRecoveryHint()).isNull();
+        assertThat(activeResult.getError()).isNull();
+
+        AgentRunRecord search = new AgentRunRecord();
+        search.setRunId("search-projection-run");
+        search.setSessionId("search-projection-session");
+        search.setSourceKey("MEMORY:search-projection:user");
+        search.setRunKind("conversation");
+        search.setStatus("failed");
+        search.setPhase("completed");
+        search.setBusyPolicy("interrupt");
+        search.setProvider("provider-search");
+        search.setModel("model-search");
+        search.setInputPreview("search input needle");
+        search.setFinalReplyPreview("search reply needle");
+        search.setRecoveryHint("search recovery hint");
+        search.setError("search error needle");
+        search.setExitReason("busy_interrupt");
+        search.setStartedAt(now + 1L);
+        search.setLastActivityAt(now + 1L);
+        env.agentRunRepository.saveRun(search);
+
+        AgentRunRecord searchResult =
+                env
+                        .agentRunRepository
+                        .searchRuns(null, null, search.getRunId(), "needle", 0L, 0L, 10)
+                        .stream()
+                        .findFirst()
+                        .orElse(null);
+        assertThat(searchResult).isNotNull();
+        assertThat(searchResult.getRunId()).isEqualTo(search.getRunId());
+        assertThat(searchResult.getStatus()).isEqualTo("failed");
+        assertThat(searchResult.getPhase()).isEqualTo("completed");
+        assertThat(searchResult.getBusyPolicy()).isEqualTo("interrupt");
+        assertThat(searchResult.getInputPreview()).isEqualTo("search input needle");
+        assertThat(searchResult.getFinalReplyPreview()).isEqualTo("search reply needle");
+        assertThat(searchResult.getError()).isEqualTo("search error needle");
+        assertThat(searchResult.getExitReason()).isEqualTo("busy_interrupt");
+        assertThat(searchResult.getProvider()).isNull();
+        assertThat(searchResult.getModel()).isNull();
+        assertThat(searchResult.getRecoveryHint()).isNull();
+
+        AgentRunRecord fullResult =
+                env.agentRunRepository.listBySession(search.getSessionId(), 1).stream()
+                        .findFirst()
+                        .orElse(null);
+        assertThat(fullResult).isNotNull();
+        assertThat(fullResult.getProvider()).isEqualTo("provider-search");
+        assertThat(fullResult.getModel()).isEqualTo("model-search");
+        assertThat(fullResult.getRecoveryHint()).isEqualTo("search recovery hint");
+        assertThat(fullResult.getError()).isEqualTo("search error needle");
     }
 
     /** 用量运行游标必须在同毫秒记录之间保持稳定倒序，且跨页不重不漏。 */

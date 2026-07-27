@@ -22,6 +22,30 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     /** Agent run 仓储日志仅记录可降级维护失败的操作名和异常类型，避免泄露会话内容或工具结果。 */
     private static final Logger log = LoggerFactory.getLogger(SqliteAgentRunRepository.class);
 
+    /** 单条详情与完整会话列表返回公开运行契约中的全部字段，避免数据库新增列被隐式带入查询。 */
+    private static final String RUN_DETAIL_COLUMNS =
+            "run_id, session_id, source_key, run_kind, parent_run_id, status, phase,"
+                    + " busy_policy, backgrounded, input_preview, final_reply_preview, provider,"
+                    + " model, attempts, context_estimate_tokens, context_window_tokens,"
+                    + " compression_count, fallback_count, tool_call_count, subtask_count,"
+                    + " input_tokens, output_tokens, total_tokens, queued_at, started_at,"
+                    + " heartbeat_at, last_activity_at, finished_at, exit_reason, recoverable,"
+                    + " recovery_hint, error";
+
+    /** 活跃运行判定只读取控制与 TUI 未完成轮次恢复实际使用的字段。 */
+    private static final String ACTIVE_RUN_COLUMNS =
+            "run_id, session_id, source_key, status, input_preview, final_reply_preview,"
+                    + " started_at, last_activity_at";
+
+    /** 运行搜索只读取命中解释、排序和日志索引实际使用的字段。 */
+    private static final String SEARCH_RUN_COLUMNS =
+            "r.run_id as run_id, r.session_id as session_id, r.source_key as source_key,"
+                    + " r.status as status, r.phase as phase, r.busy_policy as busy_policy,"
+                    + " r.input_preview as input_preview,"
+                    + " r.final_reply_preview as final_reply_preview, r.error as error,"
+                    + " r.started_at as started_at, r.last_activity_at as last_activity_at,"
+                    + " r.exit_reason as exit_reason";
+
     /** 用量回填只读取计费与来源字段，避免批量加载运行预览和错误正文。 */
     private static final String USAGE_RUN_COLUMNS =
             "run_id, session_id, source_key, provider, model, input_tokens, output_tokens,"
@@ -143,7 +167,8 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
         Connection connection = database.openReadConnection();
         try {
             PreparedStatement statement =
-                    connection.prepareStatement("select * from agent_runs where run_id = ?");
+                    connection.prepareStatement(
+                            "select " + RUN_DETAIL_COLUMNS + " from agent_runs where run_id = ?");
             statement.setString(1, runId);
             ResultSet resultSet = statement.executeQuery();
             try {
@@ -171,7 +196,9 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
-                            "select * from agent_runs where session_id = ? order by started_at desc limit ?");
+                            "select "
+                                    + RUN_DETAIL_COLUMNS
+                                    + " from agent_runs where session_id = ? order by started_at desc limit ?");
             statement.setString(1, sessionId);
             statement.setInt(2, Math.max(1, Math.min(limit, 100)));
             ResultSet resultSet = statement.executeQuery();
@@ -274,7 +301,9 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
-                            "select * from agent_runs where recoverable = 1 order by last_activity_at desc limit ?");
+                            "select "
+                                    + RUN_DETAIL_COLUMNS
+                                    + " from agent_runs where recoverable = 1 order by last_activity_at desc limit ?");
             statement.setInt(1, Math.max(1, Math.min(limit, 200)));
             ResultSet resultSet = statement.executeQuery();
             try {
@@ -477,13 +506,15 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
-                            "select * from agent_runs where source_key = ? and status in ('queued','running','waiting_approval','backgrounded','paused','interrupting','recoverable') order by started_at desc limit ?");
+                            "select "
+                                    + ACTIVE_RUN_COLUMNS
+                                    + " from agent_runs where source_key = ? and status in ('queued','running','waiting_approval','backgrounded','paused','interrupting','recoverable') order by started_at desc limit ?");
             statement.setString(1, sourceKey);
             statement.setInt(2, Math.max(1, Math.min(limit, 50)));
             ResultSet resultSet = statement.executeQuery();
             try {
                 while (resultSet.next()) {
-                    records.add(mapRun(resultSet));
+                    records.add(mapActiveRun(resultSet));
                 }
             } finally {
                 resultSet.close();
@@ -520,7 +551,9 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
         List<AgentRunRecord> records = new ArrayList<AgentRunRecord>();
         Connection connection = database.openReadConnection();
         try {
-            StringBuilder sql = new StringBuilder("select distinct r.* from agent_runs r");
+            StringBuilder sql =
+                    new StringBuilder(
+                            "select distinct " + SEARCH_RUN_COLUMNS + " from agent_runs r");
             List<Object> args = new ArrayList<Object>();
             boolean hasQuery = query != null && query.trim().length() > 0;
             if (hasQuery) {
@@ -550,7 +583,7 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
             ResultSet resultSet = statement.executeQuery();
             try {
                 while (resultSet.next()) {
-                    records.add(mapRun(resultSet));
+                    records.add(mapSearchRun(resultSet));
                 }
             } finally {
                 resultSet.close();
@@ -882,6 +915,48 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
         record.setRecoverable(resultSet.getInt("recoverable") != 0);
         record.setRecoveryHint(resultSet.getString("recovery_hint"));
         record.setError(resultSet.getString("error"));
+        return record;
+    }
+
+    /**
+     * 映射活跃运行控制与 TUI 恢复所需的轻量记录。
+     *
+     * @param resultSet 活跃运行查询结果。
+     * @return 仅包含标识、状态、预览和活动时间的运行记录。
+     */
+    private AgentRunRecord mapActiveRun(ResultSet resultSet) throws Exception {
+        AgentRunRecord record = new AgentRunRecord();
+        record.setRunId(resultSet.getString("run_id"));
+        record.setSessionId(resultSet.getString("session_id"));
+        record.setSourceKey(resultSet.getString("source_key"));
+        record.setStatus(resultSet.getString("status"));
+        record.setInputPreview(resultSet.getString("input_preview"));
+        record.setFinalReplyPreview(resultSet.getString("final_reply_preview"));
+        record.setStartedAt(resultSet.getLong("started_at"));
+        record.setLastActivityAt(resultSet.getLong("last_activity_at"));
+        return record;
+    }
+
+    /**
+     * 映射运行搜索命中解释与日志索引所需的轻量记录。
+     *
+     * @param resultSet 运行搜索查询结果。
+     * @return 仅包含标识、状态、预览、错误和排序时间的运行记录。
+     */
+    private AgentRunRecord mapSearchRun(ResultSet resultSet) throws Exception {
+        AgentRunRecord record = new AgentRunRecord();
+        record.setRunId(resultSet.getString("run_id"));
+        record.setSessionId(resultSet.getString("session_id"));
+        record.setSourceKey(resultSet.getString("source_key"));
+        record.setStatus(resultSet.getString("status"));
+        record.setPhase(resultSet.getString("phase"));
+        record.setBusyPolicy(resultSet.getString("busy_policy"));
+        record.setInputPreview(resultSet.getString("input_preview"));
+        record.setFinalReplyPreview(resultSet.getString("final_reply_preview"));
+        record.setError(resultSet.getString("error"));
+        record.setStartedAt(resultSet.getLong("started_at"));
+        record.setLastActivityAt(resultSet.getLong("last_activity_at"));
+        record.setExitReason(resultSet.getString("exit_reason"));
         return record;
     }
 
