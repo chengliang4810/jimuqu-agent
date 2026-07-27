@@ -1988,8 +1988,9 @@ public class DashboardControllerHttpTest {
                 .doesNotContain("bad-cron");
     }
 
+    /** Dashboard Chat 失败事件必须返回固定公共文案，不能透传命令异常中的原始输入。 */
     @Test
-    void shouldRedactDashboardChatRunFailedEvents() throws Exception {
+    void shouldHideDashboardChatRunFailedDetails() throws Exception {
         String token = DASHBOARD_TEST_TOKEN;
         String leakedToken = "sk-chatfailed12345";
         ONode start =
@@ -2012,7 +2013,7 @@ public class DashboardControllerHttpTest {
                                 token)
                         .body;
         ONode failed = extractSseEvent(events, "run.failed");
-        assertThat(failed.get("error").getString()).contains("***").doesNotContain(leakedToken);
+        assertThat(failed.get("error").getString()).isEqualTo("运行失败 / Run failed");
         assertThat(events).doesNotContain(leakedToken);
     }
 

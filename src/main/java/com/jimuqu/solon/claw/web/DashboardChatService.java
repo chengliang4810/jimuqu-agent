@@ -59,6 +59,12 @@ public class DashboardChatService {
     /** Web 用户主动取消运行时写入会话历史的可恢复提示。 */
     private static final String CANCELED_ASSISTANT_TEXT = "当前 Web 运行已取消。";
 
+    /** 运行失败事件对客户端展示的固定公共文案。 */
+    private static final String PUBLIC_RUN_FAILED_MESSAGE = "运行失败 / Run failed";
+
+    /** 工具失败事件对客户端展示的固定公共文案。 */
+    private static final String PUBLIC_TOOL_FAILED_MESSAGE = "工具执行失败 / Tool execution failed";
+
     /** 保存会话仓储依赖，用于访问持久化数据。 */
     private final SessionRepository sessionRepository;
 
@@ -850,7 +856,7 @@ public class DashboardChatService {
         }
 
         /**
-         * 响应工具完成事件，并把执行层给出的失败原因原样编码为结构化字段。
+         * 响应工具完成事件，并用固定公共文案替换执行层失败细节。
          *
          * @param toolName 工具名称。
          * @param result 工具返回内容。
@@ -865,11 +871,11 @@ public class DashboardChatService {
             Map<String, Object> payload = new LinkedHashMap<String, Object>();
             payload.put("tool", safeText(toolName, 120));
             payload.put("duration_ms", durationMs);
-            if (StrUtil.isNotBlank(result)) {
+            if (StrUtil.isBlank(error) && StrUtil.isNotBlank(result)) {
                 payload.put("preview", truncateInline(safeText(result, 1000), 80));
             }
             if (StrUtil.isNotBlank(error)) {
-                payload.put("error", safeText(error, 1000));
+                payload.put("error", PUBLIC_TOOL_FAILED_MESSAGE);
                 payload.put("status", "error");
             }
             enqueue(state, "tool.completed", payload);
@@ -1037,15 +1043,7 @@ public class DashboardChatService {
                 state.updatedAt = System.currentTimeMillis();
 
                 Map<String, Object> payload = new LinkedHashMap<String, Object>();
-                payload.put(
-                        "error",
-                        SecretRedactor.redact(
-                                error == null
-                                        ? "Run failed"
-                                        : StrUtil.blankToDefault(
-                                                error.getMessage(),
-                                                error.getClass().getSimpleName()),
-                                1000));
+                payload.put("error", PUBLIC_RUN_FAILED_MESSAGE);
                 enqueue(state, "run.failed", payload);
                 state.completed = true;
             }

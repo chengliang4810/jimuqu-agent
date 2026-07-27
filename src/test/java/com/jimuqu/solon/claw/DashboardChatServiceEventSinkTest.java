@@ -108,19 +108,39 @@ public class DashboardChatServiceEventSinkTest {
         assertThat(drainEvents(state).toString()).contains("assistant says " + SECRET);
     }
 
+    /** 工具失败事件必须保留结构化失败状态，同时隐藏内部路径、SQL 和实现异常细节。 */
     @Test
-    void shouldExposeExplicitToolFailureState() throws Exception {
+    void shouldHideInternalToolFailureDetails() throws Exception {
         DashboardChatService service = new DashboardChatService(null, null, null, null, null);
         Object state = newState("run-1", "session-1");
         ConversationEventSink sink = newEventSink(service, state);
+        String internalError =
+                "SQLException at /srv/solonclaw/state.db: SELECT * FROM provider_credentials";
 
-        sink.onToolCompleted(
-                "remote_lookup", "Remote call timed out", "Remote call timed out", 12L);
+        sink.onToolCompleted("remote_lookup", internalError, internalError, 12L);
 
         Map<String, Object> payload = drainEvents(state).get("tool.completed");
         assertThat(payload)
                 .containsEntry("status", "error")
-                .containsEntry("error", "Remote call timed out");
+                .containsEntry("error", "工具执行失败 / Tool execution failed")
+                .doesNotContainKey("preview");
+        assertThat(payload.toString())
+                .doesNotContain("/srv/solonclaw/state.db")
+                .doesNotContain("SELECT * FROM provider_credentials")
+                .doesNotContain("SQLException");
+    }
+
+    /** 运行失败事件必须使用固定公共文案，不能暴露异常消息或空消息时的异常类名。 */
+    @Test
+    void shouldHideInternalRunFailureDetails() throws Exception {
+        DashboardChatService service = new DashboardChatService(null, null, null, null, null);
+
+        assertRunFailureHidden(
+                service,
+                "run-message",
+                new IllegalStateException(
+                        "SQLException at /srv/solonclaw/state.db: SELECT * FROM sessions"));
+        assertRunFailureHidden(service, "run-class", new IllegalStateException());
     }
 
     @Test
@@ -231,6 +251,29 @@ public class DashboardChatServiceEventSinkTest {
                 sinkClass.getDeclaredConstructor(DashboardChatService.class, state.getClass());
         constructor.setAccessible(true);
         return (ConversationEventSink) constructor.newInstance(service, state);
+    }
+
+    /**
+     * 断言单次运行失败事件只返回稳定公共文案。
+     *
+     * @param service Dashboard Chat 服务。
+     * @param runId 测试运行标识。
+     * @param error 模拟的内部异常。
+     */
+    private void assertRunFailureHidden(DashboardChatService service, String runId, Throwable error)
+            throws Exception {
+        Object state = newState(runId, "session-" + runId);
+        ConversationEventSink sink = newEventSink(service, state);
+
+        sink.onRunFailed("session-" + runId, error);
+
+        Map<String, Object> payload = drainEvents(state).get("run.failed");
+        assertThat(payload).containsEntry("error", "运行失败 / Run failed");
+        assertThat(payload.toString())
+                .doesNotContain("/srv/solonclaw/state.db")
+                .doesNotContain("SELECT * FROM sessions")
+                .doesNotContain("SQLException")
+                .doesNotContain("IllegalStateException");
     }
 
     @SuppressWarnings("unchecked")
