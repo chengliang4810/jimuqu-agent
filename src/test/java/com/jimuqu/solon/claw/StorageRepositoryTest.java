@@ -384,6 +384,70 @@ public class StorageRepositoryTest {
         assertToolCallCount(env, targetRun.getRunId(), 0);
     }
 
+    /** 用量与陈旧运行扫描只应返回调用方需要的字段，不加载大预览和错误正文。 */
+    @Test
+    void shouldProjectLightweightUsageAndStaleRunColumns() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        long now = System.currentTimeMillis();
+        AgentRunRecord usage = new AgentRunRecord();
+        usage.setRunId("usage-projection-run");
+        usage.setSessionId("usage-projection-session");
+        usage.setSourceKey("MEMORY:usage-projection:user");
+        usage.setStatus("success");
+        usage.setProvider("provider-a");
+        usage.setModel("model-a");
+        usage.setInputTokens(10L);
+        usage.setOutputTokens(20L);
+        usage.setTotalTokens(30L);
+        usage.setStartedAt(now - 2_000L);
+        usage.setFinishedAt(now - 1_000L);
+        usage.setInputPreview("large input preview");
+        usage.setFinalReplyPreview("large reply preview");
+        usage.setRecoveryHint("large recovery hint");
+        usage.setError("large error");
+        env.agentRunRepository.saveRun(usage);
+
+        AgentRunRecord usageResult =
+                env.agentRunRepository.listFinishedWithUsage(10).stream()
+                        .filter(record -> usage.getRunId().equals(record.getRunId()))
+                        .findFirst()
+                        .orElse(null);
+        assertThat(usageResult).isNotNull();
+        assertThat(usageResult.getProvider()).isEqualTo("provider-a");
+        assertThat(usageResult.getTotalTokens()).isEqualTo(30L);
+        assertThat(usageResult.getInputPreview()).isNull();
+        assertThat(usageResult.getFinalReplyPreview()).isNull();
+        assertThat(usageResult.getRecoveryHint()).isNull();
+        assertThat(usageResult.getError()).isNull();
+
+        AgentRunRecord stale = new AgentRunRecord();
+        stale.setRunId("stale-projection-run");
+        stale.setSessionId("stale-projection-session");
+        stale.setSourceKey("MEMORY:stale-projection:user");
+        stale.setRunKind("conversation");
+        stale.setStatus("running");
+        stale.setStartedAt(now - 120_000L);
+        stale.setLastActivityAt(now - 120_000L);
+        stale.setInputPreview("large stale input");
+        stale.setFinalReplyPreview("large stale reply");
+        stale.setRecoveryHint("large stale recovery hint");
+        stale.setError("large stale error");
+        env.agentRunRepository.saveRun(stale);
+
+        AgentRunRecord staleResult =
+                env.agentRunRepository.listActiveBefore(now - 60_000L, 10).stream()
+                        .filter(record -> stale.getRunId().equals(record.getRunId()))
+                        .findFirst()
+                        .orElse(null);
+        assertThat(staleResult).isNotNull();
+        assertThat(staleResult.getRunKind()).isEqualTo("conversation");
+        assertThat(staleResult.getStatus()).isEqualTo("running");
+        assertThat(staleResult.getInputPreview()).isNull();
+        assertThat(staleResult.getFinalReplyPreview()).isNull();
+        assertThat(staleResult.getRecoveryHint()).isNull();
+        assertThat(staleResult.getError()).isNull();
+    }
+
     /** 陈旧运行应按调用方批次原子更新，并为每个运行只写一条恢复记录。 */
     @Test
     void shouldAtomicallyMarkExactStaleRunBatch() throws Exception {

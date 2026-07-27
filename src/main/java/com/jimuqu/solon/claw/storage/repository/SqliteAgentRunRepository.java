@@ -25,6 +25,15 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
     /** Agent run 仓储日志仅记录可降级维护失败的操作名和异常类型，避免泄露会话内容或工具结果。 */
     private static final Logger log = LoggerFactory.getLogger(SqliteAgentRunRepository.class);
 
+    /** 用量回填只读取计费与来源字段，避免批量加载运行预览和错误正文。 */
+    private static final String USAGE_RUN_COLUMNS =
+            "run_id, session_id, source_key, provider, model, input_tokens, output_tokens,"
+                    + " total_tokens, started_at, finished_at";
+
+    /** 陈旧运行扫描只读取状态转换与会话恢复需要的标识字段。 */
+    private static final String STALE_RUN_COLUMNS =
+            "run_id, session_id, source_key, run_kind, status";
+
     /** 记录SQLiteAgent运行中的数据库。 */
     private final SqliteDatabase database;
 
@@ -185,12 +194,16 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
-                            "select * from agent_runs where status = 'success' and (input_tokens > 0 or output_tokens > 0 or total_tokens > 0) order by finished_at desc limit ?");
+                            "select "
+                                    + USAGE_RUN_COLUMNS
+                                    + " from agent_runs where status = 'success'"
+                                    + " and (input_tokens > 0 or output_tokens > 0 or total_tokens > 0)"
+                                    + " order by finished_at desc limit ?");
             statement.setInt(1, Math.max(1, Math.min(limit <= 0 ? 1000 : limit, 10000)));
             ResultSet resultSet = statement.executeQuery();
             try {
                 while (resultSet.next()) {
-                    records.add(mapRun(resultSet));
+                    records.add(mapUsageRun(resultSet));
                 }
             } finally {
                 resultSet.close();
@@ -247,13 +260,18 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
         try {
             PreparedStatement statement =
                     connection.prepareStatement(
-                            "select * from agent_runs where status in ('queued','running','waiting_approval','backgrounded','paused','interrupting') and coalesce(nullif(last_activity_at, 0), started_at) < ? order by started_at asc limit ?");
+                            "select "
+                                    + STALE_RUN_COLUMNS
+                                    + " from agent_runs where status in"
+                                    + " ('queued','running','waiting_approval','backgrounded','paused','interrupting')"
+                                    + " and coalesce(nullif(last_activity_at, 0), started_at) < ?"
+                                    + " order by started_at asc limit ?");
             statement.setLong(1, beforeEpochMillis);
             statement.setInt(2, Math.max(1, Math.min(limit, 200)));
             ResultSet resultSet = statement.executeQuery();
             try {
                 while (resultSet.next()) {
-                    records.add(mapRun(resultSet));
+                    records.add(mapStaleRunCandidate(resultSet));
                 }
             } finally {
                 resultSet.close();
@@ -379,13 +397,18 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
         List<AgentRunRecord> records = new ArrayList<AgentRunRecord>();
         PreparedStatement statement =
                 connection.prepareStatement(
-                        "select * from agent_runs where status in ('queued','running','waiting_approval','backgrounded','paused','interrupting') and coalesce(nullif(last_activity_at, 0), started_at) < ? order by started_at asc limit ?");
+                        "select "
+                                + STALE_RUN_COLUMNS
+                                + " from agent_runs where status in"
+                                + " ('queued','running','waiting_approval','backgrounded','paused','interrupting')"
+                                + " and coalesce(nullif(last_activity_at, 0), started_at) < ?"
+                                + " order by started_at asc limit ?");
         statement.setLong(1, beforeEpochMillis);
         statement.setInt(2, Math.max(1, Math.min(limit, 500)));
         ResultSet resultSet = statement.executeQuery();
         try {
             while (resultSet.next()) {
-                records.add(mapRun(resultSet));
+                records.add(mapStaleRunCandidate(resultSet));
             }
         } finally {
             resultSet.close();
@@ -1363,6 +1386,43 @@ public class SqliteAgentRunRepository implements AgentRunRepository {
         record.setRecoverable(resultSet.getInt("recoverable") != 0);
         record.setRecoveryHint(resultSet.getString("recovery_hint"));
         record.setError(resultSet.getString("error"));
+        return record;
+    }
+
+    /**
+     * 映射用量回填所需的轻量运行记录。
+     *
+     * @param resultSet 用量运行查询结果。
+     * @return 仅包含计费与来源字段的运行记录。
+     */
+    private AgentRunRecord mapUsageRun(ResultSet resultSet) throws Exception {
+        AgentRunRecord record = new AgentRunRecord();
+        record.setRunId(resultSet.getString("run_id"));
+        record.setSessionId(resultSet.getString("session_id"));
+        record.setSourceKey(resultSet.getString("source_key"));
+        record.setProvider(resultSet.getString("provider"));
+        record.setModel(resultSet.getString("model"));
+        record.setInputTokens(resultSet.getLong("input_tokens"));
+        record.setOutputTokens(resultSet.getLong("output_tokens"));
+        record.setTotalTokens(resultSet.getLong("total_tokens"));
+        record.setStartedAt(resultSet.getLong("started_at"));
+        record.setFinishedAt(resultSet.getLong("finished_at"));
+        return record;
+    }
+
+    /**
+     * 映射陈旧运行状态转换与会话恢复所需的轻量候选。
+     *
+     * @param resultSet 陈旧运行查询结果。
+     * @return 仅包含标识、来源、类型与原状态的运行记录。
+     */
+    private AgentRunRecord mapStaleRunCandidate(ResultSet resultSet) throws Exception {
+        AgentRunRecord record = new AgentRunRecord();
+        record.setRunId(resultSet.getString("run_id"));
+        record.setSessionId(resultSet.getString("session_id"));
+        record.setSourceKey(resultSet.getString("source_key"));
+        record.setRunKind(resultSet.getString("run_kind"));
+        record.setStatus(resultSet.getString("status"));
         return record;
     }
 
