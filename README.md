@@ -230,12 +230,12 @@ solonclaw:
 
 | 渠道 | 配置前缀 | 入站方式 | 状态 |
 | --- | --- | --- | --- |
-| 飞书 | `solonclaw.channels.feishu.*` | websocket / 平台能力 | 建设中 |
-| 钉钉 | `solonclaw.channels.dingtalk.*` | stream mode | 已支持 |
-| 企业微信 | `solonclaw.channels.wecom.*` | websocket / 平台能力 | 建设中 |
-| 微信 | `solonclaw.channels.weixin.*` | iLink long-poll | 建设中 |
-| QQBot | `solonclaw.channels.qqbot.*` | websocket / REST | 建设中 |
-| 腾讯元宝 | `solonclaw.channels.yuanbao.*` | websocket / REST | 建设中 |
+| [飞书](docs/feishu.md) | `solonclaw.channels.feishu.*` | websocket / 平台能力 | 已实现，持续联调 |
+| [钉钉](docs/dingtalk.md) | `solonclaw.channels.dingtalk.*` | stream mode | 已支持 |
+| [企业微信](docs/wecom.md) | `solonclaw.channels.wecom.*` | websocket / 平台能力 | 已实现，持续联调 |
+| [微信](docs/weixin.md) | `solonclaw.channels.weixin.*` | iLink long-poll | 已实现，持续联调 |
+| [QQBot](docs/qqbot.md) | `solonclaw.channels.qqbot.*` | websocket / REST | 已实现，持续联调 |
+| [腾讯元宝](docs/yuanbao.md) | `solonclaw.channels.yuanbao.*` | websocket / REST | 已实现，持续联调 |
 
 Dashboard 提供渠道状态与 doctor 入口，建议优先通过 Dashboard 完成接入、诊断和排错。默认渠道示例仅开启微信：
 

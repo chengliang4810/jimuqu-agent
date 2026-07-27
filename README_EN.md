@@ -197,12 +197,12 @@ Supported and prioritized channels:
 
 | Channel | Prefix | Inbound mode | Status |
 | --- | --- | --- | --- |
-| Feishu | `solonclaw.channels.feishu.*` | websocket / platform capabilities | In progress |
-| DingTalk | `solonclaw.channels.dingtalk.*` | stream mode | In progress |
-| WeCom | `solonclaw.channels.wecom.*` | websocket / platform capabilities | In progress |
-| Weixin | `solonclaw.channels.weixin.*` | iLink long-poll | In progress |
-| QQBot | `solonclaw.channels.qqbot.*` | websocket / REST | In progress |
-| Yuanbao | `solonclaw.channels.yuanbao.*` | websocket / REST | In progress |
+| [Feishu](docs/feishu.md) | `solonclaw.channels.feishu.*` | websocket / platform capabilities | Implemented, integration ongoing |
+| [DingTalk](docs/dingtalk.md) | `solonclaw.channels.dingtalk.*` | stream mode | Supported |
+| [WeCom](docs/wecom.md) | `solonclaw.channels.wecom.*` | websocket / platform capabilities | Implemented, integration ongoing |
+| [Weixin](docs/weixin.md) | `solonclaw.channels.weixin.*` | iLink long-poll | Implemented, integration ongoing |
+| [QQBot](docs/qqbot.md) | `solonclaw.channels.qqbot.*` | websocket / REST | Implemented, integration ongoing |
+| [Yuanbao](docs/yuanbao.md) | `solonclaw.channels.yuanbao.*` | websocket / REST | Implemented, integration ongoing |
 
 The Dashboard includes channel status and doctor endpoints. Prefer the Dashboard for setup, diagnostics, and troubleshooting.
 
