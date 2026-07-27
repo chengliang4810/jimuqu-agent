@@ -753,7 +753,7 @@ public class SqliteSessionRepository implements SessionRepository {
         return new OriginSessionCandidate(sessionId, userId);
     }
 
-    /** 查询与渠道来源匹配的当前绑定会话，结果按最近更新时间降序排列。 */
+    /** 使用来源键索引范围查询与渠道来源匹配的当前绑定会话。 */
     private List<OriginSessionCandidate> findOriginSessionCandidates(
             Connection connection,
             String profile,
@@ -766,12 +766,17 @@ public class SqliteSessionRepository implements SessionRepository {
         if ("default".equalsIgnoreCase(expectedProfile)) {
             expectedProfile = null;
         }
+        String sourcePrefix =
+                SourceKeySupport.build(expectedProfile, platform, chatId, threadId, "");
+        String sourceUpperBound = sourceKeyPrefixUpperBound(sourcePrefix);
         PreparedStatement statement =
                 connection.prepareStatement(
                         "select b.source_key as binding_source_key, s.session_id, s.updated_at "
                                 + "from bindings b join sessions s on s.session_id = b.session_id "
-                                + "order by s.updated_at desc");
+                                + "where b.source_key >= ? and b.source_key < ?");
         try {
+            statement.setString(1, sourcePrefix);
+            statement.setString(2, sourceUpperBound);
             ResultSet resultSet = statement.executeQuery();
             try {
                 while (resultSet.next()) {
@@ -800,6 +805,19 @@ public class SqliteSessionRepository implements SessionRepository {
             statement.close();
         }
         return candidates;
+    }
+
+    /**
+     * 计算以冒号结尾的来源键前缀上界，使 SQLite 可使用主键范围扫描。
+     *
+     * @param sourcePrefix 来源键前缀。
+     * @return 不包含在查询范围内的最小上界。
+     */
+    private String sourceKeyPrefixUpperBound(String sourcePrefix) {
+        if (StrUtil.isBlank(sourcePrefix) || !sourcePrefix.endsWith(":")) {
+            throw new IllegalArgumentException("来源键前缀必须以冒号结尾");
+        }
+        return sourcePrefix.substring(0, sourcePrefix.length() - 1) + ";";
     }
 
     /** 按用户来源消除同一聊天下的会话歧义，避免把通知写入其他用户上下文。 */

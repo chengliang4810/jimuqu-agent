@@ -16,8 +16,12 @@ import com.jimuqu.solon.claw.storage.repository.SqliteGatewayPolicyRepository;
 import com.jimuqu.solon.claw.storage.repository.SqliteSessionRepository;
 import com.jimuqu.solon.claw.support.MemoryChannelAdapter;
 import com.jimuqu.solon.claw.support.MessageSupport;
+import com.jimuqu.solon.claw.support.SourceKeySupport;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -247,6 +251,74 @@ class SqliteSessionDeliveryWriteBackTest {
                         repository.appendBoundOriginAssistantMessage(
                                 PlatformType.FEISHU, "room", "thread-a", "user-a", "精确线程"))
                 .isTrue();
+    }
+
+    /** 来源键范围过滤必须把通配符视为普通字符，并保持命名 Profile 与线程隔离。 */
+    @Test
+    void shouldFilterOriginCandidatesByLiteralSourcePrefix() throws Exception {
+        SessionRecord expected =
+                repository.bindNewSession("profile:worker:WEIXIN:room%_literal:thread%_:user-a");
+        SessionRecord otherChat =
+                repository.bindNewSession("profile:worker:WEIXIN:roomXXliteral:thread%_:user-a");
+        SessionRecord otherThread =
+                repository.bindNewSession("profile:worker:WEIXIN:room%_literal:threadXX:user-a");
+
+        assertThat(
+                        repository.appendBoundOriginAssistantMessage(
+                                "worker",
+                                PlatformType.WEIXIN,
+                                "room%_literal",
+                                "thread%_",
+                                "user-a",
+                                "精确范围"))
+                .isTrue();
+
+        assertThat(
+                        MessageSupport.loadMessages(
+                                repository.findById(expected.getSessionId()).getNdjson()))
+                .singleElement()
+                .extracting(ChatMessage::getContent)
+                .isEqualTo("精确范围");
+        assertThat(repository.findById(otherChat.getSessionId()).getNdjson()).isEmpty();
+        assertThat(repository.findById(otherThread.getSessionId()).getNdjson()).isEmpty();
+    }
+
+    /** 来源键前缀范围查询必须使用 bindings 主键索引，避免退化为全表扫描。 */
+    @Test
+    void shouldUseBindingIndexForOriginCandidateRange() throws Exception {
+        String sourcePrefix =
+                SourceKeySupport.build(
+                        "worker", PlatformType.WEIXIN, "room%_literal", "thread%_", "");
+        String sourceUpperBound = sourcePrefix.substring(0, sourcePrefix.length() - 1) + ";";
+        Connection connection = database.openReadConnection();
+        try {
+            PreparedStatement statement =
+                    connection.prepareStatement(
+                            "explain query plan select b.source_key, s.session_id "
+                                    + "from bindings b join sessions s on s.session_id = b.session_id "
+                                    + "where b.source_key >= ? and b.source_key < ?");
+            try {
+                statement.setString(1, sourcePrefix);
+                statement.setString(2, sourceUpperBound);
+                ResultSet resultSet = statement.executeQuery();
+                try {
+                    StringBuilder plan = new StringBuilder();
+                    while (resultSet.next()) {
+                        plan.append(resultSet.getString("detail")).append('\n');
+                    }
+                    assertThat(plan.toString().toLowerCase(java.util.Locale.ROOT))
+                            .contains("search b")
+                            .contains("source_key>?")
+                            .contains("source_key<?");
+                } finally {
+                    resultSet.close();
+                }
+            } finally {
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
     }
 
     /** 普通会话旧快照保存时必须保留期间并发追加的后台消息。 */
