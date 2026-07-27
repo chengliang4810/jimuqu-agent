@@ -4,6 +4,8 @@ import { resolve } from 'path'
 
 const configuredBackendTarget = process.env.SOLONCLAW_SERVER_URL || ''
 const backendTarget = configuredBackendTarget || 'http://127.0.0.1:8080'
+// Monaco 0.55 内置的 DOMPurify 3.2.7 存在已知 XSS 漏洞，统一改用锁文件中的安全版本。
+const secureDomPurifyModule = resolve(__dirname, 'node_modules/dompurify/dist/purify.es.mjs')
 
 export default defineConfig({
   plugins: [vue()],
@@ -12,9 +14,16 @@ export default defineConfig({
     __SOLONCLAW_DEV_SERVER_URL__: JSON.stringify(configuredBackendTarget),
   },
   resolve: {
-    alias: {
-      '@': resolve(__dirname, 'src'),
-    },
+    alias: [
+      {
+        find: '@',
+        replacement: resolve(__dirname, 'src'),
+      },
+      {
+        find: /^\.\/dompurify\/dompurify\.js$/,
+        replacement: secureDomPurifyModule,
+      },
+    ],
   },
   build: {
     outDir: 'dist',

@@ -70,6 +70,11 @@
     "vue-i18n": "^11.3.2",
     "vue-router": "^4.6.4"
   },
+  "overrides": {
+    "monaco-editor": {
+      "dompurify": "3.4.12"
+    }
+  },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^24.12.2",
