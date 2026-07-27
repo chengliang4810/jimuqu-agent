@@ -13,6 +13,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.noear.snack4.ONode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 统一维护 .curator_state 的进程内读改写，避免用量统计和整理任务互相覆盖。
@@ -20,6 +22,9 @@ import org.noear.snack4.ONode;
  * <p>状态文件同时保存整理器运行信息和单技能统计，因此所有写入必须通过同一把按规范路径分配的锁完成。
  */
 public class CuratorStateStore {
+    /** 整理器状态降级日志，不输出状态正文或完整本地路径。 */
+    private static final Logger log = LoggerFactory.getLogger(CuratorStateStore.class);
+
     /** 按状态文件规范路径共享的进程内锁。 */
     private static final ConcurrentHashMap<String, Object> STATE_LOCKS =
             new ConcurrentHashMap<String, Object>();
@@ -50,7 +55,7 @@ public class CuratorStateStore {
      */
     public Map<String, Object> read() {
         synchronized (stateLock) {
-            return loadState();
+            return loadState(false);
         }
     }
 
@@ -66,7 +71,7 @@ public class CuratorStateStore {
             throw new IllegalArgumentException("curator state mutation is required");
         }
         synchronized (stateLock) {
-            Map<String, Object> state = loadState();
+            Map<String, Object> state = loadState(true);
             T result = mutation.apply(state);
             writeAtomically(state);
             return result;
@@ -84,9 +89,14 @@ public class CuratorStateStore {
         T apply(Map<String, Object> state);
     }
 
-    /** 读取状态文件；损坏或空文件按空状态处理，避免阻断正常技能调用。 */
+    /**
+     * 读取状态文件；只读调用可降级为空视图，写调用必须拒绝覆盖损坏状态。
+     *
+     * @param failOnCorruption 是否在读改写前发现损坏时拒绝继续。
+     * @return 当前完整状态。
+     */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> loadState() {
+    private Map<String, Object> loadState(boolean failOnCorruption) {
         if (!stateFile.isFile()) {
             return new LinkedHashMap<String, Object>();
         }
@@ -95,10 +105,36 @@ public class CuratorStateStore {
             if (parsed instanceof Map) {
                 return new LinkedHashMap<String, Object>((Map<String, Object>) parsed);
             }
-        } catch (Exception ignored) {
-            // 状态统计不可用时不应影响技能使用，后续写入会恢复为有效 JSON。
+        } catch (Exception e) {
+            if (failOnCorruption) {
+                throw invalidState(e);
+            }
+            log.warn(
+                    "Curator state could not be parsed; returning an empty read-only view: file={}, errorType={}",
+                    stateFile.getName(),
+                    e.getClass().getSimpleName());
+            return new LinkedHashMap<String, Object>();
         }
+        if (failOnCorruption) {
+            throw invalidState(null);
+        }
+        log.warn(
+                "Curator state is not a JSON object; returning an empty read-only view: file={}",
+                stateFile.getName());
         return new LinkedHashMap<String, Object>();
+    }
+
+    /**
+     * 构造拒绝覆盖损坏整理器状态的异常。
+     *
+     * @param cause 解析失败原因。
+     * @return 可直接抛出的状态异常。
+     */
+    private IllegalStateException invalidState(Exception cause) {
+        String message = "Curator state is invalid; refusing to overwrite " + stateFile.getName();
+        return cause == null
+                ? new IllegalStateException(message)
+                : new IllegalStateException(message, cause);
     }
 
     /** 将完整状态写入同目录临时文件后原子替换，避免进程中断留下半份 JSON。 */

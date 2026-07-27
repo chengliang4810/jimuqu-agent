@@ -1372,8 +1372,11 @@ public class DashboardStatusService {
                 if (provider != null && provider.isAvailable()) {
                     return true;
                 }
-            } catch (RuntimeException ignored) {
-                // 单个提供方异常不能中断 Dashboard 状态接口。
+            } catch (RuntimeException e) {
+                log.debug(
+                        "Dashboard image provider availability probe failed; provider remains unavailable: providerType={}, errorType={}",
+                        provider == null ? "" : provider.getClass().getSimpleName(),
+                        e.getClass().getSimpleName());
             }
         }
         return false;
@@ -1384,6 +1387,9 @@ public class DashboardStatusService {
         try {
             return speechService != null && speechService.isTtsAvailable();
         } catch (RuntimeException e) {
+            log.debug(
+                    "Dashboard TTS availability probe failed; provider remains unavailable: errorType={}",
+                    e.getClass().getSimpleName());
             return false;
         }
     }
@@ -1393,6 +1399,9 @@ public class DashboardStatusService {
         try {
             return speechService != null && speechService.isTranscriptionAvailable();
         } catch (RuntimeException e) {
+            log.debug(
+                    "Dashboard transcription availability probe failed; provider remains unavailable: errorType={}",
+                    e.getClass().getSimpleName());
             return false;
         }
     }
@@ -1497,6 +1506,9 @@ public class DashboardStatusService {
         try {
             return llmProviderService.resolveEffectiveProvider(null);
         } catch (Exception e) {
+            log.debug(
+                    "Dashboard effective provider probe failed; provider remains unresolved: errorType={}",
+                    e.getClass().getSimpleName());
             return null;
         }
     }

@@ -20,9 +20,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.noear.snack4.ONode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Skills Hub 状态存储。 */
 public class SkillHubStateStore {
+    /** 技能中心状态降级日志，不输出状态正文或完整本地路径。 */
+    private static final Logger log = LoggerFactory.getLogger(SkillHubStateStore.class);
+
     /** 按状态文件规范路径共享的进程内锁，覆盖多个 Store 实例。 */
     private static final ConcurrentHashMap<String, Object> FILE_LOCKS =
             new ConcurrentHashMap<String, Object>();
@@ -48,7 +53,7 @@ public class SkillHubStateStore {
     public List<HubInstallRecord> listInstalled() {
         File lockFile = lockFile();
         synchronized (lockFor(lockFile)) {
-            return new ArrayList<HubInstallRecord>(loadLock(lockFile).values());
+            return new ArrayList<HubInstallRecord>(loadLock(lockFile, false).values());
         }
     }
 
@@ -61,7 +66,7 @@ public class SkillHubStateStore {
     public HubInstallRecord getInstalled(String name) {
         File lockFile = lockFile();
         synchronized (lockFor(lockFile)) {
-            return loadLock(lockFile).get(SkillBundlePathSupport.normalizeSkillName(name));
+            return loadLock(lockFile, false).get(SkillBundlePathSupport.normalizeSkillName(name));
         }
     }
 
@@ -74,7 +79,7 @@ public class SkillHubStateStore {
         validateRecord(record);
         File lockFile = lockFile();
         synchronized (lockFor(lockFile)) {
-            Map<String, HubInstallRecord> installed = loadLock(lockFile);
+            Map<String, HubInstallRecord> installed = loadLock(lockFile, true);
             installed.put(record.getName(), record);
             saveLock(lockFile, installed);
         }
@@ -88,7 +93,7 @@ public class SkillHubStateStore {
     public void recordUninstall(String name) {
         File lockFile = lockFile();
         synchronized (lockFor(lockFile)) {
-            Map<String, HubInstallRecord> installed = loadLock(lockFile);
+            Map<String, HubInstallRecord> installed = loadLock(lockFile, true);
             installed.remove(SkillBundlePathSupport.normalizeSkillName(name));
             saveLock(lockFile, installed);
         }
@@ -111,7 +116,11 @@ public class SkillHubStateStore {
                 return container == null || container.getTaps() == null
                         ? Collections.<TapRecord>emptyList()
                         : new ArrayList<TapRecord>(container.getTaps());
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                log.warn(
+                        "Skills Hub taps state could not be parsed; returning an empty read-only view: file={}, errorType={}",
+                        tapsFile.getName(),
+                        e.getClass().getSimpleName());
                 return Collections.emptyList();
             }
         }
@@ -214,19 +223,34 @@ public class SkillHubStateStore {
     /**
      * 加载Lock。
      *
+     * @param lockFile 安装状态文件。
+     * @param failOnCorruption 是否在写入前发现损坏时拒绝继续。
      * @return 返回Lock结果。
      */
-    private Map<String, HubInstallRecord> loadLock(File lockFile) {
+    private Map<String, HubInstallRecord> loadLock(File lockFile, boolean failOnCorruption) {
         if (!lockFile.exists()) {
             return new LinkedHashMap<String, HubInstallRecord>();
         }
         LockContainer container;
         try {
             container = ONode.deserialize(FileUtil.readUtf8String(lockFile), LockContainer.class);
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            if (failOnCorruption) {
+                throw invalidInstallState(lockFile, e);
+            }
+            log.warn(
+                    "Skills Hub install state could not be parsed; returning an empty read-only view: file={}, errorType={}",
+                    lockFile.getName(),
+                    e.getClass().getSimpleName());
             return new LinkedHashMap<String, HubInstallRecord>();
         }
         if (container == null || container.getInstalled() == null) {
+            if (failOnCorruption) {
+                throw invalidInstallState(lockFile, null);
+            }
+            log.warn(
+                    "Skills Hub install state has no installed map; returning an empty read-only view: file={}",
+                    lockFile.getName());
             return new LinkedHashMap<String, HubInstallRecord>();
         }
         Map<String, HubInstallRecord> safeInstalled = new LinkedHashMap<String, HubInstallRecord>();
@@ -235,10 +259,32 @@ public class SkillHubStateStore {
                 validateRecord(record);
                 safeInstalled.put(record.getName(), record);
             } catch (IllegalStateException e) {
-                // 忽略手工编辑过的脏记录：单条状态异常不应拖垮整个 Hub 状态。
+                if (failOnCorruption) {
+                    throw invalidInstallState(lockFile, e);
+                }
+                log.warn(
+                        "Skills Hub install state contains an invalid record; omitting it from the read-only view: file={}, errorType={}",
+                        lockFile.getName(),
+                        e.getClass().getSimpleName());
             }
         }
         return safeInstalled;
+    }
+
+    /**
+     * 构造拒绝覆盖损坏安装状态的异常。
+     *
+     * @param lockFile 安装状态文件。
+     * @param cause 解析或校验失败原因。
+     * @return 可直接抛出的状态异常。
+     */
+    private IllegalStateException invalidInstallState(File lockFile, Exception cause) {
+        String message =
+                "Skills Hub install state is invalid; refusing to overwrite "
+                        + (lockFile == null ? "lock.json" : lockFile.getName());
+        return cause == null
+                ? new IllegalStateException(message)
+                : new IllegalStateException(message, cause);
     }
 
     /**

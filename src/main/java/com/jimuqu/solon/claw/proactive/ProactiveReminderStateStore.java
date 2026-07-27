@@ -2,9 +2,14 @@ package com.jimuqu.solon.claw.proactive;
 
 import com.jimuqu.solon.claw.core.repository.GlobalSettingRepository;
 import org.noear.snack4.ONode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** 统一读写主动提醒轻量状态，供调度器、命令和 Dashboard 共用。 */
 public class ProactiveReminderStateStore {
+    /** 主动提醒状态降级日志，不输出持久化状态正文。 */
+    private static final Logger log = LoggerFactory.getLogger(ProactiveReminderStateStore.class);
+
     /** 主动提醒运行状态在全局设置表中的键。 */
     public static final String STATE_KEY = "proactive.reminder.state";
 
@@ -31,6 +36,9 @@ public class ProactiveReminderStateStore {
                             globalSettingRepository.get(STATE_KEY), ProactiveReminderState.class);
             return state == null ? new ProactiveReminderState() : state;
         } catch (Exception e) {
+            log.warn(
+                    "Proactive reminder state could not be parsed; using default diagnostics: errorType={}",
+                    e.getClass().getSimpleName());
             return new ProactiveReminderState();
         }
     }

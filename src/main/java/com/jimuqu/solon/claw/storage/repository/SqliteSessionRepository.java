@@ -424,7 +424,7 @@ public class SqliteSessionRepository implements SessionRepository {
             return current;
         }
         String storedDelta = stored.substring(baseline.length()).trim();
-        if (!isAssistantMessageDelta(storedDelta)) {
+        if (!isAssistantMessageDelta(requested.getSessionId(), storedDelta)) {
             return current;
         }
         String currentDelta = current.substring(baseline.length()).trim();
@@ -435,8 +435,14 @@ public class SqliteSessionRepository implements SessionRepository {
         return currentWithoutTrailingLines + "\n" + storedDelta;
     }
 
-    /** 判断并发增量是否仅包含可安全保留的 Agent 外发消息。 */
-    private boolean isAssistantMessageDelta(String delta) {
+    /**
+     * 判断并发增量是否仅包含可安全保留的 Agent 外发消息。
+     *
+     * @param sessionId 会话标识，仅用于低敏诊断。
+     * @param delta 并发追加的消息增量。
+     * @return 全部消息均为合法 assistant 消息时返回 true。
+     */
+    private boolean isAssistantMessageDelta(String sessionId, String delta) {
         if (StrUtil.isBlank(delta)) {
             return false;
         }
@@ -452,6 +458,11 @@ public class SqliteSessionRepository implements SessionRepository {
             }
             return true;
         } catch (Exception e) {
+            log.warn(
+                    "Concurrent assistant delta could not be parsed; stored delta will not be merged: sessionId={}, deltaLength={}, error={}",
+                    StrUtil.nullToEmpty(sessionId),
+                    Integer.valueOf(delta.length()),
+                    exceptionSummary(e));
             return false;
         }
     }

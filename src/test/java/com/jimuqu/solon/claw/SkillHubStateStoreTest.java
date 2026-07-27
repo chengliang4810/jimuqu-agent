@@ -1,6 +1,7 @@
 package com.jimuqu.solon.claw;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import cn.hutool.core.io.FileUtil;
 import com.jimuqu.solon.claw.skillhub.model.HubInstallRecord;
@@ -52,22 +53,21 @@ public class SkillHubStateStoreTest {
         assertThat(new SkillHubStateStore(skillsDir).listInstalled()).hasSize(200);
     }
 
-    /** 损坏的 lock 状态必须按空状态读取，并在后续写入时恢复为有效 JSON。 */
+    /** 损坏的 lock 状态可按空视图读取，但后续写入必须拒绝覆盖原文件。 */
     @Test
-    void shouldRecoverFromCorruptedInstallLockOnNextWrite() throws Exception {
+    void shouldPreserveCorruptedInstallLockOnWrite() throws Exception {
         File skillsDir = Files.createTempDirectory("skillhub-state-corrupted").toFile();
         FileUtil.mkdir(FileUtil.file(skillsDir, ".hub"));
         File lockFile = FileUtil.file(skillsDir, ".hub", "lock.json");
-        FileUtil.writeUtf8String("{\"installed\":", lockFile);
+        String corrupted = "{\"installed\":";
+        FileUtil.writeUtf8String(corrupted, lockFile);
         SkillHubStateStore stateStore = new SkillHubStateStore(skillsDir);
 
         assertThat(stateStore.listInstalled()).isEmpty();
-        stateStore.recordInstall(record("recovered-skill"));
-
-        assertThat(new SkillHubStateStore(skillsDir).listInstalled())
-                .extracting(HubInstallRecord::getName)
-                .containsExactly("recovered-skill");
-        assertThat(FileUtil.readUtf8String(lockFile)).contains("\"version\":1");
+        assertThatThrownBy(() -> stateStore.recordInstall(record("must-not-overwrite")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("refusing to overwrite");
+        assertThat(FileUtil.readUtf8String(lockFile)).isEqualTo(corrupted);
     }
 
     /** 构造满足安装记录路径约束的测试记录。 */

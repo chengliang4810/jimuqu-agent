@@ -443,6 +443,10 @@ public class MemoryArchiveService {
                     && content.contains("- 原文 SHA-256：`" + digest + "`")
                     && content.contains("派生数据，可从同目录不可变原文重建");
         } catch (Exception e) {
+            log.debug(
+                    "Memory archive summary validation failed; summary will be rebuilt: archive={}, errorType={}",
+                    archive == null ? "" : archive.getFileName(),
+                    e.getClass().getSimpleName());
             return false;
         }
     }

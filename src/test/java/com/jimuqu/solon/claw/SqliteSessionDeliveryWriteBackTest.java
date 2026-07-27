@@ -3,6 +3,9 @@ package com.jimuqu.solon.claw;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.core.enums.PlatformType;
 import com.jimuqu.solon.claw.core.model.DeliveryRequest;
@@ -31,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.noear.solon.ai.chat.ChatRole;
 import org.noear.solon.ai.chat.message.ChatMessage;
+import org.slf4j.LoggerFactory;
 
 /** 后台投递消息回写普通会话时的角色与多用户边界测试。 */
 class SqliteSessionDeliveryWriteBackTest {
@@ -339,6 +343,51 @@ class SqliteSessionDeliveryWriteBackTest {
                 MessageSupport.loadMessages(
                         repository.findById(created.getSessionId()).getNdjson());
         assertThat(messages).extracting(ChatMessage::getContent).containsExactly("当前用户问题", "后台通知");
+    }
+
+    /** 畸形并发增量不得合并或泄露正文，并必须留下可诊断告警。 */
+    @Test
+    void shouldReportMalformedConcurrentDeltaWithoutLoggingContent() throws Exception {
+        SessionRecord created = repository.bindNewSession("FEISHU:malformed-room:user-a");
+        SessionRecord running = repository.findById(created.getSessionId());
+        running.setNdjson(
+                MessageSupport.toNdjson(Collections.singletonList(ChatMessage.ofUser("当前用户问题"))));
+        String malformed = "plainRandomCredential1234567890";
+        Connection connection = database.openConnection();
+        try {
+            PreparedStatement statement =
+                    connection.prepareStatement(
+                            "update sessions set ndjson = ? where session_id = ?");
+            try {
+                statement.setString(1, malformed);
+                statement.setString(2, created.getSessionId());
+                statement.executeUpdate();
+            } finally {
+                statement.close();
+            }
+        } finally {
+            connection.close();
+        }
+        Logger logger = (Logger) LoggerFactory.getLogger(SqliteSessionRepository.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<ILoggingEvent>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            repository.save(running);
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        assertThat(repository.findById(created.getSessionId()).getNdjson())
+                .contains("当前用户问题")
+                .doesNotContain(malformed);
+        assertThat(appender.list)
+                .extracting(ILoggingEvent::getFormattedMessage)
+                .anyMatch(
+                        message ->
+                                message.contains("Concurrent assistant delta could not be parsed"))
+                .noneMatch(message -> message.contains(malformed));
     }
 
     /** 统一投递服务仅在显式开启时于发送成功后回写会话。 */

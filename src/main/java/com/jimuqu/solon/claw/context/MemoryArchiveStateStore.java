@@ -2,9 +2,14 @@ package com.jimuqu.solon.claw.context;
 
 import com.jimuqu.solon.claw.core.repository.GlobalSettingRepository;
 import org.noear.snack4.ONode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** 在当前 Profile 的全局设置表中持久化记忆归档诊断状态。 */
 public class MemoryArchiveStateStore {
+    /** 记忆归档状态降级日志，不输出持久化状态正文。 */
+    private static final Logger log = LoggerFactory.getLogger(MemoryArchiveStateStore.class);
+
     /** 记忆归档状态键。 */
     public static final String STATE_KEY = "memory.archive.state";
 
@@ -31,6 +36,9 @@ public class MemoryArchiveStateStore {
                             globalSettingRepository.get(STATE_KEY), MemoryArchiveState.class);
             return state == null ? new MemoryArchiveState() : state;
         } catch (Exception e) {
+            log.warn(
+                    "Memory archive state could not be parsed; using default diagnostics: errorType={}",
+                    e.getClass().getSimpleName());
             return new MemoryArchiveState();
         }
     }
