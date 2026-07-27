@@ -1,13 +1,15 @@
 # 预存问题清单核验报告
 
+> 历史审计快照，仅保留当时证据；当前状态以源码、测试和最新审计为准。
+
 日期：2026-07-17
 
 ## 核验范围
 
 本报告核验以下预存清单在当前基线 `f274d8399` 上的状态：
 
-- `docs/project-suggestions-2026-07-16.md`
-- `docs/personal-assistant-optimization-2026-07-16.md`
+- `docs/audit/project-suggestions-2026-07-16.md`
+- `docs/rfc/personal-assistant-optimization-2026-07-16.md`
 
 状态只使用四类：
 

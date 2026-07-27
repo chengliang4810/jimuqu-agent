@@ -1,13 +1,15 @@
 # 预存问题清单复核基线
 
+> 历史审计基线，仅保留当时证据；当前状态以源码、测试和最新审计为准。
+
 日期：2026-07-17
 
 ## 复核范围
 
 本清单复核以下预存输入，并以当前提交 `f274d8399` 的代码和测试结果为准：
 
-- `docs/project-suggestions-2026-07-16.md`
-- `docs/personal-assistant-optimization-2026-07-16.md`
+- `docs/audit/project-suggestions-2026-07-16.md`
+- `docs/rfc/personal-assistant-optimization-2026-07-16.md`
 - 当前 Web 与 Terminal UI 原子功能审计结果
 - 当前分支、工作树、CI 工作流和 2026-07-16 之后的提交记录
 

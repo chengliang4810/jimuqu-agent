@@ -224,6 +224,8 @@ solonclaw:
 | `solonclaw.web.searchBackend` | `ddgs` | Web 搜索后端；可选内置 `ddgs` 或 `brave-free` |
 | `solonclaw.pricing.prices` | 空 | 模型价格配置；为空时只统计 token，不计算价格 |
 
+完整的架构、API、部署、运维和渠道说明见 [项目文档索引](docs/README.md)。
+
 ## 消息渠道
 
 当前保留并优先建设的渠道：

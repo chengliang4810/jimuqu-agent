@@ -1,5 +1,7 @@
 # 项目全面修复上下文恢复记录
 
+> 历史修复快照，仅保留当时上下文；当前状态以源码、测试和最新审计为准。
+
 日期：2026-07-17
 
 ## 阶段 0.1 结论
@@ -42,8 +44,8 @@
 
 当前主线保留两份 2026-07-16 审计建议：
 
-- `docs/project-suggestions-2026-07-16.md`
-- `docs/personal-assistant-optimization-2026-07-16.md`
+- `docs/audit/project-suggestions-2026-07-16.md`
+- `docs/rfc/personal-assistant-optimization-2026-07-16.md`
 
 两份文档都明确包含超时推断，且多项结论已经被后续提交覆盖。阶段 0.2 将结合当前代码和独立审计，形成新的四态预存问题清单，只把仍可复现的问题纳入后续阶段。
 
