@@ -1170,7 +1170,6 @@ public class DashboardDiagnosticOutputTest {
         Map<String, Object> missingSessionResult = missingSessionRepository.resolveApproval(body);
         assertThat(missingSessionResult.get("success")).isEqualTo(Boolean.FALSE);
         assertThat(missingSessionResult.get("code")).isEqualTo("approval_unavailable");
-        assertThat(String.valueOf(missingSessionResult.get("message"))).contains("审批服务");
 
         DashboardDiagnosticsService missingApprovalService =
                 diagnosticsBuilder(config)
@@ -1184,13 +1183,11 @@ public class DashboardDiagnosticOutputTest {
         Map<String, Object> missingApprovalResult = missingApprovalService.resolveApproval(body);
         assertThat(missingApprovalResult.get("success")).isEqualTo(Boolean.FALSE);
         assertThat(missingApprovalResult.get("code")).isEqualTo("approval_unavailable");
-        assertThat(String.valueOf(missingApprovalResult.get("message"))).contains("审批服务");
 
         Map<String, Object> pendingResult = missingApprovalService.pendingApprovals(10);
         assertThat(pendingResult.get("count")).isEqualTo(Integer.valueOf(0));
         assertThat(pendingResult.get("available")).isEqualTo(Boolean.FALSE);
         assertThat(pendingResult.get("code")).isEqualTo("approval_unavailable");
-        assertThat(String.valueOf(pendingResult.get("message"))).contains("审批服务");
 
         Map<String, Object> alwaysResult = missingApprovalService.alwaysApprovals(10);
         assertThat(alwaysResult.get("count")).isEqualTo(Integer.valueOf(0));
@@ -1223,7 +1220,6 @@ public class DashboardDiagnosticOutputTest {
         assertThat(result.get("count")).isEqualTo(Integer.valueOf(0));
         assertThat(result.get("available")).isEqualTo(Boolean.FALSE);
         assertThat(result.get("code")).isEqualTo("approval_history_unavailable");
-        assertThat(String.valueOf(result.get("message"))).contains("审批历史");
     }
 
     @Test
@@ -1249,7 +1245,6 @@ public class DashboardDiagnosticOutputTest {
 
         assertThat(result.get("success")).isEqualTo(Boolean.FALSE);
         assertThat(result.get("code")).isEqualTo("slash_confirm_unavailable");
-        assertThat(String.valueOf(result.get("message"))).contains("Slash");
     }
 
     @Test

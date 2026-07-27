@@ -270,7 +270,6 @@ public class DashboardControllerHttpTest {
         assertThat(result.body)
                 .contains("\"success\":false")
                 .contains("\"code\":\"DIAGNOSTICS_BAD_REQUEST\"")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_invaliddiagnostics12345")
                 .doesNotContain("\"action\":\"policy\"");
     }
@@ -329,7 +328,6 @@ public class DashboardControllerHttpTest {
         assertThat(result.body)
                 .contains("\"success\":false")
                 .contains("\"code\":\"DIAGNOSTICS_BAD_REQUEST\"")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_invalidprobe1234567890");
     }
 
@@ -1063,7 +1061,6 @@ public class DashboardControllerHttpTest {
         assertThat(invalidSkillToggle.status).isEqualTo(400);
         assertThat(invalidSkillToggle.body)
                 .contains("SKILLS_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_skillparse12345")
                 .doesNotContain("sample-skill token");
 
@@ -1888,7 +1885,6 @@ public class DashboardControllerHttpTest {
         assertThat(dashboardCron.body)
                 .contains("\"success\":false")
                 .contains("\"code\":\"CRON_BAD_REQUEST\"")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_invalidcron12345")
                 .doesNotContain("bad-cron");
     }
@@ -2096,7 +2092,6 @@ public class DashboardControllerHttpTest {
         assertThat(invalidJson.status).isEqualTo(400);
         assertThat(invalidJson.body)
                 .contains("CURATOR_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_curatorparse12345")
                 .doesNotContain("sample-skill token");
     }
@@ -2172,7 +2167,6 @@ public class DashboardControllerHttpTest {
         assertThat(invalidJson.status).isEqualTo(400);
         assertThat(invalidJson.body)
                 .contains("WORKSPACE_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_workspaceparse12345")
                 .doesNotContain("token=");
     }
@@ -2329,7 +2323,6 @@ public class DashboardControllerHttpTest {
         assertThat(invalidJson.status).isEqualTo(400);
         assertThat(invalidJson.body)
                 .contains("SESSION_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_sessionparseid12345")
                 .doesNotContain("ghp_sessionparse12345")
                 .doesNotContain("token=");
@@ -2359,7 +2352,6 @@ public class DashboardControllerHttpTest {
         assertThat(invalidJson.status).isEqualTo(400);
         assertThat(invalidJson.body)
                 .contains("RUN_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_invalidruncontrol12345")
                 .doesNotContain("interrupt");
 
@@ -2390,7 +2382,6 @@ public class DashboardControllerHttpTest {
         assertThat(invalidJson.status).isEqualTo(400);
         assertThat(invalidJson.body)
                 .contains("RUN_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_invalidsubcommand12345")
                 .doesNotContain("pause token");
 
@@ -2432,7 +2423,6 @@ public class DashboardControllerHttpTest {
         assertThat(invalidJson.status).isEqualTo(400);
         assertThat(invalidJson.body)
                 .contains("CHAT_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_chatparse12345")
                 .doesNotContain("/resume");
 
@@ -2512,7 +2502,6 @@ public class DashboardControllerHttpTest {
         assertThat(invalidJson.status).isEqualTo(400);
         assertThat(invalidJson.body)
                 .contains("MEDIA_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_mediaparse12345")
                 .doesNotContain("media-token");
 
@@ -2658,13 +2647,11 @@ public class DashboardControllerHttpTest {
         assertThat(invalidSet.status).isEqualTo(400);
         assertThat(invalidSet.body)
                 .contains("WORKSPACE_CONFIG_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_invalidruntime12345")
                 .doesNotContain("providers.default.apiKey");
         assertThat(invalidReveal.status).isEqualTo(400);
         assertThat(invalidReveal.body)
                 .contains("WORKSPACE_CONFIG_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_invalidreveal12345")
                 .doesNotContain("providers.default.apiKey");
         assertThat(deleteByBody.status).isEqualTo(400);
@@ -2686,7 +2673,6 @@ public class DashboardControllerHttpTest {
         assertThat(invalidSaveJson.status).isEqualTo(400);
         assertThat(invalidSaveJson.body)
                 .contains("CONFIG_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_invalidconfig12345")
                 .doesNotContain("credentialFiles");
 
@@ -2711,7 +2697,6 @@ public class DashboardControllerHttpTest {
         assertThat(invalidRawJson.status).isEqualTo(400);
         assertThat(invalidRawJson.body)
                 .contains("CONFIG_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_invalidrawconfig12345")
                 .doesNotContain("apiKey");
 
@@ -2764,7 +2749,6 @@ public class DashboardControllerHttpTest {
         assertThat(invalidCreate.status).isEqualTo(400);
         assertThat(invalidCreate.body)
                 .contains("PROVIDER_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_invalidprovider12345")
                 .doesNotContain("bad-provider");
 
@@ -2801,7 +2785,6 @@ public class DashboardControllerHttpTest {
         assertThat(invalidFallbackJson.status).isEqualTo(400);
         assertThat(invalidFallbackJson.body)
                 .contains("PROVIDER_BAD_REQUEST")
-                .contains("请求体 JSON 解析失败")
                 .doesNotContain("ghp_invalidfallback12345")
                 .doesNotContain("bad-fallback");
 

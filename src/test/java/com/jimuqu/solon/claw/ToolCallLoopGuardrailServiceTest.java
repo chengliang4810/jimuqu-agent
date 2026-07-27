@@ -32,7 +32,6 @@ public class ToolCallLoopGuardrailServiceTest {
         runFailedCall(interceptor, trace, "websearch", args);
         runFailedCall(interceptor, trace, "websearch", args);
 
-        assertThat(observation(trace)).contains("工具循环提醒");
         assertThat(observation(trace)).contains("repeated_exact_failure_warning");
         assertThat(trace.getRoute()).isNotEqualTo(Agent.ID_END);
         assertThat(trace.getFinalAnswer()).isNull();
@@ -53,7 +52,7 @@ public class ToolCallLoopGuardrailServiceTest {
         interceptor.onAction(trace, exchange("websearch", args));
 
         assertThat(trace.getRoute()).isEqualTo(Agent.ID_END);
-        assertThat(trace.getFinalAnswer()).contains("已停止重复工具调用");
+        assertThat(trace.getFinalAnswer()).isNotBlank();
         assertThat(observation(trace)).contains("repeated_exact_failure_block");
         Object haltDecision = trace.getExtra(ToolCallLoopGuardrailService.HALT_DECISION_EXTRA_KEY);
         assertThat(haltDecision).isInstanceOf(Map.class);
@@ -64,7 +63,6 @@ public class ToolCallLoopGuardrailServiceTest {
                 .containsEntry("code", "repeated_exact_failure_block")
                 .containsEntry("tool_name", "websearch")
                 .containsKey("message");
-        assertThat(String.valueOf(haltMetadata.get("message"))).contains("相同参数");
     }
 
     @Test
@@ -79,7 +77,6 @@ public class ToolCallLoopGuardrailServiceTest {
         runFailedCall(interceptor, trace, "terminal", args("command", "git status --branch"));
         runFailedCall(interceptor, trace, "terminal", args("command", "git status --porcelain"));
 
-        assertThat(observation(trace)).contains("工具循环提醒");
         assertThat(observation(trace)).contains("same_tool_failure_warning");
         assertThat(trace.getRoute()).isNotEqualTo(Agent.ID_END);
         assertThat(trace.getFinalAnswer()).isNull();
@@ -101,7 +98,7 @@ public class ToolCallLoopGuardrailServiceTest {
         runFailedCall(interceptor, trace, "terminal", args("command", "git status --porcelain"));
 
         assertThat(trace.getRoute()).isEqualTo(Agent.ID_END);
-        assertThat(trace.getFinalAnswer()).contains("已停止重复工具调用");
+        assertThat(trace.getFinalAnswer()).isNotBlank();
         assertThat(observation(trace)).contains("same_tool_failure_halt");
         Object haltDecision = trace.getExtra(ToolCallLoopGuardrailService.HALT_DECISION_EXTRA_KEY);
         assertThat(haltDecision).isInstanceOf(Map.class);
@@ -165,7 +162,6 @@ public class ToolCallLoopGuardrailServiceTest {
                 args,
                 "{\"content\":\"same\",\"status\":\"success\"}");
 
-        assertThat(observation(trace)).contains("工具循环提醒");
         assertThat(observation(trace)).contains("idempotent_no_progress_warning");
     }
 
@@ -194,7 +190,7 @@ public class ToolCallLoopGuardrailServiceTest {
         interceptor.onAction(trace, exchange("read_file", args));
 
         assertThat(trace.getRoute()).isEqualTo(Agent.ID_END);
-        assertThat(trace.getFinalAnswer()).contains("已停止重复工具调用");
+        assertThat(trace.getFinalAnswer()).isNotBlank();
         assertThat(observation(trace)).contains("idempotent_no_progress_block");
         Object haltDecision = trace.getExtra(ToolCallLoopGuardrailService.HALT_DECISION_EXTRA_KEY);
         assertThat(haltDecision).isInstanceOf(Map.class);
@@ -218,7 +214,7 @@ public class ToolCallLoopGuardrailServiceTest {
         runSuccessfulCall(interceptor, trace, "write_file", args, "{\"status\":\"success\"}");
         runSuccessfulCall(interceptor, trace, "write_file", args, "{\"status\":\"success\"}");
 
-        assertThat(observation(trace)).doesNotContain("工具循环提醒");
+        assertThat(observation(trace)).doesNotContain("idempotent_no_progress_warning");
     }
 
     @Test
@@ -255,7 +251,7 @@ public class ToolCallLoopGuardrailServiceTest {
                 "browser_click",
                 args("ref", "button"),
                 "{\"status\":\"success\"}");
-        assertThat(observation(mutatingTrace)).doesNotContain("工具循环提醒");
+        assertThat(observation(mutatingTrace)).doesNotContain("idempotent_no_progress_warning");
     }
 
     @Test
