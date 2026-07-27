@@ -134,10 +134,7 @@ const asWireText = (raw: unknown): string | null => {
 // scrubbed from log lines even when the URL is unparseable.
 const _USERINFO_FALLBACK_RE = /^([a-z][a-z0-9+.-]*:\/\/)[^/?#@]*@/i
 
-// Connection URLs (gateway, sidecar) often carry bearer tokens in the query
-// string. We surface them in user-facing log lines and the
-// `gateway.start_timeout` payload, so always strip the query string and any
-// embedded user-info before logging.
+// 连接 URL 可能携带短时票据或外部网关凭据；进入日志和超时事件前统一移除查询串与用户信息。
 const redactUrl = (raw: string): string => {
   if (!raw) {
     return raw

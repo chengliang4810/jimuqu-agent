@@ -5,8 +5,6 @@ import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.support.SecureTokenCompare;
 import java.net.InetAddress;
 import java.net.URI;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -14,7 +12,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.noear.snack4.ONode;
 import org.noear.solon.core.handle.Context;
-import org.noear.solon.net.websocket.WebSocket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -96,26 +93,6 @@ public class DashboardAuthService {
         String auth = context.header("Authorization");
         String token = accessToken();
         return matchesBearerToken(auth, token);
-    }
-
-    /**
-     * 判断 WebSocket 连接是否允许访问 Dashboard 同级控制面。
-     *
-     * @param socket WebSocket 握手后的连接对象。
-     * @return 连接携带有效 Dashboard 访问令牌时返回 true。
-     */
-    public boolean isAuthorized(WebSocket socket) {
-        String token = accessToken();
-        if (StrUtil.isBlank(token)) {
-            return false;
-        }
-        String auth = webSocketParam(socket, "Authorization");
-        if (matchesBearerToken(auth, token)) {
-            return true;
-        }
-        String queryToken = webSocketParam(socket, "token");
-        return SecureTokenCompare.matches(token, queryToken)
-                || SecureTokenCompare.matches(token, urlDecode(queryToken));
     }
 
     /**
@@ -339,37 +316,5 @@ public class DashboardAuthService {
         String scheme = auth.substring(0, splitIndex).trim();
         String actualToken = auth.substring(splitIndex + 1).trim();
         return "Bearer".equalsIgnoreCase(scheme) && SecureTokenCompare.matches(token, actualToken);
-    }
-
-    /** 按大小写不敏感方式读取 WebSocket 握手参数或请求头。 */
-    private String webSocketParam(WebSocket socket, String name) {
-        if (socket == null || StrUtil.isBlank(name)) {
-            return "";
-        }
-        String value = socket.param(name);
-        if (StrUtil.isNotBlank(value)) {
-            return value;
-        }
-        if (socket.paramMap() == null) {
-            return "";
-        }
-        for (String key : socket.paramMap().keySet()) {
-            if (name.equalsIgnoreCase(key)) {
-                return StrUtil.nullToEmpty(socket.paramMap().get(key));
-            }
-        }
-        return "";
-    }
-
-    /** 解码 WebSocket 查询串中的 token，兼容 Solon WebSocket 当前未自动解码的参数。 */
-    private String urlDecode(String value) {
-        if (StrUtil.isBlank(value)) {
-            return "";
-        }
-        try {
-            return URLDecoder.decode(value, StandardCharsets.UTF_8.name());
-        } catch (Exception e) {
-            return value;
-        }
     }
 }

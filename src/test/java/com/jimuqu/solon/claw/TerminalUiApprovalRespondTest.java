@@ -12,6 +12,7 @@ import com.jimuqu.solon.claw.support.TestEnvironment;
 import com.jimuqu.solon.claw.tool.runtime.ClarifyRequestCoordinator;
 import com.jimuqu.solon.claw.tool.runtime.DangerousCommandApprovalService;
 import com.jimuqu.solon.claw.tool.runtime.SecurityPolicyService;
+import com.jimuqu.solon.claw.tui.TerminalUiAccessTicketService;
 import com.jimuqu.solon.claw.tui.TerminalUiRpcService;
 import com.jimuqu.solon.claw.tui.TerminalUiRuntime;
 import com.jimuqu.solon.claw.tui.TerminalUiWebSocketEventSink;
@@ -34,12 +35,19 @@ class TerminalUiApprovalRespondTest {
     /** 测试 TUI WebSocket 统一使用的 Dashboard 访问令牌。 */
     private static final String TEST_DASHBOARD_TOKEN = "test-token";
 
+    /** 按监听器保存其测试票据服务，便于每个 WebSocket 获取独立一次性票据。 */
+    private static final Map<TerminalUiWebSocketListener, TerminalUiAccessTicketService>
+            ACCESS_TICKET_SERVICES =
+                    java.util.Collections.synchronizedMap(
+                            new java.util.IdentityHashMap<
+                                    TerminalUiWebSocketListener, TerminalUiAccessTicketService>());
+
     /** 验证运行树只从后端运行仓储读取，并明确拒绝不存在的快照保存契约。 */
     @Test
     void spawnTreeRpcRejectsSaveAndKeepsRepositoryListAvailable() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         TerminalUiWebSocketListener listener = newTuiListener(env);
-        RecordingSocket socket = new RecordingSocket();
+        RecordingSocket socket = authorizedSocket(listener);
         listener.onOpen(socket);
 
         AgentRunRecord run = new AgentRunRecord();
@@ -87,9 +95,9 @@ class TerminalUiApprovalRespondTest {
                                                 "spawn_tree.save is not available in the current backend"));
     }
 
-    /** 验证本机无令牌连接会被策略关闭，且不会收到 server.ready。 */
+    /** 验证本机无票据连接会被策略关闭，且不会收到 server.ready。 */
     @Test
-    void loopbackSocketWithoutTokenIsRejectedBeforeReady() throws Exception {
+    void loopbackSocketWithoutTicketIsRejectedBeforeReady() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         TerminalUiWebSocketListener listener = newTuiListener(env);
         RecordingSocket socket = new RecordingSocket("");
@@ -101,6 +109,24 @@ class TerminalUiApprovalRespondTest {
         assertThat(socket.sentText()).isEmpty();
     }
 
+    /** 验证有效票据只授权第一次连接，重放连接会在 server.ready 前关闭。 */
+    @Test
+    void replayedTicketIsRejectedBeforeReady() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        TerminalUiWebSocketListener listener = newTuiListener(env);
+        RecordingSocket first = authorizedSocket(listener);
+        RecordingSocket replay = new RecordingSocket(first.accessTicket());
+
+        listener.onOpen(first);
+        listener.onOpen(replay);
+
+        assertThat(first.closeCode()).isNull();
+        assertThat(first.sentText()).anyMatch(text -> text.contains("\"type\":\"server.ready\""));
+        assertThat(replay.closeCode()).isEqualTo(1008);
+        assertThat(replay.closeReason()).isEqualTo("Unauthorized");
+        assertThat(replay.sentText()).isEmpty();
+    }
+
     /** 验证 WebSocket 事件 request_id 可由同会话 clarify.respond 精确回流。 */
     @Test
     void clarifyRespondCompletesWaitingRequestForTheSameSession() throws Exception {
@@ -109,7 +135,7 @@ class TerminalUiApprovalRespondTest {
         SessionRecord session =
                 env.sessionRepository.bindNewSession(
                         TerminalUiRpcService.TERMINAL_SOURCE_KEY_PREFIX + "clarify-flow");
-        RecordingSocket socket = new RecordingSocket();
+        RecordingSocket socket = authorizedSocket(listener);
         listener.onOpen(socket);
         listener.onMessage(
                 socket,
@@ -173,8 +199,8 @@ class TerminalUiApprovalRespondTest {
         SessionRecord session =
                 env.sessionRepository.bindNewSession(
                         TerminalUiRpcService.TERMINAL_SOURCE_KEY_PREFIX + "clarify-owner");
-        RecordingSocket owner = new RecordingSocket();
-        RecordingSocket attacker = new RecordingSocket();
+        RecordingSocket owner = authorizedSocket(listener);
+        RecordingSocket attacker = authorizedSocket(listener);
         listener.onOpen(owner);
         listener.onOpen(attacker);
         listener.onMessage(
@@ -362,7 +388,8 @@ class TerminalUiApprovalRespondTest {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         TerminalUiWebSocketListener listener = newTuiListener(env);
 
-        RecordingSocket socket = new RecordingSocket();
+        RecordingSocket socket = authorizedSocket(listener);
+        listener.onOpen(socket);
         listener.onMessage(
                 socket,
                 "{\"jsonrpc\":\"2.0\",\"id\":\"rpc-create\",\"method\":\"session.create\",\"params\":{}}");
@@ -402,7 +429,8 @@ class TerminalUiApprovalRespondTest {
                 env.dangerousCommandApprovalService.listPendingApprovals(agentSession).get(0);
         String selector = DangerousCommandApprovalService.approvalSelector(pending);
 
-        RecordingSocket socket = new RecordingSocket();
+        RecordingSocket socket = authorizedSocket(listener);
+        listener.onOpen(socket);
         listener.onMessage(
                 socket,
                 "{\"jsonrpc\":\"2.0\",\"id\":\"rpc-policy-session\",\"method\":\"approval.respond\","
@@ -448,7 +476,8 @@ class TerminalUiApprovalRespondTest {
                 "recursive delete",
                 "rm -rf workspace/cache");
 
-        RecordingSocket socket = new RecordingSocket();
+        RecordingSocket socket = authorizedSocket(listener);
+        listener.onOpen(socket);
         listener.onMessage(
                 socket,
                 "{\"jsonrpc\":\"2.0\",\"id\":\"rpc-1\",\"method\":\"approval.respond\","
@@ -492,7 +521,8 @@ class TerminalUiApprovalRespondTest {
                                 .listPendingApprovals(agentSession)
                                 .get(1));
 
-        RecordingSocket socket = new RecordingSocket();
+        RecordingSocket socket = authorizedSocket(listener);
+        listener.onOpen(socket);
         listener.onMessage(
                 socket,
                 "{\"jsonrpc\":\"2.0\",\"id\":\"rpc-2\",\"method\":\"approval.respond\","
@@ -519,7 +549,7 @@ class TerminalUiApprovalRespondTest {
                 env.sessionRepository.bindNewSession(
                         TerminalUiRpcService.TERMINAL_SOURCE_KEY_PREFIX + "tui-resume-approval");
 
-        RecordingSocket socket = new RecordingSocket();
+        RecordingSocket socket = authorizedSocket(listener);
         listener.onOpen(socket);
         listener.onMessage(
                 socket,
@@ -551,7 +581,8 @@ class TerminalUiApprovalRespondTest {
         TestEnvironment env = TestEnvironment.withFakeLlm();
         TerminalUiWebSocketListener listener = newTuiListener(env);
 
-        RecordingSocket socket = new RecordingSocket();
+        RecordingSocket socket = authorizedSocket(listener);
+        listener.onOpen(socket);
         listener.onMessage(
                 socket,
                 "{\"jsonrpc\":\"2.0\",\"id\":\"rpc-missing-session\","
@@ -582,7 +613,8 @@ class TerminalUiApprovalRespondTest {
                 "recursive delete",
                 "rm -rf workspace/cache");
 
-        RecordingSocket socket = new RecordingSocket();
+        RecordingSocket socket = authorizedSocket(listener);
+        listener.onOpen(socket);
         listener.onMessage(
                 socket,
                 "{\"jsonrpc\":\"2.0\",\"id\":\"rpc-3\",\"method\":\"slash.exec\","
@@ -614,7 +646,7 @@ class TerminalUiApprovalRespondTest {
                 "recursive delete",
                 "rm -rf workspace/cache");
 
-        RecordingSocket socket = new RecordingSocket();
+        RecordingSocket socket = authorizedSocket(listener);
         listener.onOpen(socket);
         listener.onMessage(
                 socket,
@@ -652,33 +684,54 @@ class TerminalUiApprovalRespondTest {
     private static TerminalUiWebSocketListener newTuiListener(
             TestEnvironment env, SecurityPolicyService securityPolicyService) {
         env.appConfig.getDashboard().setAccessToken(TEST_DASHBOARD_TOKEN);
+        TerminalUiAccessTicketService accessTicketService = new TerminalUiAccessTicketService();
         TerminalUiRuntime runtime =
                 new TerminalUiRuntime(
                         env.commandService,
                         env.conversationOrchestrator,
                         env.agentRunControlService,
                         TerminalUiRpcService.TERMINAL_SOURCE_KEY_PREFIX);
-        return new TerminalUiWebSocketListener(
-                runtime,
-                env.appConfig,
-                env.sessionRepository,
-                securityPolicyService,
-                null,
-                env.dangerousCommandApprovalService,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                env.agentRunRepository,
-                env.runtimeSettingsService,
-                env.globalSettingRepository);
+        TerminalUiWebSocketListener listener =
+                new TerminalUiWebSocketListener(
+                        runtime,
+                        env.appConfig,
+                        env.sessionRepository,
+                        securityPolicyService,
+                        null,
+                        env.dangerousCommandApprovalService,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        env.agentRunRepository,
+                        env.runtimeSettingsService,
+                        env.globalSettingRepository,
+                        null,
+                        null,
+                        accessTicketService);
+        ACCESS_TICKET_SERVICES.put(listener, accessTicketService);
+        return listener;
+    }
+
+    /**
+     * 创建携带当前监听器新签发票据的测试 WebSocket。
+     *
+     * @param listener 目标 TUI WebSocket 监听器。
+     * @return 携带独立一次性票据的测试连接。
+     */
+    private static RecordingSocket authorizedSocket(TerminalUiWebSocketListener listener) {
+        TerminalUiAccessTicketService service = ACCESS_TICKET_SERVICES.get(listener);
+        if (service == null) {
+            throw new IllegalStateException("Missing terminal UI test access ticket service");
+        }
+        return new RecordingSocket(service.issue());
     }
 
     /** 等待后台 prompt.submit 线程把预期帧写入测试 socket。 */
@@ -777,8 +830,8 @@ class TerminalUiApprovalRespondTest {
         /** WebSocket 属性。 */
         private final Map<String, Object> attrs = new LinkedHashMap<String, Object>();
 
-        /** 握手查询参数中的 Dashboard 访问令牌。 */
-        private final String token;
+        /** 握手查询参数中的短时一次性访问票据。 */
+        private final String accessTicket;
 
         /** 最近一次服务端主动关闭使用的状态码。 */
         private Integer closeCode;
@@ -786,14 +839,14 @@ class TerminalUiApprovalRespondTest {
         /** 最近一次服务端主动关闭使用的原因。 */
         private String closeReason;
 
-        /** 创建携带默认测试令牌的 WebSocket。 */
+        /** 创建不携带访问票据的 WebSocket，适用于无需建连认证的事件输出测试。 */
         private RecordingSocket() {
-            this(TEST_DASHBOARD_TOKEN);
+            this("");
         }
 
-        /** 创建携带指定测试令牌的 WebSocket。 */
-        private RecordingSocket(String token) {
-            this.token = token;
+        /** 创建携带指定一次性访问票据的 WebSocket。 */
+        private RecordingSocket(String accessTicket) {
+            this.accessTicket = accessTicket;
         }
 
         /** 返回服务端已发送的文本帧。 */
@@ -809,6 +862,11 @@ class TerminalUiApprovalRespondTest {
         /** 返回服务端主动关闭使用的原因。 */
         private String closeReason() {
             return closeReason;
+        }
+
+        /** 返回握手查询参数中的一次性访问票据。 */
+        private String accessTicket() {
+            return accessTicket;
         }
 
         @Override
@@ -850,15 +908,15 @@ class TerminalUiApprovalRespondTest {
         @Override
         public MultiMap<String> paramMap() {
             MultiMap<String> params = new MultiMap<String>();
-            if (token != null) {
-                params.put("token", token);
+            if (accessTicket != null) {
+                params.put("ticket", accessTicket);
             }
             return params;
         }
 
         @Override
         public String param(String name) {
-            return "token".equalsIgnoreCase(name) ? token : null;
+            return "ticket".equalsIgnoreCase(name) ? accessTicket : null;
         }
 
         @Override

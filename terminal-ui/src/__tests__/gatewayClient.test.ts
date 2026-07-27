@@ -115,7 +115,10 @@ describe('GatewayClient solonclaw bridge', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
-        json: async () => ({ protocol_version: 1, ws_url: 'ws://127.0.0.1:18080/ws/tui' }),
+        json: async () => ({
+          protocol_version: 1,
+          ws_url: 'ws://127.0.0.1:18080/ws/tui?ticket=default-short-lived-ticket'
+        }),
         ok: true,
         status: 200
       }))
@@ -180,7 +183,9 @@ describe('GatewayClient solonclaw bridge', () => {
     await gw.drain()
 
     expect(globalThis.fetch).toHaveBeenCalledWith('http://127.0.0.1:8080/api/tui/handshake')
-    expect(FakeWebSocket.instances[0]!.url).toBe('ws://127.0.0.1:18080/ws/tui')
+    expect(FakeWebSocket.instances[0]!.url).toBe(
+      'ws://127.0.0.1:18080/ws/tui?ticket=default-short-lived-ticket'
+    )
     expect(FakeWebSocket.instances[0]!.sent[0]).toContain('client.hello')
     expect(events).toContain('gateway.ready')
   })
@@ -228,13 +233,16 @@ describe('GatewayClient solonclaw bridge', () => {
     gw.kill()
   })
 
-  it('sends dashboard token during handshake and redacts websocket token from logs', async () => {
+  it('sends dashboard token only during handshake and uses a redacted websocket ticket', async () => {
     process.env.SOLONCLAW_DASHBOARD_TOKEN = 'hunter2'
     vi.mocked(globalThis.fetch).mockImplementationOnce(async (_url, init) => {
       expect(init).toEqual({ headers: { Authorization: 'Bearer hunter2' } })
 
       return {
-        json: async () => ({ protocol_version: 1, ws_url: 'ws://127.0.0.1:18080/ws/tui?token=hunter2' }),
+        json: async () => ({
+          protocol_version: 1,
+          ws_url: 'ws://127.0.0.1:18080/ws/tui?ticket=short-lived-ticket'
+        }),
         ok: true,
         status: 200
       } as Response
@@ -246,8 +254,10 @@ describe('GatewayClient solonclaw bridge', () => {
     await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1))
     FakeWebSocket.instances[0]!.open()
 
-    expect(FakeWebSocket.instances[0]!.url).toBe('ws://127.0.0.1:18080/ws/tui?token=hunter2')
-    expect(gw.getLogTail(20)).not.toContain('hunter2')
+    expect(FakeWebSocket.instances[0]!.url).toBe(
+      'ws://127.0.0.1:18080/ws/tui?ticket=short-lived-ticket'
+    )
+    expect(gw.getLogTail(20)).not.toContain('hunter2').not.toContain('short-lived-ticket')
     gw.kill()
   })
 

@@ -58,7 +58,8 @@ public class TerminalUiConfiguration {
             GlobalSettingRepository globalSettingRepository,
             WeixinQrSetupService weixinQrSetupService,
             DomesticQrSetupService domesticQrSetupService,
-            DangerousCommandApprovalService approvalService) {
+            DangerousCommandApprovalService approvalService,
+            TerminalUiAccessTicketService accessTicketService) {
         TerminalUiRuntime terminalRuntime =
                 new TerminalUiRuntime(
                         commandService,
@@ -90,7 +91,8 @@ public class TerminalUiConfiguration {
                         runtimeSettingsService,
                         globalSettingRepository,
                         weixinQrSetupService,
-                        domesticQrSetupService);
+                        domesticQrSetupService,
+                        accessTicketService);
         WebSocketRouter.getInstance().of(TerminalUiHandshakeService.WS_PATH, listener);
         return listener;
     }

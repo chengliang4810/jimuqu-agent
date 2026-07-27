@@ -188,6 +188,19 @@ public class DashboardControllerHttpTest {
         String token = DASHBOARD_TEST_TOKEN;
         assertThat(token).isNotBlank();
 
+        HttpResult tuiHandshake = request("GET", "/api/tui/handshake", null, null);
+        HttpResult secondTuiHandshake = request("GET", "/api/tui/handshake", null, null);
+        assertThat(tuiHandshake.status).isEqualTo(200);
+        assertThat(secondTuiHandshake.status).isEqualTo(200);
+        String tuiWebSocketUrl = ONode.ofJson(tuiHandshake.body).get("ws_url").getString();
+        String secondTuiWebSocketUrl =
+                ONode.ofJson(secondTuiHandshake.body).get("ws_url").getString();
+        assertThat(tuiWebSocketUrl)
+                .contains("/ws/tui?ticket=")
+                .doesNotContain(DASHBOARD_TEST_TOKEN)
+                .doesNotContain("?token=");
+        assertThat(secondTuiWebSocketUrl).contains("/ws/tui?ticket=").isNotEqualTo(tuiWebSocketUrl);
+
         HttpResult status = request("GET", "/api/status", null, null);
         assertThat(status.status).isEqualTo(200);
         assertThat(status.body).contains("\"version\"");

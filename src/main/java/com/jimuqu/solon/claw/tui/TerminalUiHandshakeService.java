@@ -43,29 +43,29 @@ public class TerminalUiHandshakeService {
         return handshake(serverUrl, "");
     }
 
-    /** 根据当前服务地址和可用访问令牌生成终端 UI 握手响应。 */
-    public Map<String, Object> handshake(String serverUrl, String accessToken) {
+    /** 根据当前服务地址和短时一次性票据生成终端 UI 握手响应。 */
+    public Map<String, Object> handshake(String serverUrl, String accessTicket) {
         String base = normalizeBaseUrl(serverUrl);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("app", "solonclaw");
         result.put("mode", "server");
         result.put("protocol_version", Integer.valueOf(PROTOCOL_VERSION));
-        result.put("ws_url", appendToken(toWebSocketUrl(base), accessToken));
+        result.put("ws_url", appendTicket(toWebSocketUrl(base), accessTicket));
         result.put("features", Arrays.asList("chat", "slash_commands", "sessions", "approvals"));
         return result;
     }
 
-    /** 给 WebSocket 地址追加经过编码的访问令牌，匿名握手不暴露令牌。 */
-    private String appendToken(String wsUrl, String accessToken) {
-        if (StrUtil.isBlank(accessToken)) {
+    /** 给 WebSocket 地址追加经过编码的短时票据，匿名握手不追加认证参数。 */
+    private String appendTicket(String wsUrl, String accessTicket) {
+        if (StrUtil.isBlank(accessTicket)) {
             return wsUrl;
         }
         try {
             String separator = wsUrl.contains("?") ? "&" : "?";
             return wsUrl
                     + separator
-                    + "token="
-                    + URLEncoder.encode(accessToken, StandardCharsets.UTF_8.name());
+                    + "ticket="
+                    + URLEncoder.encode(accessTicket, StandardCharsets.UTF_8.name());
         } catch (Exception e) {
             return wsUrl;
         }

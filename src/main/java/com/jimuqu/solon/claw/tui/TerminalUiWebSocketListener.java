@@ -28,7 +28,6 @@ import com.jimuqu.solon.claw.tool.runtime.MemoryApprovalCoordinator;
 import com.jimuqu.solon.claw.tool.runtime.ProcessRegistry;
 import com.jimuqu.solon.claw.tool.runtime.SecurityPolicyService;
 import com.jimuqu.solon.claw.tool.runtime.SolonClawShellSkill;
-import com.jimuqu.solon.claw.web.DashboardAuthService;
 import com.jimuqu.solon.claw.web.DashboardSkillsService;
 import com.jimuqu.solon.claw.web.DomesticQrSetupService;
 import com.jimuqu.solon.claw.web.WeixinQrSetupService;
@@ -76,8 +75,12 @@ public class TerminalUiWebSocketListener implements WebSocketListener {
     /** 安全策略服务，用于直接 shell 命令审批恢复时生成精确的一次性策略 token。 */
     private final SecurityPolicyService securityPolicyService;
 
-    /** 复用 Dashboard 访问令牌策略保护远程 TUI WebSocket 控制面。 */
-    private final DashboardAuthService dashboardAuthService;
+    /** 原子消费 HTTP 握手签发的短时一次性 WebSocket 票据。 */
+    private final TerminalUiAccessTicketService accessTicketService;
+
+    /** 已通过一次性票据认证的活动 WebSocket 连接。 */
+    private final Map<WebSocket, Boolean> authorizedConnections =
+            new java.util.concurrent.ConcurrentHashMap<WebSocket, Boolean>();
 
     /** clarify 工具与终端 UI 的请求/响应协调器。 */
     private final ClarifyRequestCoordinator clarifyCoordinator;
@@ -213,12 +216,66 @@ public class TerminalUiWebSocketListener implements WebSocketListener {
             GlobalSettingRepository globalSettingRepository,
             WeixinQrSetupService weixinQrSetupService,
             DomesticQrSetupService domesticQrSetupService) {
+        this(
+                runtime,
+                appConfig,
+                sessionRepository,
+                securityPolicyService,
+                processRegistry,
+                approvalService,
+                localSkillService,
+                skillHubService,
+                checkpointService,
+                dashboardSkillsService,
+                preferenceStore,
+                browserRuntimeService,
+                contextCompressionService,
+                attachmentResolver,
+                gatewayRuntimeRefreshService,
+                delegationService,
+                agentRunControlService,
+                agentRunRepository,
+                runtimeSettingsService,
+                globalSettingRepository,
+                weixinQrSetupService,
+                domesticQrSetupService,
+                new TerminalUiAccessTicketService());
+    }
+
+    /** 创建带完整后端服务适配、渠道扫码能力和共享访问票据服务的终端 UI 监听器。 */
+    public TerminalUiWebSocketListener(
+            TerminalUiRuntime runtime,
+            AppConfig appConfig,
+            SessionRepository sessionRepository,
+            SecurityPolicyService securityPolicyService,
+            ProcessRegistry processRegistry,
+            DangerousCommandApprovalService approvalService,
+            LocalSkillService localSkillService,
+            SkillHubService skillHubService,
+            CheckpointService checkpointService,
+            DashboardSkillsService dashboardSkillsService,
+            SqlitePreferenceStore preferenceStore,
+            BrowserRuntimeService browserRuntimeService,
+            ContextCompressionService contextCompressionService,
+            AttachmentPathResolver attachmentResolver,
+            GatewayRuntimeRefreshService gatewayRuntimeRefreshService,
+            DelegationService delegationService,
+            AgentRunControlService agentRunControlService,
+            AgentRunRepository agentRunRepository,
+            RuntimeSettingsService runtimeSettingsService,
+            GlobalSettingRepository globalSettingRepository,
+            WeixinQrSetupService weixinQrSetupService,
+            DomesticQrSetupService domesticQrSetupService,
+            TerminalUiAccessTicketService accessTicketService) {
         this.runtime = runtime;
         this.promptExecutor = Executors.newCachedThreadPool(new TerminalUiThreadFactory());
         this.sessionRepository = sessionRepository;
         this.approvalService = approvalService;
         this.securityPolicyService = securityPolicyService;
-        this.dashboardAuthService = appConfig == null ? null : new DashboardAuthService(appConfig);
+        this.accessTicketService =
+                accessTicketService == null
+                        ? new TerminalUiAccessTicketService()
+                        : accessTicketService;
         this.clarifyCoordinator = ClarifyRequestCoordinator.shared();
         this.memoryApprovalCoordinator = MemoryApprovalCoordinator.shared();
         this.rpcService =
@@ -260,10 +317,11 @@ public class TerminalUiWebSocketListener implements WebSocketListener {
     /** 连接建立后通知终端 UI 当前协议可用。 */
     @Override
     public void onOpen(WebSocket socket) {
-        if (dashboardAuthService != null && !dashboardAuthService.isAuthorized(socket)) {
+        if (!accessTicketService.consume(accessTicket(socket))) {
             socket.close(1008, "Unauthorized");
             return;
         }
+        authorizedConnections.put(socket, Boolean.TRUE);
         if (approvalService != null) {
             TerminalUiApprovalObserver observer = new TerminalUiApprovalObserver(socket);
             approvalObservers.put(socket, observer);
@@ -275,6 +333,10 @@ public class TerminalUiWebSocketListener implements WebSocketListener {
     /** 处理终端 UI 发来的文本协议消息。 */
     @Override
     public void onMessage(WebSocket socket, String text) throws IOException {
+        if (!isAuthorizedConnection(socket)) {
+            socket.close(1008, "Unauthorized");
+            return;
+        }
         try {
             ONode node = ONode.ofJson(StrUtil.blankToDefault(text, "{}"));
             String jsonrpc = node.get("jsonrpc").getString();
@@ -301,12 +363,17 @@ public class TerminalUiWebSocketListener implements WebSocketListener {
     /** 拒绝二进制消息，终端 UI 协议只接受 JSON 文本。 */
     @Override
     public void onMessage(WebSocket socket, ByteBuffer bytes) throws IOException {
+        if (!isAuthorizedConnection(socket)) {
+            socket.close(1008, "Unauthorized");
+            return;
+        }
         send(socket, "error", pair("message", "Binary messages are not supported"));
     }
 
     /** 终端 UI 断开时释放本连接等待中的 clarify 请求，避免后台工具线程泄露。 */
     @Override
     public void onClose(WebSocket socket) {
+        authorizedConnections.remove(socket);
         TerminalUiApprovalObserver observer = approvalObservers.remove(socket);
         if (approvalService != null && observer != null) {
             approvalService.removeApprovalObserver(observer);
@@ -318,6 +385,41 @@ public class TerminalUiWebSocketListener implements WebSocketListener {
     /** 底层连接异常由 WebSocket 容器记录，这里不向业务运行时传播。 */
     @Override
     public void onError(WebSocket socket, Throwable error) {}
+
+    /**
+     * 读取 WebSocket 握手查询参数中的一次性访问票据。
+     *
+     * @param socket 当前 WebSocket 连接。
+     * @return 查询参数中的票据，不存在时返回空字符串。
+     */
+    private String accessTicket(WebSocket socket) {
+        if (socket == null) {
+            return "";
+        }
+        String ticket = socket.param("ticket");
+        if (StrUtil.isNotBlank(ticket)) {
+            return ticket;
+        }
+        if (socket.paramMap() == null) {
+            return "";
+        }
+        for (String key : socket.paramMap().keySet()) {
+            if ("ticket".equalsIgnoreCase(key)) {
+                return StrUtil.nullToEmpty(socket.paramMap().get(key));
+            }
+        }
+        return "";
+    }
+
+    /**
+     * 判断连接是否已经在 onOpen 阶段消费有效票据。
+     *
+     * @param socket 当前 WebSocket 连接。
+     * @return 已认证且尚未关闭清理时返回 true。
+     */
+    private boolean isAuthorizedConnection(WebSocket socket) {
+        return socket != null && authorizedConnections.containsKey(socket);
+    }
 
     /** 将终端 UI 输入转发给本地运行时并通过事件流返回结果。 */
     private void handleChatSend(WebSocket socket, ONode payload) throws Exception {

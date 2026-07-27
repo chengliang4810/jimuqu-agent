@@ -16,13 +16,18 @@ class TerminalUiHandshakeServiceTest {
 
     private final TerminalUiHandshakeService service = new TerminalUiHandshakeService();
 
+    /** 测试握手控制器与 WebSocket 监听器共享的一次性票据服务。 */
+    private final TerminalUiAccessTicketService accessTicketService =
+            new TerminalUiAccessTicketService();
+
     /** 验证未配置令牌时发现接口明确拒绝，而不是返回必然失败的 WebSocket 地址。 */
     @Test
     @DisplayName("controller handshake - 空 access token 时返回配置提示")
     void controllerHandshakeWithEmptyTokenShouldFailClosed() {
         AppConfig appConfig = new AppConfig();
         TerminalUiController controller =
-                new TerminalUiController(service, new DashboardAuthService(appConfig));
+                new TerminalUiController(
+                        service, new DashboardAuthService(appConfig), accessTicketService);
         LocalContext context = new LocalContext();
 
         Map<String, Object> result = controller.handshake(context);
@@ -55,22 +60,47 @@ class TerminalUiHandshakeServiceTest {
     }
 
     @Test
-    @DisplayName("handshake - 带 access token 时追加 token 参数")
-    void handshake_withAccessToken_shouldAppendTokenParam() {
+    @DisplayName("handshake - 带 access ticket 时追加 ticket 参数")
+    void handshake_withAccessTicket_shouldAppendTicketParam() {
         Map<String, Object> result =
-                service.handshake("http://127.0.0.1:8080", "token with space&scope=all");
+                service.handshake("http://127.0.0.1:8080", "ticket with space&scope=all");
 
         String wsUrl = result.get("ws_url").toString();
-        assertThat(wsUrl).endsWith("token=token+with+space%26scope%3Dall");
+        assertThat(wsUrl).endsWith("ticket=ticket+with+space%26scope%3Dall");
+        assertThat(wsUrl).doesNotContain("token=");
     }
 
     @Test
-    @DisplayName("handshake - 空 access token 时 URL 不包含 token 参数")
-    void handshake_withEmptyToken_shouldNotAppendToken() {
+    @DisplayName("handshake - 空 access ticket 时 URL 不包含认证参数")
+    void handshake_withEmptyTicket_shouldNotAppendAuthenticationParameter() {
         Map<String, Object> result = service.handshake("http://127.0.0.1:8080", "");
 
         String wsUrl = result.get("ws_url").toString();
         assertThat(wsUrl).doesNotContain("token=");
+        assertThat(wsUrl).doesNotContain("ticket=");
+    }
+
+    /** 验证控制器只返回可消费一次的短时票据，不再把 Dashboard 长期令牌写入 URL。 */
+    @Test
+    @DisplayName("controller handshake - 签发一次性 ticket")
+    void controllerHandshakeShouldIssueOneTimeTicket() {
+        AppConfig appConfig = new AppConfig();
+        appConfig.getDashboard().setAccessToken("long-lived-dashboard-token");
+        TerminalUiController controller =
+                new TerminalUiController(
+                        service, new DashboardAuthService(appConfig), accessTicketService);
+
+        Map<String, Object> result = controller.handshake(new LocalContext());
+
+        String wsUrl = String.valueOf(result.get("ws_url"));
+        String marker = "ticket=";
+        String ticket = wsUrl.substring(wsUrl.indexOf(marker) + marker.length());
+        assertThat(wsUrl)
+                .contains("/ws/tui?ticket=")
+                .doesNotContain("long-lived-dashboard-token")
+                .doesNotContain("?token=");
+        assertThat(accessTicketService.consume(ticket)).isTrue();
+        assertThat(accessTicketService.consume(ticket)).isFalse();
     }
 
     @Test

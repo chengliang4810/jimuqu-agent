@@ -19,22 +19,29 @@ public class TerminalUiController {
     /** 复用 Dashboard 访问控制服务，避免 TUI 握手暴露独立凭据规则。 */
     private final DashboardAuthService authService;
 
+    /** 为已通过 HTTP 鉴权的调用方签发短时一次性 WebSocket 票据。 */
+    private final TerminalUiAccessTicketService accessTicketService;
+
     /**
      * 创建终端 UI 后端发现接口。
      *
      * @param handshakeService 终端 UI 握手响应构造服务。
-     * @param authService Dashboard 认证服务，复用同一套访问控制与 token 暴露策略。
+     * @param authService Dashboard 认证服务，复用同一套访问控制策略。
+     * @param accessTicketService 短时一次性 WebSocket 票据服务。
      */
     public TerminalUiController(
-            TerminalUiHandshakeService handshakeService, DashboardAuthService authService) {
+            TerminalUiHandshakeService handshakeService,
+            DashboardAuthService authService,
+            TerminalUiAccessTicketService accessTicketService) {
         this.handshakeService = handshakeService;
         this.authService = authService;
+        this.accessTicketService = accessTicketService;
     }
 
     /**
      * 返回终端 UI 协议版本与 WebSocket 地址。
      *
-     * @param context 当前 HTTP 请求上下文，用于判断调用方是否允许读取会话 token。
+     * @param context 当前 HTTP 请求上下文，用于判断调用方是否允许签发 WebSocket 票据。
      * @return 前端握手信息；未授权时返回 401，未配置访问令牌时返回 503 配置错误。
      */
     @Mapping(value = "/api/tui/handshake", method = MethodType.GET)
@@ -44,14 +51,20 @@ public class TerminalUiController {
             authService.writeUnauthorized(context);
             return Collections.emptyMap();
         }
-        String token = authService == null ? "" : authService.sessionToken();
-        if (StrUtil.isBlank(token)) {
+        String dashboardToken = authService == null ? "" : authService.sessionToken();
+        if (StrUtil.isBlank(dashboardToken)) {
             context.status(503);
             return DashboardResponse.error(
                     "TUI_ACCESS_TOKEN_REQUIRED",
                     "未配置 Dashboard 访问令牌，请先设置 solonclaw.dashboard.accessToken");
         }
-        return handshakeService.handshake(baseUrl(context), token);
+        try {
+            return handshakeService.handshake(baseUrl(context), accessTicketService.issue());
+        } catch (IllegalStateException e) {
+            context.status(503);
+            return DashboardResponse.error(
+                    "TUI_ACCESS_TICKET_UNAVAILABLE", "暂时无法创建终端 UI 连接票据，请稍后重试");
+        }
     }
 
     /**
