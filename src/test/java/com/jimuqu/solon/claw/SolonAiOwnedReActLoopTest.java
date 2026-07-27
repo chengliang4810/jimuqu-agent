@@ -3,6 +3,10 @@ package com.jimuqu.solon.claw;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.context.MemoryContextBoundary;
@@ -22,6 +26,7 @@ import com.jimuqu.solon.claw.tool.runtime.SecurityPolicyService;
 import com.jimuqu.solon.claw.tool.runtime.ToolCallLoopGuardrailService;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.nio.file.Files;
@@ -57,10 +62,61 @@ import org.noear.solon.ai.chat.message.ToolMessage;
 import org.noear.solon.ai.chat.prompt.Prompt;
 import org.noear.solon.ai.chat.tool.FunctionToolDesc;
 import org.noear.solon.ai.chat.tool.ToolCall;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 
 /** 校验项目自有 ReAct 循环能直接驱动文本 Action 与流式输出。 */
 public class SolonAiOwnedReActLoopTest {
+
+    /** 畸形文本 Action 必须 fail-closed，且调试日志不得包含模型提供的原始参数。 */
+    @Test
+    void shouldRejectMalformedTextActionsWithoutLoggingRawArguments() throws Exception {
+        String secret = "plainRandomCredential1234567890";
+        SolonAiLlmGateway gateway = new SolonAiLlmGateway(config());
+        Logger logger = (Logger) LoggerFactory.getLogger(SolonAiLlmGateway.class);
+        Level previousLevel = logger.getLevel();
+        ListAppender<ILoggingEvent> appender = new ListAppender<ILoggingEvent>();
+        appender.start();
+        logger.setLevel(Level.DEBUG);
+        logger.addAppender(appender);
+
+        Object jsonAction;
+        Object actionInput;
+        try {
+            Method parseJson =
+                    SolonAiLlmGateway.class.getDeclaredMethod("parseOwnedJsonAction", String.class);
+            parseJson.setAccessible(true);
+            jsonAction =
+                    parseJson.invoke(
+                            gateway,
+                            "{\"name\":\"echo_tool\",\"arguments\":{\"token\":\""
+                                    + secret
+                                    + "\"} invalid}");
+
+            Method parseInput =
+                    SolonAiLlmGateway.class.getDeclaredMethod(
+                            "parseOwnedActionInput", String.class);
+            parseInput.setAccessible(true);
+            actionInput =
+                    parseInput.invoke(
+                            gateway,
+                            "Action: echo_tool\nAction Input: {\"token\":\"" + secret + "\"");
+        } finally {
+            logger.detachAppender(appender);
+            logger.setLevel(previousLevel);
+        }
+
+        Field valid = actionInput.getClass().getDeclaredField("valid");
+        valid.setAccessible(true);
+        assertThat(jsonAction).isNull();
+        assertThat(valid.getBoolean(actionInput)).isFalse();
+        assertThat(appender.list)
+                .extracting(ILoggingEvent::getFormattedMessage)
+                .anyMatch(message -> message.contains("Text Action JSON"))
+                .anyMatch(message -> message.contains("Text Action input"))
+                .noneMatch(message -> message.contains(secret));
+    }
+
     @Test
     void shouldRunTextActionInputWhenNativeToolCallsAreMissing() throws Exception {
         AppConfig config = config();

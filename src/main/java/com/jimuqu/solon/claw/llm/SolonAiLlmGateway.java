@@ -1772,7 +1772,8 @@ public class SolonAiLlmGateway implements LlmGateway {
                     arguments,
                     rawArguments != null && arguments != null,
                     rawArguments == null ? "" : String.valueOf(rawArguments));
-        } catch (Throwable e) {
+        } catch (RuntimeException e) {
+            log.debug("Text Action JSON was invalid and will not execute: error={}", safeError(e));
             return null;
         }
     }
@@ -1820,7 +1821,8 @@ public class SolonAiLlmGateway implements LlmGateway {
             return arguments == null
                     ? ParsedToolArguments.invalid(input)
                     : ParsedToolArguments.valid(arguments, input);
-        } catch (Throwable e) {
+        } catch (RuntimeException e) {
+            log.debug("Text Action input was invalid and will not execute: error={}", safeError(e));
             return ParsedToolArguments.invalid(input);
         }
     }
