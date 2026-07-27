@@ -313,6 +313,59 @@ describe('GatewayClient solonclaw bridge', () => {
     gw.kill()
   })
 
+  it('拒绝 HTTPS 握手响应降级到远程明文 WebSocket', async () => {
+    process.env.SOLONCLAW_SERVER_URL = 'https://agent.example.com'
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
+      json: async () => ({
+        protocol_version: 1,
+        ws_url: 'ws://agent.example.com/ws/tui?ticket=remote-cleartext-ticket'
+      }),
+      ok: true,
+      status: 200
+    } as Response)
+    const gw = new GatewayClient()
+
+    gw.start()
+    await vi.waitFor(() => expect(gw.getLogTail(20)).toContain('远程明文 WebSocket'))
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('https://agent.example.com/api/tui/handshake')
+    expect(FakeWebSocket.instances).toHaveLength(0)
+    expect(gw.getLogTail(20)).not.toContain('remote-cleartext-ticket')
+    gw.kill()
+  })
+
+  it.each([
+    'ws://gateway.example.com/api/ws?token=remote-cleartext-token',
+    'ws://127.attacker.example/api/ws?token=lookalike-token'
+  ])('拒绝直接连接远程明文 WebSocket：%s', async attachUrl => {
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = attachUrl
+    const gw = new GatewayClient()
+
+    gw.start()
+    await vi.waitFor(() => expect(gw.getLogTail(20)).toContain('远程明文 WebSocket'))
+
+    expect(FakeWebSocket.instances).toHaveLength(0)
+    expect(gw.getLogTail(20)).not.toContain(new URL(attachUrl).searchParams.get('token'))
+    gw.kill()
+  })
+
+  it.each([
+    'ws://127.1:18080/ws/tui?ticket=ipv4-loopback',
+    'ws://[0:0:0:0:0:0:0:1]:18080/ws/tui?ticket=ipv6-loopback',
+    'ws://LOCALHOST.:18080/ws/tui?ticket=hostname-loopback'
+  ])('允许标准化后的明确 loopback 明文 WebSocket：%s', async attachUrl => {
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = attachUrl
+    const gw = new GatewayClient()
+
+    gw.start()
+    expect(FakeWebSocket.instances).toHaveLength(1)
+    expect(FakeWebSocket.instances[0]!.url).toBe(attachUrl)
+
+    FakeWebSocket.instances[0]!.open()
+    await gw.drain()
+    gw.kill()
+  })
+
   it('redacts handshake URL credentials from logs and error events', async () => {
     const serverUrl = 'http://alice:hunter2@127.0.0.1:8080?api_key=secret'
     const handshake = `${serverUrl}/api/tui/handshake`
@@ -493,7 +546,7 @@ describe('GatewayClient solonclaw bridge', () => {
   })
 
   it('waits for websocket open and resolves RPC requests in attach mode', async () => {
-    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'ws://gateway.test/api/ws?token=abc'
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'wss://gateway.test/api/ws?token=abc'
     const gw = new GatewayClient()
 
     gw.start()
@@ -514,7 +567,7 @@ describe('GatewayClient solonclaw bridge', () => {
   })
 
   it('serializes RPC requests on one websocket so the Solon backend does not drop concurrent frames', async () => {
-    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'ws://gateway.test/api/ws?token=abc'
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'wss://gateway.test/api/ws?token=abc'
     const gw = new GatewayClient()
 
     gw.start()
@@ -541,7 +594,7 @@ describe('GatewayClient solonclaw bridge', () => {
   })
 
   it('coalesces repeated polls while preserving the serial RPC transport', async () => {
-    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'ws://gateway.test/api/ws?token=abc'
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'wss://gateway.test/api/ws?token=abc'
     const gw = new GatewayClient()
 
     gw.start()
@@ -579,8 +632,8 @@ describe('GatewayClient solonclaw bridge', () => {
   })
 
   it('mirrors event frames to sidecar websocket when configured', async () => {
-    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'ws://gateway.test/api/ws?token=abc'
-    process.env.SOLONCLAW_TUI_SIDECAR_URL = 'ws://gateway.test/api/pub?token=abc&channel=demo'
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'wss://gateway.test/api/ws?token=abc'
+    process.env.SOLONCLAW_TUI_SIDECAR_URL = 'wss://gateway.test/api/pub?token=abc&channel=demo'
 
     const gw = new GatewayClient()
     const seen: string[] = []
@@ -611,8 +664,24 @@ describe('GatewayClient solonclaw bridge', () => {
     gw.kill()
   })
 
+  it('拒绝将事件镜像到远程明文 sidecar WebSocket', async () => {
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'wss://gateway.test/api/ws?token=abc'
+    process.env.SOLONCLAW_TUI_SIDECAR_URL = 'ws://sidecar.example.com/api/pub?token=sidecar-cleartext-token'
+    const gw = new GatewayClient()
+
+    gw.start()
+    const gatewaySocket = FakeWebSocket.instances[0]!
+
+    gatewaySocket.open()
+    await vi.waitFor(() => expect(gw.getLogTail(20)).toContain('远程明文 WebSocket'))
+
+    expect(FakeWebSocket.instances).toHaveLength(1)
+    expect(gw.getLogTail(20)).not.toContain('sidecar-cleartext-token')
+    gw.kill()
+  })
+
   it('emits exit when attached websocket closes', async () => {
-    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'ws://gateway.test/api/ws?token=abc'
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'wss://gateway.test/api/ws?token=abc'
     const gw = new GatewayClient()
     const exits: Array<null | number> = []
 
@@ -631,7 +700,7 @@ describe('GatewayClient solonclaw bridge', () => {
   })
 
   it('rejects pending RPCs with websocket wording when the attached socket closes', async () => {
-    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'ws://gateway.test/api/ws?token=abc'
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'wss://gateway.test/api/ws?token=abc'
     const gw = new GatewayClient()
 
     gw.start()
@@ -649,7 +718,7 @@ describe('GatewayClient solonclaw bridge', () => {
   })
 
   it('rejects pending RPCs when kill() closes the attached websocket', async () => {
-    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'ws://gateway.test/api/ws?token=abc'
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'wss://gateway.test/api/ws?token=abc'
     const gw = new GatewayClient()
 
     gw.start()
@@ -668,7 +737,7 @@ describe('GatewayClient solonclaw bridge', () => {
   })
 
   it('reattaches when SOLONCLAW_TUI_GATEWAY_URL rotates between requests', async () => {
-    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'ws://gateway-old.test/api/ws?token=abc'
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'wss://gateway-old.test/api/ws?token=abc'
     const gw = new GatewayClient()
 
     gw.start()
@@ -680,7 +749,7 @@ describe('GatewayClient solonclaw bridge', () => {
     const stale = gw.request('session.create', {})
     await vi.waitFor(() => expect(findRpcFrame(firstSocket, 'session.create')).toBeTruthy())
 
-    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'ws://gateway-new.test/api/ws?token=xyz'
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'wss://gateway-new.test/api/ws?token=xyz'
     const next = gw.request('session.create', {})
 
     await expect(stale).rejects.toThrow(/gateway attach url changed/)
@@ -700,7 +769,7 @@ describe('GatewayClient solonclaw bridge', () => {
   })
 
   it('redacts query string secrets in attach failure logs and events', async () => {
-    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'ws://gateway.test/api/ws?token=hunter2&channel=secret'
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'wss://gateway.test/api/ws?token=hunter2&channel=secret'
 
     // 使 WebSocket 构造函数抛错以模拟连接失败（ws 模块 fallback 使 "unavailable" 不再触发）
     const OrigWs = globalThis.WebSocket
@@ -734,7 +803,7 @@ describe('GatewayClient solonclaw bridge', () => {
   })
 
   it('redacts attach URL secrets when the WebSocket constructor throws', async () => {
-    const secretUrl = 'ws://gateway.test/api/ws?token=hunter2&channel=secret'
+    const secretUrl = 'wss://gateway.test/api/ws?token=hunter2&channel=secret'
 
     process.env.SOLONCLAW_TUI_GATEWAY_URL = secretUrl
     ;(globalThis as { WebSocket?: unknown }).WebSocket = class ThrowingWebSocket extends FakeWebSocket {
@@ -752,15 +821,15 @@ describe('GatewayClient solonclaw bridge', () => {
     expect(tail).not.toContain('hunter2')
     expect(tail).not.toContain('channel=secret')
     expect(tail).not.toContain(secretUrl)
-    expect(tail).toContain('ws://gateway.test/api/ws?***')
+    expect(tail).toContain('wss://gateway.test/api/ws?***')
 
     gw.kill()
   })
 
   it('redacts sidecar URL secrets when the WebSocket constructor throws', async () => {
-    const sidecarUrl = 'ws://gateway.test/api/pub?token=hunter2&channel=secret'
+    const sidecarUrl = 'wss://gateway.test/api/pub?token=hunter2&channel=secret'
 
-    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'ws://gateway.test/api/ws?token=abc'
+    process.env.SOLONCLAW_TUI_GATEWAY_URL = 'wss://gateway.test/api/ws?token=abc'
     process.env.SOLONCLAW_TUI_SIDECAR_URL = sidecarUrl
     ;(globalThis as { WebSocket?: unknown }).WebSocket = class ThrowingSidecarWebSocket extends FakeWebSocket {
       constructor(url: string) {
@@ -783,7 +852,7 @@ describe('GatewayClient solonclaw bridge', () => {
     expect(tail).not.toContain('hunter2')
     expect(tail).not.toContain('channel=secret')
     expect(tail).not.toContain(sidecarUrl)
-    expect(tail).toContain('ws://gateway.test/api/pub?***')
+    expect(tail).toContain('wss://gateway.test/api/pub?***')
 
     gw.kill()
   })

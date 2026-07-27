@@ -8,6 +8,7 @@ import type { GatewayEvent } from './gatewayTypes.js'
 import { CircularBuffer } from './lib/circularBuffer.js'
 import { resolveDashboardToken } from './lib/dashboardToken.js'
 import { recordParentLifecycle } from './lib/parentLog.js'
+import { assertSecureWebSocketUrl } from './lib/webSocketUrlPolicy.js'
 
 // 测试或兼容运行时可能没有全局 WebSocket，使用 ws 模块兜底。
 // 懒解析：每次调用时检查全局 WebSocket（测试会动态 mock/delete）
@@ -329,6 +330,7 @@ export class GatewayClient extends EventEmitter {
     }
 
     try {
+      assertSecureWebSocketUrl(this.sidecarUrl)
       const ws = new (resolveWsCtor())(this.sidecarUrl)
 
       this.sidecarWs = ws
@@ -340,8 +342,11 @@ export class GatewayClient extends EventEmitter {
       ws.addEventListener('error', () => {
         this.pushLog('[sidecar] mirror connection error')
       })
-    } catch {
-      this.pushLog(`[sidecar] failed to connect ${redactUrl(this.sidecarUrl)} (constructor error)`)
+    } catch (err) {
+      const rawMessage = err instanceof Error ? err.message : String(err)
+      const safeMessage = redactUrlsInText(rawMessage)
+
+      this.pushLog(`[sidecar] failed to connect ${redactUrl(this.sidecarUrl)} (${safeMessage})`)
       this.sidecarWs = null
     }
   }
@@ -413,6 +418,7 @@ export class GatewayClient extends EventEmitter {
     }
 
     try {
+      assertSecureWebSocketUrl(attachUrl)
       const ws = new (resolveWsCtor())(attachUrl)
       let settled = false
 
