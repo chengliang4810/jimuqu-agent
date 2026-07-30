@@ -242,6 +242,12 @@ export interface PlatformDoctor {
   features?: string[]
   last_error_code?: string
   last_error_message?: string
+  /** 入站仍连接但最近一次出站投递是否失败。 */
+  outbound_degraded?: boolean
+  /** 最近一次出站投递失败的错误码。 */
+  outbound_error_code?: string
+  /** 最近一次出站投递失败的脱敏错误详情。 */
+  outbound_error_message?: string
   reconnecting?: boolean
   reconnect_attempt?: number
   last_reconnect_error?: string

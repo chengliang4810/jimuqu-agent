@@ -90,6 +90,15 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     /** 消息DEDUP最大ENTRIES的统一常量值。 */
     private static final int MESSAGE_DEDUP_MAX_ENTRIES = 512;
 
+    /** 微信会话过期错误码。 */
+    private static final int SESSION_EXPIRED_ERROR_CODE = -14;
+
+    /** 微信临时平台失败错误码，公开协议未承诺其固定含义。 */
+    private static final int TEMPORARY_PLATFORM_FAILURE_CODE = -2;
+
+    /** 微信旧会话响应使用的错误文本。 */
+    private static final String STALE_SESSION_ERROR_MESSAGE = "unknown error";
+
     /** 最大HTTPREDIRECTS的统一常量值。 */
     private static final int MAX_HTTP_REDIRECTS = 5;
 
@@ -163,8 +172,11 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     /** 保存渠道状态仓储依赖，用于访问持久化数据。 */
     private final ChannelStateRepository channelStateRepository;
 
-    /** 串行化当前适配器的文字和附件发送，确保限流状态对排队请求立即可见。 */
+    /** 串行化当前适配器的文字和附件发送，确保出站保护状态对排队请求立即可见。 */
     private final Object outboundSendGate = new Object();
+
+    /** 当前微信出站保护冷却截止时间。 */
+    private volatile long sendFailureCooldownUntilMillis;
 
     /** 注入附件缓存服务，用于调用对应业务能力。 */
     private final AttachmentCacheService attachmentCacheService;
@@ -925,6 +937,7 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
      * @param attachment 附件参数。
      */
     private void sendAttachment(String chatId, MessageAttachment attachment) {
+        throwIfSendFailureCooldownActive("Weixin media send failed");
         File file = new File(attachment.getLocalPath());
         if (!file.isFile()) {
             throw new IllegalStateException(
@@ -958,6 +971,8 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
                                 .set("no_need_thumb", true)
                                 .set("aeskey", HexUtil.encodeHexStr(aesKey))
                                 .asObject());
+        throwIfTemporaryPlatformFailure(
+                uploadInfo, "weixin_send_media_failed", "Weixin upload init failed");
         ensureSuccess(uploadInfo, "Weixin upload init failed");
 
         String uploadUrl = resolveUploadUrl(uploadInfo, fileKey);
@@ -988,6 +1003,7 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
      */
     private void sendMessageWithRetry(
             String chatId, ONode message, String errorCode, String failureMessage) {
+        throwIfSendFailureCooldownActive(failureMessage);
         int attempts = Math.max(1, config.getSendChunkRetries() + 1);
         String contextToken = loadContextToken(chatId);
         if (StrUtil.isNotBlank(contextToken)) {
@@ -995,18 +1011,25 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         }
         for (int attempt = 1; ; attempt++) {
             try {
+                throwIfSendFailureCooldownActive(failureMessage);
                 ONode response = apiPost(SEND_ENDPOINT, new ONode().set("msg", message).asObject());
-                if (hasExpiredContextToken(response) && StrUtil.isNotBlank(contextToken)) {
+                if (hasStaleSession(response) && StrUtil.isNotBlank(contextToken)) {
                     clearContextToken(chatId);
                     contextToken = null;
                     message.remove("context_token");
                     response = apiPost(SEND_ENDPOINT, new ONode().set("msg", message).asObject());
                 }
+                throwIfTemporaryPlatformFailure(response, errorCode, failureMessage);
                 ensureSuccess(response, failureMessage);
+                sendFailureCooldownUntilMillis = 0L;
+                clearOutboundFailure();
                 clearLastError();
                 return;
+            } catch (SendFailureCooldownException e) {
+                throw e;
             } catch (Exception e) {
                 setLastError(errorCode, safeMessage(e));
+                setOutboundFailure(errorCode, safeMessage(e));
                 if (Thread.currentThread().isInterrupted()) {
                     throw new IllegalStateException(safeMessage(e), e);
                 }
@@ -1024,9 +1047,85 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
         }
     }
 
-    /** 判断 sendmessage 是否以任一错误字段声明当前上下文 token 已失效。 */
-    private boolean hasExpiredContextToken(ONode response) {
-        return response.get("errcode").getInt(0) == -14 || response.get("ret").getInt(0) == -14;
+    /** 判断 sendmessage 是否声明当前上下文 token 已失效。 */
+    private boolean hasStaleSession(ONode response) {
+        int errCode = response.get("errcode").getInt(0);
+        int ret = response.get("ret").getInt(0);
+        if (errCode == SESSION_EXPIRED_ERROR_CODE || ret == SESSION_EXPIRED_ERROR_CODE) {
+            return true;
+        }
+        if (errCode != TEMPORARY_PLATFORM_FAILURE_CODE && ret != TEMPORARY_PLATFORM_FAILURE_CODE) {
+            return false;
+        }
+        return STALE_SESSION_ERROR_MESSAGE.equalsIgnoreCase(
+                StrUtil.trim(response.get("errmsg").getString()));
+    }
+
+    /** 判断 sendmessage 是否返回需要暂停继续请求的临时平台失败。 */
+    private boolean hasTemporaryPlatformFailure(ONode response) {
+        return response.get("errcode").getInt(0) == TEMPORARY_PLATFORM_FAILURE_CODE
+                || response.get("ret").getInt(0) == TEMPORARY_PLATFORM_FAILURE_CODE;
+    }
+
+    /** 识别临时平台失败，记录出站降级，并在启用保护冷却时立即中止发送。 */
+    private void throwIfTemporaryPlatformFailure(
+            ONode response, String errorCode, String failureMessage) {
+        if (!hasTemporaryPlatformFailure(response)) {
+            return;
+        }
+        if (openSendFailureCooldown(errorCode, failureMessage, response)) {
+            throw new SendFailureCooldownException(
+                    failureMessage + ": " + safeJson(response) + "; " + outboundCooldownSuffix());
+        }
+    }
+
+    /** 打开共享出站保护冷却，避免并发定时任务继续撞击同一平台失败。 */
+    private boolean openSendFailureCooldown(
+            String errorCode, String failureMessage, ONode response) {
+        String message = failureMessage + ": " + safeJson(response);
+        setLastError(errorCode, message);
+        setOutboundFailure(errorCode, message);
+        long cooldownMillis = sendFailureCooldownMillis();
+        if (cooldownMillis <= 0L) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        long candidate =
+                cooldownMillis >= Long.MAX_VALUE - now ? Long.MAX_VALUE : now + cooldownMillis;
+        sendFailureCooldownUntilMillis = Math.max(sendFailureCooldownUntilMillis, candidate);
+        return true;
+    }
+
+    /** 在冷却窗口内快速拒绝新的出站请求，不再访问微信接口。 */
+    private void throwIfSendFailureCooldownActive(String failureMessage) {
+        if (sendFailureCooldownUntilMillis <= System.currentTimeMillis()) {
+            return;
+        }
+        String message = outboundCooldownMessage(failureMessage);
+        throw new SendFailureCooldownException(message);
+    }
+
+    /** 把当前冷却策略转换为毫秒，并防御运行时热配置中的非法数值。 */
+    private long sendFailureCooldownMillis() {
+        double seconds = config.getSendFailureCooldownSeconds();
+        if (Double.isNaN(seconds) || Double.isInfinite(seconds) || seconds <= 0.0D) {
+            return 0L;
+        }
+        double millis = seconds * 1000.0D;
+        return millis >= Long.MAX_VALUE ? Long.MAX_VALUE : Math.max(1L, (long) millis);
+    }
+
+    /** 构造不暴露接收方信息的微信出站冷却提示。 */
+    private String outboundCooldownMessage(String failureMessage) {
+        return failureMessage + ": temporary platform failure; " + outboundCooldownSuffix();
+    }
+
+    /** 构造供首次平台失败错误附加的冷却说明。 */
+    private String outboundCooldownSuffix() {
+        long remainingMillis =
+                Math.max(0L, sendFailureCooldownUntilMillis - System.currentTimeMillis());
+        long remainingSeconds = Math.max(1L, (remainingMillis + 999L) / 1000L);
+        return "outbound cooldown active for " + remainingSeconds + " second(s)";
     }
 
     /**
@@ -2550,6 +2649,21 @@ public class WeiXinChannelAdapter extends AbstractConfigurableChannelAdapter {
     /** 规范化基础 URL，避免后续拼接路径时出现重复斜杠。 */
     private String normalizeBaseUrl(String baseUrl) {
         return BaseUrlSupport.stripTrailingSlashes(baseUrl);
+    }
+
+    /** 表示微信出站保护冷却已打开，调用方应立即释放串行发送锁。 */
+    private static class SendFailureCooldownException extends IllegalStateException {
+        /** 序列化版本。 */
+        private static final long serialVersionUID = 1L;
+
+        /**
+         * 创建微信出站冷却异常。
+         *
+         * @param message 不包含接收方敏感信息的错误说明。
+         */
+        private SendFailureCooldownException(String message) {
+            super(message);
+        }
     }
 
     /** 承载聊天Target相关状态和辅助逻辑。 */

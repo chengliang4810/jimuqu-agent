@@ -647,6 +647,9 @@ public class RuntimeSetupService {
         } else if ("sendChunkRetryDelaySeconds".equals(key)) {
             config.setSendChunkRetryDelaySeconds(
                     parseDouble(value, config.getSendChunkRetryDelaySeconds()));
+        } else if ("sendFailureCooldownSeconds".equals(key)) {
+            config.setSendFailureCooldownSeconds(
+                    parseDouble(value, config.getSendFailureCooldownSeconds()));
         }
     }
 

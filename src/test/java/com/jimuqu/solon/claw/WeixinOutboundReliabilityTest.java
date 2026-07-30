@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.core.enums.PlatformType;
+import com.jimuqu.solon.claw.core.model.ChannelStatus;
 import com.jimuqu.solon.claw.core.model.DeliveryRequest;
 import com.jimuqu.solon.claw.core.model.MessageAttachment;
 import com.jimuqu.solon.claw.core.repository.ChannelStateRepository;
@@ -32,7 +33,7 @@ import org.noear.snack4.ONode;
 
 /** 验证微信出站请求串行、有界重试和失效上下文 token 清理。 */
 public class WeixinOutboundReliabilityTest {
-    /** 收到 ret=-2 后应按配置重试，文字与附件均不得丢失或乱序。 */
+    /** 关闭保护冷却后，ret=-2 仍应按配置重试，文字与附件不得丢失或乱序。 */
     @Test
     void shouldRetryRetMinusTwoAttachmentWithoutDroppingOrderedDelivery() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -60,6 +61,7 @@ public class WeixinOutboundReliabilityTest {
         AppConfig config = newConfig(server);
         config.getChannels().getWeixin().setSendChunkRetries(1);
         config.getChannels().getWeixin().setSendChunkRetryDelaySeconds(0D);
+        config.getChannels().getWeixin().setSendFailureCooldownSeconds(0D);
         WeiXinChannelAdapter adapter = newAdapter(config, new MemoryStateRepository());
         File attachmentFile = Files.createTempFile("solonclaw-weixin-rate-limit", ".txt").toFile();
         Files.writeString(attachmentFile.toPath(), "attachment", StandardCharsets.UTF_8);
@@ -102,6 +104,7 @@ public class WeixinOutboundReliabilityTest {
         AppConfig config = newConfig(server);
         config.getChannels().getWeixin().setSendChunkRetries(1);
         config.getChannels().getWeixin().setSendChunkRetryDelaySeconds(0D);
+        config.getChannels().getWeixin().setSendFailureCooldownSeconds(0D);
         WeiXinChannelAdapter adapter = newAdapter(config, new MemoryStateRepository());
 
         try {
@@ -118,10 +121,191 @@ public class WeixinOutboundReliabilityTest {
                                     .hasMessageContaining("after 2 attempt(s)")
                                     .hasMessageContaining("\"ret\":-2"));
             assertThat(sendRequests.get()).isEqualTo(2);
+            assertThat(adapter.statusSnapshot().isOutboundDegraded()).isTrue();
 
             platformFailure.set(false);
             adapter.send(textRequest("wx-user", "after failure"));
             assertThat(sendRequests.get()).isEqualTo(3);
+            assertThat(adapter.statusSnapshot().isOutboundDegraded()).isFalse();
+        } finally {
+            adapter.disconnect();
+            server.stop(0);
+        }
+    }
+
+    /** prepare failed 应打开共享冷却，后续定时任务不得继续请求平台。 */
+    @Test
+    void shouldOpenSharedCooldownAfterPrepareFailure() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        AtomicInteger sendRequests = new AtomicInteger();
+        AtomicInteger uploadInitRequests = new AtomicInteger();
+        server.createContext(
+                "/ilink/bot/sendmessage",
+                exchange -> {
+                    sendRequests.incrementAndGet();
+                    byte[] response =
+                            "{\"ret\":-2,\"errmsg\":\"prepare failed\"}"
+                                    .getBytes(StandardCharsets.UTF_8);
+                    exchange.sendResponseHeaders(200, response.length);
+                    exchange.getResponseBody().write(response);
+                    exchange.close();
+                });
+        server.createContext(
+                "/ilink/bot/getuploadurl",
+                exchange -> {
+                    uploadInitRequests.incrementAndGet();
+                    byte[] response = "{}".getBytes(StandardCharsets.UTF_8);
+                    exchange.sendResponseHeaders(200, response.length);
+                    exchange.getResponseBody().write(response);
+                    exchange.close();
+                });
+        server.start();
+        AppConfig config = newConfig(server);
+        config.getChannels().getWeixin().setSendChunkRetries(5);
+        config.getChannels().getWeixin().setSendFailureCooldownSeconds(60D);
+        WeiXinChannelAdapter adapter = newAdapter(config, new MemoryStateRepository());
+        File attachmentFile = Files.createTempFile("solonclaw-weixin-cooldown", ".txt").toFile();
+        Files.writeString(attachmentFile.toPath(), "attachment", StandardCharsets.UTF_8);
+
+        try {
+            assertThatThrownBy(() -> adapter.send(textRequest("wx-user", "first")))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("prepare failed")
+                    .hasMessageContaining("outbound cooldown active");
+            assertThat(sendRequests.get()).isEqualTo(1);
+
+            ChannelStatus status = adapter.statusSnapshot();
+            assertThat(status.isOutboundDegraded()).isTrue();
+            assertThat(status.getOutboundErrorCode()).isEqualTo("weixin_send_text_failed");
+            assertThat(status.getOutboundErrorMessage()).contains("prepare failed");
+
+            assertThatThrownBy(() -> adapter.send(textRequest("wx-user", "second")))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("temporary platform failure")
+                    .hasMessageContaining("outbound cooldown active");
+            assertThat(sendRequests.get()).isEqualTo(1);
+
+            assertThatThrownBy(() -> adapter.send(attachmentRequest("wx-user", attachmentFile)))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("temporary platform failure")
+                    .hasMessageContaining("outbound cooldown active");
+            assertThat(uploadInitRequests.get()).isZero();
+            assertThat(sendRequests.get()).isEqualTo(1);
+
+            ChannelStatus preservedStatus = adapter.statusSnapshot();
+            assertThat(preservedStatus.getOutboundErrorCode()).isEqualTo("weixin_send_text_failed");
+            assertThat(preservedStatus.getOutboundErrorMessage()).contains("prepare failed");
+        } finally {
+            adapter.disconnect();
+            server.stop(0);
+        }
+    }
+
+    /** 附件上传初始化返回 prepare failed 时也应打开共享冷却并暴露出站降级。 */
+    @Test
+    void shouldOpenSharedCooldownAfterUploadInitPrepareFailure() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        AtomicInteger sendRequests = new AtomicInteger();
+        AtomicInteger uploadInitRequests = new AtomicInteger();
+        server.createContext(
+                "/ilink/bot/getuploadurl",
+                exchange -> {
+                    uploadInitRequests.incrementAndGet();
+                    byte[] response =
+                            "{\"ret\":-2,\"errmsg\":\"prepare failed\"}"
+                                    .getBytes(StandardCharsets.UTF_8);
+                    exchange.sendResponseHeaders(200, response.length);
+                    exchange.getResponseBody().write(response);
+                    exchange.close();
+                });
+        server.createContext(
+                "/ilink/bot/sendmessage",
+                exchange -> {
+                    sendRequests.incrementAndGet();
+                    byte[] response = "{}".getBytes(StandardCharsets.UTF_8);
+                    exchange.sendResponseHeaders(200, response.length);
+                    exchange.getResponseBody().write(response);
+                    exchange.close();
+                });
+        server.start();
+        AppConfig config = newConfig(server);
+        config.getChannels().getWeixin().setSendFailureCooldownSeconds(60D);
+        WeiXinChannelAdapter adapter = newAdapter(config, new MemoryStateRepository());
+        File attachmentFile =
+                Files.createTempFile("solonclaw-weixin-upload-cooldown", ".txt").toFile();
+        Files.writeString(attachmentFile.toPath(), "attachment", StandardCharsets.UTF_8);
+
+        try {
+            assertThatThrownBy(() -> adapter.send(attachmentRequest("wx-user", attachmentFile)))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Weixin upload init failed")
+                    .hasMessageContaining("prepare failed")
+                    .hasMessageContaining("outbound cooldown active");
+            assertThat(uploadInitRequests.get()).isEqualTo(1);
+            assertThat(sendRequests.get()).isZero();
+
+            ChannelStatus status = adapter.statusSnapshot();
+            assertThat(status.isOutboundDegraded()).isTrue();
+            assertThat(status.getOutboundErrorCode()).isEqualTo("weixin_send_media_failed");
+            assertThat(status.getOutboundErrorMessage())
+                    .contains("Weixin upload init failed")
+                    .contains("prepare failed");
+
+            assertThatThrownBy(() -> adapter.send(textRequest("wx-user", "after upload failure")))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("temporary platform failure")
+                    .hasMessageContaining("outbound cooldown active");
+            assertThat(uploadInitRequests.get()).isEqualTo(1);
+            assertThat(sendRequests.get()).isZero();
+
+            ChannelStatus preservedStatus = adapter.statusSnapshot();
+            assertThat(preservedStatus.getOutboundErrorCode())
+                    .isEqualTo("weixin_send_media_failed");
+            assertThat(preservedStatus.getOutboundErrorMessage()).contains("prepare failed");
+        } finally {
+            adapter.disconnect();
+            server.stop(0);
+        }
+    }
+
+    /** ret=-2 unknown error 应按旧会话处理并去掉上下文 token 重试。 */
+    @Test
+    void shouldRetryUnknownErrorWithoutStaleContextToken() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        List<String> bodies = Collections.synchronizedList(new ArrayList<String>());
+        AtomicInteger requests = new AtomicInteger();
+        server.createContext(
+                "/ilink/bot/sendmessage",
+                exchange -> {
+                    bodies.add(
+                            new String(
+                                    exchange.getRequestBody().readAllBytes(),
+                                    StandardCharsets.UTF_8));
+                    String responseText =
+                            requests.incrementAndGet() == 1
+                                    ? "{\"ret\":-2,\"errmsg\":\"unknown error\"}"
+                                    : "{}";
+                    byte[] response = responseText.getBytes(StandardCharsets.UTF_8);
+                    exchange.sendResponseHeaders(200, response.length);
+                    exchange.getResponseBody().write(response);
+                    exchange.close();
+                });
+        server.start();
+        AppConfig config = newConfig(server);
+        MemoryStateRepository repository = new MemoryStateRepository();
+        repository.value.set("stale-session-token");
+        WeiXinChannelAdapter adapter = newAdapter(config, repository);
+
+        try {
+            adapter.send(textRequest("wx-user", "recover session"));
+
+            assertThat(requests.get()).isEqualTo(2);
+            assertThat(ONode.ofJson(bodies.get(0)).get("msg").get("context_token").getString())
+                    .isEqualTo("stale-session-token");
+            assertThat(ONode.ofJson(bodies.get(1)).get("msg").get("context_token").getString())
+                    .isBlank();
+            assertThat(repository.deletes.get()).isEqualTo(1);
+            assertThat(adapter.statusSnapshot().isOutboundDegraded()).isFalse();
         } finally {
             adapter.disconnect();
             server.stop(0);

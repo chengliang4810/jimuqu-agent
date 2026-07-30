@@ -899,6 +899,12 @@ public class DashboardConfigService implements ConfigManagementPort {
                         "number",
                         "messaging",
                         "微信分片重试间隔（秒）"));
+        addField(
+                new FieldDefinition(
+                        "channels.weixin.sendFailureCooldownSeconds",
+                        "number",
+                        "messaging",
+                        "微信发送失败保护冷却（秒）"));
 
         addChannelFields("qqbot");
         addField(

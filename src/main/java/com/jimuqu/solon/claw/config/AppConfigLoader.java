@@ -1062,6 +1062,16 @@ final class AppConfigLoader {
                                         1.0D)));
         config.getChannels()
                 .getWeixin()
+                .setSendFailureCooldownSeconds(
+                        nonNegativeFiniteDouble(
+                                readDouble(
+                                        props,
+                                        overrides,
+                                        "solonclaw.channels.weixin.sendFailureCooldownSeconds",
+                                        30.0D),
+                                30.0D));
+        config.getChannels()
+                .getWeixin()
                 .setToolProgress(
                         resolveConfigString(
                                 readString(

@@ -74,6 +74,23 @@ public class RuntimeRefreshBehaviorTest {
         assertThat(adapter.connectCount).isEqualTo(1);
     }
 
+    /** 微信发送失败冷却配置必须按小数写入，并触发渠道重连使新值立即生效。 */
+    @Test
+    void shouldPersistWeixinSendFailureCooldownAndReconnectChannel() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        RecordingChannelAdapter adapter = new RecordingChannelAdapter(PlatformType.WEIXIN);
+        RuntimeSettingsService runtimeSettingsService = runtimeSettingsService(env, adapter);
+
+        runtimeSettingsService.setConfigValue("channels.weixin.sendFailureCooldownSeconds", "12.5");
+
+        assertThat(env.appConfig.getChannels().getWeixin().getSendFailureCooldownSeconds())
+                .isEqualTo(12.5D);
+        assertThat(FileUtil.readUtf8String(env.appConfig.getRuntime().getConfigFile()))
+                .contains("sendFailureCooldownSeconds: 12.5");
+        assertThat(adapter.disconnectCount).isEqualTo(1);
+        assertThat(adapter.connectCount).isEqualTo(1);
+    }
+
     @Test
     void shouldRejectModelAndProviderKeysFromGenericConfigWrite() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();

@@ -226,6 +226,50 @@ public class DashboardStatusServiceTest {
                 .containsEntry("running", Boolean.TRUE);
     }
 
+    /** 验证连接仍正常但出站持续失败时，平台和整体运行态会进入降级状态。 */
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldDegradeConnectedChannelAfterPersistentOutboundFailure() throws Exception {
+        AppConfig config = new AppConfig();
+        File workspaceHome = new File("target/status-outbound-degraded-runtime").getAbsoluteFile();
+        config.getRuntime().setHome(workspaceHome.getAbsolutePath());
+        config.getRuntime().setConfigFile(new File(workspaceHome, "config.yml").getAbsolutePath());
+        ChannelStatus channelStatus =
+                new ChannelStatus(PlatformType.WEIXIN, true, true, "connected");
+        channelStatus.setSetupState("connected");
+        channelStatus.setConnectionMode("longpoll");
+        channelStatus.setOutboundDegraded(true);
+        channelStatus.setOutboundErrorCode("weixin_send_failed");
+        channelStatus.setOutboundErrorMessage(
+                "send failed token=ghp_statusoutbound12345 password=status-outbound-pass");
+        DashboardStatusService service =
+                statusService(config, new EmptySessionRepository(), channelStatus);
+
+        Map<String, Object> status = service.getStatus(true);
+        Map<String, Object> platforms = (Map<String, Object>) status.get("gateway_platforms");
+        Map<String, Object> weixin = (Map<String, Object>) platforms.get("weixin");
+        Map<String, Object> runtimeStatus = (Map<String, Object>) status.get("runtime_status");
+        Map<String, Object> runtimeGateway = (Map<String, Object>) runtimeStatus.get("gateway");
+        Map<String, Object> diagnostics = (Map<String, Object>) runtimeStatus.get("diagnostics");
+
+        assertThat(status)
+                .containsEntry("gateway_running", Boolean.TRUE)
+                .containsEntry("gateway_state", "running");
+        assertThat(weixin)
+                .containsEntry("state", "degraded")
+                .containsEntry("error_code", "weixin_send_failed");
+        assertThat(String.valueOf(weixin.get("error_message")))
+                .contains("token=***")
+                .contains("password=***")
+                .doesNotContain("ghp_statusoutbound12345")
+                .doesNotContain("status-outbound-pass");
+        assertThat(runtimeStatus).containsEntry("status", "degraded");
+        assertThat(runtimeGateway)
+                .containsEntry("state", "running")
+                .containsEntry("running", Boolean.TRUE);
+        assertThat(diagnostics).containsEntry("state", "degraded");
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void shouldSeparateRecentSessionsFromRunningAgentRuns() throws Exception {

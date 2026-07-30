@@ -265,6 +265,21 @@ public class DashboardGatewayDoctorService implements GatewayDoctorPort {
             String setupState = safeObjectText(platform.get("setup_state"), 120);
             String lastError = safeObjectText(platform.get("last_error_message"), 800);
             String lastReconnectError = safeObjectText(platform.get("last_reconnect_error"), 800);
+            String outboundError = safeObjectText(platform.get("outbound_error_message"), 800);
+            if (Boolean.TRUE.equals(platform.get("connected"))
+                    && Boolean.TRUE.equals(platform.get("outbound_degraded"))) {
+                addIssue(
+                        issues,
+                        "warning",
+                        "platform",
+                        "channel_outbound_degraded",
+                        target,
+                        platformName
+                                + " 渠道入站仍连接，但最近一次出站投递失败"
+                                + (StrUtil.isBlank(outboundError) ? "。" : "：" + outboundError),
+                        "等待 " + platformName + " 渠道保护冷却结束后重试；若持续失败，请检查平台返回错误。");
+                continue;
+            }
             if ("error".equalsIgnoreCase(setupState)
                     || StrUtil.isNotBlank(lastError)
                     || StrUtil.isNotBlank(lastReconnectError)) {
@@ -655,6 +670,11 @@ public class DashboardGatewayDoctorService implements GatewayDoctorPort {
         item.put("features", status.getFeatures());
         item.put("last_error_code", status.getLastErrorCode());
         item.put("last_error_message", redactSensitivePaths(status.getLastErrorMessage(), 1000));
+        item.put("outbound_degraded", Boolean.valueOf(status.isOutboundDegraded()));
+        item.put("outbound_error_code", status.getOutboundErrorCode());
+        item.put(
+                "outbound_error_message",
+                redactSensitivePaths(status.getOutboundErrorMessage(), 1000));
         item.put("reconnecting", Boolean.valueOf(status.isReconnecting()));
         item.put("reconnect_attempt", Integer.valueOf(status.getReconnectAttempt()));
         item.put("last_reconnect_at", Long.valueOf(status.getLastReconnectAt()));
@@ -688,6 +708,9 @@ public class DashboardGatewayDoctorService implements GatewayDoctorPort {
         }
         if (status.getMissingConfig() != null && !status.getMissingConfig().isEmpty()) {
             return "补齐缺失配置：" + join(status.getMissingConfig());
+        }
+        if (status.isConnected() && status.isOutboundDegraded()) {
+            return "入站连接正常，但最近一次出站失败；等待保护冷却结束后重试。";
         }
         if ("connected".equalsIgnoreCase(status.getSetupState()) || status.isConnected()) {
             return "渠道已连通，可直接开始使用。";

@@ -875,6 +875,7 @@ public class DashboardStatusService implements StatusQueryPort {
         boolean anyEnabled = false;
         boolean anyConnected = false;
         boolean anyFatal = false;
+        boolean anyDegraded = false;
         Map<String, Object> platformStates = new LinkedHashMap<String, Object>();
         String updatedAt = isoNow();
         for (ChannelStatus status : statuses) {
@@ -890,17 +891,24 @@ public class DashboardStatusService implements StatusQueryPort {
                             && !status.isConnected()
                             && (StrUtil.isNotBlank(status.getLastErrorCode())
                                     || StrUtil.isNotBlank(status.getLastErrorMessage()));
+            boolean degraded =
+                    status.isEnabled() && status.isConnected() && status.isOutboundDegraded();
             if (fatal) {
                 anyFatal = true;
+            }
+            if (degraded) {
+                anyDegraded = true;
             }
 
             Map<String, Object> item = new LinkedHashMap<String, Object>();
             item.put(
                     "state",
                     status.isEnabled()
-                            ? (status.isConnected()
-                                    ? "connected"
-                                    : (fatal ? "fatal" : "disconnected"))
+                            ? (degraded
+                                    ? "degraded"
+                                    : (status.isConnected()
+                                            ? "connected"
+                                            : (fatal ? "fatal" : "disconnected")))
                             : "disabled");
             item.put("updated_at", updatedAt);
             item.put("detail", detailed ? detail : publicDetail(status));
@@ -910,16 +918,23 @@ public class DashboardStatusService implements StatusQueryPort {
             item.put("features", detailed ? status.getFeatures() : null);
             item.put(
                     "error_message",
-                    detailed && fatal
+                    detailed && (fatal || degraded)
                             ? redactSensitivePaths(
-                                    StrUtil.blankToDefault(status.getLastErrorMessage(), detail),
+                                    degraded
+                                            ? StrUtil.blankToDefault(
+                                                    status.getOutboundErrorMessage(), detail)
+                                            : StrUtil.blankToDefault(
+                                                    status.getLastErrorMessage(), detail),
                                     1000)
                             : null);
             item.put(
                     "error_code",
-                    fatal
+                    fatal || degraded
                             ? StrUtil.blankToDefault(
-                                    status.getLastErrorCode(), "channel_unavailable")
+                                    degraded
+                                            ? status.getOutboundErrorCode()
+                                            : status.getLastErrorCode(),
+                                    degraded ? "channel_outbound_degraded" : "channel_unavailable")
                             : null);
             platformStates.put(status.getPlatform().name().toLowerCase(), item);
         }
@@ -938,6 +953,7 @@ public class DashboardStatusService implements StatusQueryPort {
         snapshot.runningAgentRuns = 0;
         snapshot.anyConnected = anyConnected;
         snapshot.anyFatal = anyFatal;
+        snapshot.anyDegraded = anyDegraded;
         snapshot.firstFatalDetail = anyFatal ? redact(firstFatalDetail(statuses), 1000) : null;
         snapshot.gatewayState = gatewayState;
         snapshot.platformStates = platformStates;
@@ -982,7 +998,7 @@ public class DashboardStatusService implements StatusQueryPort {
         Map<String, Object> status = new LinkedHashMap<String, Object>();
         status.put("schema_version", Integer.valueOf(1));
         status.put("service", "solonclaw");
-        status.put("status", snapshot.anyFatal ? "degraded" : "ok");
+        status.put("status", snapshot.anyFatal || snapshot.anyDegraded ? "degraded" : "ok");
         status.put("updated_at", snapshot.updatedAt);
         status.put("active_sessions", Integer.valueOf(snapshot.activeSessions));
         status.put("running_agent_runs", Integer.valueOf(snapshot.runningAgentRuns));
@@ -1213,7 +1229,7 @@ public class DashboardStatusService implements StatusQueryPort {
      */
     private Map<String, Object> diagnosticsStatus(RuntimeStatusSnapshot snapshot) {
         Map<String, Object> status = new LinkedHashMap<String, Object>();
-        status.put("state", snapshot.anyFatal ? "degraded" : "ok");
+        status.put("state", snapshot.anyFatal || snapshot.anyDegraded ? "degraded" : "ok");
         status.put("gateway_state", snapshot.gatewayState);
         status.put(
                 "runtime_refresh_failed",
@@ -1587,6 +1603,9 @@ public class DashboardStatusService implements StatusQueryPort {
         if (!status.isEnabled()) {
             return "disabled";
         }
+        if (status.isConnected() && status.isOutboundDegraded()) {
+            return "degraded";
+        }
         return status.isConnected() ? "connected" : "disconnected";
     }
 
@@ -1735,6 +1754,9 @@ public class DashboardStatusService implements StatusQueryPort {
 
         /** 是否启用anyFatal。 */
         private boolean anyFatal;
+
+        /** 是否存在连接仍可用但出站投递已降级的渠道。 */
+        private boolean anyDegraded;
 
         /** 记录运行时状态快照中的firstFatal详情。 */
         private String firstFatalDetail;

@@ -524,6 +524,103 @@ public class DashboardDiagnosticOutputTest {
         assertThat(platforms).extracting(item -> item.get("platform")).contains("qqbot", "yuanbao");
     }
 
+    /** 验证微信入站仍连接但出站降级时，Doctor 与诊断输出会报告并脱敏错误。 */
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldReportRedactedWeixinOutboundDegradation() throws Exception {
+        AppConfig config = new AppConfig();
+        File workspaceHome =
+                new File("target/diagnostic-weixin-outbound-runtime").getAbsoluteFile();
+        config.getRuntime().setHome(workspaceHome.getAbsolutePath());
+        config.getRuntime().setConfigFile(new File(workspaceHome, "config.yml").getAbsolutePath());
+        config.getModel().setProviderKey("default");
+        config.getModel().setDefault("gpt-test");
+
+        AppConfig.ProviderConfig provider = new AppConfig.ProviderConfig();
+        provider.setName("Default");
+        provider.setBaseUrl("https://api.example.com/v1");
+        provider.setDefaultModel("gpt-test");
+        provider.setDialect("openai");
+        provider.setApiKey("sk-test-weixin-outbound");
+        config.getProviders().put("default", provider);
+
+        ChannelStatus channelStatus =
+                new ChannelStatus(PlatformType.WEIXIN, true, true, "connected");
+        channelStatus.setSetupState("connected");
+        channelStatus.setConnectionMode("longpoll");
+        channelStatus.setOutboundDegraded(true);
+        channelStatus.setOutboundErrorCode("weixin_send_failed");
+        channelStatus.setOutboundErrorMessage(
+                "send failed token=ghp_weixinoutbound12345 password=weixin-outbound-pass");
+        FixedDeliveryService deliveryService = new FixedDeliveryService(channelStatus);
+        GatewayRuntimeRefreshService refreshService =
+                new GatewayRuntimeRefreshService(
+                        config, new ChannelConnectionManager(Collections.emptyMap()));
+
+        DashboardGatewayDoctorService doctorService =
+                new DashboardGatewayDoctorService(
+                        config, deliveryService, new LlmProviderService(config), refreshService);
+        Map<String, Object> doctor = doctorService.doctor();
+        List<Map<String, Object>> platforms = (List<Map<String, Object>>) doctor.get("platforms");
+        Map<String, Object> weixin =
+                platforms.stream()
+                        .filter(item -> "weixin".equals(item.get("platform")))
+                        .findFirst()
+                        .orElseThrow(AssertionError::new);
+        Map<String, Object> summary = (Map<String, Object>) doctor.get("summary");
+        List<Map<String, Object>> issues = (List<Map<String, Object>>) summary.get("issues");
+        Map<String, Object> issue =
+                issues.stream()
+                        .filter(item -> "channel_outbound_degraded".equals(item.get("code")))
+                        .findFirst()
+                        .orElseThrow(AssertionError::new);
+
+        assertThat(weixin)
+                .containsEntry("enabled", Boolean.TRUE)
+                .containsEntry("connected", Boolean.TRUE)
+                .containsEntry("outbound_degraded", Boolean.TRUE)
+                .containsEntry("outbound_error_code", "weixin_send_failed")
+                .containsEntry("next_step", "入站连接正常，但最近一次出站失败；等待保护冷却结束后重试。");
+        assertThat(String.valueOf(weixin.get("outbound_error_message")))
+                .contains("token=***")
+                .contains("password=***")
+                .doesNotContain("ghp_weixinoutbound12345")
+                .doesNotContain("weixin-outbound-pass");
+        assertThat(issue)
+                .containsEntry("severity", "warning")
+                .containsEntry("code", "channel_outbound_degraded")
+                .containsEntry("target", "platform:weixin")
+                .containsEntry("nextAction", "等待 weixin 渠道保护冷却结束后重试；若持续失败，请检查平台返回错误。");
+        assertThat(String.valueOf(issue.get("message")))
+                .contains("token=***")
+                .contains("password=***")
+                .doesNotContain("ghp_weixinoutbound12345")
+                .doesNotContain("weixin-outbound-pass");
+
+        DashboardDiagnosticsService diagnosticsService =
+                diagnosticsBuilder(config)
+                        .deliveryService(deliveryService)
+                        .llmProviderService(new LlmProviderService(config))
+                        .toolRegistry(new FixedToolRegistry())
+                        .securityPolicyService(new SecurityPolicyService(config))
+                        .build();
+        Map<String, Object> diagnostics = diagnosticsService.diagnostics();
+        List<Map<String, Object>> channels =
+                (List<Map<String, Object>>) diagnostics.get("channels");
+        Map<String, Object> channel = channels.get(0);
+
+        assertThat(channel)
+                .containsEntry("platform", "weixin")
+                .containsEntry("connected", Boolean.TRUE)
+                .containsEntry("outbound_degraded", Boolean.TRUE)
+                .containsEntry("outbound_error_code", "weixin_send_failed");
+        assertThat(String.valueOf(channel.get("outbound_error_message")))
+                .contains("token=***")
+                .contains("password=***")
+                .doesNotContain("ghp_weixinoutbound12345")
+                .doesNotContain("weixin-outbound-pass");
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void shouldExposeRedactedShutdownForensicsSummary() throws Exception {

@@ -109,6 +109,7 @@ public class CoreConfigOverrideLoadTest {
                         + "      textBatchDelaySeconds: 0.8\n"
                         + "      textBatchSplitDelaySeconds: 1.6\n"
                         + "      sendChunkRetries: 9\n"
+                        + "      sendFailureCooldownSeconds: 12.5\n"
                         + "approvals:\n"
                         + "  timeoutSeconds: 45\n"
                         + "security:\n"
@@ -208,6 +209,8 @@ public class CoreConfigOverrideLoadTest {
         assertThat(config.getChannels().getWeixin().getTextBatchSplitDelaySeconds())
                 .isEqualTo(1.6D);
         assertThat(config.getChannels().getWeixin().getSendChunkRetries()).isEqualTo(9);
+        assertThat(config.getChannels().getWeixin().getSendFailureCooldownSeconds())
+                .isEqualTo(12.5D);
     }
 
     /** 静态上下文预算不能低于保留完整截断标记所需的安全下限。 */
@@ -271,7 +274,7 @@ public class CoreConfigOverrideLoadTest {
     }
 
     @Test
-    void shouldFallbackInvalidWeixinTextBatchDelaysToDefaults() throws Exception {
+    void shouldFallbackInvalidWeixinSendDelayValuesToDefaults() throws Exception {
         File workspaceHome = Files.createTempDirectory("solonclaw-weixin-text-batch").toFile();
         File configFile = new File(workspaceHome, "config.yml");
         FileUtil.writeUtf8String(
@@ -279,7 +282,8 @@ public class CoreConfigOverrideLoadTest {
                         + "  channels:\n"
                         + "    weixin:\n"
                         + "      textBatchDelaySeconds: NaN\n"
-                        + "      textBatchSplitDelaySeconds: -1\n",
+                        + "      textBatchSplitDelaySeconds: -1\n"
+                        + "      sendFailureCooldownSeconds: -1\n",
                 configFile);
 
         Props props = new Props();
@@ -290,6 +294,8 @@ public class CoreConfigOverrideLoadTest {
         assertThat(config.getChannels().getWeixin().getTextBatchDelaySeconds()).isEqualTo(3.0D);
         assertThat(config.getChannels().getWeixin().getTextBatchSplitDelaySeconds())
                 .isEqualTo(5.0D);
+        assertThat(config.getChannels().getWeixin().getSendFailureCooldownSeconds())
+                .isEqualTo(30.0D);
     }
 
     @Test

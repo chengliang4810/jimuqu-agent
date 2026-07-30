@@ -42,6 +42,15 @@ public class ChannelStatus {
     /** 最近一次错误消息。 */
     private String lastErrorMessage;
 
+    /** 是否存在持续出站失败导致的降级。 */
+    private boolean outboundDegraded;
+
+    /** 最近一次出站失败的错误码。 */
+    private String outboundErrorCode;
+
+    /** 最近一次出站失败的错误消息。 */
+    private String outboundErrorMessage;
+
     /** 是否正在等待自动重连。 */
     private boolean reconnecting;
 

@@ -201,7 +201,8 @@ public final class RuntimeSetupSpec {
                                 "textBatchSplitDelaySeconds",
                                 "sendChunkDelaySeconds",
                                 "sendChunkRetries",
-                                "sendChunkRetryDelaySeconds")));
+                                "sendChunkRetryDelaySeconds",
+                                "sendFailureCooldownSeconds")));
         result.put(
                 "qqbot",
                 mergeKeys(
@@ -280,6 +281,7 @@ public final class RuntimeSetupSpec {
         registerFlag(result, "sendChunkDelaySeconds", "send-chunk-delay-seconds");
         registerFlag(result, "sendChunkRetries", "send-chunk-retries");
         registerFlag(result, "sendChunkRetryDelaySeconds", "send-chunk-retry-delay-seconds");
+        registerFlag(result, "sendFailureCooldownSeconds", "send-failure-cooldown-seconds");
         registerFlag(result, "apiDomain", "api-domain");
         registerFlag(result, "markdownSupport", "markdown-support");
         return Collections.unmodifiableMap(result);

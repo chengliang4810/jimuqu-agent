@@ -22,5 +22,9 @@ class RuntimeSetupSpecTest {
                 .containsEntry("order", 10)
                 .containsEntry("enabled", true);
         assertThat(RuntimeSetupSpec.allowedChannelKeys("dingtalk")).contains("mentionPatterns");
+        assertThat(RuntimeSetupSpec.allowedChannelKeys("weixin"))
+                .contains("sendFailureCooldownSeconds");
+        assertThat(RuntimeSetupSpec.normalizeChannelFlag("send-failure-cooldown-seconds"))
+                .isEqualTo("sendFailureCooldownSeconds");
     }
 }

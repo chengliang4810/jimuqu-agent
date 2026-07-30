@@ -1146,6 +1146,7 @@ public class RuntimeConfigResolver {
                 "sendChunkDelaySeconds",
                 "sendChunkRetries",
                 "sendChunkRetryDelaySeconds",
+                "sendFailureCooldownSeconds",
                 "toolProgress");
         add(mappings, "solonclaw.display.platforms.weixin.metadataFooter.enabled");
         addChannelMappings(

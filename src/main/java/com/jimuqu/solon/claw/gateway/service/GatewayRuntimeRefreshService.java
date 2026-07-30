@@ -1025,7 +1025,10 @@ public class GatewayRuntimeRefreshService {
 
     /** 双精度后缀列表的统一常量值。 */
     private static final Set<String> DOUBLE_SUFFIXES =
-            setOf(".sendChunkDelaySeconds", ".sendChunkRetryDelaySeconds");
+            setOf(
+                    ".sendChunkDelaySeconds",
+                    ".sendChunkRetryDelaySeconds",
+                    ".sendFailureCooldownSeconds");
 
     /** 布尔后缀列表的统一常量值。 */
     private static final Set<String> BOOLEAN_SUFFIXES =

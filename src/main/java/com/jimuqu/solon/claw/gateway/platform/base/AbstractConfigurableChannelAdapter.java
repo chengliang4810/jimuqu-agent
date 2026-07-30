@@ -61,6 +61,15 @@ public abstract class AbstractConfigurableChannelAdapter implements ChannelAdapt
     /** 最近一次错误消息。 */
     private String lastErrorMessage;
 
+    /** 是否存在持续出站失败导致的降级。 */
+    private volatile boolean outboundDegraded;
+
+    /** 最近一次出站失败的错误码。 */
+    private volatile String outboundErrorCode;
+
+    /** 最近一次出站失败的错误消息。 */
+    private volatile String outboundErrorMessage;
+
     /** 入站消息处理器。 */
     private InboundMessageHandler inboundMessageHandler;
 
@@ -166,6 +175,9 @@ public abstract class AbstractConfigurableChannelAdapter implements ChannelAdapt
         status.setFeatures(new ArrayList<String>(features));
         status.setLastErrorCode(lastErrorCode);
         status.setLastErrorMessage(lastErrorMessage);
+        status.setOutboundDegraded(outboundDegraded);
+        status.setOutboundErrorCode(outboundErrorCode);
+        status.setOutboundErrorMessage(outboundErrorMessage);
         return status;
     }
 
@@ -580,6 +592,20 @@ public abstract class AbstractConfigurableChannelAdapter implements ChannelAdapt
     protected void clearLastError() {
         this.lastErrorCode = null;
         this.lastErrorMessage = null;
+    }
+
+    /** 清理出站降级状态。 */
+    protected void clearOutboundFailure() {
+        this.outboundDegraded = false;
+        this.outboundErrorCode = null;
+        this.outboundErrorMessage = null;
+    }
+
+    /** 标记持续出站失败。 */
+    protected void setOutboundFailure(String code, String message) {
+        this.outboundDegraded = true;
+        this.outboundErrorCode = code;
+        this.outboundErrorMessage = safeStatusText(message);
     }
 
     /** 记录最近一次错误。 */

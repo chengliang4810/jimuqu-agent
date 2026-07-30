@@ -737,6 +737,7 @@ public class AppConfig {
         target.setSendChunkDelaySeconds(source.getSendChunkDelaySeconds());
         target.setSendChunkRetries(source.getSendChunkRetries());
         target.setSendChunkRetryDelaySeconds(source.getSendChunkRetryDelaySeconds());
+        target.setSendFailureCooldownSeconds(source.getSendFailureCooldownSeconds());
         target.setToolProgress(source.getToolProgress());
         target.setProgressCardTemplateId(source.getProgressCardTemplateId());
         target.setApprovalCardTemplateId(source.getApprovalCardTemplateId());
@@ -1861,6 +1862,9 @@ public class AppConfig {
 
         /** 微信分片重试间隔。 */
         private double sendChunkRetryDelaySeconds = 1.0D;
+
+        /** 微信平台拒绝发送后的客户端保护冷却时间，该值不代表平台官方限额。 */
+        private double sendFailureCooldownSeconds = 30.0D;
 
         /** 渠道默认工具进度模式。 */
         private String toolProgress;

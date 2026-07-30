@@ -998,8 +998,20 @@ onMounted(load)
             <article v-for="platform in doctorPlatforms" :key="platform.platform" class="doctor-platform-item">
               <div class="doctor-platform-head">
                 <strong>{{ platform.platform || '-' }}</strong>
-                <Tag size="small" :color="platform.enabled && platform.connected ? 'success' : 'warning'" :bordered="false">
-                  {{ platform.enabled ? (platform.connected ? t('diagnostics.doctorPlatformConnected') : t('diagnostics.doctorPlatformDisconnected')) : t('diagnostics.doctorPlatformDisabled') }}
+                <Tag
+                  size="small"
+                  :color="platform.enabled && platform.connected && !platform.outbound_degraded ? 'success' : 'warning'"
+                  :bordered="false"
+                >
+                  {{
+                    platform.enabled
+                      ? (platform.connected && platform.outbound_degraded
+                        ? t('diagnostics.doctorPlatformOutboundDegraded')
+                        : (platform.connected
+                          ? t('diagnostics.doctorPlatformConnected')
+                          : t('diagnostics.doctorPlatformDisconnected')))
+                      : t('diagnostics.doctorPlatformDisabled')
+                  }}
                 </Tag>
               </div>
               <div class="doctor-platform-detail">
@@ -1008,6 +1020,10 @@ onMounted(load)
                 <span v-if="platform.missing_config?.length">{{ t('diagnostics.doctorPlatformMissing') }}：{{ platform.missing_config.join(', ') }}</span>
                 <span v-if="platform.last_error_message || platform.last_reconnect_error">
                   {{ t('diagnostics.doctorPlatformError') }}：{{ platform.last_error_message || platform.last_reconnect_error }}
+                </span>
+                <span v-if="platform.outbound_degraded">
+                  {{ t('diagnostics.doctorPlatformOutboundError') }}：
+                  {{ [platform.outbound_error_code, platform.outbound_error_message].filter(Boolean).join(' · ') || '-' }}
                 </span>
                 <span>{{ t('diagnostics.doctorPlatformNextStep') }}：{{ platform.next_step || '-' }}</span>
               </div>

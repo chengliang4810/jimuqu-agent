@@ -165,6 +165,7 @@ public class RuntimeSettingsService {
                     ".sendChunkDelaySeconds",
                     ".sendChunkRetries",
                     ".sendChunkRetryDelaySeconds",
+                    ".sendFailureCooldownSeconds",
                     ".toolProgress",
                     ".progressCardTemplateId",
                     ".approvalCardTemplateId",
@@ -622,6 +623,7 @@ public class RuntimeSettingsService {
                 || key.endsWith("textBatchSplitDelaySeconds")
                 || key.endsWith("sendChunkDelaySeconds")
                 || key.endsWith("sendChunkRetryDelaySeconds")
+                || key.endsWith("sendFailureCooldownSeconds")
                 || "llm.temperature".equals(key)
                 || "compression.thresholdPercent".equals(key)
                 || "compression.tailRatio".equals(key)

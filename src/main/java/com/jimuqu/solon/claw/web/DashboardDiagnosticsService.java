@@ -637,11 +637,16 @@ public class DashboardDiagnosticsService implements DiagnosticsManagementPort {
                             : status.getPlatform().name().toLowerCase());
             item.put("enabled", status.isEnabled());
             item.put("connected", status.isConnected());
+            item.put("outbound_degraded", status.isOutboundDegraded());
+            item.put("outbound_error_code", status.getOutboundErrorCode());
             item.put("setup_state", status.getSetupState());
             item.put("connection_mode", status.getConnectionMode());
             item.put(
                     "last_error_message",
                     SecretRedactor.redact(status.getLastErrorMessage(), 1000));
+            item.put(
+                    "outbound_error_message",
+                    SecretRedactor.redact(status.getOutboundErrorMessage(), 1000));
             items.add(item);
         }
         return items;

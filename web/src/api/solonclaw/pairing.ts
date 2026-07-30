@@ -42,7 +42,8 @@ export interface PairingPrimaryUpdate {
   home_channel: PairingHomeChannel
 }
 
-export type PairingChannelState = 'connected' | 'disconnected' | 'disabled' | 'fatal'
+/** 渠道连接及出站投递能力状态。 */
+export type PairingChannelState = 'connected' | 'degraded' | 'disconnected' | 'disabled' | 'fatal'
 
 export async function fetchPairing(): Promise<PairingPlatform[]> {
   const data = await request<{ platforms: PairingPlatform[] }>('/api/gateway/pairing')

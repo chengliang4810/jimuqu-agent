@@ -39,7 +39,11 @@ const channelState = computed<PairingChannelState>(() =>
   channelStates.value[selected.value]
     || (props.platformSettings[selected.value]?.enabled ? 'disconnected' : 'disabled'),
 )
-const channelStateColor = computed(() => channelState.value === 'connected' ? 'success' : 'default')
+const channelStateColor = computed(() => {
+  if (channelState.value === 'connected') return 'success'
+  if (channelState.value === 'degraded') return 'warning'
+  return 'default'
+})
 const channelStateLabel = computed(() => t(`channels.channelState${channelState.value[0].toUpperCase()}${channelState.value.slice(1)}`))
 const ownerName = computed(() => current.value?.admin?.user_name || current.value?.admin?.user_id || '')
 const notificationChat = computed(() => current.value?.home_channel?.chat_id || '')
