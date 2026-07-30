@@ -360,7 +360,8 @@ public class DashboardProviderService implements ProviderManagementPort {
             model.put("max_output", metadata.getMaxOutput());
             model.put("reasoning_effort", appConfig.getLlm().getReasoningEffort());
             appendPricingMetadata(
-                    model, currentPriceCatalog.find(entry.getKey(), provider.getDefaultModel()));
+                    model,
+                    currentPriceCatalog.findCached(entry.getKey(), provider.getDefaultModel()));
             appendProviderDisplay(model, display);
             models.add(model);
             groupItems.add(

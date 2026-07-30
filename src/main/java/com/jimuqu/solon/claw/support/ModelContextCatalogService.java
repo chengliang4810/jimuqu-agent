@@ -136,6 +136,27 @@ public class ModelContextCatalogService implements AutoCloseable {
             return null;
         }
         awaitInitialPriceRefresh();
+        return findCachedPrice(providerKey, model);
+    }
+
+    /**
+     * 只查询本地或已完成异步刷新的在线价格缓存，不等待首次网络刷新。
+     *
+     * <p>该入口用于 Dashboard、健康检查等低延迟状态接口；缓存未就绪时触发后台刷新并立即返回空，避免外部目录网络抖动阻塞用户请求。
+     *
+     * @param providerKey 用户配置的 Provider 键。
+     * @param model 模型名称。
+     * @return 已缓存命中时返回价格副本，否则返回 null。
+     */
+    public ModelPrice getCachedPrice(String providerKey, String model) {
+        if (StrUtil.isBlank(model) || !isRefreshEnabled()) {
+            return null;
+        }
+        return findCachedPrice(providerKey, model);
+    }
+
+    /** 按当前内存或磁盘缓存执行价格匹配，并在缓存缺失时维持异步刷新。 */
+    private ModelPrice findCachedPrice(String providerKey, String model) {
         String normalizedModel = model.trim();
         AppConfig.ProviderConfig provider =
                 appConfig == null || appConfig.getProviders() == null

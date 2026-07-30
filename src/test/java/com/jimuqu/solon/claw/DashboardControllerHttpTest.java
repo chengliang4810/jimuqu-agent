@@ -713,6 +713,21 @@ public class DashboardControllerHttpTest {
                 "SECRET_REVEAL",
                 "BEARER",
                 "solonclaw.gateway.injectionSecret");
+        HttpResult deleteRuntimeConfig =
+                request(
+                        "DELETE",
+                        "/api/workspace-config?key=solonclaw.gateway.injectionSecret",
+                        null,
+                        token);
+        assertThat(deleteRuntimeConfig.status).isEqualTo(200);
+        assertThat(deleteRuntimeConfig.responseHeaders.get("X-Request-Id")).isNotBlank();
+        assertSensitiveConfigAuditEvent(
+                deleteRuntimeConfig.responseHeaders.get("X-Request-Id"),
+                "SECRET_DELETE_ATTEMPT",
+                "BEARER",
+                "solonclaw.gateway.injectionSecret");
+        assertThat(FileUtil.readUtf8String(overrideFile))
+                .doesNotContain("injectionSecret: secret12345678");
 
         seedDashboardGoalSession();
 

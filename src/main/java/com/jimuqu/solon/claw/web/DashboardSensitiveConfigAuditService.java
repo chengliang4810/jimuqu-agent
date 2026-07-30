@@ -14,6 +14,9 @@ public final class DashboardSensitiveConfigAuditService {
     /** 敏感配置写入尝试的审计操作类型。 */
     public static final String OPERATION_SECRET_SET_ATTEMPT = "SECRET_SET_ATTEMPT";
 
+    /** 敏感配置删除尝试的审计操作类型。 */
+    public static final String OPERATION_SECRET_DELETE_ATTEMPT = "SECRET_DELETE_ATTEMPT";
+
     /** 敏感配置明文读取的审计操作类型。 */
     public static final String OPERATION_SECRET_REVEAL = "SECRET_REVEAL";
 
@@ -56,6 +59,18 @@ public final class DashboardSensitiveConfigAuditService {
      */
     public String recordSecretSetAttempt(Context context, String configKey, String profile) {
         return recordAuthenticated(context, OPERATION_SECRET_SET_ATTEMPT, configKey, profile);
+    }
+
+    /**
+     * 在删除敏感配置前记录已认证 Dashboard 删除尝试。
+     *
+     * @param context 当前 HTTP 请求。
+     * @param configKey 敏感配置键。
+     * @param profile 已解析的实际 Profile 名。
+     * @return 可用于响应对账的审计事件标识。
+     */
+    public String recordSecretDeleteAttempt(Context context, String configKey, String profile) {
+        return recordAuthenticated(context, OPERATION_SECRET_DELETE_ATTEMPT, configKey, profile);
     }
 
     /**

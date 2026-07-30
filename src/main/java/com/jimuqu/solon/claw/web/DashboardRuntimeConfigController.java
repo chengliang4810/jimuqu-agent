@@ -113,9 +113,16 @@ public class DashboardRuntimeConfigController {
             return DashboardResponse.error("WORKSPACE_CONFIG_BAD_REQUEST", "配置项 key 不能为空");
         }
         try {
-            return DashboardResponse.ok(
-                    runtimeConfigService.remove(
-                            key, DashboardProfileContext.requestedProfile(context, body)));
+            String profile = DashboardProfileContext.requestedProfile(context, body);
+            if (runtimeConfigService.isSecret(key)) {
+                String requestId =
+                        sensitiveConfigAuditService.recordSecretDeleteAttempt(
+                                context, key, runtimeConfigService.resolveProfileName(profile));
+                context.headerSet("X-Request-Id", requestId);
+            }
+            return DashboardResponse.ok(runtimeConfigService.remove(key, profile));
+        } catch (DashboardSensitiveConfigAuditService.AuditUnavailableException e) {
+            return auditUnavailable(context, e);
         } catch (DashboardProfileNotFoundException e) {
             return DashboardResponse.error(context, 404, "PROFILE_NOT_FOUND", e);
         } catch (IllegalArgumentException e) {

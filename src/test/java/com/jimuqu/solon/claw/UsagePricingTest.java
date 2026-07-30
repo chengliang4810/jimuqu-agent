@@ -195,6 +195,35 @@ public class UsagePricingTest {
         assertThat(local.find("arbitrary-provider", "model")).isNull();
     }
 
+    /** Dashboard 缓存查询只能读取已就绪在线价格，不能进入等待首次刷新的阻塞入口。 */
+    @Test
+    void cachedLookupUsesNonBlockingOnlineCatalogEntry() {
+        AppConfig config = new AppConfig();
+        ModelPrice cachedPrice = new ModelPrice();
+        cachedPrice.setProvider("stepfun");
+        cachedPrice.setModel("step-3.7-flash");
+        cachedPrice.setInputCostPerMillion("0.185");
+        cachedPrice.setSource("models.dev");
+        ModelContextCatalogService onlineCatalog =
+                new ModelContextCatalogService(config) {
+                    @Override
+                    public ModelPrice getPrice(String providerKey, String model) {
+                        throw new AssertionError("缓存查询不应等待在线目录刷新");
+                    }
+
+                    @Override
+                    public ModelPrice getCachedPrice(String providerKey, String model) {
+                        return "step-3.7-flash".equals(model) ? cachedPrice : null;
+                    }
+                };
+
+        ModelPrice matched =
+                PriceCatalog.forConfig(config, onlineCatalog)
+                        .findCached("any-name", "step-3.7-flash");
+
+        assertThat(matched).isSameAs(cachedPrice);
+    }
+
     @Test
     void configuredPricesPartiallyOverrideBuiltInDefaults() {
         ModelPrice override = new ModelPrice();

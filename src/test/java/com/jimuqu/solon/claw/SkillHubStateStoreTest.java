@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import cn.hutool.core.io.FileUtil;
 import com.jimuqu.solon.claw.skillhub.model.HubInstallRecord;
+import com.jimuqu.solon.claw.skillhub.model.TapRecord;
 import com.jimuqu.solon.claw.skillhub.support.SkillHubStateStore;
 import java.io.File;
 import java.nio.file.Files;
+import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -68,6 +70,26 @@ public class SkillHubStateStoreTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("refusing to overwrite");
         assertThat(FileUtil.readUtf8String(lockFile)).isEqualTo(corrupted);
+    }
+
+    /** 损坏的 taps 状态可按空视图读取，但后续写入必须拒绝覆盖原文件。 */
+    @Test
+    void shouldPreserveCorruptedTapsOnWrite() throws Exception {
+        File skillsDir = Files.createTempDirectory("skillhub-taps-corrupted").toFile();
+        FileUtil.mkdir(FileUtil.file(skillsDir, ".hub"));
+        File tapsFile = FileUtil.file(skillsDir, ".hub", "taps.json");
+        String corrupted = "{\"taps\":";
+        FileUtil.writeUtf8String(corrupted, tapsFile);
+        SkillHubStateStore stateStore = new SkillHubStateStore(skillsDir);
+        TapRecord tap = new TapRecord();
+        tap.setRepo("openai/skills");
+        tap.setPath("skills/");
+
+        assertThat(stateStore.listTaps()).isEmpty();
+        assertThatThrownBy(() -> stateStore.saveTaps(Collections.singletonList(tap)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("refusing to overwrite");
+        assertThat(FileUtil.readUtf8String(tapsFile)).isEqualTo(corrupted);
     }
 
     /** 构造满足安装记录路径约束的测试记录。 */

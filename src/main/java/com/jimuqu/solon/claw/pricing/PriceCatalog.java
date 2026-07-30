@@ -596,6 +596,22 @@ public class PriceCatalog {
      * @return 返回find结果。
      */
     public ModelPrice find(String provider, String model) {
+        return find(provider, model, true);
+    }
+
+    /**
+     * 查询本地价格与已经就绪的在线缓存，不等待首次远程目录刷新。
+     *
+     * @param provider 模型或能力提供方。
+     * @param model 模型名称。
+     * @return 已命中的本地或缓存价格；缓存尚未就绪时返回 null。
+     */
+    public ModelPrice findCached(String provider, String model) {
+        return find(provider, model, false);
+    }
+
+    /** 按调用场景决定在线价格查询是否允许等待首次远程刷新。 */
+    private ModelPrice find(String provider, String model, boolean waitForOnlineRefresh) {
         String normalizedProvider = ModelPrice.normalize(provider);
         String normalizedModel = ModelPrice.normalize(model);
         for (String candidateProvider : providerCandidates(normalizedProvider)) {
@@ -606,7 +622,11 @@ public class PriceCatalog {
             }
         }
         ModelPrice online =
-                onlineCatalog == null ? null : onlineCatalog.getPrice(provider, normalizedModel);
+                onlineCatalog == null
+                        ? null
+                        : waitForOnlineRefresh
+                                ? onlineCatalog.getPrice(provider, normalizedModel)
+                                : onlineCatalog.getCachedPrice(provider, normalizedModel);
         return online == null ? findFirstByModel(normalizedModel) : online;
     }
 

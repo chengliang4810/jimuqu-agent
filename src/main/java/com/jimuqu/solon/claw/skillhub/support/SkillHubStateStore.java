@@ -107,22 +107,7 @@ public class SkillHubStateStore {
     public List<TapRecord> listTaps() {
         File tapsFile = hubFile(SkillHubPathSupport.tapsFile(skillsDir), "taps path");
         synchronized (lockFor(tapsFile)) {
-            if (!tapsFile.exists()) {
-                return Collections.emptyList();
-            }
-            try {
-                TapContainer container =
-                        ONode.deserialize(FileUtil.readUtf8String(tapsFile), TapContainer.class);
-                return container == null || container.getTaps() == null
-                        ? Collections.<TapRecord>emptyList()
-                        : new ArrayList<TapRecord>(container.getTaps());
-            } catch (Exception e) {
-                log.warn(
-                        "Skills Hub taps state could not be parsed; returning an empty read-only view: file={}, errorType={}",
-                        tapsFile.getName(),
-                        e.getClass().getSimpleName());
-                return Collections.emptyList();
-            }
+            return loadTaps(tapsFile, false);
         }
     }
 
@@ -137,6 +122,7 @@ public class SkillHubStateStore {
                 taps == null ? new ArrayList<TapRecord>() : new ArrayList<TapRecord>(taps));
         File tapsFile = hubFile(SkillHubPathSupport.tapsFile(skillsDir), "taps path");
         synchronized (lockFor(tapsFile)) {
+            loadTaps(tapsFile, true);
             writeAtomically(tapsFile, ONode.serialize(container));
         }
     }
@@ -218,6 +204,58 @@ public class SkillHubStateStore {
      */
     public File importedDir() {
         return SkillHubPathSupport.importedDir(skillsDir);
+    }
+
+    /**
+     * 加载来源库状态。
+     *
+     * @param tapsFile 来源库状态文件。
+     * @param failOnCorruption 是否在写入前发现损坏时拒绝继续。
+     * @return 返回来源库列表。
+     */
+    private List<TapRecord> loadTaps(File tapsFile, boolean failOnCorruption) {
+        if (!tapsFile.exists()) {
+            return Collections.emptyList();
+        }
+        TapContainer container;
+        try {
+            container = ONode.deserialize(FileUtil.readUtf8String(tapsFile), TapContainer.class);
+        } catch (Exception e) {
+            if (failOnCorruption) {
+                throw invalidTapState(tapsFile, e);
+            }
+            log.warn(
+                    "Skills Hub taps state could not be parsed; returning an empty read-only view: file={}, errorType={}",
+                    tapsFile.getName(),
+                    e.getClass().getSimpleName());
+            return Collections.emptyList();
+        }
+        if (container == null || container.getTaps() == null) {
+            if (failOnCorruption) {
+                throw invalidTapState(tapsFile, null);
+            }
+            log.warn(
+                    "Skills Hub taps state has no taps list; returning an empty read-only view: file={}",
+                    tapsFile.getName());
+            return Collections.emptyList();
+        }
+        return new ArrayList<TapRecord>(container.getTaps());
+    }
+
+    /**
+     * 构造拒绝覆盖损坏来源库状态的异常。
+     *
+     * @param tapsFile 来源库状态文件。
+     * @param cause 解析失败原因。
+     * @return 可直接抛出的状态异常。
+     */
+    private IllegalStateException invalidTapState(File tapsFile, Exception cause) {
+        String message =
+                "Skills Hub taps state is invalid; refusing to overwrite "
+                        + (tapsFile == null ? "taps.json" : tapsFile.getName());
+        return cause == null
+                ? new IllegalStateException(message)
+                : new IllegalStateException(message, cause);
     }
 
     /**

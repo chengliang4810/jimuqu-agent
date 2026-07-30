@@ -2000,6 +2000,10 @@ final class AppConfigLoader {
                                                 180)),
                                 180));
 
+        if (providerRootHome != null) {
+            ProfileEnvironmentLoader.apply(
+                    config, ProfileEnvironmentLoader.load(workspaceHome.toPath()));
+        }
         validateSpeechConfiguration(config.getSpeech());
         config.normalizePaths();
         syncRuntimeConfigExample(config.getRuntime().getHome());

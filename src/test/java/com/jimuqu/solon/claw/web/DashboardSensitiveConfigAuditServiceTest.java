@@ -125,6 +125,36 @@ class DashboardSensitiveConfigAuditServiceTest {
         assertThat(String.valueOf(response)).doesNotContain(secret);
     }
 
+    /** 审计存储失败时，密钥删除必须失败关闭且保留原配置。 */
+    @Test
+    void shouldNotDeleteSecretWhenAuditIsUnavailable() throws Exception {
+        TestEnvironment environment = TestEnvironment.withFakeLlm();
+        environment.appConfig.getDashboard().setAccessToken("audit-controller-token");
+        DashboardRuntimeConfigService runtimeConfigService =
+                new DashboardRuntimeConfigService(
+                        environment.appConfig, environment.gatewayRuntimeRefreshService);
+        String secret = "audit-delete-must-not-persist";
+        runtimeConfigService.set("solonclaw.gateway.injectionSecret", secret);
+        DashboardAuthService authService = new DashboardAuthService(environment.appConfig);
+        DashboardRuntimeConfigController controller =
+                controller(runtimeConfigService, authService, failingRepository());
+        File configFile = new File(environment.appConfig.getRuntime().getConfigFile());
+        String before = cn.hutool.core.io.FileUtil.readUtf8String(configFile);
+        AuditContext context =
+                new AuditContext(
+                        "127.0.0.1",
+                        "{\"key\":\"solonclaw.gateway.injectionSecret\"}",
+                        "Bearer audit-controller-token",
+                        null);
+
+        Map<String, Object> response = controller.remove(context);
+
+        assertAuditUnavailable(context, response);
+        assertThat(cn.hutool.core.io.FileUtil.readUtf8String(configFile))
+                .isEqualTo(before)
+                .contains(secret);
+    }
+
     /** 创建带指定审计仓储的控制器。 */
     private DashboardRuntimeConfigController controller(
             DashboardRuntimeConfigService runtimeConfigService,

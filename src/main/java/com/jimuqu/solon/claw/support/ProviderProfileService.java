@@ -109,7 +109,7 @@ public class ProviderProfileService {
         LlmProviderService.ResolvedProvider resolved = resolveProvider(providerKey, provider);
         AppConfig.ProviderConfig effective = effectiveProvider(provider, resolved);
         ModelMetadata metadata = modelMetadataService.resolve(providerKey, effective);
-        ModelPrice price = priceCatalog.find(providerKey, effective.getDefaultModel());
+        ModelPrice price = priceCatalog.findCached(providerKey, effective.getDefaultModel());
 
         Map<String, Object> item = new LinkedHashMap<String, Object>();
         item.put("provider", providerKey);

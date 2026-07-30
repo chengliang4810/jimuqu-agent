@@ -6,6 +6,7 @@ import com.jimuqu.solon.claw.config.AppConfig;
 import com.jimuqu.solon.claw.pricing.ModelPrice;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -14,6 +15,38 @@ import org.junit.jupiter.api.Test;
 
 /** 验证模型目录异步刷新线程随 Profile 运行时销毁而释放。 */
 class ModelContextCatalogServiceTest {
+    /** 状态接口使用的缓存查询不得等待远程目录首轮刷新。 */
+    @Test
+    void cachedPriceLookupReturnsWithoutWaitingForRemoteRefresh() throws Exception {
+        ModelContextCatalogService service = new ModelContextCatalogService(new AppConfig());
+        long now = System.currentTimeMillis();
+        ModelPrice cached = price("cached-provider", "cached-model", "1");
+        setField(
+                service,
+                "modelsDevCache",
+                Collections.singletonMap(
+                        "cached-provider", Collections.singletonMap("cached-model", 1)));
+        setField(service, "modelsDevCacheTime", Long.valueOf(now));
+        setField(
+                service,
+                "modelsDevPriceCache",
+                Collections.singletonMap(
+                        "cached-provider", Collections.singletonMap("cached-model", cached)));
+        setField(service, "modelsDevPriceCacheTime", Long.valueOf(now));
+        try {
+            org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(
+                    Duration.ofSeconds(2),
+                    () -> {
+                        ModelPrice price =
+                                service.getCachedPrice("cached-provider", "cached-model");
+                        assertThat(price).isNotNull();
+                        assertThat(price.getSource()).isEqualTo("models.dev");
+                    });
+        } finally {
+            service.shutdown();
+        }
+    }
+
     /** 两个公开目录的价格单位必须统一转换为每百万 Token 美元。 */
     @Test
     void parsesModelsDevAndOpenRouterPricing() {

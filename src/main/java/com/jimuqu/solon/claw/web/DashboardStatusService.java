@@ -1495,7 +1495,7 @@ public class DashboardStatusService implements StatusQueryPort {
         }
         return priceCatalog
                 .configuredFor(appConfig)
-                .find(resolved.getProviderKey(), resolved.getModel());
+                .findCached(resolved.getProviderKey(), resolved.getModel());
     }
 
     /**

@@ -102,6 +102,30 @@ public class AppConfigLoaderProfileScopeTest {
         assertThat(config.getModel().getProviderKey()).isEqualTo("dwf");
     }
 
+    /** 独立 JVM 启动命名 Profile 时，工作区 .env 必须直接进入渠道与语音配置。 */
+    @Test
+    void shouldApplyNamedProfileEnvironmentWithoutRuntimeScope() throws Exception {
+        Path root = Files.createTempDirectory("profile-standalone-env");
+        Path profile = root.resolve("profiles/writer");
+        Files.createDirectories(profile);
+        Files.writeString(
+                profile.resolve(".env"),
+                "SOLONCLAW_SPEECH_API_KEY=profile-speech-key\n"
+                        + "SOLONCLAW_CHANNEL_DINGTALK_CLIENT_ID=profile-client-id\n"
+                        + "SOLONCLAW_CHANNEL_DINGTALK_CLIENT_SECRET=profile-client-secret\n"
+                        + "SOLONCLAW_CHANNEL_DINGTALK_ROBOT_CODE=profile-robot-code\n");
+
+        AppConfig config = AppConfig.loadDetached(props(profile, false, false));
+
+        assertThat(config.getSpeech().getTts().getApiKey()).isEqualTo("profile-speech-key");
+        assertThat(config.getSpeech().getStt().getApiKey()).isEqualTo("profile-speech-key");
+        assertThat(config.getChannels().getDingtalk().getClientId()).isEqualTo("profile-client-id");
+        assertThat(config.getChannels().getDingtalk().getClientSecret())
+                .isEqualTo("profile-client-secret");
+        assertThat(config.getChannels().getDingtalk().getRobotCode())
+                .isEqualTo("profile-robot-code");
+    }
+
     /** Provider 凭据只接受当前项目专属键，不再读取协议通用环境变量。 */
     @Test
     void shouldOnlyLoadExplicitSolonclawProviderCredential() throws Exception {
