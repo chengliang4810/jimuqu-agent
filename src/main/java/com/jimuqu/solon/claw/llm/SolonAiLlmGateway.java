@@ -2931,7 +2931,7 @@ public class SolonAiLlmGateway implements LlmGateway {
 
     /** 从公开选择项或默认响应聚合状态中提取标准化结束原因。 */
     private String finishReason(ChatResponse response) {
-        ChatChoice choice = response == null ? null : response.lastChoice();
+        ChatChoice choice = lastChoiceOrNull(response);
         String value = choice == null ? "" : choice.getFinishReason();
         if (StrUtil.isBlank(value) && response instanceof ChatResponseDefault) {
             value = ((ChatResponseDefault) response).getLastFinishReasonNormalized();
@@ -2939,6 +2939,11 @@ public class SolonAiLlmGateway implements LlmGateway {
         return StrUtil.nullToEmpty(ChatResponseDefault.normalizeFinishReason(value))
                 .trim()
                 .toLowerCase(Locale.ROOT);
+    }
+
+    /** 安全读取最后一个选择项，兼容仅携带 usage 且没有 choices 的 OpenAI 流事件。 */
+    static ChatChoice lastChoiceOrNull(ChatResponse response) {
+        return response == null || !response.hasChoices() ? null : response.lastChoice();
     }
 
     /** 记录被截断或内容过滤的完成状态。 */
