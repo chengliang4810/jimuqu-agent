@@ -2,6 +2,7 @@ package com.jimuqu.solon.claw.tool.runtime;
 
 import cn.hutool.core.util.StrUtil;
 import com.jimuqu.solon.claw.config.AppConfig;
+import com.jimuqu.solon.claw.profile.ProfileRuntimeScope;
 import com.jimuqu.solon.claw.support.SecretRedactor;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -183,6 +184,10 @@ public final class SubprocessEnvironmentSanitizer {
         }
         Set<String> passthrough = envPassthrough(appConfig);
         passthrough.addAll(currentSkillEnvironmentPassthrough());
+        ProfileRuntimeScope.Context profile = ProfileRuntimeScope.current();
+        if (profile != null) {
+            passthrough.addAll(profile.getEnvironment().keySet());
+        }
         for (String name : env.keySet()) {
             decisions.add(probeDecision(name, appConfig, passthrough, redactNames));
         }

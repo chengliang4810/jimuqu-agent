@@ -175,7 +175,8 @@ public final class ToolPreviewSupport {
                 || "execute_js".equals(toolName)) {
             return new String[] {"command", "code"};
         }
-        if (ToolNameConstants.CONFIG_SET_SECRET.equals(toolName)) {
+        if (ToolNameConstants.CONFIG_SET_SECRET.equals(toolName)
+                || ToolNameConstants.CREDENTIAL_MANAGE.equals(toolName)) {
             return new String[] {"key"};
         }
         if (ToolNameConstants.CONFIG_GET.equals(toolName)
@@ -215,7 +216,9 @@ public final class ToolPreviewSupport {
      */
     private static Map<String, Object> sanitizeArgs(String toolName, Map<String, Object> args) {
         Map<String, Object> safe = new LinkedHashMap<String, Object>();
-        boolean secretTool = ToolNameConstants.CONFIG_SET_SECRET.equals(toolName);
+        boolean secretTool =
+                ToolNameConstants.CONFIG_SET_SECRET.equals(toolName)
+                        || ToolNameConstants.CREDENTIAL_MANAGE.equals(toolName);
         for (Map.Entry<String, Object> entry : args.entrySet()) {
             String key = entry.getKey();
             Object value = entry.getValue();

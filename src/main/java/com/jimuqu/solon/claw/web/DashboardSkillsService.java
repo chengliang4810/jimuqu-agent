@@ -502,6 +502,7 @@ public class DashboardSkillsService implements SkillsQueryPort {
                                 ToolNameConstants.CONFIG_GET,
                                 ToolNameConstants.CONFIG_SET,
                                 ToolNameConstants.CONFIG_SET_SECRET,
+                                ToolNameConstants.CREDENTIAL_MANAGE,
                                 ToolNameConstants.CONFIG_REFRESH)));
         result.add(
                 toolset(

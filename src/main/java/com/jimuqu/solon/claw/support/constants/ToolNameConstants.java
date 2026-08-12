@@ -176,6 +176,9 @@ public interface ToolNameConstants {
     /** 配置SET密钥的统一常量值。 */
     String CONFIG_SET_SECRET = "config_set_secret";
 
+    /** Profile 凭据管理的统一常量值。 */
+    String CREDENTIAL_MANAGE = "credential_manage";
+
     /** 配置刷新的统一常量值。 */
     String CONFIG_REFRESH = "config_refresh";
 

@@ -1884,6 +1884,7 @@ public class LocalSkillService implements SkillCatalogService {
                     ToolNameConstants.CONFIG_GET,
                     ToolNameConstants.CONFIG_SET,
                     ToolNameConstants.CONFIG_SET_SECRET,
+                    ToolNameConstants.CREDENTIAL_MANAGE,
                     ToolNameConstants.CONFIG_REFRESH);
         }
         return java.util.Collections.emptyList();

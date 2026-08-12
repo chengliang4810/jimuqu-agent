@@ -452,6 +452,7 @@ public class DefaultToolRegistry implements ToolRegistry {
         ProfileTaskTools profileTaskTools = new ProfileTaskTools(appConfig, sourceKey);
         ConfigTools configTools =
                 new ConfigTools(runtimeSettingsService, gatewayRuntimeRefreshService, appConfig);
+        CredentialTools credentialTools = new CredentialTools(appConfig);
         String sysWorkDir = resolveWorkDir(agentScope);
         List<String> enabledToolNames = new ArrayList<String>();
         LinkedHashSet<String> enabledFileFunctionNames = new LinkedHashSet<String>();
@@ -572,6 +573,8 @@ public class DefaultToolRegistry implements ToolRegistry {
                 tools.add(new ConfigTools.ConfigSetTool(configTools));
             } else if (ToolNameConstants.CONFIG_SET_SECRET.equals(toolName)) {
                 tools.add(new ConfigTools.ConfigSetSecretTool(configTools));
+            } else if (ToolNameConstants.CREDENTIAL_MANAGE.equals(toolName)) {
+                tools.add(credentialTools);
             } else if (ToolNameConstants.CONFIG_REFRESH.equals(toolName)) {
                 tools.add(new ConfigTools.ConfigRefreshTool(configTools));
             } else if (ToolNameConstants.TOOL_GATEWAY.equals(toolName)) {

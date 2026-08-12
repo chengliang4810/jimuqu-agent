@@ -79,6 +79,7 @@ public final class AgentRuntimePolicy {
                     ToolNameConstants.CONFIG_GET,
                     ToolNameConstants.CONFIG_SET,
                     ToolNameConstants.CONFIG_SET_SECRET,
+                    ToolNameConstants.CREDENTIAL_MANAGE,
                     ToolNameConstants.CONFIG_REFRESH,
                     ToolNameConstants.TOOL_GATEWAY,
                     ToolNameConstants.CURATOR_MANAGE,
@@ -363,6 +364,7 @@ public final class AgentRuntimePolicy {
             output.add(ToolNameConstants.CONFIG_GET);
             output.add(ToolNameConstants.CONFIG_SET);
             output.add(ToolNameConstants.CONFIG_SET_SECRET);
+            output.add(ToolNameConstants.CREDENTIAL_MANAGE);
             output.add(ToolNameConstants.CONFIG_REFRESH);
             return;
         }

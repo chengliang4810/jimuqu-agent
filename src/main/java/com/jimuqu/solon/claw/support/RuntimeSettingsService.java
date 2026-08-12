@@ -373,7 +373,7 @@ public class RuntimeSettingsService {
                 "File reads are allowed subject to security guardrails. File writes inside the workspace are free; writes outside it require approval. Command and network operations follow their own security and approval policies regardless of working directory. Secrets are always redacted.\n");
         appendShellGuidance(buffer, enabledToolNames);
         buffer.append(
-                "Only change your own configuration through /model, config_set, or config_set_secret. Secret keys must use config_set_secret and must never be copied from redacted read_file output. If you edit workspace/config.yml directly for non-secret keys, call config_refresh afterward; it validates YAML first and refuses invalid config. Global changes take effect on the next message.");
+                "Only change SolonClaw configuration through /model, config_set, or config_set_secret. Use config_set_secret only for whitelisted SolonClaw configuration secrets. Store user account passwords, tokens, and other credentials with credential_manage in the current Profile .env; process environment variables are the read-only fallback. Never store credentials in MEMORY.md, Base64 files, shell command text, or tool output. Shell commands must reference credential environment variable names instead of embedding values. If you edit workspace/config.yml directly for non-secret keys, call config_refresh afterward; it validates YAML first and refuses invalid config. Global changes take effect on the next message.");
         return buffer.toString();
     }
 

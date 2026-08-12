@@ -81,6 +81,7 @@ public class ToolCallLoopGuardrailService {
                                     ToolNameConstants.PROCESS,
                                     ToolNameConstants.CONFIG_SET,
                                     ToolNameConstants.CONFIG_SET_SECRET,
+                                    ToolNameConstants.CREDENTIAL_MANAGE,
                                     ToolNameConstants.CONFIG_REFRESH,
                                     "browser_click",
                                     "browser_type",

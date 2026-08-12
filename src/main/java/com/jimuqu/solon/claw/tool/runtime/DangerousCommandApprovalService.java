@@ -1631,7 +1631,8 @@ public class DangerousCommandApprovalService {
                 || ToolNameConstants.AGENT_MANAGE.equals(toolName)
                 || ToolNameConstants.CONFIG_GET.equals(toolName)
                 || ToolNameConstants.CONFIG_SET.equals(toolName)
-                || ToolNameConstants.CONFIG_SET_SECRET.equals(toolName);
+                || ToolNameConstants.CONFIG_SET_SECRET.equals(toolName)
+                || ToolNameConstants.CREDENTIAL_MANAGE.equals(toolName);
     }
 
     /**

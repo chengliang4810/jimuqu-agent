@@ -4356,7 +4356,17 @@ public class SolonAiLlmGateway implements LlmGateway {
             }
             Map<String, Object> metadata = new LinkedHashMap<String, Object>();
             metadata.put("tool", toolName);
-            metadata.put("args", args);
+            if (com.jimuqu.solon.claw.support.constants.ToolNameConstants.CONFIG_SET_SECRET.equals(
+                            toolName)
+                    || com.jimuqu.solon.claw.support.constants.ToolNameConstants.CREDENTIAL_MANAGE
+                            .equals(toolName)) {
+                metadata.put(
+                        "argsPreview",
+                        com.jimuqu.solon.claw.gateway.feedback.ToolPreviewSupport.buildPreview(
+                                toolName, args, 1000, true));
+            } else {
+                metadata.put("args", args);
+            }
             metadata.put("allowed_tools", runContext.getAllowedToolNames());
             metadata.put("max_tool_calls", runContext.getMaxToolCalls());
             metadata.put(
@@ -4904,7 +4914,17 @@ public class SolonAiLlmGateway implements LlmGateway {
             runContext.setPhase("tool");
             Map<String, Object> metadata = new java.util.LinkedHashMap<String, Object>();
             metadata.put("tool", toolName);
-            metadata.put("args", args);
+            if (com.jimuqu.solon.claw.support.constants.ToolNameConstants.CONFIG_SET_SECRET.equals(
+                            toolName)
+                    || com.jimuqu.solon.claw.support.constants.ToolNameConstants.CREDENTIAL_MANAGE
+                            .equals(toolName)) {
+                metadata.put(
+                        "argsPreview",
+                        com.jimuqu.solon.claw.gateway.feedback.ToolPreviewSupport.buildPreview(
+                                toolName, args, previewLength, true));
+            } else {
+                metadata.put("args", args);
+            }
             runContext.event("tool.start", "调用工具：" + toolName, metadata);
             ToolCallRecord record = new ToolCallRecord();
             record.setToolCallId(IdSupport.newId());
@@ -4913,7 +4933,9 @@ public class SolonAiLlmGateway implements LlmGateway {
             record.setSourceKey(runContext.getSourceKey());
             record.setToolName(toolName);
             record.setStatus("running");
-            record.setArgsPreview(AgentRunContext.safe(String.valueOf(args), previewLength));
+            record.setArgsPreview(
+                    com.jimuqu.solon.claw.gateway.feedback.ToolPreviewSupport.buildPreview(
+                            toolName, args, previewLength, true));
             record.setInterruptible(true);
             record.setSideEffecting(isSideEffectingTool(toolName, args));
             record.setReadOnly(!record.isSideEffecting());

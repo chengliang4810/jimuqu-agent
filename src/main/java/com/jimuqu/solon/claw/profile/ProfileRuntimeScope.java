@@ -38,6 +38,15 @@ public final class ProfileRuntimeScope {
         return CURRENT.get();
     }
 
+    /** 使用刚写入的 .env 快照刷新当前线程作用域，供后续工具立即使用。 */
+    public static void refreshCurrentEnvironment(Map<String, String> environment) {
+        Context current = CURRENT.get();
+        if (current != null) {
+            CURRENT.set(
+                    new Context(current.profile, current.home, environment, current.appContext));
+        }
+    }
+
     /**
      * 捕获当前 Profile 作用域，供预先创建或复用的工作线程执行任务时安装并在结束后恢复。
      *
