@@ -136,8 +136,7 @@ public class AttachmentCacheService {
         }
         File canonical = FileUtil.file(file).getAbsoluteFile();
         if (!isUnderCacheRoot(canonical)) {
-            throw new IllegalArgumentException(
-                    "Attachment file is outside runtime cache: " + safePath(file));
+            throw outsideRuntimeCache(file);
         }
 
         MessageAttachment attachment = new MessageAttachment();
@@ -198,8 +197,7 @@ public class AttachmentCacheService {
             return fromLocalFile(platform, canonical, explicitKind, fromQuote, transcribedText);
         }
         if (!isSafeRuntimeGeneratedFile(canonical)) {
-            throw new IllegalArgumentException(
-                    "Attachment file is outside runtime cache: " + safePath(file));
+            throw outsideRuntimeCache(file);
         }
         if (canonical.length() > MAX_CACHE_BYTES) {
             throw new IllegalStateException("Attachment too large: " + canonical.length());
@@ -667,6 +665,19 @@ public class AttachmentCacheService {
             name = file.getPath();
         }
         return safeName(SecretRedactor.redact(name, 400));
+    }
+
+    /** 构造可直接指导 Agent 修正附件输出目录的越界异常。 */
+    private IllegalArgumentException outsideRuntimeCache(File file) {
+        File generatedDir = new File(cacheRoot, "generated").getAbsoluteFile();
+        String suggestedName = file == null ? "attachment.bin" : safePath(file);
+        File suggestedFile = new File(generatedDir, suggestedName);
+        return new IllegalArgumentException(
+                "Attachment file is outside runtime cache: "
+                        + suggestedName
+                        + ". Save or copy the generated file to "
+                        + suggestedFile.getAbsolutePath()
+                        + " and call send_message again with that absolute path. Do not use /tmp or the workspace media/ directory.");
     }
 
     /**

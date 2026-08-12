@@ -289,6 +289,7 @@ public class CronJobService {
                                         body.get("cronExpr"),
                                         record.getCronExpr());
                         CronSupport.validate(schedule);
+                        rejectExpiredOneShot(schedule, System.currentTimeMillis(), "更新");
                         record.setCronExpr(schedule);
                         record.setNextRunAt(
                                 CronSupport.nextRunAt(schedule, System.currentTimeMillis()));
@@ -653,6 +654,7 @@ public class CronJobService {
      */
     public CronJobRecord resume(String jobId) throws Exception {
         CronJobRecord record = require(jobId);
+        rejectExpiredOneShot(record.getCronExpr(), System.currentTimeMillis(), "恢复");
         record.setStatus(STATUS_ACTIVE);
         record.setPausedAt(0L);
         record.setPausedReason(null);
@@ -661,6 +663,20 @@ public class CronJobService {
                     CronSupport.nextRunAt(record.getCronExpr(), System.currentTimeMillis()));
         }
         return cronJobRepository.update(record);
+    }
+
+    /**
+     * 拒绝已经过期的绝对时间一次性任务，避免更新或恢复后被静默改成近立即执行。
+     *
+     * @param schedule 调度表达式。
+     * @param now 当前时间戳。
+     * @param action 当前操作名称。
+     */
+    private void rejectExpiredOneShot(String schedule, long now, String action) {
+        Long runAt = CronSupport.absoluteRunAt(schedule);
+        if (runAt != null && runAt.longValue() < now) {
+            throw new IllegalStateException("不能" + action + "执行时间已过期的一次性任务，请设置新的未来时间。");
+        }
     }
 
     /**

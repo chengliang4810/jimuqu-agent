@@ -131,6 +131,9 @@ public class AgentRunSupervisor implements AgentRunControlService {
     private final ConcurrentMap<String, RunHandle> runningRuns =
             new ConcurrentHashMap<String, RunHandle>();
 
+    /** 正在执行上下文压缩的会话标识，防止 interrupt 与压缩并发改写同一会话。 */
+    private final Set<String> compressingSessionIds = ConcurrentHashMap.newKeySet();
+
     /** 保存drainingQueues映射，便于按键快速查询。 */
     private final ConcurrentMap<String, AtomicBoolean> drainingQueues =
             new ConcurrentHashMap<String, AtomicBoolean>();
@@ -429,6 +432,15 @@ public class AgentRunSupervisor implements AgentRunControlService {
             decision.setMessage("[SILENT]");
             return decision;
         }
+        if ("interrupt".equals(policy) && isCompressionInFlight(handle)) {
+            RunBusyDecision queued =
+                    queueMessageWhileRunActive(key, sessionId, message, "queue", handle);
+            queued.setPolicy(policy);
+            if (queued.isQueued()) {
+                queued.setMessage("当前会话正在压缩上下文，新消息已排队，将在压缩完成后执行。");
+            }
+            return queued;
+        }
         if ("interrupt".equals(policy)) {
             AgentRunRecord active = runningRecord;
             if (active != null) {
@@ -498,6 +510,18 @@ public class AgentRunSupervisor implements AgentRunControlService {
             return decision;
         }
         return queueMessageWhileRunActive(key, sessionId, message, policy, handle);
+    }
+
+    /**
+     * 判断运行句柄对应会话是否正在压缩上下文。
+     *
+     * @param handle 当前运行句柄。
+     * @return 压缩进行中时返回 true。
+     */
+    private boolean isCompressionInFlight(RunHandle handle) {
+        return handle != null
+                && StrUtil.isNotBlank(handle.sessionId)
+                && compressingSessionIds.contains(handle.sessionId);
     }
 
     /**
@@ -1696,7 +1720,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
         SessionRecord before = cloneSessionState(session);
         runContext.setPhase("compression");
         CompressionOutcome outcome =
-                contextCompressionService.compressNowWithOutcome(
+                compressWithSessionGuard(
                         session, systemPrompt, userMessage, resolved.getContextWindowTokens());
         SessionRecord compressed = outcome.getSession();
         boolean changed = !StrUtil.equals(before.getNdjson(), compressed.getNdjson());
@@ -1756,7 +1780,7 @@ public class AgentRunSupervisor implements AgentRunControlService {
         SessionRecord before = cloneSessionState(session);
         runContext.setPhase("compression");
         CompressionOutcome outcome =
-                contextCompressionService.compressNowWithOutcome(
+                compressWithSessionGuard(
                         session, systemPrompt, null, resolved.getContextWindowTokens());
         SessionRecord compressed = outcome.getSession();
         boolean changed = !StrUtil.equals(before.getNdjson(), compressed.getNdjson());
@@ -1779,6 +1803,32 @@ public class AgentRunSupervisor implements AgentRunControlService {
             agentRunRepository.saveRun(runRecord);
         }
         return outcome;
+    }
+
+    /**
+     * 在会话级压缩标记保护下执行压缩，供 busy interrupt 降级为排队。
+     *
+     * @param session 当前会话。
+     * @param systemPrompt 系统提示词。
+     * @param focus 压缩关注内容。
+     * @param contextWindowTokens 当前模型上下文窗口。
+     * @return 压缩结果。
+     */
+    private CompressionOutcome compressWithSessionGuard(
+            SessionRecord session, String systemPrompt, String focus, int contextWindowTokens)
+            throws Exception {
+        String sessionId = session == null ? "" : session.getSessionId();
+        if (StrUtil.isNotBlank(sessionId)) {
+            compressingSessionIds.add(sessionId);
+        }
+        try {
+            return contextCompressionService.compressNowWithOutcome(
+                    session, systemPrompt, focus, contextWindowTokens);
+        } finally {
+            if (StrUtil.isNotBlank(sessionId)) {
+                compressingSessionIds.remove(sessionId);
+            }
+        }
     }
 
     /**

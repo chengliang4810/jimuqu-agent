@@ -254,6 +254,45 @@ public class CompressionStabilityTest {
                 .doesNotContain("Progress\n- " + CompressionConstants.SUMMARY_PREFIX);
     }
 
+    /** 首条尾部消息为 assistant 时摘要必须合并，且结束标记保持在全部历史内容之后。 */
+    @Test
+    void shouldMergeSummaryIntoAssistantTailWithEndMarkerLast() throws Exception {
+        AppConfig config = config();
+        config.getCompression().setProtectHeadMessages(2);
+        config.getCompression().setTailRatio(0.20D);
+        DefaultContextCompressionService service = new DefaultContextCompressionService(config);
+        SessionRecord session = new SessionRecord();
+        session.setSessionId("s-assistant-tail-merge");
+        session.setNdjson(
+                MessageSupport.toNdjson(
+                        Arrays.asList(
+                                ChatMessage.ofSystem("system"),
+                                ChatMessage.ofUser("旧任务"),
+                                ChatMessage.ofAssistant(repeat("中间分析", 800)),
+                                ChatMessage.ofAssistant("受保护的尾部进展"))));
+
+        SessionRecord compressed = service.compressNow(session, "system prompt");
+        String ndjson = compressed.getNdjson();
+
+        assertThat(ndjson).contains(CompressionConstants.MERGED_PRIOR_CONTEXT_HEADER);
+        assertThat(ndjson).contains(CompressionConstants.MERGED_SUMMARY_DELIMITER);
+        assertThat(ndjson).contains("受保护的尾部进展");
+        assertThat(ndjson.indexOf("受保护的尾部进展"))
+                .isLessThan(ndjson.indexOf(CompressionConstants.SUMMARY_PREFIX));
+        assertThat(ndjson.indexOf(CompressionConstants.SUMMARY_END_MARKER))
+                .isGreaterThan(ndjson.indexOf(CompressionConstants.SUMMARY_PREFIX));
+        assertThat(
+                        CompressionConstants.isSummaryContent(
+                                CompressionConstants.MERGED_PRIOR_CONTEXT_HEADER
+                                        + "\n历史尾部\n"
+                                        + CompressionConstants.MERGED_SUMMARY_DELIMITER
+                                        + "\n"
+                                        + CompressionConstants.SUMMARY_PREFIX
+                                        + "\n摘要\n"
+                                        + CompressionConstants.SUMMARY_END_MARKER))
+                .isTrue();
+    }
+
     @Test
     void shouldNotDropLatestUserMessageWhenItStartsWithSummaryPrefix() throws Exception {
         AppConfig config = config();

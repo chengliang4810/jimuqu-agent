@@ -13,6 +13,16 @@ public interface CompressionConstants {
                     + "latest user message wins. If a historical Active Task or handoff "
                     + "conflicts with the latest user message, discard that stale Active Task.";
 
+    /** 摘要合并进尾部消息时，标记原尾部内容仅属于历史上下文。 */
+    String MERGED_PRIOR_CONTEXT_HEADER = "[PRIOR CONTEXT - for reference only; not a new message]";
+
+    /** 摘要合并进尾部消息时，分隔原尾部内容与压缩摘要。 */
+    String MERGED_SUMMARY_DELIMITER = "[END OF PRIOR CONTEXT - COMPACTION SUMMARY BELOW]";
+
+    /** 压缩摘要结束标记，必须位于合并消息的最后。 */
+    String SUMMARY_END_MARKER =
+            "[END OF COMPACTION SUMMARY - respond to the latest user message, not this summary]";
+
     /** 被裁剪的工具输出占位文本。 */
     String PRUNED_TOOL_PLACEHOLDER = "[Tool output cleared to save context space]";
 
@@ -52,6 +62,10 @@ public interface CompressionConstants {
     /** 判断内容是否为压缩摘要消息。 */
     static boolean isSummaryContent(String content) {
         String value = StrUtil.nullToEmpty(content).trim();
+        int delimiterIndex = value.indexOf(MERGED_SUMMARY_DELIMITER);
+        if (delimiterIndex >= 0) {
+            value = value.substring(delimiterIndex + MERGED_SUMMARY_DELIMITER.length()).trim();
+        }
         if (StrUtil.startWithIgnoreCase(value, SUMMARY_PREFIX)) {
             return true;
         }
@@ -70,8 +84,15 @@ public interface CompressionConstants {
     /** 去掉当前摘要前缀，只保留摘要正文。 */
     static String stripSummaryPrefix(String content) {
         String value = StrUtil.nullToEmpty(content).trim();
+        int delimiterIndex = value.indexOf(MERGED_SUMMARY_DELIMITER);
+        if (delimiterIndex >= 0) {
+            value = value.substring(delimiterIndex + MERGED_SUMMARY_DELIMITER.length()).trim();
+        }
         if (StrUtil.startWithIgnoreCase(value, SUMMARY_PREFIX)) {
-            return value.substring(SUMMARY_PREFIX.length()).trim();
+            value = value.substring(SUMMARY_PREFIX.length()).trim();
+        }
+        if (value.endsWith(SUMMARY_END_MARKER)) {
+            value = value.substring(0, value.length() - SUMMARY_END_MARKER.length()).trim();
         }
         return value;
     }

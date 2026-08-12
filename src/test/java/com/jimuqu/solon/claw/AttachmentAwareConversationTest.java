@@ -231,6 +231,10 @@ public class AttachmentAwareConversationTest {
                                         PlatformType.MEMORY, outside, "file", false, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("outside runtime cache")
+                .hasMessageContaining(
+                        "cache" + File.separator + "media" + File.separator + "generated")
+                .hasMessageContaining("call send_message again")
+                .hasMessageContaining("Do not use /tmp")
                 .hasMessageNotContaining(workspaceHome.getParent())
                 .hasMessageNotContaining("ghp_outsidesecret");
 

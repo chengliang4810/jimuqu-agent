@@ -17,7 +17,7 @@ public final class LlmErrorClassifier {
      */
     private static final Pattern EMBEDDED_STATUS_CODE_PATTERN =
             Pattern.compile(
-                    "\\b(?:http(?:/\\d(?:\\.\\d)?)?(?:\\s+status)?|status(?:[_\\s-]*code)?|error\\s*code|code)\\s*[:=]?\\s*(400|401|402|403|404|413|429|500|502|503|504|529)\\b",
+                    "\\b(?:http(?:/\\d(?:\\.\\d)?)?(?:\\s+status)?|status(?:[_\\s-]*code)?|error\\s*code|code)\\s*[:=]?\\s*(400|401|402|403|404|408|413|429|500|502|503|504|529)\\b",
                     Pattern.CASE_INSENSITIVE);
 
     /** 计费或账户余额不足相关错误特征，命中后通常不应立即重试同一提供方。 */
@@ -230,6 +230,9 @@ public final class LlmErrorClassifier {
         if (status == 404 || containsAny(message, MODEL_NOT_FOUND_PATTERNS)) {
             return result(FailoverReason.MODEL_NOT_FOUND, status, false, true, false, message);
         }
+        if (status == 408) {
+            return result(FailoverReason.TIMEOUT, status, true, true, false, message);
+        }
         if (status == 429 && containsAny(message, OVERLOADED_PATTERNS)) {
             return result(FailoverReason.OVERLOADED, status, true, true, false, message);
         }
@@ -333,7 +336,8 @@ public final class LlmErrorClassifier {
         if (matcher.find()) {
             return Integer.parseInt(matcher.group(1));
         }
-        for (int code : new int[] {400, 401, 402, 403, 404, 413, 429, 500, 502, 503, 504, 529}) {
+        for (int code :
+                new int[] {400, 401, 402, 403, 404, 408, 413, 429, 500, 502, 503, 504, 529}) {
             String value = String.valueOf(code);
             if (message.contains(" " + value + " ")
                     || message.contains("http " + value)

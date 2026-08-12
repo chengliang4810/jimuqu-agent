@@ -54,6 +54,21 @@ public class LlmErrorClassifierTest {
         assertThat(result.isShouldFallback()).isTrue();
     }
 
+    /** HTTP 408 是可恢复的请求超时，不能与确定性的 400 请求错误一同终止。 */
+    @Test
+    void shouldRetryHttp408AsTimeoutWithoutChangingHttp400Boundary() {
+        LlmErrorClassifier.ClassifiedError timeout =
+                LlmErrorClassifier.classify(new IllegalStateException("HTTP 408 Request Timeout"));
+        LlmErrorClassifier.ClassifiedError badRequest =
+                LlmErrorClassifier.classify(new IllegalStateException("HTTP 400 Bad Request"));
+
+        assertThat(timeout.getReason()).isEqualTo(LlmErrorClassifier.FailoverReason.TIMEOUT);
+        assertThat(timeout.getStatusCode()).isEqualTo(408);
+        assertThat(timeout.isRetryable()).isTrue();
+        assertThat(badRequest.getReason()).isEqualTo(LlmErrorClassifier.FailoverReason.UNKNOWN);
+        assertThat(badRequest.isRetryable()).isFalse();
+    }
+
     @Test
     void shouldOnlyRetryUnknownErrorsWhenTransientPatternMatches() {
         LlmErrorClassifier.ClassifiedError unknown =

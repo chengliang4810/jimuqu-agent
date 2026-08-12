@@ -215,8 +215,13 @@ public class DefaultContextCompressionService implements ContextCompressionServi
 
             List<ChatMessage> compacted = new ArrayList<ChatMessage>();
             compacted.addAll(window.head);
-            compacted.add(ChatMessage.ofAssistant(summaryText));
-            compacted.addAll(window.tail);
+            if (!window.tail.isEmpty() && window.tail.get(0).getRole() == ChatRole.ASSISTANT) {
+                compacted.add(mergeSummaryIntoAssistantTail(window.tail.get(0), summaryText));
+                compacted.addAll(window.tail.subList(1, window.tail.size()));
+            } else {
+                compacted.add(ChatMessage.ofAssistant(summaryText));
+                compacted.addAll(window.tail);
+            }
 
             String compactedNdjson = MessageSupport.toNdjson(compacted);
             SessionRecord compactedState = new SessionRecord();
@@ -247,6 +252,27 @@ public class DefaultContextCompressionService implements ContextCompressionServi
             session.setLastCompressionFailedAt(System.currentTimeMillis());
             return CompressionOutcome.failed(session, e);
         }
+    }
+
+    /**
+     * 将摘要合并进首条 assistant 尾部消息，并确保结束标记位于所有历史内容之后。
+     *
+     * @param tailMessage 首条受保护尾部消息。
+     * @param summaryText 当前压缩摘要。
+     * @return 保留原尾部正文且带明确摘要边界的新消息。
+     */
+    private ChatMessage mergeSummaryIntoAssistantTail(ChatMessage tailMessage, String summaryText) {
+        String merged =
+                CompressionConstants.MERGED_PRIOR_CONTEXT_HEADER
+                        + "\n"
+                        + StrUtil.nullToEmpty(tailMessage.getContent())
+                        + "\n\n"
+                        + CompressionConstants.MERGED_SUMMARY_DELIMITER
+                        + "\n\n"
+                        + summaryText
+                        + "\n\n"
+                        + CompressionConstants.SUMMARY_END_MARKER;
+        return ChatMessage.ofAssistant(merged);
     }
 
     /**

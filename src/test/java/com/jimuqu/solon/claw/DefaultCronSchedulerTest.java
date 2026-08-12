@@ -686,6 +686,36 @@ public class DefaultCronSchedulerTest {
         assertThat(job.getNextRunAt()).isGreaterThan(System.currentTimeMillis());
     }
 
+    /** 更新和恢复都必须拒绝执行时间已经过去的绝对时间一次性任务。 */
+    @Test
+    void shouldRejectExpiredOneShotOnUpdateAndResume() throws Exception {
+        TestEnvironment env = TestEnvironment.withFakeLlm();
+        CronJobService service = new CronJobService(env.appConfig, env.cronJobRepository);
+        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        body.put("name", "expired-once");
+        body.put("schedule", "30m");
+        body.put("prompt", "once prompt");
+        CronJobRecord job = service.create("MEMORY:cron:user", body);
+        String expired =
+                java.time.Instant.ofEpochMilli(System.currentTimeMillis() - 300_000L).toString();
+        Map<String, Object> update = new LinkedHashMap<String, Object>();
+        update.put("schedule", expired);
+
+        assertThatThrownBy(() -> service.update(job.getJobId(), update))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("执行时间已过期")
+                .hasMessageContaining("更新");
+
+        job.setCronExpr(expired);
+        job.setStatus("PAUSED");
+        job.setNextRunAt(0L);
+        env.cronJobRepository.update(job);
+        assertThatThrownBy(() -> service.resume(job.getJobId()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("执行时间已过期")
+                .hasMessageContaining("恢复");
+    }
+
     @Test
     void shouldSupportJimuquDurationAliases() throws Exception {
         TestEnvironment env = TestEnvironment.withFakeLlm();

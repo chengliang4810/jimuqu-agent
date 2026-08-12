@@ -429,7 +429,10 @@ public class MessagingToolsAttachmentTest {
                                         Collections.singletonList(config.getAbsolutePath()),
                                         null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("outside runtime cache");
+                .hasMessageContaining("outside runtime cache")
+                .hasMessageContaining(
+                        "cache" + File.separator + "media" + File.separator + "generated")
+                .hasMessageContaining("call send_message again");
     }
 
     private byte[] pngBytes() {

@@ -170,7 +170,8 @@ public class MessagingTools {
             @Param(name = "text", description = "要发送的文本", required = false) String text,
             @Param(
                             name = "mediaPaths",
-                            description = "可选附件路径数组，支持当前 Profile 工作区文件或附件缓存路径。",
+                            description =
+                                    "可选附件路径数组。生成截图、PDF、音频等待发送文件时，必须直接保存到当前 Profile 的 runtime.cacheDir/media/generated/ 目录，并传入该文件的绝对路径；不接受 /tmp、工作区 media/ 子目录或其他主机路径。",
                             required = false)
                     List<String> mediaPaths,
             @Param(name = "channelExtrasJson", description = "可选渠道扩展 JSON", required = false)
