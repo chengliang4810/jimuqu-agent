@@ -23,7 +23,7 @@ assert.ok(chatStore.includes('profile: startingProfile'))
 assert.ok(chatStore.includes('session_id: startingSessionId'))
 assert.ok(chatStore.includes('model: startingModel'))
 assert.ok(chatStore.includes('provider: startingProvider'))
-assert.ok(chatStore.includes('startingProfile,\n          )'))
+assert.match(chatStore, /startingProfile,\s*\)/)
 
 const uploadIndex = chatStore.indexOf('await uploadChatFiles(')
 const driftIndex = chatStore.indexOf('if (sessionContextDrifted()) return abortForSessionSwitch()', uploadIndex)

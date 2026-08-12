@@ -1,4 +1,4 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createMemoryHistory, createRouter, createWebHashHistory } from 'vue-router'
 import {
   exchangeDashboardSession,
   getInjectedToken,
@@ -9,8 +9,13 @@ import {
 const STALE_CHUNK_RELOAD_KEY = 'solonclaw_stale_chunk_reload_at'
 let staleChunkReloaded = false
 
+/** 浏览器使用 Hash 路由，Node.js 测试与服务端加载使用内存路由。 */
+const history = typeof globalThis.location === 'undefined'
+  ? createMemoryHistory('/')
+  : createWebHashHistory()
+
 const router = createRouter({
-  history: createWebHashHistory(),
+  history,
   routes: [
     {
       path: '/',

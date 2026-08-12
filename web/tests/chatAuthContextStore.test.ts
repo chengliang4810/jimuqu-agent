@@ -131,12 +131,14 @@ function chatApiMocks(): Plugin {
     name: 'chat-auth-context-test-mocks',
     enforce: 'pre',
     resolveId(id, importer) {
+      // Vite 8 在 Windows 下可能先把别名解析为反斜杠绝对路径，统一后再匹配测试替身。
+      const normalizedId = id.replace(/\\/g, '/')
       if ((id === './app' || id === './profiles') && !importer?.endsWith('/stores/solonclaw/chat.ts')) return null
       const sourceId = Object.keys(modules).find(candidate =>
-        candidate === id
+        candidate === normalizedId
         || (candidate.startsWith('@/') && (
-          id.endsWith(`/src/${candidate.slice(2)}`)
-          || id.endsWith(`/src/${candidate.slice(2)}.ts`)
+          normalizedId.endsWith(`/src/${candidate.slice(2)}`)
+          || normalizedId.endsWith(`/src/${candidate.slice(2)}.ts`)
         )),
       )
       return sourceId ? `\0chat-test:${sourceId}` : null

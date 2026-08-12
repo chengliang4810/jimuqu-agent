@@ -37,6 +37,7 @@ const originalConsoleError = console.error
 try {
   console.error = () => {}
   const transformed = script
+    .replace(/\r\n/g, '\n')
     .replace(/import[\s\S]*?from ['"][^'"]+['"]\n/g, '')
     .replace("const { t } = useI18n()", "const t = (key: string) => key")
     .replace(

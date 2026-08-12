@@ -40,7 +40,7 @@ function handleAuthStorageChange(event: StorageEvent): void {
   }
 }
 
-if (typeof window.addEventListener === 'function') {
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   window.addEventListener('storage', handleAuthStorageChange)
 }
 
