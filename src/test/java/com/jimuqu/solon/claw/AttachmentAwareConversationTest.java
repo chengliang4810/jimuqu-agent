@@ -235,7 +235,7 @@ public class AttachmentAwareConversationTest {
                         "cache" + File.separator + "media" + File.separator + "generated")
                 .hasMessageContaining("call send_message again")
                 .hasMessageContaining("Do not use /tmp")
-                .hasMessageNotContaining(workspaceHome.getParent())
+                .hasMessageNotContaining(outside.getAbsolutePath())
                 .hasMessageNotContaining("ghp_outsidesecret");
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
